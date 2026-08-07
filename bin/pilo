@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SOURCE="${BASH_SOURCE[0]}"
+LAUNCH_CWD="$(pwd)"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+
+PILO_HOME_DIR="${PILO_HOME:-$HOME}/.pilo"
+PORT_FILE="$PILO_HOME_DIR/port"
+LOG_DIR="$PILO_HOME_DIR/logs"
+LOG="$LOG_DIR/pilo.log"
+PIDFILE="$PILO_HOME_DIR/server.pid"
+WANTED_PORT="${PILO_PORT:-48888}"
+mkdir -p "$LOG_DIR"
+cd "$ROOT"
+
+need() {
+  command -v "$1" >/dev/null 2>&1 || { echo "Pilo requires $1."; exit 1; }
+}
+
+live_port() {
+  if [[ -f "$PORT_FILE" ]]; then cat "$PORT_FILE"; else echo "$WANTED_PORT"; fi
+}
+
+health() {
+  curl -fsS "http://127.0.0.1:$(live_port)/health" >/dev/null 2>&1
+}
+
+wait_http() {
+  for _ in $(seq 1 40); do
+    health && return 0
+    sleep 0.25
+  done
+  return 1
+}
+
+ensure_server() {
+  need docker
+  need node
+  need curl
+
+  if ! docker info >/dev/null 2>&1; then
+    echo "Docker-compatible runtime is not running."
+    echo "Recommended: OrbStack. Also supported: Docker Desktop, Colima."
+    exit 1
+  fi
+
+  docker compose up -d postgres >/dev/null 2>&1
+  for _ in $(seq 1 20); do
+    docker compose exec -T postgres pg_isready -U pilo -d pilo >/dev/null 2>&1 && break
+    sleep 0.4
+  done
+
+  health && return
+
+  # The server applies migrations, picks a free port and records it in ~/.pilo/port.
+  PILO_PORT="$WANTED_PORT" nohup node "$ROOT/src/server.js" >> "$LOG" 2>&1 &
+  echo $! > "$PIDFILE"
+  wait_http || { echo "Pilo server failed. See $LOG"; exit 1; }
+}
+
+case "${1:-tui}" in
+  tui|"")
+    ensure_server
+    PILO_PORT="$(live_port)" PILO_LAUNCH_CWD="$LAUNCH_CWD" node "$ROOT/src/tui.js"
+    ;;
+  up|serve|start)
+    ensure_server
+    echo "Pilo ready"
+    ;;
+  dashboard|dash)
+    ensure_server
+    command -v open >/dev/null 2>&1 && open "http://127.0.0.1:$(live_port)/dashboard"
+    echo "Pilo dashboard opened"
+    ;;
+  stop)
+    if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then kill "$(cat "$PIDFILE")"; fi
+    rm -f "$PIDFILE"
+    echo "Pilo server stopped"
+    ;;
+  status)
+    if health; then echo "server:    running (port $(live_port))"; else echo "server:    stopped"; fi
+    docker compose ps --format '{{.Service}}: {{.Status}}' 2>/dev/null || true
+    ;;
+  doctor)
+    echo "root:      $ROOT"
+    echo "home:      $PILO_HOME_DIR"
+    echo "port file: $(live_port)"
+    command -v docker >/dev/null 2>&1 && echo "docker:    $(docker info --format '{{.ServerVersion}}' 2>/dev/null || echo 'not running')" || echo "docker:    missing"
+    command -v /opt/homebrew/bin/herdr >/dev/null 2>&1 \
+      && echo "herdr:     $(/opt/homebrew/bin/herdr agent list 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["result"]["agents"]), "sessions")' 2>/dev/null || echo 'installed, no sessions')" \
+      || echo "herdr:     missing"
+    if health; then
+      echo "server:    running"
+      curl -fsS "http://127.0.0.1:$(live_port)/api/system" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+for s in d["services"]:
+    print("  %-10s %-9s %s" % (s["name"], s["state"], s["detail"]))
+print("  wake failures: %d" % len(d["wakeFailures"]))
+'
+    else
+      echo "server:    stopped — run 'pilo up'"
+    fi
+    ;;
+  logs) tail -f "$LOG" ;;
+  *) echo "Usage: pilo [tui|up|dashboard|status|doctor|stop|logs]"; exit 1 ;;
+esac
