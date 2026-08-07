@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap }
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap }
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Medium.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap }
+  html, body { margin: 0; padding: 0; background: #08090a; color: #d9ded9; font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased; }
+  * { box-sizing: border-box; }
+  a { color: oklch(0.80 0.10 165); text-decoration: none; }
+  a:hover { color: oklch(0.88 0.10 165); }
+  input, button, textarea, select { font: inherit; color: inherit; }
+  ::selection { background: oklch(0.55 0.10 165 / 0.45); }
+  @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+  @keyframes pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.25 } }
+  @keyframes slidein { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+  .om-scroll::-webkit-scrollbar { width: 8px; height: 8px }
+  .om-scroll::-webkit-scrollbar-thumb { background: #2a302d; border-radius: 8px }
+  .om-scroll::-webkit-scrollbar-track { background: transparent }
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: #08090a; padding: 0 0 80px">
+
+  <div style="position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 28px; padding: 14px 28px; background: rgba(8,9,10,0.92); backdrop-filter: blur(10px); border-bottom: 1px solid #1a1e1c">
+    <div style="display: flex; align-items: center; gap: 10px">
+      <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 17px; font-weight: 600; letter-spacing: -0.03em; color: #eef2ee">{{ productName }}</span>
+      <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">local agent desk</span>
+    </div>
+    <div style="display: flex; gap: 4px; margin-left: auto">
+      <sc-for list="{{ views }}" as="v" hint-placeholder-count="4">
+        <button onClick="{{ v.onClick }}" style="position: relative; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; letter-spacing: 0.02em; padding: 7px 14px; border-radius: 6px; border: 1px solid transparent; background: transparent; color: #6f7a73; cursor: pointer; white-space: nowrap" style-hover="color: #d9ded9; background: #141816">
+          <sc-if value="{{ v.active }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; inset: 0; border-radius: 6px; border: 1px solid #26302b; background: #101412"></span>
+          </sc-if>
+          <span style="position: relative">{{ v.label }}</span>
+        </button>
+      </sc-for>
+    </div>
+  </div>
+
+  <!-- ============ BRAND ============ -->
+  <sc-if value="{{ isBrand }}" hint-placeholder-val="{{ true }}">
+  <div style="max-width: 1180px; margin: 0 auto; padding: 56px 28px 0">
+    <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.14em; color: #5f6b64; text-transform: uppercase">01 — brand</div>
+    <h1 style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 34px; line-height: 1.2; font-weight: 600; letter-spacing: -0.03em; margin: 14px 0 10px; color: #eef2ee">Pilo</h1>
+    <p style="max-width: 640px; margin: 0 0 8px; font-size: 15px; line-height: 1.6; color: #8b968e; text-wrap: pretty">심볼 없이 텍스트만 씁니다. IBM Plex Mono 600, P만 대문자, 트래킹 −0.03em. 커맨드는 항상 소문자 <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; color: #d9ded9">pilo</span>.</p>
+
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin: 32px 0 0">
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 220px; padding: 28px; border: 1px solid #1c211f; border-radius: 12px; background: radial-gradient(120% 120% at 30% 20%, #141917, #0a0d0c)">
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 76px; font-weight: 600; letter-spacing: -0.04em; color: #eef2ee">Pilo</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; min-height: 220px; padding: 28px; border: 1px solid #1c211f; border-radius: 12px; background: #eef2ee">
+        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 60px; font-weight: 600; letter-spacing: -0.04em; color: #0a0d0c">Pilo</span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; margin: 14px 0 0">
+      <div style="border: 1px solid #1c211f; border-radius: 12px; background: linear-gradient(180deg, #101312, #0b0e0d); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: center; height: 132px">
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 40px; font-weight: 600; letter-spacing: -0.04em; color: #eef2ee">Pilo</span>
+        </div>
+        <div style="padding: 13px 15px; border-top: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">wordmark · 600 · −0.04em</div>
+      </div>
+      <div style="border: 1px solid #1c211f; border-radius: 12px; background: linear-gradient(180deg, #101312, #0b0e0d); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: center; height: 132px; gap: 10px">
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 34px; font-weight: 600; color: #3ed49c">❯</span>
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 34px; font-weight: 600; letter-spacing: -0.03em; color: #eef2ee">pilo</span>
+        </div>
+        <div style="padding: 13px 15px; border-top: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">command · 항상 소문자</div>
+      </div>
+      <div style="border: 1px solid #1c211f; border-radius: 12px; background: linear-gradient(180deg, #101312, #0b0e0d); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: center; height: 132px">
+          <span style="display: flex; align-items: center; justify-content: center; width: 64px; height: 64px; border-radius: 15px; background: #0a0d0c; border: 1px solid #242b28; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 30px; font-weight: 600; color: #eef2ee">P</span>
+        </div>
+        <div style="padding: 13px 15px; border-top: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">app icon · 축약형 P</div>
+      </div>
+      <div style="border: 1px solid #1c211f; border-radius: 12px; background: linear-gradient(180deg, #101312, #0b0e0d); overflow: hidden">
+        <div style="display: flex; align-items: center; justify-content: center; height: 132px; gap: 9px">
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 22px; font-weight: 600; letter-spacing: -0.03em; color: #eef2ee">Pilo</span>
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">local agent desk</span>
+        </div>
+        <div style="padding: 13px 15px; border-top: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">product lockup · 태그라인</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 24px 0 0">
+      <div style="padding: 20px 22px; border: 1px solid #1c211f; border-radius: 12px; background: #0c0f0e">
+        <div style="font-size: 13px; font-weight: 500; color: #d9ded9">쓰는 규칙</div>
+        <div style="margin: 12px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; line-height: 2.1; color: #8b968e">
+          <div>face         <span style="color:#d9ded9">IBM Plex Mono 600</span></div>
+          <div>case         <span style="color:#d9ded9">P만 대문자 · 커맨드는 pilo</span></div>
+          <div>accent       <span style="color:#3ed49c">#3ed49c</span> <span style="color:#4f5a53">(oklch 0.78 0.13 165)</span></div>
+          <div>ink / paper  <span style="color:#d9ded9">#eef2ee</span> / <span style="color:#d9ded9">#0a0d0c</span></div>
+          <div>금지         <span style="color:#d9ded9">기울이기 · 자간 늘리기 · 그림자</span></div>
+        </div>
+      </div>
+      <div style="padding: 20px 22px; border: 1px dashed #232927; border-radius: 12px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 13px; line-height: 2; color: #8b968e">
+        <div><span style="color:#5f6b64">herdr</span>      →  agent들이 떠 있는 작업장</div>
+        <div><span style="color:#3ed49c">Pilo agent</span> →  유일한 role=pilo · 사용자와 대화하는 대표</div>
+        <div><span style="color:#5f6b64">PM agent</span>   →  프로젝트 담당 · worker에게 실무 분배</div>
+        <div style="margin: 10px 0 0; font-family: inherit; font-size: 12px; color: #67726b; line-height: 1.6">사용자 입력은 inbox로, PM은 pm_result를, Pilo agent는 final_reply를 만듭니다. TUI에는 final_reply만 올라옵니다.</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ TUI ============ -->
+  <sc-if value="{{ isTui }}" hint-placeholder-val="{{ false }}">
+  <div style="max-width: 1320px; margin: 0 auto; padding: 40px 28px 0">
+    <div style="display: flex; align-items: flex-end; gap: 20px; margin: 0 0 20px">
+      <div>
+        <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; letter-spacing: 0.14em; color: #5f6b64; text-transform: uppercase">02 — tui</div>
+        <h1 style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 28px; font-weight: 600; letter-spacing: -0.03em; margin: 10px 0 6px; color: #eef2ee">$ pilo</h1>
+        <p style="margin: 0; max-width: 720px; font-size: 14px; line-height: 1.6; color: #8b968e">iTerm2·tmux 안에서 도는 TUI. 대화 상대는 언제나 Pilo agent 하나이고, 화면에 올라오는 것은 final_reply뿐입니다. 실행 로그·diff·아티팩트는 <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; color: #d9ded9">:dash</span>에서 봅니다.</p>
+      </div>
+      <div style="margin-left: auto; flex: none; display: flex; gap: 4px; padding: 4px; border: 1px solid #1c211f; border-radius: 8px; background: #0d100f">
+        <sc-for list="{{ tuiStates }}" as="b" hint-placeholder-count="2">
+          <button onClick="{{ b.onClick }}" style="position: relative; white-space: nowrap; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 6px 12px; border-radius: 5px; border: none; background: transparent; color: #6f7a73; cursor: pointer" style-hover="color: #d9ded9">
+            <sc-if value="{{ b.active }}" hint-placeholder-val="{{ false }}">
+              <span style="position: absolute; inset: 0; border-radius: 5px; background: #1a201d"></span>
+            </sc-if>
+            <span style="position: relative">{{ b.label }}</span>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <!-- TUI pane — 창 크롬은 터미널 것이므로 그리지 않음 -->
+    <div style="border: 1px solid #1c211f; border-radius: 4px; overflow: hidden; background: #0a0c0b">
+
+      <sc-if value="{{ needsSetup }}" hint-placeholder-val="{{ false }}">
+        <div style="padding: 34px 30px 30px; min-height: 620px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace">
+          <div style="display: flex; align-items: center; gap: 10px">
+            <span style="width: 7px; height: 7px; border-radius: 50%; background: oklch(0.83 0.12 80); display: block"></span>
+            <span style="font-size: 14px; color: #eef2ee">setup required</span>
+          </div>
+          <p style="max-width: 560px; margin: 12px 0 26px; font-family: inherit; font-size: 13px; line-height: 1.7; color: #8b968e">기동에 필요한 필수 네 가지와 선택 하나입니다. 명령은 <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; color: #b9c3bc">pilo up</span> 하나뿐이고, agent 등록은 대시보드에서 합니다. 완료된 항목은 자동으로 체크됩니다.</p>
+          <sc-if value="{{ hasSetupError }}" hint-placeholder-val="{{ true }}">
+            <div style="margin: 0 0 24px; padding: 16px 18px; border: 1px solid oklch(0.42 0.10 25 / 0.45); border-radius: 10px; background: oklch(0.26 0.05 25 / 0.16)">
+              <div style="display: flex; align-items: center; gap: 9px">
+                <span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.70 0.15 25); display: block"></span>
+                <span style="font-size: 13px; color: #eef2ee">{{ setupErrorTitle }}</span>
+                <span style="margin-left: auto; font-size: 10px; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 3px; color: oklch(0.75 0.14 25); border: 1px solid #2e2422">ERROR</span>
+              </div>
+              <p style="margin: 8px 0 12px; font-family: inherit; font-size: 12px; line-height: 1.65; color: #b9a5a2">{{ setupErrorDetail }}</p>
+              <sc-for list="{{ setupErrorRows }}" as="er" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; margin: 0 0 6px; border-radius: 8px; background: #0b0d0c; border: 1px solid #1e2422; font-size: 11px">
+                  <span style="color: #eef2ee; width: 74px">{{ er.name }}</span>
+                  <span style="color: #67726b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ er.cwd }} · {{ er.runtime }}</span>
+                  <span style="color: #3e4744">{{ er.at }}</span>
+                  <span style="padding: 4px 9px; border-radius: 5px; border: 1px solid #26302b; color: #d9ded9; cursor: pointer; white-space: nowrap" style-hover="border-color:#3a4540">change role</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-for list="{{ setupSteps }}" as="st" hint-placeholder-count="4">
+            <div style="display: flex; gap: 14px; padding: 15px 0; border-top: 1px solid #171b19">
+              <span style="flex: none; width: 16px; font-size: 13px; color: {{ st.color }}">{{ st.mark }}</span>
+              <div style="flex: 1; min-width: 0">
+                <div style="font-size: 13px; color: {{ st.titleColor }}">{{ st.title }}</div>
+                <div style="margin: 5px 0 0; font-family: inherit; font-size: 12px; line-height: 1.6; color: #67726b">{{ st.desc }}</div>
+                <sc-if value="{{ st.hasCmd }}" hint-placeholder-val="{{ true }}">
+                  <div style="margin: 9px 0 0; padding: 9px 12px; border-radius: 6px; background: #0d100f; border: 1px solid #1a1e1c; font-size: 12px; color: #b9c3bc">{{ st.cmd }}</div>
+                </sc-if>
+              </div>
+              <span style="flex: none; font-size: 11px; color: #4f5a53">{{ st.state }}</span>
+            </div>
+          </sc-for>
+          <div style="margin: 26px 0 0; padding: 14px 16px; border: 1px dashed #232927; border-radius: 8px; font-size: 11px; line-height: 2; color: #67726b">
+            <div>config   <span style="color:#b9c3bc">~/.pilo/config.toml</span></div>
+            <div>db       <span style="color:#b9c3bc">postgres://pilo@127.0.0.1:15432/pilo</span> <span style="color:#3e4744">pgvector</span></div>
+            <div>port     <span style="color:#b9c3bc">~/.pilo/port</span></div>
+            <div>logs     <span style="color:#b9c3bc">~/.pilo/logs/</span></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ ready }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: #0a0c0b; border-bottom: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; white-space: nowrap">
+        <span style="color: #eef2ee">pilo</span>
+        <span style="color: #3e4744">│</span>
+        <span style="display: flex; align-items: center; gap: 6px; color: #9aa59d"><span style="width: 5px; height: 5px; border-radius: 50%; background: #3ed49c; display: block"></span>pilo agent</span>
+        <span style="color: #5f6b64">~/work</span>
+        <span style="margin-left: auto; color: #4f5a53">:help — commands</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 18px; white-space: nowrap; overflow: hidden; padding: 9px 16px; background: #0d100f; border-bottom: 1px solid #1a1e1c; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+        <span style="display: flex; align-items: center; gap: 7px; flex: 1 1 auto; min-width: 0; color: #9aa59d"><span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.78 0.13 165); animation: pulse 2.4s ease-in-out infinite; display: block; flex: none"></span><span style="min-width: 0; overflow: hidden; text-overflow: ellipsis">herdr connected <span style="color:#5f6b64">· 8 sessions</span></span></span>
+        <span style="color: #67726b; flex: none">pm <span style="color:#d9ded9">{{ pmCount }}</span> · worker <span style="color:#d9ded9">{{ workerCount }}</span> · running <span style="color: oklch(0.82 0.11 165)">{{ runningCount }}</span> · failed <span style="color: oklch(0.70 0.15 25)">{{ failedCount }}</span></span>
+        <sc-if value="{{ showCost }}" hint-placeholder-val="{{ true }}">
+          <span style="display: flex; align-items: center; gap: 10px; flex: none; color: #67726b">
+            <span style="color: #2f3634">│</span>
+            <span>tokens <span style="color:#d9ded9">{{ tokenTotal }}</span></span>
+          </span>
+        </sc-if>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 288px; min-height: 620px">
+        <!-- conversation with the pilo agent -->
+        <div style="display: flex; flex-direction: column; border-right: 1px solid #1a1e1c">
+          <div class="om-scroll" style="flex: 1; overflow-y: auto; max-height: 540px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.65">
+            <sc-for list="{{ feed }}" as="m" hint-placeholder-count="3">
+              <div style="animation: slidein 0.25s ease both">
+
+                <sc-if value="{{ m.isUser }}" hint-placeholder-val="{{ true }}">
+                  <div style="display: flex; gap: 12px; align-items: flex-start">
+                    <span style="color: oklch(0.82 0.11 165); flex: none">❯</span>
+                    <span style="color: #e6ebe6; white-space: pre-wrap">{{ m.text }}</span>
+                  </div>
+                </sc-if>
+
+                <sc-if value="{{ m.isNote }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; gap: 12px; align-items: flex-start; padding: 11px 14px; border-left: 2px solid #2b3531; background: #0e1211; border-radius: 0 8px 8px 0">
+                    <span style="color: #6f7a73; flex: none">pilo</span>
+                    <span style="color: #9aa59d; white-space: pre-wrap">{{ m.text }}</span>
+                  </div>
+                </sc-if>
+
+                <!-- final_reply -->
+                <sc-if value="{{ m.isReply }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; gap: 12px">
+                    <span style="flex: none; width: 34px; padding-top: 13px; font-size: 11px; color: #3ed49c">pilo</span>
+                    <div style="flex: 1; min-width: 0; border: 1px solid #1e2422; border-left: 2px solid #3ed49c; border-radius: 4px 10px 10px 4px; background: linear-gradient(180deg, #101413, #0b0e0d)">
+                      <button onClick="{{ m.onToggle }}" style="display: flex; align-items: flex-start; gap: 12px; width: 100%; padding: 13px 15px; border: none; background: transparent; cursor: pointer; text-align: left">
+                        <div style="flex: 1; min-width: 0">
+                          <div style="display: flex; align-items: center; gap: 9px">
+                            <span style="font-size: 10px; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 4px; color: #3ed49c; border: 1px solid #24312c; background: #0e1211">FINAL_REPLY</span>
+                            <span style="font-size: 11px; color: #5f6b64">{{ m.scope }}</span>
+                          </div>
+                          <div style="margin: 9px 0 0; font-family: inherit; font-size: 13px; line-height: 1.65; color: #d9ded9; text-wrap: pretty">{{ m.summary }}</div>
+                        </div>
+                        <span style="font-size: 11px; color: #4f5a53; flex: none; white-space: nowrap">{{ m.meta }} {{ m.caret }}</span>
+                      </button>
+                      <sc-if value="{{ m.open }}" hint-placeholder-val="{{ true }}">
+                        <div style="padding: 0 15px 15px">
+                          <sc-for list="{{ m.points }}" as="pt" hint-placeholder-count="2">
+                            <div style="display: flex; gap: 11px; padding: 9px 0; border-top: 1px solid #171b19">
+                              <span style="flex: none; width: 8px; color: #3e4744; font-size: 12px">·</span>
+                              <div style="flex: 1; min-width: 0">
+                                <div style="font-size: 11px; color: #7d887f">{{ pt.who }}</div>
+                                <div style="margin: 3px 0 0; font-family: inherit; font-size: 12.5px; line-height: 1.6; color: #b9c3bc">{{ pt.text }}</div>
+                              </div>
+                            </div>
+                          </sc-for>
+                          <div style="display: flex; align-items: center; gap: 10px; margin: 12px 0 0; padding: 11px 0 0; border-top: 1px dashed #1e2422; font-size: 11px; color: #4f5a53">
+                            <span>실행 로그 · 변경 파일 · 아티팩트는 대시보드</span>
+                            <button onClick="{{ m.onOpenDash }}" style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; background: #131817; color: #9aa59d; cursor: pointer; white-space: nowrap" style-hover="color: #eef2ee; border-color: #3a4540">:dash</button>
+                          </div>
+                        </div>
+                      </sc-if>
+                    </div>
+                  </div>
+                </sc-if>
+
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ busy }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; gap: 12px; align-items: center">
+                <span style="flex: none; width: 34px; font-size: 11px; color: #3ed49c">pilo</span>
+                <div style="flex: 1; display: flex; align-items: center; gap: 11px; padding: 12px 15px; border: 1px dashed #24302b; border-radius: 10px; background: #0c100e">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; background: #3ed49c; animation: pulse 1.1s ease-in-out infinite; display: block; flex: none"></span>
+                  <span style="font-size: 12.5px; color: #9aa59d">{{ busyLabel }}</span>
+                  <span style="margin-left: auto; font-size: 11px; color: #4f5a53">{{ busySub }}</span>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="border-top: 1px solid #1a1e1c; background: #0d100f; padding: 13px 16px">
+            <div style="display: flex; align-items: center; gap: 11px">
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: oklch(0.82 0.11 165)">❯</span>
+              <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onKey }}" placeholder="Pilo agent에게 지시 · : 로 시작하면 커맨드 (예 :dash)" style="flex: 1; min-width: 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 13px; background: transparent; border: none; outline: none; color: #e6ebe6">
+              <button onClick="{{ onSend }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 6px 12px; border-radius: 6px; border: 1px solid #26302b; background: #131817; color: #9aa59d; cursor: pointer; white-space: nowrap" style-hover="color: #eef2ee; border-color: #3a4540">send ⏎</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 16px; margin: 11px 0 0; padding: 0 0 10px; border-bottom: 1px solid #141817; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #4f5a53; white-space: nowrap; overflow: hidden">
+              <span><span style="color:#9aa59d">⏎</span> send</span>
+              <span><span style="color:#9aa59d">:dash</span> open web dashboard</span>
+              <span><span style="color:#9aa59d">:agents</span> agent tree</span>
+              <span><span style="color:#9aa59d">:inbox</span> 미처리 요청</span>
+              <span><span style="color:#9aa59d">:help</span></span>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 11px 0 0">
+              <sc-for list="{{ suggestions }}" as="s" hint-placeholder-count="3">
+                <button onClick="{{ s.onClick }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 999px; border: 1px solid #1e2422; background: transparent; color: #67726b; cursor: pointer; text-align: left" style-hover="color: #d9ded9; border-color: #303a35">{{ s.label }}</button>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <!-- agent tree rail -->
+        <div class="om-scroll" style="overflow-y: auto; max-height: 620px; background: #0b0e0d">
+          <div style="padding: 14px 15px 10px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.14em; color: #4f5a53; text-transform: uppercase">agent tree</div>
+          <div style="padding: 0 15px 12px; border-bottom: 1px solid #141817">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="width: 6px; height: 6px; border-radius: 50%; flex: none; background: #3ed49c"></span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #e6ebe6">{{ piloName }}</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 3px; color: #3ed49c; border: 1px solid #24312c">PILO</span>
+            </div>
+            <div style="margin: 5px 0 0 14px; font-family: inherit; font-size: 11px; color: #5f6b64">사용자와 대화 · pm_result 취합</div>
+          </div>
+          <sc-if value="{{ treeEmpty }}" hint-placeholder-val="{{ false }}">
+            <div style="margin: 4px 12px 0; padding: 16px 14px; border: 1px dashed #232927; border-radius: 9px; background: #0a0d0c">
+              <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #9aa59d">Project agent 없음</div>
+              <div style="margin: 6px 0 0; font-size: 11px; line-height: 1.6; color: #5f6b64">대시보드 Agents 탭에서 PM을 등록하면 여기에 트리가 그려집니다. 등록 전에도 Pilo agent와 대화는 됩니다.</div>
+              <button onClick="{{ onOpenAgents }}" style="width: 100%; margin: 11px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 7px; border-radius: 6px; border: 1px solid #26302b; background: #131817; color: #d9ded9; cursor: pointer" style-hover="border-color: #3a4540">register agent</button>
+            </div>
+          </sc-if>
+          <sc-for list="{{ tree }}" as="pm" hint-placeholder-count="3">
+            <div style="padding: 12px 15px; border-bottom: 1px solid #141817">
+              <div style="display: flex; align-items: center; gap: 8px">
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #3e4744; flex: none">└</span>
+                <span style="width: 6px; height: 6px; border-radius: 50%; flex: none; background: {{ pm.color }}"></span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #e6ebe6; min-width: 0; overflow: hidden; text-overflow: ellipsis">{{ pm.name }}</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 3px; color: oklch(0.78 0.08 235); border: 1px solid #232b31; flex: none">PM</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #4f5a53; margin-left: auto; flex: none">{{ pm.status }}</span>
+              </div>
+              <div style="margin: 5px 0 0 30px; font-size: 11px; color: #67726b; line-height: 1.5">{{ pm.task }}</div>
+              <sc-for list="{{ pm.children }}" as="c" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0 0 22px">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #2f3634; flex: none">└</span>
+                  <span style="width: 5px; height: 5px; border-radius: 50%; flex: none; background: {{ c.color }}"></span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #9aa59d; min-width: 0; overflow: hidden; text-overflow: ellipsis">{{ c.name }}</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; padding: 2px 5px; border-radius: 3px; color: #67726b; border: 1px solid #1e2422; flex: none">WORKER</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #3e4744; margin-left: auto; flex: none">{{ c.status }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+          <div style="padding: 12px 15px">
+            <button onClick="{{ onOpenAgents }}" style="width: 100%; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 8px; border-radius: 6px; border: 1px dashed #262e2b; background: transparent; color: #5f6b64; cursor: pointer" style-hover="color: #9aa59d; border-color: #3a4540">+ register agent — :dash agents</button>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+  </sc-if>
+
+  <!-- ============ DASHBOARD ============ -->
+  <sc-if value="{{ isDash }}" hint-placeholder-val="{{ false }}">
+  <div style="display: grid; grid-template-columns: 216px 1fr; min-height: calc(100vh - 55px)">
+    <div style="border-right: 1px solid #1a1e1c; background: #0a0c0b; padding: 22px 12px">
+      <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.14em; color: #4f5a53; padding: 0 10px 12px; text-transform: uppercase">dashboard</div>
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="8">
+        <button onClick="{{ t.onClick }}" style="position: relative; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; margin: 0 0 2px; border-radius: 7px; border: none; background: transparent; color: #6f7a73; cursor: pointer; text-align: left; font-size: 13px" style-hover="background: #121615; color: #d9ded9">
+          <sc-if value="{{ t.active }}" hint-placeholder-val="{{ false }}">
+            <span style="position: absolute; inset: 0; border-radius: 7px; background: #121615; border: 1px solid #232b28"></span>
+          </sc-if>
+          <span style="position: relative; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #4f5a53; width: 16px">{{ t.num }}</span>
+          <span style="position: relative">{{ t.label }}</span>
+          <sc-if value="{{ t.hasBadge }}" hint-placeholder-val="{{ false }}">
+            <span style="position: relative; margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 2px 7px; border-radius: 999px; color: {{ t.badgeColor }}; background: #151a18">{{ t.badge }}</span>
+          </sc-if>
+        </button>
+      </sc-for>
+      <div style="margin: 26px 0 0; padding: 14px 12px; border-radius: 9px; border: 1px solid #1a1e1c; background: #0d100f">
+        <div style="display: flex; align-items: center; gap: 7px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #9aa59d"><span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.78 0.13 165); display: block"></span>herdr connected</div>
+        <div style="margin: 7px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; line-height: 1.7; color: #4f5a53">1 pilo · 3 pm · 5 worker<br>uptime 6d 04h</div>
+      </div>
+    </div>
+
+    <div class="om-scroll" style="padding: 30px 32px 60px; overflow-x: hidden">
+      <div style="display: flex; align-items: flex-end; gap: 16px; margin: 0 0 24px">
+        <div>
+          <h1 style="font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 5px; color: #eef2ee">{{ tabTitle }}</h1>
+          <p style="margin: 0; font-size: 13px; color: #7d887f">{{ tabDesc }}</p>
+        </div>
+        <div style="margin-left: auto; display: flex; gap: 8px">
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 7px 12px; border-radius: 7px; border: 1px solid #1e2422; color: #7d887f; white-space: nowrap">last sync 12s ago</span>
+        </div>
+      </div>
+
+      <!-- overview -->
+      <sc-if value="{{ tabOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 0 0 22px">
+          <sc-for list="{{ stats }}" as="s" hint-placeholder-count="4">
+            <div style="padding: 16px 18px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; color: #5f6b64; text-transform: uppercase">{{ s.label }}</div>
+              <div style="display: flex; align-items: baseline; gap: 8px; margin: 10px 0 0">
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 24px; font-weight: 500; color: #eef2ee">{{ s.value }}</span>
+                <span style="font-size: 11px; color: #67726b">{{ s.sub }}</span>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin: 0 0 12px">
+          <div style="min-width: 0; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; overflow: hidden">
+            <div style="display: flex; align-items: center; padding: 13px 16px; border-bottom: 1px solid #171b19">
+              <span style="font-size: 13px; color: #d9ded9; font-weight: 500">Recent tasks</span>
+              <span style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">last 24h</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 74px 1fr 120px 84px 74px; padding: 9px 16px; border-bottom: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; color: #4f5a53; text-transform: uppercase">
+              <span>time</span><span>task</span><span>agent</span><span>status</span><span>tokens</span>
+            </div>
+            <sc-for list="{{ tasks }}" as="t" hint-placeholder-count="6">
+              <div style="display: grid; grid-template-columns: 74px 1fr 120px 84px 74px; align-items: center; padding: 11px 16px; border-bottom: 1px solid #121615; font-size: 12px; color: #9aa59d" style-hover="background: #101413">
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">{{ t.time }}</span>
+                <span style="color: #d9ded9; padding-right: 16px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ t.title }}</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">{{ t.agent }}</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{ t.color }}">{{ t.status }}</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">{{ t.tokens }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="min-width: 0">
+            <div style="padding: 18px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500; margin: 0 0 4px">Runtime status</div>
+              <p style="margin: 0 0 14px; font-size: 12px; color: #7d887f">서버 · wake · 대시보드</p>
+              <sc-for list="{{ services }}" as="sv" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="width: 6px; height: 6px; border-radius: 50%; flex: none; background: {{ sv.color }}"></span>
+                  <span style="color: #d9ded9; width: 78px">{{ sv.name }}</span>
+                  <span style="color: #67726b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ sv.detail }}</span>
+                  <span style="color: {{ sv.color }}; flex: none">{{ sv.state }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin: 12px 0 0; padding: 18px; border: 1px solid oklch(0.40 0.10 25 / 0.35); border-radius: 11px; background: oklch(0.26 0.05 25 / 0.14)">
+              <div style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.70 0.15 25); display: block"></span><span style="font-size: 13px; color: #eef2ee; font-weight: 500">wake 실패 {{ wakeFailCount }}건</span></div>
+              <sc-for list="{{ wakeFailures }}" as="w" hint-placeholder-count="2">
+                <div style="margin: 12px 0 0; padding: 12px; border-radius: 9px; background: #0b0d0c; border: 1px solid #1e2422">
+                  <div style="display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                    <span style="color: oklch(0.75 0.14 25)">{{ w.agent }}</span>
+                    <span style="color: #4f5a53">{{ w.code }}</span>
+                    <span style="margin-left: auto; color: #3e4744">{{ w.at }}</span>
+                  </div>
+                  <div style="margin: 7px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.6; color: #8b968e">{{ w.detail }}</div>
+                  <div style="display: flex; gap: 7px; margin: 10px 0 0">
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #d9ded9; cursor: pointer" style-hover="border-color:#3a4540">wake again</span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer" style-hover="border-color:#3a4540">open log</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 18px 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+          <div style="font-size: 13px; color: #d9ded9; font-weight: 500; margin: 0 0 12px">설정 경로</div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+            <sc-for list="{{ paths }}" as="pa" hint-placeholder-count="5">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #0a0d0c; border: 1px solid #171b19">
+                <span style="color: #5f6b64; width: 58px; flex: none">{{ pa.label }}</span>
+                <span style="color: #b9c3bc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ pa.value }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- agents: org tree + register -->
+      <sc-if value="{{ tabAgents }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start">
+          <div style="min-width: 0; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; padding: 22px 24px">
+            <div style="display: flex; align-items: center; gap: 10px; margin: 0 0 20px">
+              <span style="font-size: 13px; color: #d9ded9; font-weight: 500">조직도</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">parent_agent_id tree</span>
+              <div style="margin-left: auto; display: flex; gap: 6px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em">
+                <span style="padding: 3px 7px; border-radius: 3px; color: #3ed49c; border: 1px solid #24312c">PILO</span>
+                <span style="padding: 3px 7px; border-radius: 3px; color: oklch(0.78 0.08 235); border: 1px solid #232b31">PM</span>
+                <span style="padding: 3px 7px; border-radius: 3px; color: #7d887f; border: 1px solid #1e2422">WORKER</span>
+              </div>
+            </div>
+
+            <div style="display: inline-flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 10px; border: 1px solid #24312c; background: linear-gradient(180deg, #101413, #0b0e0d)">
+              <span style="width: 7px; height: 7px; border-radius: 50%; background: #3ed49c; display: block"></span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 14px; color: #eef2ee; white-space: nowrap">{{ piloName }}</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 3px; color: #3ed49c; border: 1px solid #24312c">PILO</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">claude · ~/work</span>
+              <span style="display: flex; gap: 5px; margin-left: 8px; opacity: 0.35" style-hover="opacity: 1">
+                <button onClick="{{ onEditPilo }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: #eef2ee; border-color: #3a4540">edit</button>
+                <span title="대표 agent는 삭제할 수 없습니다" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #1a1e1c; background: #0a0d0c; color: #313937; cursor: not-allowed">delete</span>
+              </span>
+            </div>
+
+            <div style="margin: 4px 0 0 26px; border-left: 1px solid #1e2422; padding: 0 0 0 22px">
+              <sc-for list="{{ tree }}" as="pm" hint-placeholder-count="3">
+                <div style="padding: 16px 0 0">
+                  <div style="position: relative; display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-radius: 10px; border: 1px solid #1e2422; background: #0d100f" style-hover="border-color: #2b3531">
+                    <span style="position: absolute; left: -22px; top: 50%; width: 22px; height: 1px; background: #1e2422; display: block"></span>
+                    <span style="width: 6px; height: 6px; border-radius: 50%; flex: none; background: {{ pm.color }}"></span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 13px; color: #eef2ee; white-space: nowrap">{{ pm.name }}</span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; letter-spacing: 0.08em; padding: 3px 7px; border-radius: 3px; color: oklch(0.78 0.08 235); border: 1px solid #232b31">PM</span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">{{ pm.project }} · {{ pm.runtime }}</span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #4f5a53; margin-left: auto">{{ pm.aliases }}</span>
+                    <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{ pm.color }}; width: 60px; text-align: right">{{ pm.status }}</span>
+                    <span style="display: flex; gap: 5px; opacity: 0.35" style-hover="opacity: 1">
+                      <button onClick="{{ pm.onEdit }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: #eef2ee; border-color: #3a4540">edit</button>
+                      <button style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: oklch(0.75 0.14 25); border-color: #3a2a28">delete</button>
+                    </span>
+                  </div>
+                  <div style="margin: 0 0 0 26px; border-left: 1px solid #1a1e1c; padding: 0 0 0 22px">
+                    <sc-for list="{{ pm.children }}" as="c" hint-placeholder-count="2">
+                      <div style="position: relative; display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 10px 14px; border-radius: 9px; border: 1px solid #171b19; background: #0a0d0c">
+                        <span style="position: absolute; left: -22px; top: 50%; width: 22px; height: 1px; background: #1a1e1c; display: block"></span>
+                        <span style="width: 5px; height: 5px; border-radius: 50%; flex: none; background: {{ c.color }}"></span>
+                        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #b9c3bc; white-space: nowrap">{{ c.name }}</span>
+                        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 9px; padding: 2px 6px; border-radius: 3px; color: #7d887f; border: 1px solid #1e2422">WORKER</span>
+                        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #4f5a53">{{ c.note }}</span>
+                        <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{ c.color }}; margin-left: auto">{{ c.status }}</span>
+                        <span style="display: flex; gap: 5px; opacity: 0.35" style-hover="opacity: 1">
+                          <button onClick="{{ c.onEdit }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #1e2422; background: #0a0d0c; color: #7d887f; cursor: pointer" style-hover="color: #eef2ee; border-color: #3a4540">edit</button>
+                          <button style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #1e2422; background: #0a0d0c; color: #7d887f; cursor: pointer" style-hover="color: oklch(0.75 0.14 25); border-color: #3a2a28">delete</button>
+                        </span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="min-width: 0; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; padding: 22px">
+            <div style="display: flex; align-items: center; gap: 9px">
+              <span style="font-size: 13px; color: #d9ded9; font-weight: 500">{{ formTitle }}</span>
+              <sc-if value="{{ isEditing }}" hint-placeholder-val="{{ false }}">
+                <span style="display: flex; align-items: center; gap: 8px; margin-left: auto">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 3px; color: oklch(0.78 0.08 235); border: 1px solid #232b31">EDIT</span>
+                  <button onClick="{{ onCancelEdit }}" style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 9px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: #eef2ee">cancel</button>
+                </span>
+              </sc-if>
+            </div>
+            <p style="margin: 7px 0 18px; font-size: 12px; line-height: 1.6; color: #7d887f">{{ formDesc }}</p>
+            <sc-for list="{{ formFields }}" as="fd" hint-placeholder-count="8">
+              <div style="margin: 0 0 13px">
+                <div style="display: flex; align-items: baseline; gap: 7px; margin: 0 0 6px">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #9aa59d">{{ fd.name }}</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #4f5a53">{{ fd.hint }}</span>
+                  <sc-if value="{{ fd.required }}" hint-placeholder-val="{{ false }}">
+                    <span style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: oklch(0.72 0.13 25)">required</span>
+                  </sc-if>
+                </div>
+                <sc-if value="{{ fd.isChoice }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; gap: 6px">
+                    <sc-for list="{{ fd.choices }}" as="ch" hint-placeholder-count="3">
+                      <button onClick="{{ ch.onClick }}" disabled="{{ ch.disabled }}" style="position: relative; flex: 1; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 8px 6px; border-radius: 7px; border: 1px solid #1e2422; background: #0a0d0c; color: #6f7a73; cursor: {{ ch.cursor }}; opacity: {{ ch.opacity }}" style-hover="border-color: #303a35">
+                        <sc-if value="{{ ch.active }}" hint-placeholder-val="{{ false }}">
+                          <span style="position: absolute; inset: 0; border-radius: 7px; border: 1px solid #3a4540; background: #151a18"></span>
+                        </sc-if>
+                        <span style="position: relative; display: block; color: {{ ch.color }}">{{ ch.label }}</span>
+                        <sc-if value="{{ ch.disabled }}" hint-placeholder-val="{{ false }}">
+                          <span style="position: relative; display: block; margin: 3px 0 0; font-size: 9px; color: #3e4744">이미 등록됨</span>
+                        </sc-if>
+                      </button>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ fd.isSelect }}" hint-placeholder-val="{{ false }}">
+                  <select value="{{ fd.value }}" onChange="{{ fd.onChange }}" style="width: 100%; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; padding: 9px 11px; border-radius: 7px; border: 1px solid #1e2422; background: #0a0d0c; color: #e6ebe6; outline: none">
+                    <sc-for list="{{ fd.options }}" as="op" hint-placeholder-count="3">
+                      <option value="{{ op.value }}">{{ op.label }}</option>
+                    </sc-for>
+                  </select>
+                </sc-if>
+                <sc-if value="{{ fd.isText }}" hint-placeholder-val="{{ true }}">
+                  <input value="{{ fd.value }}" onChange="{{ fd.onChange }}" placeholder="{{ fd.placeholder }}" style="width: 100%; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; padding: 9px 11px; border-radius: 7px; border: 1px solid #1e2422; background: #0a0d0c; color: #e6ebe6; outline: none">
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="display: flex; align-items: center; gap: 10px; margin: 16px 0 0; padding: 11px 13px; border-radius: 8px; border: 1px dashed #232927; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">
+              <span>target</span>
+              <span style="color: #b9c3bc">{{ autoTarget }}</span>
+              <span style="margin-left: auto; color: #3e4744">auto</span>
+            </div>
+            <button style="width: 100%; margin: 16px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; padding: 10px; border-radius: 8px; border: 1px solid #2b3531; background: #151a18; color: #eef2ee; cursor: pointer" style-hover="border-color: oklch(0.55 0.09 165)">{{ submitLabel }}</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- inbox -->
+      <sc-if value="{{ tabInbox }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px">
+          <div style="border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; overflow: hidden">
+            <div style="display: flex; align-items: center; padding: 13px 16px; border-bottom: 1px solid #171b19">
+              <span style="font-size: 13px; color: #d9ded9; font-weight: 500">inbox</span>
+              <span style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">사용자 입력 원문</span>
+            </div>
+            <sc-for list="{{ inbox }}" as="ib" hint-placeholder-count="4">
+              <div style="padding: 14px 16px; border-bottom: 1px solid #121615" style-hover="background: #101413">
+                <div style="display: flex; align-items: center; gap: 9px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: #4f5a53">{{ ib.id }}</span>
+                  <span style="color: #5f6b64">{{ ib.at }}</span>
+                  <span style="margin-left: auto; padding: 2px 8px; border-radius: 999px; border: 1px solid #232b28; color: {{ ib.color }}">{{ ib.state }}</span>
+                </div>
+                <div style="margin: 8px 0 0; font-size: 12.5px; line-height: 1.6; color: #d9ded9">{{ ib.text }}</div>
+                <div style="margin: 8px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #67726b">→ {{ ib.routed }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="border: 1px solid #1a1e1c; border-radius: 11px; background: #0a0c0b; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-bottom: 1px solid #171b19; background: #0e1211; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px">
+              <span style="color: #e6ebe6">{{ inboxDetailId }}</span>
+              <span style="color: #5f6b64">lifecycle</span>
+            </div>
+            <div style="padding: 18px">
+              <sc-for list="{{ inboxTrace }}" as="tr" hint-placeholder-count="4">
+                <div style="display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid #141817">
+                  <span style="flex: none; width: 90px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: {{ tr.color }}">{{ tr.stage }}</span>
+                  <div style="flex: 1; min-width: 0">
+                    <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #7d887f">{{ tr.who }} · {{ tr.at }}</div>
+                    <div style="margin: 4px 0 0; font-size: 12.5px; line-height: 1.6; color: #b9c3bc">{{ tr.text }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- events: raw pm_result / event -->
+      <sc-if value="{{ tabEvents }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 300px 1fr; gap: 14px">
+          <div style="border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; overflow: hidden">
+            <sc-for list="{{ events }}" as="ev" hint-placeholder-count="5">
+              <button onClick="{{ ev.onClick }}" style="position: relative; display: block; width: 100%; text-align: left; padding: 13px 15px; border: none; border-bottom: 1px solid #121615; background: transparent; cursor: pointer" style-hover="background: #101413">
+                <sc-if value="{{ ev.active }}" hint-placeholder-val="{{ false }}">
+                  <span style="position: absolute; inset: 0; background: #121615; border-left: 2px solid #3ed49c"></span>
+                </sc-if>
+                <span style="position: relative; display: flex; align-items: center; gap: 8px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: {{ ev.color }}">{{ ev.type }}</span>
+                  <span style="color: #4f5a53; margin-left: auto">{{ ev.at }}</span>
+                </span>
+                <span style="position: relative; display: block; margin: 6px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #d9ded9">{{ ev.agent }}</span>
+                <span style="position: relative; display: block; margin: 3px 0 0; font-size: 11px; color: #5f6b64; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ ev.title }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="border: 1px solid #1a1e1c; border-radius: 11px; background: #0a0c0b; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-bottom: 1px solid #171b19; background: #0e1211">
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #e6ebe6">{{ eventTitle }}</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">원문 payload</span>
+              <span style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer" style-hover="color:#eef2ee">copy json</span>
+            </div>
+            <div class="om-scroll" style="padding: 16px; overflow: auto; max-height: 300px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.85">
+              <sc-for list="{{ eventLines }}" as="l" hint-placeholder-count="10">
+                <div style="display: flex; gap: 16px">
+                  <span style="color: #2f3634; flex: none; width: 24px; text-align: right">{{ l.n }}</span>
+                  <span style="white-space: pre; color: {{ l.color }}">{{ l.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="padding: 14px 16px; border-top: 1px solid #171b19; background: #0b0e0d">
+              <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; color: #4f5a53; text-transform: uppercase">run log</div>
+              <div style="margin: 10px 0 0">
+                <sc-for list="{{ eventLog }}" as="lg" hint-placeholder-count="5">
+                  <div style="display: flex; gap: 12px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.9; color: #939e96">
+                    <span style="color: #3e4744; flex: none; width: 52px">{{ lg.t }}</span>
+                    <span style="white-space: pre-wrap">{{ lg.text }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; padding: 12px 0 0; border-top: 1px dashed #1e2422">
+                <sc-for list="{{ eventFiles }}" as="fl" hint-placeholder-count="2">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 4px 9px; border-radius: 5px; background: #131817; border: 1px solid #212725; color: #9aa59d">{{ fl.label }}</span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- system -->
+      <sc-if value="{{ tabSystem }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px">
+          <div>
+            <div style="padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500; margin: 0 0 12px">서비스 상태</div>
+              <sc-for list="{{ services }}" as="sv" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 11px; padding: 13px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px">
+                  <span style="width: 7px; height: 7px; border-radius: 50%; flex: none; background: {{ sv.color }}"></span>
+                  <span style="color: #eef2ee; width: 90px">{{ sv.name }}</span>
+                  <span style="color: #67726b; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ sv.detail }}</span>
+                  <span style="color: {{ sv.color }}; flex: none; font-size: 11px">{{ sv.state }}</span>
+                </div>
+              </sc-for>
+              <div style="margin: 16px 0 0; padding: 13px; border-radius: 9px; background: #0a0d0c; border: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 2; color: #8b968e">
+                <div>pilo up      <span style="color:#4f5a53">postgres + 서버 기동</span></div>
+                <div>pilo status  <span style="color:#4f5a53">서비스 상태</span></div>
+                <div>pilo doctor  <span style="color:#4f5a53">진단</span></div>
+                <div style="margin: 8px 0 0; color: #4f5a53; font-size: 10.5px; line-height: 1.6">세션 wake는 watcher가 자동으로 처리합니다.</div>
+              </div>
+            </div>
+            <div style="margin: 12px 0 0; padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500; margin: 0 0 12px">설정 경로</div>
+              <sc-for list="{{ paths }}" as="pa" hint-placeholder-count="5">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: #5f6b64; width: 64px; flex: none">{{ pa.label }}</span>
+                  <span style="color: #b9c3bc; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ pa.value }}</span>
+                  <span style="color: #3e4744; flex: none">{{ pa.note }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="padding: 20px; border: 1px solid oklch(0.40 0.10 25 / 0.35); border-radius: 11px; background: oklch(0.26 0.05 25 / 0.14); align-self: start">
+            <div style="display: flex; align-items: center; gap: 8px"><span style="width: 6px; height: 6px; border-radius: 50%; background: oklch(0.70 0.15 25); display: block"></span><span style="font-size: 13px; color: #eef2ee; font-weight: 500">wake 실패 목록</span></div>
+            <p style="margin: 8px 0 0; font-size: 12px; line-height: 1.6; color: #8b968e">herdr 세션을 깨우지 못한 기록입니다. 재시도하거나 세션을 다시 바인딩하세요.</p>
+            <sc-for list="{{ wakeFailures }}" as="w" hint-placeholder-count="3">
+              <div style="margin: 12px 0 0; padding: 14px; border-radius: 9px; background: #0b0d0c; border: 1px solid #1e2422">
+                <div style="display: flex; align-items: center; gap: 9px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: oklch(0.75 0.14 25)">{{ w.agent }}</span>
+                  <span style="color: #4f5a53">{{ w.code }}</span>
+                  <span style="margin-left: auto; color: #3e4744">{{ w.at }}</span>
+                </div>
+                <div style="margin: 7px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 1.6; color: #8b968e">{{ w.detail }}</div>
+                <div style="margin: 7px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">attempts {{ w.attempts }} · runtime {{ w.runtime }}</div>
+                <div style="display: flex; gap: 7px; margin: 11px 0 0">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #d9ded9; cursor: pointer" style-hover="border-color:#3a4540">wake again</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer" style-hover="border-color:#3a4540">rebind session</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer" style-hover="border-color:#3a4540">open log</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- artifacts -->
+      <sc-if value="{{ tabArtifacts }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; align-items: start">
+          <div style="min-width: 0; max-width: 340px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e; overflow: hidden">
+            <div style="display: flex; align-items: center; padding: 12px 15px; border-bottom: 1px solid #171b19">
+              <span style="font-size: 13px; color: #d9ded9; font-weight: 500">files</span>
+              <span style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">{{ artifactCount }} changed</span>
+            </div>
+            <sc-for list="{{ artifacts }}" as="ar" hint-placeholder-count="5">
+              <button onClick="{{ ar.onClick }}" style="position: relative; display: block; width: 100%; text-align: left; padding: 12px 15px; border: none; border-bottom: 1px solid #121615; background: transparent; cursor: pointer" style-hover="background: #101413">
+                <sc-if value="{{ ar.active }}" hint-placeholder-val="{{ false }}">
+                  <span style="position: absolute; inset: 0; background: #121615; border-left: 2px solid #3ed49c"></span>
+                </sc-if>
+                <span style="position: relative; display: flex; align-items: center; gap: 8px">
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #e6ebe6; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ ar.file }}</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; margin-left: auto; flex: none; color: {{ ar.deltaColor }}">{{ ar.delta }}</span>
+                </span>
+                <span style="position: relative; display: flex; align-items: center; gap: 8px; margin: 5px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: #5f6b64">
+                  <span>{{ ar.agent }}</span>
+                  <span style="color: #2f3634">·</span>
+                  <span>{{ ar.at }}</span>
+                </span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="min-width: 0; border: 1px solid #1a1e1c; border-radius: 11px; background: #0a0c0b; overflow: hidden">
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-bottom: 1px solid #171b19; background: #0e1211">
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; color: #e6ebe6; flex: 1 1 auto; min-width: 60px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ artifactPath }}</span>
+              <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ artifactMeta }}</span>
+              <span style="margin-left: auto; display: flex; gap: 6px; flex: none">
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer; white-space: nowrap" style-hover="color:#eef2ee">copy</span>
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer; white-space: nowrap" style-hover="color:#eef2ee">reveal</span>
+              </span>
+            </div>
+            <div class="om-scroll" style="padding: 14px 0; overflow: auto; max-height: 520px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px; line-height: 1.85">
+              <sc-for list="{{ artifactLines }}" as="l" hint-placeholder-count="12">
+                <div style="display: flex; gap: 14px; padding: 0 16px; background: {{ l.bg }}">
+                  <span style="color: #2f3634; flex: none; width: 26px; text-align: right">{{ l.n }}</span>
+                  <span style="color: {{ l.markColor }}; flex: none; width: 8px">{{ l.mark }}</span>
+                  <span style="white-space: pre-wrap; color: {{ l.color }}">{{ l.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- projects -->
+      <sc-if value="{{ tabProjects }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; align-items: center; gap: 10px; margin: 0 0 14px">
+          <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; color: #5f6b64">{{ projectCount }} projects</span>
+          <button style="margin-left: auto; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; padding: 7px 12px; border-radius: 7px; border: 1px solid #2b3531; background: #151a18; color: #eef2ee; cursor: pointer" style-hover="border-color: oklch(0.55 0.09 165)">+ new project</button>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px">
+          <sc-for list="{{ projects }}" as="pr" hint-placeholder-count="4">
+            <div style="min-width: 0; padding: 18px 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: linear-gradient(180deg, #0f1211, #0a0d0c)" style-hover="border-color: #2b3531">
+              <div style="display: flex; align-items: center; gap: 9px">
+                <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 14px; color: #eef2ee">{{ pr.name }}</span>
+                <span style="display: flex; gap: 5px; margin-left: auto; opacity: 0.35" style-hover="opacity: 1">
+                  <button style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: #eef2ee; border-color: #3a4540">edit</button>
+                  <button style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 4px 8px; border-radius: 5px; border: 1px solid #26302b; background: #0a0d0c; color: #9aa59d; cursor: pointer" style-hover="color: oklch(0.75 0.14 25); border-color: #3a2a28">delete</button>
+                </span>
+              </div>
+              <div style="margin: 14px 0 0; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px; line-height: 2; color: #67726b">
+                <div style="display: flex; gap: 10px"><span style="width: 46px; flex: none">repo</span><span style="color:#b9c3bc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ pr.repo }}</span></div>
+                <div style="display: flex; gap: 10px"><span style="width: 46px; flex: none">path</span><span style="color:#b9c3bc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ pr.path }}</span></div>
+                <div style="display: flex; gap: 10px"><span style="width: 46px; flex: none">pm</span><span style="color: {{ pr.pmColor }}">{{ pr.pm }}</span><span style="color:#3e4744">{{ pr.workers }} worker</span></div>
+              </div>
+              <div style="margin: 13px 0 0; padding: 12px 0 0; border-top: 1px solid #171b19">
+                <div style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; letter-spacing: 0.1em; color: #4f5a53; text-transform: uppercase">recent task</div>
+                <div style="margin: 6px 0 0; display: flex; align-items: center; gap: 9px">
+                  <span style="font-size: 12px; color: #b9c3bc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ pr.recent }}</span>
+                  <span style="font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; color: {{ pr.recentColor }}; margin-left: auto; flex: none">{{ pr.recentState }}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- settings -->
+      <sc-if value="{{ tabSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; align-items: start">
+          <div style="min-width: 0">
+            <div style="padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500">runtime별 기본 모델</div>
+              <p style="margin: 6px 0 14px; font-size: 12px; line-height: 1.6; color: #7d887f">agent 등록 시 모델을 지정하지 않으면 여기 값이 쓰입니다.</p>
+              <sc-for list="{{ runtimeModels }}" as="rm" hint-placeholder-count="2">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 12px">
+                  <span style="color: #eef2ee; width: 78px; flex: none">{{ rm.runtime }}</span>
+                  <span style="color: #b9c3bc; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ rm.model }}</span>
+                  <span style="font-size: 11px; padding: 5px 10px; border-radius: 6px; border: 1px solid #26302b; color: #9aa59d; cursor: pointer; flex: none" style-hover="color:#eef2ee; border-color:#3a4540">change</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin: 12px 0 0; padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500">토큰 집계 표시</div>
+              <p style="margin: 6px 0 14px; font-size: 12px; line-height: 1.6; color: #7d887f">TUI 상태바와 대시보드에 어떤 수치를 띄울지 고릅니다.</p>
+              <sc-for list="{{ tokenOptions }}" as="to" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: #b9c3bc; flex: 1; min-width: 0">{{ to.label }}</span>
+                  <span style="width: 30px; height: 17px; border-radius: 999px; flex: none; background: {{ to.bg }}; position: relative">
+                    <span style="position: absolute; top: 2px; left: {{ to.knob }}; width: 13px; height: 13px; border-radius: 50%; background: #0a0d0c; display: block"></span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="min-width: 0">
+            <div style="padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500">알림 규칙</div>
+              <p style="margin: 6px 0 14px; font-size: 12px; line-height: 1.6; color: #7d887f">조용한 관제실 원칙 — 실패와 승인 요청만 즉시 알립니다.</p>
+              <sc-for list="{{ rules }}" as="r" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid #171b19; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                  <span style="color: #b9c3bc; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ r.when }}</span>
+                  <span style="color: #4f5a53; flex: none">→</span>
+                  <span style="color: #9aa59d; width: 86px; flex: none">{{ r.channel }}</span>
+                  <span style="width: 30px; height: 17px; border-radius: 999px; flex: none; background: {{ r.bg }}; position: relative">
+                    <span style="position: absolute; top: 2px; left: {{ r.knob }}; width: 13px; height: 13px; border-radius: 50%; background: #0a0d0c; display: block"></span>
+                  </span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin: 12px 0 0; padding: 20px; border: 1px solid #1a1e1c; border-radius: 11px; background: #0c0f0e">
+              <div style="font-size: 13px; color: #d9ded9; font-weight: 500">데이터 보관 기간</div>
+              <p style="margin: 6px 0 14px; font-size: 12px; line-height: 1.6; color: #7d887f">작업 기록(지시·답변·산출물)은 삭제하지 않습니다. 시스템 로그만 기간이 지나면 정리합니다.</p>
+              <sc-for list="{{ retention }}" as="rt" hint-placeholder-count="3">
+                <div style="padding: 12px 0; border-top: 1px solid #171b19">
+                  <div style="display: flex; align-items: baseline; gap: 10px; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 11px">
+                    <span style="color: #b9c3bc">{{ rt.label }}</span>
+                    <span style="flex: none; font-size: 9px; letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px; color: #67726b; border: 1px solid #232b28; background: #0a0d0c">2차 적용</span>
+                    <span style="margin-left: auto; color: #eef2ee">{{ rt.value }}</span>
+                  </div>
+                  <div style="display: flex; gap: 5px; margin: 8px 0 0">
+                    <sc-for list="{{ rt.choices }}" as="rc" hint-placeholder-count="4">
+                      <span style="flex: 1; text-align: center; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; padding: 6px 4px; border-radius: 6px; border: 1px solid {{ rc.border }}; background: {{ rc.bg }}; color: {{ rc.color }}; cursor: pointer">{{ rc.label }}</span>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-for>
+              <div style="margin: 14px 0 0; padding: 11px 13px; border-radius: 8px; border: 1px dashed #232927; font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; font-size: 10px; line-height: 1.8; color: #5f6b64">
+                <div>wake 실패 등 실패 이벤트는 <span style="color: #b9c3bc">90일</span> 보관</div>
+                <div>inbox · task · pm_result · final_reply · artifact는 <span style="color: #b9c3bc">삭제하지 않음</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;productName&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Pilo&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Brand&quot;},&quot;showCost&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;TUI&quot;}}">
+const GREEN = "oklch(0.78 0.13 165)";
+const AMBER = "oklch(0.83 0.12 80)";
+const RED = "oklch(0.70 0.15 25)";
+const BLUE = "oklch(0.78 0.08 235)";
+const GREY = "#4f5a53";
+
+const TREE = [
+  { name: "pm-1", project: "project-a", runtime: "claude", aliases: "@a", status: "running", task: "요청 분해 · worker 2개 실행 중",
+    children: [
+      { name: "w-1a", status: "running", note: "impl" },
+      { name: "w-1b", status: "done", note: "review" }
+    ] },
+  { name: "pm-2", project: "project-b", runtime: "codex", aliases: "@b", status: "idle", task: "대기 · 마지막 결과 전달 완료",
+    children: [
+      { name: "w-2a", status: "done", note: "impl" }
+    ] },
+  { name: "pm-3", project: "project-c", runtime: "codex", aliases: "@c", status: "failed", task: "wake 실패 — 세션 없음",
+    children: [
+      { name: "w-3a", status: "idle", note: "docs" },
+      { name: "w-3b", status: "idle", note: "impl" }
+    ] }
+];
+
+const PROJECTS = [
+  { name: "project-a", repo: "local/project-a", path: "~/work/project-a", pm: "pm-1", workers: 2, recent: "인덱스 이슈 수정", recentState: "done" },
+  { name: "project-b", repo: "local/project-b", path: "~/work/project-b", pm: "pm-2", workers: 1, recent: "스키마 마이그레이션", recentState: "done" },
+  { name: "project-c", repo: "local/project-c", path: "~/work/project-c", pm: "pm-3", workers: 2, recent: "문서 구조 정리", recentState: "failed" },
+  { name: "project-d", repo: "—", path: "~/work/project-d", pm: "미배정", workers: 0, recent: "없음", recentState: "done" }
+];
+
+const ARTIFACTS = [
+  { file: "tokenizer.ts", path: "project-a/src/index/tokenizer.ts", agent: "w-1a", at: "17:42", delta: "+7 −2" },
+  { file: "index.test.ts", path: "project-a/tests/index.test.ts", agent: "w-1a", at: "17:42", delta: "new" },
+  { file: "export-check.md", path: "project-b/report/export-check.md", agent: "w-2a", at: "17:39", delta: "new" },
+  { file: "schema.sql", path: "project-b/db/schema.sql", agent: "pm-2", at: "16:31", delta: "+24 −6" },
+  { file: "outline.md", path: "project-c/docs/outline.md", agent: "w-3a", at: "17:20", delta: "−12" }
+];
+
+const ARTIFACT_BODIES = [
+  [["export function tokenize(input: string): string[] {", " "], ["  const src = input;", "-"], ["  // 저장 시 분해형이 섞이므로 정규화한다", "+"], ["  const src = input.normalize('NFC');", "+"], ["  return src", " "], ["    .split(BOUNDARY)", " "], ["    .filter(Boolean)", " "], ["    .map((t) => t.toLowerCase());", " "], ["}", " "]],
+  [["describe('index', () => {", "+"], ["  it('matches normalized notes', () => {", "+"], ["    expect(search('회의록').length).toBe(12);", "+"], ["  });", "+"], ["});", "+"]],
+  [["# export 경로 점검", "+"], ["", "+"], ["결론: 동일 이슈 없음. 정규화가 이미 적용되어 있음.", "+"], ["", "+"], ["## 남은 edge case", "+"], ["- 파일명 생성부에서 조합형 잔존 가능", "+"], ["- 영향 범위: 파일명만", "+"]],
+  [["create table inbox (", " "], ["  id text primary key,", " "], ["  body text not null,", " "], ["  embedding vector(1536),", "+"], ["  created_at timestamptz default now()", " "], [");", " "], ["", " "], ["create index on inbox using hnsw (embedding vector_cosine_ops);", "+"]],
+  [["# project-c 문서", " "], ["", " "], ["## 개요", " "], ["- 중복 섹션 3개 제거", "-"], ["- 목차 재정렬", "-"], ["", " "], ["## 구성", " "]]
+];
+
+class Component extends DCLogic {
+  state = {
+    view: "brand",
+    tab: "overview",
+    setup: false,
+    event: 0,
+    artifact: 0,
+    draft: "",
+    busy: false,
+    busyLabel: "",
+    busySub: "",
+    folded: {},
+    editing: null,
+    form: { name: "pm-4", parent: "pilo", project: "project-d", cwd: "~/work/project-d", aliases: "@d, dd", specialty: "backend, migration", note: "PoC 담당", role: "pm", runtime: "claude" },
+    feed: [
+      { id: "u1", kind: "user", text: "project-a 검색 인덱스 이슈 원인 찾고, project-b에도 같은 문제 있는지 확인해줘." },
+      { id: "f1", kind: "reply", scope: "pm-1, pm-2", meta: "2m 41s", taskRef: "t-1042",
+        summary: "project-a의 인덱스 이슈는 문자열 정규화 누락이 원인이었고 수정·검증까지 마쳤습니다. project-b는 같은 경로에 이미 정규화가 들어가 있어 문제가 없었습니다. 별도 조치가 필요한 항목은 없습니다.",
+        points: [
+          { who: "pm-1 · project-a", text: "원인 확정 후 수정 반영, 회귀 테스트 3건 통과. worker 2개(impl·review)로 나눠 처리했습니다." },
+          { who: "pm-2 · project-b", text: "동일 경로 점검 결과 이상 없음. 파일명 생성부에 경미한 edge case 1건만 기록해 두었습니다." }
+        ] }
+    ]
+  };
+
+  componentWillUnmount() { (this._t || []).forEach(clearTimeout); }
+  _later(fn, ms) { (this._t = this._t || []).push(setTimeout(fn, ms)); }
+
+  toggle = (id) => this.setState(s => ({ folded: Object.assign({}, s.folded, { [id]: !s.folded[id] }) }));
+  setField = (k, v) => this.setState(s => ({ form: Object.assign({}, s.form, { [k]: v }) }));
+  editAgent = (a) => this.setState({ view: "dash", tab: "agents", editing: a.name, form: {
+    name: a.name, role: a.role, parent: a.parent, project: a.project, runtime: a.runtime,
+    cwd: a.cwd, specialty: a.specialty, aliases: a.aliases, note: a.note } });
+  cancelEdit = () => this.setState({ editing: null, form: { name: "", parent: "pilo", project: "project-a", cwd: "", aliases: "", specialty: "", note: "", role: "pm", runtime: "claude" } });
+  goDash = (tab) => this.setState({ view: "dash", tab: tab || "overview" });
+
+  runCommand = (raw) => {
+    const cmd = raw.slice(1).trim().toLowerCase();
+    const w = cmd.split(/\s+/);
+    let out;
+    if (w[0] === "dash" || w[0] === "dashboard") {
+      out = "opening web dashboard";
+      this._later(() => this.goDash(w[1] === "agents" ? "agents" : "overview"), 520);
+    } else if (w[0] === "agents") {
+      out = "pilo ● │ pm-1 ● running (w-1a, w-1b) │ pm-2 ○ idle (w-2a) │ pm-3 ✕ failed (w-3a, w-3b)";
+    } else if (w[0] === "inbox") {
+      out = "in-1042 done · in-1043 pm_result 대기 · in-1044 queued";
+    } else if (w[0] === "help") {
+      out = ":dash  대시보드   :agents  agent tree   :inbox  요청 목록   :cost  토큰 사용량   :q  종료";
+    } else if (w[0] === "cost") {
+      out = "tokens 42.3k · in 268k · out 144k (today)";
+    } else {
+      out = "unknown command: :" + w[0] + " — :help 참고";
+    }
+    const st = Date.now();
+    this.setState(s => ({ draft: "", feed: s.feed.concat([
+      { id: "u" + st, kind: "user", text: raw },
+      { id: "n" + st, kind: "note", text: out }
+    ]) }));
+  };
+
+  send = () => {
+    const text = (this.state.draft || "").trim();
+    if (!text || this.state.busy) return;
+    if (text[0] === ":") return this.runCommand(text);
+
+    const t = text.toLowerCase();
+    let pms = TREE.filter(p => t.includes(p.project) || t.includes(p.name) || t.includes(p.aliases.replace("@", ""))).map(p => p.name);
+    if (!pms.length) pms = ["pm-1"];
+    pms = pms.slice(0, 3);
+
+    const stamp = Date.now();
+    this.setState(s => ({
+      draft: "", busy: true, busyLabel: "Pilo agent 정리 중…", busySub: "요청 접수 · inbox in-" + (1045),
+      feed: s.feed.concat([{ id: "u" + stamp, kind: "user", text }])
+    }));
+
+    this._later(() => this.setState({ busyLabel: "Pilo agent 정리 중…", busySub: pms.join(", ") + " 작업 중 · pm_result 대기" }), 1100);
+    this._later(() => this.setState({ busyLabel: "Pilo agent 정리 중…", busySub: "pm_result 취합 · final_reply 작성" }), 2600);
+    this._later(() => {
+      this.setState(s => ({
+        busy: false, busyLabel: "", busySub: "",
+        feed: s.feed.concat([{
+          id: "f" + stamp, kind: "reply", scope: pms.join(", "), meta: "1m 58s", taskRef: "t-1045",
+          summary: pms.length + "개 프로젝트에 나눠 처리했고 결과를 하나로 정리했습니다. 요청하신 범위는 모두 끝났으며, 추가로 확인이 필요한 항목은 없습니다.",
+          points: pms.map(n => {
+            const pm = TREE.filter(x => x.name === n)[0] || TREE[0];
+            return { who: n + " · " + pm.project, text: "요청 범위를 worker " + pm.children.length + "개로 나눠 처리하고 검증까지 마쳤습니다." };
+          })
+        }])
+      }));
+    }, 3900);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const p = this.props;
+    const sc = (st) => st === "running" ? AMBER : st === "failed" ? RED : st === "done" ? GREEN : GREY;
+
+    const feed = s.feed.map(m => {
+      if (m.kind === "user") return { key: m.id, isUser: true, text: m.text };
+      if (m.kind === "note") return { key: m.id, isNote: true, text: m.text };
+      const open = !s.folded[m.id];
+      return { key: m.id, isReply: true, scope: m.scope, meta: m.meta, summary: m.summary, taskRef: m.taskRef,
+        open, caret: open ? "▾" : "▸",
+        points: m.points.map((pt, i) => ({ key: i, who: pt.who, text: pt.text })),
+        onToggle: () => this.toggle(m.id), onOpenDash: () => this.goDash("events") };
+    });
+
+    const tree = TREE.map((pm) => ({
+      key: pm.name, name: pm.name, project: pm.project, runtime: pm.runtime, aliases: pm.aliases,
+      status: pm.status, task: pm.task, color: sc(pm.status),
+      onEdit: () => this.editAgent({ name: pm.name, role: "pm", parent: "pilo", project: pm.project, runtime: pm.runtime, cwd: "~/work/" + pm.project, specialty: pm.specialty || "", aliases: pm.aliases, note: pm.task }),
+      children: pm.children.map(c => ({ key: c.name, name: c.name, status: c.status, note: c.note, color: sc(c.status),
+        onEdit: () => this.editAgent({ name: c.name, role: "worker", parent: pm.name, project: pm.project, runtime: pm.runtime, cwd: "~/work/" + pm.project, specialty: c.note, aliases: "", note: c.note }) }))
+    }));
+
+    const services = [
+      { key: 1, name: "server", detail: "pid 48213 · uptime 6d 04h", state: "running", color: GREEN },
+      { key: 2, name: "postgres", detail: "pgvector 0.7 · compose · 12 conn", state: "healthy", color: GREEN },
+      { key: 3, name: "wake", detail: "herdr session watcher · 8 sessions seen", state: "degraded", color: AMBER },
+      { key: 4, name: "dashboard", detail: "local web dashboard", state: "running", color: GREEN }
+    ];
+    const paths = [
+      { key: 1, label: "config", value: "~/.pilo/config.toml", note: "toml" },
+      { key: 2, label: "db", value: "postgres://pilo@127.0.0.1:15432/pilo", note: "postgres 16 + pgvector" },
+      { key: 3, label: "port", value: "~/.pilo/port", note: "실행 포트 기록" },
+      { key: 4, label: "logs", value: "~/.pilo/logs/", note: "dir" }
+    ];
+    const wakeFailures = [
+      { key: 1, agent: "pm-3", code: "SESSION_NOT_FOUND", at: "17:20", detail: "herdr에 바인딩된 세션이 종료됨 — target 재감지 필요", attempts: "2", runtime: "codex" },
+      { key: 2, agent: "w-3b", code: "TIMEOUT 30s", at: "16:58", detail: "wake 신호 후 응답 없음 — 상위 pm-3 실패에 종속", attempts: "1", runtime: "codex" }
+    ];
+
+    const events = [
+      { type: "pm_result", agent: "pm-1", title: "project-a 인덱스 이슈 원인 확정", at: "17:42", color: BLUE },
+      { type: "final_reply", agent: "pilo", title: "두 프로젝트 결과 취합", at: "17:42", color: GREEN },
+      { type: "pm_result", agent: "pm-2", title: "project-b 동일 경로 점검", at: "17:39", color: BLUE },
+      { type: "event", agent: "pm-3", title: "wake failed — SESSION_NOT_FOUND", at: "17:20", color: RED },
+      { type: "event", agent: "w-1a", title: "worker spawned by pm-1", at: "17:11", color: GREY }
+    ];
+    const eventBodies = [
+      [['{', "#939e96"], ['  "type": "pm_result",', BLUE], ['  "inbox_id": "in-1042",', "#939e96"], ['  "agent": "pm-1",', "#939e96"], ['  "parent_agent_id": "pilo",', "#939e96"], ['  "project": "project-a",', "#939e96"], ['  "status": "done",', GREEN], ['  "summary": "정규화 누락이 원인. 수정 반영 후 회귀 3건 통과.",', "#b9c3bc"], ['  "tokens": { "in": 16200, "out": 7900 }', "#939e96"], ['}', "#939e96"]],
+      [['{', "#939e96"], ['  "type": "final_reply",', GREEN], ['  "inbox_id": "in-1042",', "#939e96"], ['  "agent": "pilo",', "#939e96"], ['  "sources": ["pm-1", "pm-2"],', "#939e96"], ['  "surfaced_in_tui": true,', GREEN], ['  "summary": "project-a 수정 완료, project-b 이상 없음.",', "#b9c3bc"], ['  "elapsed_ms": 161000', "#939e96"], ['}', "#939e96"]],
+      [['{', "#939e96"], ['  "type": "pm_result",', BLUE], ['  "agent": "pm-2",', "#939e96"], ['  "project": "project-b",', "#939e96"], ['  "status": "done",', GREEN], ['  "findings": ["no issue", "minor edge case in filename"],', "#939e96"], ['  "patch": null', "#939e96"], ['}', "#939e96"]],
+      [['{', "#939e96"], ['  "type": "event",', RED], ['  "name": "wake_failed",', RED], ['  "agent": "pm-3",', "#939e96"], ['  "runtime": "codex",', "#939e96"], ['  "error": "SESSION_NOT_FOUND",', RED], ['  "attempts": 2,', "#939e96"], ['  "hint": "herdr 세션 재바인딩 필요"', AMBER], ['}', "#939e96"]],
+      [['{', "#939e96"], ['  "type": "event",', GREY], ['  "name": "worker_spawned",', "#939e96"], ['  "agent": "w-1a",', "#939e96"], ['  "parent_agent_id": "pm-1",', "#939e96"], ['  "role": "worker"', "#939e96"], ['}', "#939e96"]]
+    ];
+    const eventLogs = [
+      [{ t: "00:02", text: "read index/*.ts · 6 files" }, { t: "00:19", text: "repro: query returns 0 hits" }, { t: "00:41", text: "cause: normalization missing on ingest" }, { t: "01:07", text: "patch applied · +7 −2" }, { t: "01:48", text: "3 tests passed" }],
+      [{ t: "00:01", text: "collect pm_result × 2" }, { t: "00:06", text: "merge · dedupe findings" }, { t: "00:11", text: "final_reply emitted → tui" }],
+      [{ t: "00:03", text: "grep normalize( in export path" }, { t: "00:21", text: "already normalized — no patch" }, { t: "00:39", text: "edge case noted" }],
+      [{ t: "00:00", text: "wake pm-3 (codex)" }, { t: "00:30", text: "timeout · retry 1" }, { t: "01:00", text: "SESSION_NOT_FOUND · give up" }],
+      [{ t: "00:00", text: "spawn w-1a from pm-1" }, { t: "00:02", text: "cwd ~/work/project-a" }]
+    ];
+    const eventFiles = [
+      ["src/index/tokenizer.ts +7 −2", "tests/index.test.ts (new)"],
+      ["—"],
+      ["report/export-check.md (new)"],
+      ["logs/wake-pm-3.log"],
+      ["—"]
+    ];
+    const ei = Math.min(s.event, events.length - 1);
+    const ai = Math.min(s.artifact || 0, ARTIFACTS.length - 1);
+
+    const tabMeta = {
+      overview: ["Overview", "agent 상태 · 최근 task · 런타임"],
+      agents: ["Agents", "role 조직도와 agent 등록"],
+      inbox: ["Inbox", "사용자 입력과 처리 경로"],
+      events: ["Events", "pm_result · final_reply · event 원문"],
+      system: ["System", "server · wake · dashboard 상태와 경로"],
+      artifacts: ["Artifacts", "agent가 만들거나 바꾼 파일"],
+      projects: ["Projects", "프로젝트 · 담당 PM · 경로"],
+      settings: ["Settings", "모델 · 알림 · 보관 기간"]
+    };
+
+    const piloExists = true;
+    const roleChoices = [["pilo", "#3ed49c"], ["pm", BLUE], ["worker", "#9aa59d"]].map(([v, c]) => {
+      const dis = v === "pilo" && piloExists && s.editing !== "pilo";
+      return { key: v, label: v, color: s.form.role === v ? c : (dis ? "#3e4744" : "#6f7a73"),
+        active: s.form.role === v, disabled: dis, cursor: dis ? "not-allowed" : "pointer", opacity: dis ? 0.55 : 1,
+        onClick: dis ? (() => {}) : (() => this.setField("role", v)) };
+    });
+    const projectOptions = PROJECTS.map(p => ({ key: p.name, value: p.name, label: p.name }))
+      .concat([{ key: "__new", value: "__new", label: "+ 새 프로젝트…" }]);
+    const runtimeChoices = [["codex", "#9aa59d"], ["claude", "#9aa59d"]].map(([v, c]) => ({
+      key: v, label: v, color: s.form.runtime === v ? "#eef2ee" : "#6f7a73", active: s.form.runtime === v, onClick: () => this.setField("runtime", v) }));
+    const txt = (name, hint, ph, req) => ({ key: name, name, hint, placeholder: ph, required: !!req, isText: true, isChoice: false,
+      value: s.form[name], onChange: (e) => this.setField(name, e.target.value) });
+
+    return {
+      productName: p.productName || "Pilo",
+      showCost: p.showCost !== false,
+      views: [["brand", "01 brand"], ["tui", "02 tui"], ["dash", "03 dashboard"]].map(([k, l]) => ({ key: k, label: l, active: s.view === k, onClick: () => this.setState({ view: k }) })),
+      isBrand: s.view === "brand", isTui: s.view === "tui", isDash: s.view === "dash",
+
+      tuiStates: [["ready", "connected"], ["setup", "setup required"]].map(([k, l]) => ({
+        key: k, label: l, active: (k === "setup") === s.setup, onClick: () => this.setState({ setup: k === "setup" }) })),
+      needsSetup: s.setup, ready: !s.setup,
+      setupSteps: [
+        { key: 1, mark: "✓", color: GREEN, titleColor: "#9aa59d", title: "Docker runtime", desc: "컨테이너 런타임이 감지되었습니다 (OrbStack). 없다면 OrbStack 설치 후 실행해 주세요 — Docker Desktop도 동작합니다.", hasCmd: false, cmd: "", state: "ok" },
+        { key: 2, mark: "✓", color: GREEN, titleColor: "#9aa59d", title: "herdr 실행 중", desc: "agent 세션이 떠 있는 작업장이 감지되었습니다. 미설치·미실행이면 herdr를 먼저 띄워야 agent를 붙일 수 있습니다.", hasCmd: false, cmd: "", state: "ok" },
+        { key: 3, mark: "→", color: AMBER, titleColor: "#eef2ee", title: "PostgreSQL 기동", desc: "inbox·이벤트·임베딩을 저장할 postgres(pgvector)가 아직 뜨지 않았습니다. Docker Compose로 함께 올라갑니다.", hasCmd: true, cmd: "$ pilo up", state: "필요" },
+        { key: 4, mark: "○", color: GREY, titleColor: "#9aa59d", title: "대표 agent 등록 (role=pilo)", desc: "사용자와 대화할 agent는 정확히 하나여야 합니다. 대시보드 Agents 탭에서 등록하세요.", hasCmd: true, cmd: "dashboard → Agents → register agent", state: "필요" },
+        { key: 5, mark: "○", color: GREY, titleColor: "#9aa59d", title: "PM agent 등록", desc: "PM이 없어도 Pilo agent와 대화는 가능합니다. worker도 같은 화면에서 등록합니다.", hasCmd: true, cmd: "dashboard → Agents → register agent", state: "선택" }
+      ],
+      hasSetupError: true,
+      setupErrorTitle: "role=pilo agent가 2개 감지됨",
+      setupErrorDetail: "대표 agent는 정확히 하나여야 합니다. 아래 중 하나를 pm 또는 worker로 바꾸거나 삭제해야 Pilo가 기동됩니다.",
+      setupErrorRows: [
+        { key: 1, name: "pilo", cwd: "~/work", runtime: "claude", at: "등록 6d 전" },
+        { key: 2, name: "pilo-old", cwd: "~/work/legacy", runtime: "codex", at: "등록 2d 전" }
+      ],
+
+      feed, tree, piloName: "pilo",
+      busy: s.busy, busyLabel: s.busyLabel, busySub: s.busySub,
+      draft: s.draft,
+      onDraft: (e) => this.setState({ draft: e.target.value }),
+      onKey: (e) => { if (e.key === "Enter") this.send(); },
+      onSend: this.send,
+      onOpenAgents: () => this.goDash("agents"),
+      suggestions: ["project-c 상태 확인하고 막힌 부분 알려줘", "project-b 회귀 테스트 한 번 돌려줘", ":dash agents"]
+        .map((l, i) => ({ key: i, label: l, onClick: () => this.setState({ draft: l }) })),
+      pmCount: TREE.length,
+      workerCount: TREE.reduce((n, x) => n + x.children.length, 0),
+      runningCount: TREE.filter(x => x.status === "running").length,
+      failedCount: TREE.filter(x => x.status === "failed").length,
+      tokenTotal: "42.3k",
+
+      tabs: [["overview", "Overview", "01", "", ""], ["agents", "Agents", "02", "", ""], ["inbox", "Inbox", "03", "3", AMBER], ["events", "Events", "04", "", ""], ["system", "System", "05", "2", RED], ["artifacts", "Artifacts", "06", "", ""], ["projects", "Projects", "07", "", ""], ["settings", "Settings", "08", "", ""]]
+        .map(([k, l, n, b, bc]) => ({ key: k, label: l, num: n, active: s.tab === k, hasBadge: !!b, badge: b, badgeColor: bc, onClick: () => this.setState({ tab: k }) })),
+      tabTitle: tabMeta[s.tab][0], tabDesc: tabMeta[s.tab][1],
+      tabOverview: s.tab === "overview", tabAgents: s.tab === "agents", tabInbox: s.tab === "inbox",
+      tabEvents: s.tab === "events", tabSystem: s.tab === "system",
+      tabArtifacts: s.tab === "artifacts", tabProjects: s.tab === "projects", tabSettings: s.tab === "settings",
+
+      stats: [
+        { key: 1, label: "agents", value: "9", sub: "1 pilo · 3 pm · 5 worker" },
+        { key: 2, label: "inbox today", value: "24", sub: "21 done · 3 대기" },
+        { key: 3, label: "tokens", value: "412k", sub: "in 268k · out 144k" },
+        { key: 4, label: "failed", value: "2", sub: "wake 1 · task 1" }
+      ],
+      tasks: [
+        { key: 1, time: "17:42", title: "project-a 인덱스 이슈 수정", agent: "pm-1 → w-1a", status: "done", color: GREEN, tokens: "24.1k" },
+        { key: 2, time: "17:39", title: "project-b 동일 경로 점검", agent: "pm-2 → w-2a", status: "done", color: GREEN, tokens: "11.6k" },
+        { key: 3, time: "17:20", title: "project-c 문서 정리", agent: "pm-3", status: "failed", color: RED, tokens: "6.2k" },
+        { key: 4, time: "16:58", title: "project-a 리뷰 코멘트 반영", agent: "pm-1 → w-1b", status: "done", color: GREEN, tokens: "9.4k" },
+        { key: 5, time: "16:31", title: "project-b 스키마 마이그레이션", agent: "pm-2", status: "done", color: GREEN, tokens: "38.9k" },
+        { key: 6, time: "15:47", title: "project-c worker 재기동", agent: "pm-3 → w-3a", status: "queued", color: GREY, tokens: "—" }
+      ],
+      services, paths, wakeFailures, wakeFailCount: wakeFailures.length,
+
+      inbox: [
+        { key: 1, id: "in-1042", at: "17:39", state: "done", color: GREEN, text: "project-a 검색 인덱스 이슈 원인 찾고, project-b에도 같은 문제 있는지 확인해줘.", routed: "pm-1, pm-2 → final_reply" },
+        { key: 2, id: "in-1043", at: "17:18", state: "pm_result 대기", color: AMBER, text: "project-c 문서 구조 정리하고 목차 다시 잡아줘.", routed: "pm-3 (wake failed)" },
+        { key: 3, id: "in-1044", at: "16:55", state: "queued", color: GREY, text: "project-b 회귀 테스트 한 번 돌려줘.", routed: "pm-2" },
+        { key: 4, id: "in-1041", at: "16:30", state: "done", color: GREEN, text: "project-a 리뷰 코멘트 반영해줘.", routed: "pm-1 → w-1b → final_reply" }
+      ],
+      inboxDetailId: "in-1042",
+      inboxTrace: [
+        { key: 1, stage: "inbox", who: "user", at: "17:39:02", text: "project-a 검색 인덱스 이슈 원인 찾고, project-b에도 같은 문제 있는지 확인해줘.", color: "#9aa59d" },
+        { key: 2, stage: "dispatch", who: "pilo", at: "17:39:04", text: "요청을 두 갈래로 분해해 pm-1, pm-2에 전달.", color: "#3ed49c" },
+        { key: 3, stage: "pm_result", who: "pm-1", at: "17:41:20", text: "정규화 누락 확인, 수정 반영, 회귀 3건 통과. worker w-1a/w-1b 사용.", color: BLUE },
+        { key: 4, stage: "pm_result", who: "pm-2", at: "17:41:48", text: "동일 경로 이상 없음. 파일명 생성부 edge case 1건 기록.", color: BLUE },
+        { key: 5, stage: "final_reply", who: "pilo", at: "17:41:55", text: "두 결과를 합쳐 사용자에게 한 덩어리로 회신 — TUI에 표시됨.", color: GREEN }
+      ],
+
+      events: events.map((e, i) => ({ key: i, type: e.type, agent: e.agent, title: e.title, at: e.at, color: e.color, active: i === ei, onClick: () => this.setState({ event: i }) })),
+      eventTitle: events[ei].type + " · " + events[ei].agent,
+      eventLines: eventBodies[ei].map((l, i) => ({ key: i, n: i + 1, text: l[0], color: l[1] })),
+      eventLog: eventLogs[ei].map((l, i) => ({ key: i, t: l.t, text: l.text })),
+      eventFiles: eventFiles[ei].map((l, i) => ({ key: i, label: l })),
+
+      autoTarget: "herdr:codex#5 (감지됨)",
+      treeEmpty: TREE.length === 0,
+      isEditing: !!s.editing,
+      formTitle: s.editing ? s.editing + " 수정" : "agent 등록",
+      formDesc: s.editing ? "값을 바꾼 뒤 저장하면 즉시 반영됩니다. target은 herdr에서 다시 감지됩니다." : "target(세션 핸들)은 herdr에서 자동 감지되므로 입력하지 않습니다.",
+      submitLabel: s.editing ? "save changes" : "register agent",
+      onCancelEdit: this.cancelEdit,
+      onEditPilo: () => this.editAgent({ name: "pilo", role: "pilo", parent: "", project: "", runtime: "claude", cwd: "~/work", specialty: "", aliases: "", note: "대표 agent" }),
+
+      artifactCount: ARTIFACTS.length,
+      artifacts: ARTIFACTS.map((a, i) => ({ key: i, file: a.file, agent: a.agent, at: a.at, delta: a.delta,
+        deltaColor: a.delta === "new" ? GREEN : a.delta[0] === "−" ? RED : "#7d887f",
+        active: i === ai, onClick: () => this.setState({ artifact: i }) })),
+      artifactPath: ARTIFACTS[ai].path,
+      artifactMeta: ARTIFACTS[ai].agent + " · " + ARTIFACTS[ai].at + " · " + ARTIFACTS[ai].delta,
+      artifactLines: ARTIFACT_BODIES[ai].map((l, i) => ({ key: i, n: i + 1, text: l[0],
+        mark: l[1] === "+" ? "+" : l[1] === "-" ? "−" : "",
+        markColor: l[1] === "+" ? GREEN : l[1] === "-" ? RED : "#2f3634",
+        color: l[1] === "+" ? "#bfe6d3" : l[1] === "-" ? "#e0b5b0" : "#939e96",
+        bg: l[1] === "+" ? "oklch(0.40 0.07 165 / 0.13)" : l[1] === "-" ? "oklch(0.38 0.08 25 / 0.12)" : "transparent" })),
+
+      projectCount: PROJECTS.length,
+      projects: PROJECTS.map((p, i) => ({ key: i, name: p.name, repo: p.repo, path: p.path, pm: p.pm, workers: p.workers,
+        pmColor: p.pm === "미배정" ? "#4f5a53" : "#b9c3bc",
+        recent: p.recent, recentState: p.recentState, recentColor: p.recentState === "failed" ? RED : p.recentState === "running" ? AMBER : GREEN })),
+
+      runtimeModels: [
+        { key: 1, runtime: "claude", model: "claude-sonnet-4.5" },
+        { key: 2, runtime: "codex", model: "gpt-5-codex" }
+      ],
+      tokenOptions: [
+        { key: 1, label: "TUI 상태바에 토큰 합계 표시", on: true },
+        { key: 2, label: "agent별 토큰 분리 집계", on: true },
+        { key: 3, label: "입력/출력 토큰 나눠 보기", on: false }
+      ].map(o => ({ key: o.key, label: o.label, bg: o.on ? "oklch(0.45 0.09 165)" : "#232b28", knob: o.on ? "15px" : "2px" })),
+      rules: [
+        { key: 1, when: "task failed", channel: "desktop", on: true },
+        { key: 2, when: "approval needed", channel: "desktop", on: true },
+        { key: 3, when: "wake failed", channel: "desktop", on: true },
+        { key: 4, when: "final_reply 도착", channel: "in-app", on: false }
+      ].map(r => ({ key: r.key, when: r.when, channel: r.channel, bg: r.on ? "oklch(0.45 0.09 165)" : "#232b28", knob: r.on ? "15px" : "2px" })),
+      retention: [
+        { key: 1, label: "event payload", value: "30일", sel: "30d" },
+        { key: 2, label: "run log", value: "14일", sel: "14d" },
+        { key: 3, label: "server log", value: "14일", sel: "14d" }
+      ].map(r => ({ key: r.key, label: r.label, value: r.value,
+        choices: ["7d", "14d", "30d", "90d", "영구"].map(c => ({ key: c, label: c,
+          border: c === r.sel ? "#3a4540" : "#1e2422", bg: c === r.sel ? "#151a18" : "transparent", color: c === r.sel ? "#eef2ee" : "#5f6b64" })) })),
+
+      formFields: [
+        txt("name", "고유 식별자", "pm-4", true),
+        { key: "role", name: "role", hint: "pilo는 정확히 1개", required: true, isChoice: true, isText: false, choices: roleChoices },
+        txt("parent", "parent_agent_id", "pilo", s.form.role !== "pilo"),
+        { key: "project", name: "project", hint: "Projects 탭 기준", required: true, isSelect: true, isText: false, isChoice: false,
+          value: s.form.project, options: projectOptions, onChange: (e) => this.setField("project", e.target.value) },
+        { key: "runtime", name: "runtime", hint: "실행 환경", required: true, isChoice: true, isText: false, choices: runtimeChoices },
+        txt("cwd", "작업 디렉터리", "~/work/project-d", true),
+        txt("specialty", "전문 영역", "backend, migration", false),
+        txt("aliases", "쉼표로 구분", "@d, dd", false),
+        txt("note", "메모", "PoC 담당", false)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
