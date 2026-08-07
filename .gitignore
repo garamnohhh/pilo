@@ -1,0 +1,6 @@
+node_modules/
+.env
+.env.*
+.pilo.pid
+pilo.log
+.playwright-mcp/
