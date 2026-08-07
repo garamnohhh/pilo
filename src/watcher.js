@@ -44,7 +44,7 @@ async function pumpInbox() {
       await recordWakeFailure(pilo, "SESSION_NOT_BOUND", null, row.id);
       continue;
     }
-    await wake(pilo, `[pilo] 요청 도착 #${row.id}`, { inboxId: row.id });
+    await wake(pilo, `[pilo:inbox] 요청 도착 #${row.id}`, { inboxId: row.id });
   }
 }
 
@@ -61,7 +61,7 @@ async function pumpTasks() {
       await recordWakeFailure(agent, "SESSION_NOT_BOUND", task.id, task.inbox_id);
       continue;
     }
-    await wake(agent, `[pilo] 작업 도착 #${task.id}`, { taskId: task.id, inboxId: task.inbox_id });
+    await wake(agent, `[pilo:task] 작업 도착 #${task.id}`, { taskId: task.id, inboxId: task.inbox_id });
   }
 }
 
@@ -85,7 +85,7 @@ async function pumpResults() {
       [row.id, row.ready_at]
     );
     if (woken) continue;
-    await wake(pilo, `[pilo] 결과 도착 #${row.id}`, { inboxId: row.id });
+    await wake(pilo, `[pilo:result] 결과 도착 #${row.id}`, { inboxId: row.id });
   }
 }
 
