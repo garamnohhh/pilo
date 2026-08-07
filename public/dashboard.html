@@ -1,0 +1,860 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pilo dashboard</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0d0c'/><text x='16' y='23' font-family='monospace' font-size='20' font-weight='600' fill='%23eef2ee' text-anchor='middle'>P</text></svg>">
+<style>
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap }
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap }
+  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap }
+  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap }
+
+  :root {
+    color-scheme: dark;
+    --bg: #08090a; --panel: #0c0f0e; --panel2: #0a0c0b; --line: #1a1e1c; --line2: #26302b;
+    --text: #d9ded9; --strong: #eef2ee; --muted: #7d887f; --faint: #4f5a53;
+    --green: #3ed49c; --amber: oklch(0.83 0.12 80); --red: oklch(0.70 0.15 25); --blue: oklch(0.78 0.08 235);
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
+  button, input, select, textarea { font: inherit; color: inherit }
+  .mono { font-family: var(--mono) }
+  .app { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh }
+
+  aside { border-right: 1px solid var(--line); background: var(--panel2); padding: 22px 12px }
+  .eyebrow { font: 10px var(--mono); letter-spacing: .14em; color: var(--faint); text-transform: uppercase; padding: 0 10px 12px }
+  .tab { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; margin-bottom: 2px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: #6f7a73; font-size: 13px; text-align: left; cursor: pointer }
+  .tab:hover { background: #121615; color: var(--text) }
+  .tab.active { background: #121615; border-color: #232b28; color: var(--text) }
+  .tab .num { font: 11px var(--mono); color: var(--faint); width: 16px }
+  .badge { margin-left: auto; font: 10px var(--mono); padding: 2px 7px; border-radius: 999px; background: #151a18 }
+  .side-card { margin-top: 26px; padding: 14px 12px; border: 1px solid var(--line); border-radius: 9px; background: #0d100f; font: 11px var(--mono); color: #9aa59d }
+  .side-card .sub { margin-top: 7px; font-size: 10px; line-height: 1.7; color: var(--faint) }
+
+  main { padding: 30px 32px 60px; overflow-x: hidden }
+  header { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px }
+  h1 { margin: 0 0 5px; font-size: 22px; font-weight: 600; letter-spacing: -.01em; color: var(--strong) }
+  header p { margin: 0; font-size: 13px; color: var(--muted) }
+  .pill { font: 11px var(--mono); padding: 7px 12px; border-radius: 7px; border: 1px solid #1e2422; color: var(--muted); white-space: nowrap }
+
+  .card { padding: 18px 20px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel) }
+  .card h2 { margin: 0 0 4px; font-size: 13px; font-weight: 500; color: var(--text) }
+  .card p.hint { margin: 0 0 14px; font-size: 12px; line-height: 1.6; color: var(--muted) }
+  .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 22px }
+  .grid2 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 12px; margin-bottom: 12px }
+  .split { display: grid; grid-template-columns: 1fr 400px; gap: 14px }
+  .half { display: grid; grid-template-columns: 1fr 1fr; gap: 14px }
+  .label { font: 10px var(--mono); letter-spacing: .1em; color: #5f6b64; text-transform: uppercase }
+  .value { font: 500 24px var(--mono); color: var(--strong) }
+  .sub { font-size: 11px; color: #67726b }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex: none }
+  .row { display: grid; align-items: center; padding: 11px 16px; border-bottom: 1px solid #121615; font-size: 12px; color: #9aa59d }
+  .row:hover { background: #101413 }
+  .head { font: 10px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; border-bottom: 1px solid #171b19; padding: 9px 16px }
+  .table { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--panel) }
+  .table .title { display: flex; align-items: center; padding: 13px 16px; border-bottom: 1px solid #171b19; font-size: 13px; color: var(--text); font-weight: 500 }
+  .empty { padding: 34px 16px; color: var(--faint); font: 12px var(--mono); text-align: center }
+
+  .btn { font: 11px var(--mono); padding: 6px 11px; border-radius: 6px; border: 1px solid var(--line2); background: #131817; color: #9aa59d; cursor: pointer; white-space: nowrap }
+  .btn:hover { color: var(--strong); border-color: #3a4540 }
+  .btn.small { font-size: 10px; padding: 4px 8px; background: var(--panel2) }
+  .btn.danger:hover { color: var(--red); border-color: #3a2a28 }
+  .btn.primary { width: 100%; padding: 10px; font-size: 12px; border-color: #2b3531; background: #151a18; color: var(--strong) }
+  .btn[disabled] { opacity: .45; cursor: not-allowed }
+  .btn.wide { width: 100% }
+
+  .field { margin-bottom: 13px }
+  .field .name { display: flex; align-items: baseline; gap: 7px; margin-bottom: 6px; font: 11px var(--mono); color: #9aa59d }
+  .field .name .hint { font-size: 10px; color: var(--faint) }
+  .field .name .req { margin-left: auto; font-size: 10px; color: var(--red) }
+  .field input, .field select, .field textarea { width: 100%; font: 12px var(--mono); padding: 9px 11px; border-radius: 7px; border: 1px solid #1e2422; background: var(--panel2); color: #e6ebe6; outline: none }
+  .field input:focus, .field select:focus { border-color: #3a4540 }
+  .choices { display: flex; gap: 6px }
+  .choice { position: relative; flex: 1; font: 11px var(--mono); padding: 8px 6px; border-radius: 7px; border: 1px solid #1e2422; background: var(--panel2); color: #6f7a73; cursor: pointer }
+  .choice.on { border-color: #3a4540; background: #151a18; color: var(--strong) }
+  .choice small { display: block; margin-top: 3px; font-size: 9px; color: var(--faint) }
+
+  .node { position: relative; display: flex; align-items: center; gap: 10px; padding: 12px 15px; border-radius: 10px; border: 1px solid #1e2422; background: #0d100f }
+  .node.root { display: inline-flex; border-color: #24312c; background: linear-gradient(180deg, #101413, #0b0e0d) }
+  .node .name { font: 13px var(--mono); color: var(--strong) }
+  .node .meta { font: 11px var(--mono); color: #5f6b64 }
+  .node .acts { margin-left: auto; display: flex; gap: 6px }
+  .role { font: 9px var(--mono); letter-spacing: .08em; padding: 3px 7px; border-radius: 3px; border: 1px solid #232b28 }
+  .role.pilo { color: var(--green); border-color: #24312c }
+  .role.pm { color: var(--blue); border-color: #232b31 }
+  .role.worker { color: var(--muted); border-color: #1e2422 }
+  .branch { margin: 4px 0 0 26px; border-left: 1px solid #1e2422; padding-left: 22px }
+  .branch .node::before { content: ""; position: absolute; left: -22px; top: 50%; width: 22px; height: 1px; background: #1e2422 }
+
+  .list-item { position: relative; display: block; width: 100%; text-align: left; padding: 13px 15px; border: none; border-bottom: 1px solid #121615; background: transparent; cursor: pointer; color: inherit }
+  .list-item:hover { background: #101413 }
+  .list-item.on { background: #121615; box-shadow: inset 2px 0 0 var(--green) }
+  .code { padding: 16px; overflow: auto; max-height: 320px; font: 12px/1.85 var(--mono) }
+  .code .ln { display: flex; gap: 16px }
+  .code .n { color: #2f3634; width: 24px; text-align: right; flex: none }
+  .code .t { white-space: pre }
+  .toggle { width: 30px; height: 17px; border-radius: 999px; border: none; padding: 0; position: relative; cursor: pointer }
+  .toggle span { position: absolute; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: var(--panel2) }
+  .note { margin-top: 14px; padding: 11px 13px; border-radius: 8px; border: 1px dashed #232927; font: 10px/1.8 var(--mono); color: #5f6b64 }
+  .fail { padding: 18px; border: 1px solid oklch(0.40 0.10 25 / .35); border-radius: 11px; background: oklch(0.26 0.05 25 / .14) }
+  .fail .item { margin-top: 12px; padding: 12px; border-radius: 9px; background: #0b0d0c; border: 1px solid #1e2422 }
+  .toast { position: fixed; right: 20px; bottom: 20px; padding: 11px 15px; border-radius: 9px; border: 1px solid var(--line2); background: #101413; font: 12px var(--mono); color: var(--text); opacity: 0; transition: opacity .18s; pointer-events: none }
+  .toast.show { opacity: 1 }
+  .toast.bad { border-color: #3a2a28; color: #f0c2b8 }
+  a { color: var(--green); text-decoration: none }
+  @media (max-width: 1100px) { .split, .half, .grid2 { grid-template-columns: 1fr } .grid4 { grid-template-columns: repeat(2, 1fr) } }
+  @media (max-width: 780px) { .app { grid-template-columns: 1fr } aside { display: none } main { padding: 20px } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="eyebrow">dashboard</div>
+    <nav id="tabs"></nav>
+    <div class="side-card" id="sideCard"></div>
+  </aside>
+  <main>
+    <header>
+      <div>
+        <h1 id="tabTitle">Overview</h1>
+        <p id="tabDesc"></p>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px">
+        <span class="pill" id="sync">loading…</span>
+      </div>
+    </header>
+    <section id="view"></section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script type="module">
+const TABS = [
+  ["overview", "Overview", "01", "agent 상태 · 최근 task · 런타임"],
+  ["agents", "Agents", "02", "role 조직도와 agent 등록"],
+  ["inbox", "Inbox", "03", "사용자 입력과 처리 경로"],
+  ["events", "Events", "04", "pm_result · final_reply · event 원문"],
+  ["artifacts", "Artifacts", "05", "agent가 만든 파일과 변경 내용"],
+  ["projects", "Projects", "06", "프로젝트 · 경로 · 담당 PM"],
+  ["settings", "Settings", "07", "알림 · 토큰 표기 · 보관 기간"],
+  ["system", "System", "08", "server · wake · dashboard 상태와 경로"]
+];
+
+const state = {
+  tab: location.hash.slice(1) || "overview",
+  data: {},
+  form: emptyForm(),
+  editing: null,
+  candidates: [],
+  selected: { event: null, artifact: null, inbox: null },
+  project: { id: null, name: "", repo: "", path: "", note: "" }
+};
+
+function emptyForm() {
+  return { name: "", role: "pm", parentAgentId: "", projectId: "", cwd: "", specialty: "", aliases: "", note: "", model: "" };
+}
+
+const $ = (id) => document.getElementById(id);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const time = (v) => (v ? new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—");
+const stamp = (v) => (v ? new Date(v).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+const stateColor = (s) => ({ failed: "var(--red)", down: "var(--red)", running: "var(--amber)", degraded: "var(--amber)", queued: "var(--faint)", archived: "var(--faint)" }[s] || "var(--green)");
+
+let toastTimer;
+function toast(message, bad = false) {
+  const el = $("toast");
+  el.textContent = message;
+  el.className = "toast show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (el.className = "toast"), 2600);
+}
+
+async function call(method, path, body) {
+  const res = await fetch(path, {
+    method,
+    headers: body ? { "content-type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(payload.error || `${method} ${path} failed`);
+  return payload;
+}
+const get = (path) => call("GET", path);
+
+async function load() {
+  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup] = await Promise.all([
+    get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox"),
+    get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup")
+  ]);
+  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup };
+  await loadDetail();
+  $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
+  render();
+}
+
+// The detail panes keep their own selection, so refresh them alongside the lists.
+async function loadDetail() {
+  const pick = (list, chosen) => (list.some((x) => String(x.id) === String(chosen)) ? chosen : list[0]?.id);
+  if (state.tab === "inbox") {
+    const id = pick(state.data.inbox, state.selected.inbox);
+    state.selected.inbox = id ?? null;
+    state.data.inboxDetail = id ? await get(`/api/inbox/${id}`) : null;
+  }
+  if (state.tab === "events") {
+    const id = pick(state.data.events, state.selected.event);
+    state.selected.event = id ?? null;
+    state.data.eventDetail = id ? await get(`/api/events/${id}`) : null;
+  }
+  if (state.tab === "artifacts") {
+    const id = pick(state.data.artifacts, state.selected.artifact);
+    state.selected.artifact = id ?? null;
+    state.data.artifactDetail = id ? await get(`/api/artifacts/${id}`) : null;
+  }
+}
+
+function renderTabs() {
+  const badges = {
+    inbox: state.data.inbox?.filter((i) => i.status !== "replied").length || 0,
+    system: state.data.system?.wakeFailures?.length || 0
+  };
+  $("tabs").innerHTML = TABS.map(([key, label, num]) => {
+    const badge = badges[key];
+    return `<button class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">
+      <span class="num">${num}</span><span>${label}</span>
+      ${badge ? `<span class="badge" style="color:${key === "system" ? "var(--red)" : "var(--amber)"}">${badge}</span>` : ""}
+    </button>`;
+  }).join("");
+  const s = state.data.setup || {};
+  const st = state.data.overview?.stats || {};
+  $("sideCard").innerHTML = `
+    <div style="display:flex;align-items:center;gap:7px">
+      <span class="dot" style="background:${s.herdr ? "var(--green)" : "var(--red)"}"></span>
+      herdr ${s.herdr ? "connected" : "not detected"}
+    </div>
+    <div class="sub">${s.sessions || 0} sessions<br>${st.pilo || 0} pilo · ${st.pm || 0} pm · ${st.worker || 0} worker</div>`;
+}
+
+function render() {
+  const meta = TABS.find((t) => t[0] === state.tab) || TABS[0];
+  $("tabTitle").textContent = meta[1];
+  $("tabDesc").textContent = meta[3];
+  renderTabs();
+  $("view").innerHTML = views[state.tab]();
+  wire();
+}
+
+/* ---------- views ---------- */
+const views = {};
+
+views.overview = () => {
+  const { stats, tasks, services, paths, wakeFailures } = state.data.overview;
+  const cards = [
+    ["agents", stats.agents, `${stats.pilo} pilo · ${stats.pm} pm · ${stats.worker} worker`],
+    ["inbox today", stats.inboxToday.total, `${stats.inboxToday.replied} replied · ${stats.inboxToday.pending} 대기`],
+    ["tokens", fmtTokens(stats.tokens.total), `in ${fmtTokens(stats.tokens.in)} · out ${fmtTokens(stats.tokens.out)} · today`],
+    ["failed", stats.failed.total, `wake ${stats.failed.wake} · task ${stats.failed.task}`]
+  ];
+  return `
+    <div class="grid4">${cards.map(([l, v, s]) => `<div class="card"><div class="label">${l}</div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:10px"><span class="value">${esc(v)}</span><span class="sub">${esc(s)}</span></div></div>`).join("")}</div>
+    <div class="grid2">
+      <div class="table">
+        <div class="title">Recent tasks <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">last ${tasks.length}</span></div>
+        <div class="row head" style="grid-template-columns:74px 1fr 140px 84px 74px"><span>time</span><span>task</span><span>agent</span><span>status</span><span>tokens</span></div>
+        ${tasks.length ? tasks.map((t) => `<div class="row" style="grid-template-columns:74px 1fr 140px 84px 74px">
+          <span class="mono" style="font-size:11px;color:#5f6b64">${time(t.createdAt)}</span>
+          <span style="color:var(--text);padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title || t.request || "(untitled)")}</span>
+          <span class="mono" style="font-size:11px">${esc(t.agent || "—")}</span>
+          <span class="mono" style="font-size:11px;color:${stateColor(t.status)}">${esc(t.status)}</span>
+          <span class="mono" style="font-size:11px">${fmtTokens(Number(t.tokensIn) + Number(t.tokensOut))}</span>
+        </div>`).join("") : `<div class="empty">no tasks yet</div>`}
+      </div>
+      <div>
+        ${serviceCard(services)}
+        ${failureCard(wakeFailures)}
+      </div>
+    </div>
+    <div class="card"><h2>설정 경로</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;font:11px var(--mono)">
+        ${paths.map((p) => `<div style="display:flex;gap:10px;padding:10px 12px;border-radius:8px;background:var(--panel2);border:1px solid #171b19">
+          <span style="color:#5f6b64;width:52px;flex:none">${esc(p.label)}</span>
+          <span style="color:#b9c3bc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.value)}</span></div>`).join("")}
+      </div></div>`;
+};
+
+const fmtTokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0));
+
+function serviceCard(services) {
+  return `<div class="card"><h2>Runtime status</h2><p class="hint">server · postgres · wake · dashboard</p>
+    ${services.map((s) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+      <span class="dot" style="background:${stateColor(s.state)}"></span>
+      <span style="color:var(--text);width:78px">${esc(s.name)}</span>
+      <span style="color:#67726b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.detail)}</span>
+      <span style="color:${stateColor(s.state)}">${esc(s.state)}</span></div>`).join("")}</div>`;
+}
+
+function failureCard(failures) {
+  if (!failures.length) {
+    return `<div class="card" style="margin-top:12px"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">모든 agent가 정상적으로 깨어났습니다.</p></div>`;
+  }
+  return `<div class="fail" style="margin-top:12px">
+    <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:var(--red)"></span>
+      <span style="font-size:13px;color:var(--strong);font-weight:500">wake 실패 ${failures.length}건</span></div>
+    ${failures.map((f) => `<div class="item">
+      <div style="display:flex;align-items:center;gap:8px;font:11px var(--mono)">
+        <span style="color:oklch(0.75 0.14 25)">${esc(f.agent)}</span>
+        <span style="color:var(--faint)">${esc(f.payload.code || "")}</span>
+        <span style="margin-left:auto;color:#3e4744">${time(f.at)}</span></div>
+      <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")} · attempts ${esc(f.payload.attempts || 1)}</div>
+      <div style="display:flex;gap:7px;margin-top:10px">
+        ${f.agentId ? `<button class="btn small" data-act="wake" data-id="${f.agentId}">wake again</button>
+        <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>` : ""}
+        <button class="btn small" data-act="open-event" data-id="${f.id}">open log</button>
+      </div></div>`).join("")}</div>`;
+}
+
+views.agents = () => {
+  const { pilo, pms, orphanWorkers } = state.data.tree;
+  const projects = state.data.projects;
+  const tree = !pilo
+    ? `<div class="empty">대표 agent(role=pilo)가 없습니다. 오른쪽 폼에서 등록하세요.</div>`
+    : `<div class="node root">
+        <span class="dot" style="background:var(--green)"></span>
+        <span class="name">${esc(pilo.name)}</span><span class="role pilo">PILO</span>
+        <span class="meta">${esc(pilo.runtime || "runtime 미감지")} · ${esc(pilo.cwd || "cwd 없음")}</span>
+        <span class="acts">
+          <button class="btn small" data-act="edit-agent" data-id="${pilo.id}">edit</button>
+          <button class="btn small" disabled title="대표 agent는 삭제할 수 없습니다">delete</button>
+        </span></div>
+      <div class="branch">
+        ${pms.length ? pms.map(pmNode).join("") : `<div class="sub" style="padding:14px 0">PM agent 없음 — 오른쪽에서 등록</div>`}
+        ${orphanWorkers.map((w) => workerNode(w)).join("")}
+      </div>`;
+  return `<div class="split">
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+        <h2 style="margin:0">조직도</h2><span class="mono" style="font-size:11px;color:#5f6b64">parent_agent_id tree</span>
+        <span style="margin-left:auto;display:flex;gap:6px"><span class="role pilo">PILO</span><span class="role pm">PM</span><span class="role worker">WORKER</span></span>
+      </div>${tree}</div>
+    ${agentForm(projects, pilo, pms)}
+  </div>`;
+};
+
+function pmNode(pm) {
+  return `<div style="padding-top:16px">
+    <div class="node">
+      <span class="dot" style="background:${stateColor(pm.status)}"></span>
+      <span class="name">${esc(pm.name)}</span><span class="role pm">PM</span>
+      <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.runtime || "미감지")}</span>
+      <span class="meta">${esc(pm.aliases || "")}</span>
+      <span class="acts">
+        <button class="btn small" data-act="edit-agent" data-id="${pm.id}">edit</button>
+        <button class="btn small danger" data-act="delete-agent" data-id="${pm.id}">delete</button>
+      </span></div>
+    <div class="branch">${pm.children.map(workerNode).join("") || `<div class="sub" style="padding:10px 0">worker 없음</div>`}</div>
+  </div>`;
+}
+
+function workerNode(w) {
+  return `<div class="node" style="margin-top:10px;padding:10px 14px;border-color:#171b19;background:var(--panel2)">
+    <span class="dot" style="background:${stateColor(w.status)}"></span>
+    <span class="name" style="font-size:12px;color:#b9c3bc">${esc(w.name)}</span><span class="role worker">WORKER</span>
+    <span class="meta">${esc(w.specialty || w.note || "")}</span>
+    <span class="acts">
+      <button class="btn small" data-act="edit-agent" data-id="${w.id}">edit</button>
+      <button class="btn small danger" data-act="delete-agent" data-id="${w.id}">delete</button>
+    </span></div>`;
+}
+
+function agentForm(projects, pilo, pms) {
+  const f = state.form;
+  const piloTaken = Boolean(pilo) && state.editing !== (pilo && pilo.id);
+  const roles = [["pilo", "PILO"], ["pm", "PM"], ["worker", "WORKER"]];
+  const parents = f.role === "pm" ? (pilo ? [pilo] : []) : f.role === "worker" ? pms : [];
+  return `<div class="card">
+    <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">${state.editing ? "agent 수정" : "agent 등록"}</h2>
+      ${state.editing ? `<button class="btn small" data-act="cancel-edit" style="margin-left:auto">취소</button>` : ""}</div>
+    <p class="hint">target(세션 핸들)은 herdr에서 자동 감지되므로 입력하지 않습니다.</p>
+    <div class="field"><div class="name">name <span class="hint">고유 식별자</span><span class="req">required</span></div>
+      <input id="f-name" value="${esc(f.name)}" placeholder="pm-4"></div>
+    <div class="field"><div class="name">role <span class="hint">pilo는 정확히 1개</span><span class="req">required</span></div>
+      <div class="choices">${roles.map(([v, l]) => {
+        const off = v === "pilo" && piloTaken;
+        return `<button class="choice ${f.role === v ? "on" : ""}" data-act="role" data-role="${v}" ${off ? "disabled" : ""}>
+          ${l}${off ? "<small>이미 등록됨</small>" : ""}</button>`;
+      }).join("")}</div></div>
+    ${f.role === "pilo" ? "" : `<div class="field"><div class="name">parent <span class="hint">parent_agent_id</span><span class="req">required</span></div>
+      <select id="f-parent">${parents.length ? parents.map((p) => `<option value="${p.id}" ${String(f.parentAgentId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("") : `<option value="">${f.role === "pm" ? "pilo agent를 먼저 등록" : "PM agent를 먼저 등록"}</option>`}</select></div>`}
+    <div class="field"><div class="name">project <span class="hint">Projects 탭 기준</span></div>
+      <select id="f-project"><option value="">— 미지정 —</option>
+        ${projects.map((p) => `<option value="${p.id}" ${String(f.projectId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+        <option value="__new">+ 새 프로젝트 (Projects 탭)</option></select></div>
+    <div class="field"><div class="name">cwd <span class="hint">herdr 세션 매칭 기준</span><span class="req">required</span></div>
+      <input id="f-cwd" value="${esc(f.cwd)}" placeholder="~/work/project-d"></div>
+    <div class="field"><div class="name">model <span class="hint">표시용 메모</span></div>
+      <input id="f-model" value="${esc(f.model)}" placeholder="claude-sonnet"></div>
+    <div class="field"><div class="name">specialty <span class="hint">전문 영역</span></div>
+      <input id="f-specialty" value="${esc(f.specialty)}" placeholder="backend, migration"></div>
+    <div class="field"><div class="name">aliases <span class="hint">쉼표로 구분</span></div>
+      <input id="f-aliases" value="${esc(f.aliases)}" placeholder="@d, dd"></div>
+    <div class="field"><div class="name">note <span class="hint">메모</span></div>
+      <input id="f-note" value="${esc(f.note)}" placeholder="PoC 담당"></div>
+    <div class="note" style="display:flex;gap:10px;align-items:center">
+      <span>target</span><span style="color:#b9c3bc">${state.editing ? esc(currentTarget()) : "등록 시 cwd로 자동 감지"}</span>
+      ${state.editing ? `<button class="btn small" data-act="rebind" data-id="${state.editing}" style="margin-left:auto">rebind</button>` : `<span style="margin-left:auto;color:#3e4744">auto</span>`}
+    </div>
+    ${state.candidates.length > 1 ? `<div class="note">
+      <div style="color:#b9c3bc;margin-bottom:6px">후보 ${state.candidates.length}개 — 하나를 고르세요</div>
+      ${state.candidates.map((c) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 0">
+        <span>${esc(c.runtime)} · ${esc(c.target)} · ${esc(c.title || "")}</span>
+        <button class="btn small" data-act="pick-target" data-target="${esc(c.target)}" style="margin-left:auto">bind</button></div>`).join("")}</div>` : ""}
+    <button class="btn primary" data-act="${state.editing ? "update-agent" : "create-agent"}">${state.editing ? "save agent" : "register agent"}</button>
+  </div>`;
+}
+
+function currentTarget() {
+  const all = [state.data.tree.pilo, ...state.data.tree.pms, ...state.data.tree.pms.flatMap((p) => p.children), ...state.data.tree.orphanWorkers].filter(Boolean);
+  const found = all.find((a) => String(a.id) === String(state.editing));
+  return found?.herdrTarget || "미바인딩";
+}
+
+views.inbox = () => {
+  const list = state.data.inbox;
+  if (!list.length) return `<div class="table"><div class="empty">inbox가 비어 있습니다. TUI에서 지시를 입력하면 여기에 쌓입니다.</div></div>`;
+  const current = state.selected.inbox || list[0].id;
+  const detail = state.data.inboxDetail;
+  return `<div class="half">
+    <div class="table">
+      <div class="title">inbox <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">사용자 입력 원문</span></div>
+      ${list.map((i) => `<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
+        <span style="display:flex;gap:9px;font:11px var(--mono)">
+          <span style="color:var(--faint)">in-${i.id}</span><span style="color:#5f6b64">${time(i.createdAt)}</span>
+          <span style="margin-left:auto;padding:2px 8px;border-radius:999px;border:1px solid #232b28;color:${stateColor(i.status === "replied" ? "done" : i.status)}">${esc(i.status)}</span></span>
+        <span style="display:block;margin-top:8px;font-size:12.5px;line-height:1.6;color:var(--text)">${esc(i.userRequest)}</span>
+        <span style="display:block;margin-top:8px;font:11px var(--mono);color:#67726b">→ ${esc(i.routed || "미배분")}</span>
+      </button>`).join("")}
+    </div>
+    <div class="table">
+      <div class="title">in-${esc(current)} <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">lifecycle</span></div>
+      ${detail && String(detail.id) === String(current) ? `<div style="padding:18px">
+        ${detail.trace.map((t) => `<div style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid #141817">
+          <span class="mono" style="width:90px;flex:none;font-size:11px;color:${t.stage === "final_reply" ? "var(--green)" : t.stage === "pm_result" ? "var(--blue)" : "#9aa59d"}">${esc(t.stage)}</span>
+          <div style="flex:1;min-width:0"><div class="mono" style="font-size:11px;color:var(--muted)">${esc(t.who)} · ${stamp(t.at)}</div>
+          <div style="margin-top:4px;font-size:12.5px;line-height:1.6;color:#b9c3bc">${esc(t.text)}</div></div></div>`).join("")}
+      </div>` : `<div class="empty">항목을 선택하세요</div>`}
+    </div>
+  </div>`;
+};
+
+views.events = () => {
+  const list = state.data.events;
+  if (!list.length) return `<div class="table"><div class="empty">기록된 event가 없습니다.</div></div>`;
+  const current = state.selected.event || list[0].id;
+  const d = state.data.eventDetail;
+  const typeColor = (t) => ({ pm_result: "var(--blue)", final_reply: "var(--green)", wake_failed: "var(--red)" }[t] || "var(--faint)");
+  return `<div class="split" style="grid-template-columns:300px 1fr">
+    <div class="table">${list.map((e) => `<button class="list-item ${String(e.id) === String(current) ? "on" : ""}" data-act="open-event" data-id="${e.id}">
+      <span style="display:flex;gap:8px;font:11px var(--mono)"><span style="color:${typeColor(e.type)}">${esc(e.type)}</span>
+      <span style="margin-left:auto;color:var(--faint)">${time(e.createdAt)}</span></span>
+      <span style="display:block;margin-top:6px;font:12px var(--mono);color:var(--text)">${esc(e.agent)}</span>
+      <span style="display:block;margin-top:3px;font-size:11px;color:#5f6b64;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title)}</span>
+    </button>`).join("")}</div>
+    <div class="table">${d && String(d.id) === String(current) ? `
+      <div class="title">${esc(d.type)} · ${esc(d.agent)}
+        <span class="mono" style="margin-left:12px;font-size:11px;color:#5f6b64">원문 payload</span>
+        <button class="btn small" data-act="copy-json" style="margin-left:auto">copy json</button></div>
+      <div class="code">${JSON.stringify(d.payload, null, 2).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t">${esc(l)}</span></div>`).join("")}</div>
+      <div style="padding:14px 16px;border-top:1px solid #171b19;background:#0b0e0d">
+        <div class="label">run log</div>
+        ${(d.runLog || []).length ? d.runLog.map((l) => `<div style="display:flex;gap:12px;font:12px/1.9 var(--mono);color:#939e96">
+          <span style="color:#3e4744;width:52px;flex:none">${esc(l.t || "")}</span><span>${esc(l.text || "")}</span></div>`).join("") : `<div class="sub" style="margin-top:8px">기록된 로그 없음</div>`}
+        ${(d.files || []).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px dashed #1e2422">
+          ${d.files.map((f) => `<span class="mono" style="font-size:11px;padding:4px 9px;border-radius:5px;background:#131817;border:1px solid #212725;color:#9aa59d">${esc(f.path)} ${esc(f.delta)}</span>`).join("")}</div>` : ""}
+      </div>` : `<div class="empty">event를 선택하세요</div>`}</div>
+  </div>`;
+};
+
+views.artifacts = () => {
+  const list = state.data.artifacts;
+  if (!list.length) return `<div class="table"><div class="empty">저장된 산출물이 없습니다. PM이 결과를 보고할 때 파일이 쌓입니다.</div></div>`;
+  const current = state.selected.artifact || list[0].id;
+  const d = state.data.artifactDetail;
+  const lineColor = (l) => (l.startsWith("+") ? "var(--green)" : l.startsWith("-") ? "var(--red)" : "#939e96");
+  return `<div class="split" style="grid-template-columns:340px 1fr">
+    <div class="table">
+      <div class="title">files <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length} changed</span></div>
+      ${list.map((a) => `<button class="list-item ${String(a.id) === String(current) ? "on" : ""}" data-act="open-artifact" data-id="${a.id}">
+        <span style="display:flex;gap:8px;align-items:center">
+          <span class="mono" style="font-size:12px;color:#e6ebe6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.path.split("/").pop())}</span>
+          <span class="mono" style="margin-left:auto;font-size:10px;color:var(--muted)">${esc(a.delta)}</span></span>
+        <span style="display:block;margin-top:5px;font:10px var(--mono);color:#5f6b64">${esc(a.agent)} · ${time(a.createdAt)}</span>
+      </button>`).join("")}
+    </div>
+    <div class="table">${d && String(d.id) === String(current) ? `
+      <div class="title"><span class="mono" style="font-size:12px">${esc(d.path)}</span>
+        <span class="mono" style="margin-left:12px;font-size:11px;color:#5f6b64">${esc(d.agent)} · ${esc(d.delta)}</span>
+        <button class="btn small" data-act="copy-diff" style="margin-left:auto">copy</button></div>
+      <div class="code">${(d.diff || "(diff 없음)").split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="color:${lineColor(l)}">${esc(l)}</span></div>`).join("")}</div>`
+      : `<div class="empty">파일을 선택하세요</div>`}</div>
+  </div>`;
+};
+
+views.projects = () => {
+  const list = state.data.projects;
+  const p = state.project;
+  return `<div class="split">
+    <div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">
+        ${list.length ? list.map((pr) => `<div class="card">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mono" style="font-size:15px;color:var(--strong)">${esc(pr.name)}</span>
+            <span class="acts" style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn small" data-act="edit-project" data-id="${pr.id}">edit</button>
+              <button class="btn small danger" data-act="delete-project" data-id="${pr.id}">delete</button></span>
+          </div>
+          <div style="margin-top:13px;padding-top:12px;border-top:1px solid #171b19;font:11px/2 var(--mono);color:#67726b">
+            <div>repo   <span style="color:#b9c3bc">${esc(pr.repo || "—")}</span></div>
+            <div>path   <span style="color:#b9c3bc">${esc(pr.path || "—")}</span></div>
+            <div>pm     <span style="color:${pr.pm ? "var(--green)" : "var(--faint)"}">${esc(pr.pm || "미배정")}</span> <span style="color:#3e4744">${pr.workers} worker</span></div>
+            <div>recent <span style="color:#b9c3bc">${esc(pr.recentTask || "없음")}</span> <span style="color:${stateColor(pr.recentStatus)}">${esc(pr.recentStatus || "")}</span></div>
+          </div></div>`).join("") : `<div class="table"><div class="empty">등록된 프로젝트가 없습니다.</div></div>`}
+      </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">${p.id ? "프로젝트 수정" : "프로젝트 등록"}</h2>
+        ${p.id ? `<button class="btn small" data-act="cancel-project" style="margin-left:auto">취소</button>` : ""}</div>
+      <p class="hint">Agents 등록 폼의 project 목록이 여기를 참조합니다.</p>
+      <div class="field"><div class="name">name<span class="req">required</span></div><input id="p-name" value="${esc(p.name)}" placeholder="project-d"></div>
+      <div class="field"><div class="name">repo <span class="hint">선택</span></div><input id="p-repo" value="${esc(p.repo)}" placeholder="local/project-d"></div>
+      <div class="field"><div class="name">path <span class="hint">작업 디렉터리</span></div><input id="p-path" value="${esc(p.path)}" placeholder="~/work/project-d"></div>
+      <div class="field"><div class="name">note</div><input id="p-note" value="${esc(p.note)}" placeholder="PoC"></div>
+      <button class="btn primary" data-act="${p.id ? "update-project" : "create-project"}">${p.id ? "save project" : "create project"}</button>
+    </div>
+  </div>`;
+};
+
+views.settings = () => {
+  const s = state.data.settings;
+  const rules = s.notifications || [];
+  const tokens = s.tokens || {};
+  const retention = s.retention || {};
+  const toggle = (on, act, key) => `<button class="toggle" data-act="${act}" data-key="${key}" style="background:${on ? "oklch(0.45 0.09 165)" : "#232b28"}"><span style="left:${on ? "15px" : "2px"}"></span></button>`;
+  const rows = [
+    ["event payload", "eventPayloadDays", retention.eventPayloadDays],
+    ["run log", "runLogDays", retention.runLogDays],
+    ["server log", "serverLogDays", retention.serverLogDays]
+  ];
+  return `<div class="half">
+    <div>
+      <div class="card"><h2>토큰 집계 표시</h2><p class="hint">TUI 상태바와 대시보드에 어떤 수치를 띄울지 고릅니다. 집계 기준은 오늘(today)입니다.</p>
+        ${[["showInTui", "TUI 상태바에 tokens 표시"], ["showInDashboard", "대시보드 Overview에 tokens 표시"]].map(([k, label]) =>
+          `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+            <span style="color:#b9c3bc;flex:1">${label}</span>${toggle(tokens[k] !== false, "toggle-token", k)}</div>`).join("")}
+      </div>
+      <div class="card" style="margin-top:12px"><h2>데이터 보관 기간</h2>
+        <p class="hint">작업 기록(지시·답변·산출물)은 삭제하지 않습니다. 시스템 로그만 기간이 지나면 정리합니다.</p>
+        ${rows.map(([label, key, value]) => `<div style="padding:12px 0;border-top:1px solid #171b19">
+          <div style="display:flex;align-items:baseline;gap:10px;font:11px var(--mono)">
+            <span style="color:#b9c3bc">${label}</span>
+            <span style="font-size:9px;letter-spacing:.06em;padding:2px 6px;border-radius:3px;color:#67726b;border:1px solid #232b28">2차 적용</span>
+            <span style="margin-left:auto;color:var(--strong)">${esc(value)}일</span></div>
+          <div style="display:flex;gap:5px;margin-top:8px">
+            ${[7, 14, 30, 90].map((d) => `<button class="choice ${Number(value) === d ? "on" : ""}" style="font-size:10px;padding:6px 4px" data-act="retention" data-key="${key}" data-days="${d}">${d}d</button>`).join("")}
+          </div></div>`).join("")}
+        <div class="note">
+          <div>wake 실패 등 실패 이벤트는 <span style="color:#b9c3bc">${esc(retention.failureEventDays)}일</span> 보관</div>
+          <div>inbox · task · pm_result · final_reply · artifact는 <span style="color:#b9c3bc">삭제하지 않음</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="card"><h2>알림 규칙</h2><p class="hint">조용한 관제실 원칙 — 실패와 승인 요청만 즉시 알립니다. 전달은 herdr notification.</p>
+        ${rules.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+          <span style="color:#b9c3bc;flex:1">${esc(r.when)}</span><span style="color:var(--faint)">→</span>
+          <span style="color:#9aa59d;width:86px">${esc(r.channel)}</span>${toggle(r.on, "toggle-rule", i)}</div>`).join("")}
+      </div>
+      <div class="card" style="margin-top:12px"><h2>runtime</h2>
+        <p class="hint">Pilo는 herdr에 떠 있는 세션에 프롬프트만 전달합니다. 모델은 세션이 정하므로 model 필드는 표시용 메모입니다.</p>
+        ${state.data.system.sessions.length ? state.data.system.sessions.map((s) => `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+          <span style="color:var(--strong);width:66px">${esc(s.runtime)}</span>
+          <span style="color:#67726b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.cwd)}</span>
+          <span style="color:var(--faint)">${esc(s.target)}</span></div>`).join("") : `<div class="sub">herdr 세션이 감지되지 않았습니다.</div>`}
+      </div>
+    </div>
+  </div>`;
+};
+
+views.system = () => {
+  const sys = state.data.system;
+  return `<div class="half">
+    <div>
+      ${serviceCard(sys.services)}
+      <div class="card" style="margin-top:12px"><h2>명령</h2>
+        <div style="font:11px/2 var(--mono);color:#8b968e;margin-top:10px">
+          ${sys.commands.map((c) => `<div>${esc(c.cmd).padEnd(12, " ").replace(/ /g, "&nbsp;")}<span style="color:var(--faint)">${esc(c.desc)}</span></div>`).join("")}
+        </div></div>
+      <div class="card" style="margin-top:12px"><h2>설정 경로</h2>
+        ${sys.paths.map((p) => `<div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+          <span style="color:#5f6b64;width:64px;flex:none">${esc(p.label)}</span>
+          <span style="color:#b9c3bc;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.value)}</span>
+          <span style="color:#3e4744">${esc(p.note)}</span></div>`).join("")}</div>
+    </div>
+    <div>
+      ${sys.wakeFailures.length ? `<div class="fail">
+        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:var(--red)"></span>
+          <span style="font-size:13px;color:var(--strong);font-weight:500">wake 실패 목록</span></div>
+        <p class="hint" style="margin:8px 0 0">herdr 세션을 깨우지 못한 기록입니다. 재시도하거나 세션을 다시 바인딩하세요.</p>
+        ${sys.wakeFailures.map((f) => `<div class="item">
+          <div style="display:flex;gap:9px;font:11px var(--mono)"><span style="color:oklch(0.75 0.14 25)">${esc(f.agent)}</span>
+            <span style="color:var(--faint)">${esc(f.payload.code || "")}</span><span style="margin-left:auto;color:#3e4744">${stamp(f.at)}</span></div>
+          <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")}</div>
+          <div style="margin-top:7px;font:11px var(--mono);color:#5f6b64">attempts ${esc(f.payload.attempts || 1)} · runtime ${esc(f.payload.runtime || "—")}</div>
+          <div style="display:flex;gap:7px;margin-top:11px">
+            ${f.agentId ? `<button class="btn small" data-act="wake" data-id="${f.agentId}">wake again</button>
+            <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>` : ""}
+            <button class="btn small" data-act="open-event" data-id="${f.id}">open log</button></div>
+        </div>`).join("")}</div>`
+      : `<div class="card"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">최근 기록된 실패가 없습니다.</p></div>`}
+      <div class="card" style="margin-top:12px"><h2>herdr 세션</h2><p class="hint">cwd가 같은 세션이 agent에 자동으로 바인딩됩니다.</p>
+        ${sys.sessions.length ? sys.sessions.map((s) => `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+          <span class="dot" style="background:${s.status === "working" ? "var(--amber)" : "var(--green)"};margin-top:5px"></span>
+          <span style="color:var(--strong);width:56px">${esc(s.runtime)}</span>
+          <span style="color:#67726b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.cwd)}</span>
+          <span style="color:var(--faint)">${esc(s.target)}</span></div>`).join("") : `<div class="sub">herdr 세션 없음</div>`}
+      </div>
+    </div>
+  </div>`;
+};
+
+/* ---------- actions ---------- */
+function readAgentForm() {
+  const val = (id) => ($(id) ? $(id).value.trim() : "");
+  return {
+    name: val("f-name"),
+    role: state.form.role,
+    parentAgentId: $("f-parent") ? $("f-parent").value || null : null,
+    projectId: $("f-project") && $("f-project").value !== "__new" ? $("f-project").value || null : null,
+    cwd: val("f-cwd"),
+    model: val("f-model"),
+    specialty: val("f-specialty"),
+    aliases: val("f-aliases"),
+    note: val("f-note")
+  };
+}
+
+function keepAgentForm() {
+  if (!$("f-name")) return;
+  state.form = { ...state.form, ...readAgentForm(), role: state.form.role };
+}
+
+function readProjectForm() {
+  return {
+    name: $("p-name").value.trim(),
+    repo: $("p-repo").value.trim(),
+    path: $("p-path").value.trim(),
+    note: $("p-note").value.trim()
+  };
+}
+
+const actions = {
+  async "role"(el) {
+    keepAgentForm();
+    state.form.role = el.dataset.role;
+    state.form.parentAgentId = "";
+    render();
+  },
+  async "create-agent"() {
+    const form = readAgentForm();
+    if (!form.name || !form.cwd) return toast("name과 cwd는 필수입니다", true);
+    const res = await call("POST", "/api/agents", form);
+    state.candidates = res.candidates || [];
+    state.form = emptyForm();
+    toast(state.candidates.length > 1 ? "등록됨 — 세션 후보가 여러 개입니다" : "agent 등록됨");
+    await load();
+  },
+  async "edit-agent"(el) {
+    const id = el.dataset.id;
+    const all = [state.data.tree.pilo, ...state.data.tree.pms, ...state.data.tree.pms.flatMap((p) => p.children), ...state.data.tree.orphanWorkers].filter(Boolean);
+    const a = all.find((x) => String(x.id) === String(id));
+    if (!a) return;
+    state.editing = id;
+    state.form = {
+      name: a.name, role: a.role, parentAgentId: a.parentAgentId || "", projectId: a.projectId || "",
+      cwd: a.cwd || "", model: a.model || "", specialty: a.specialty || "", aliases: a.aliases || "", note: a.note || ""
+    };
+    state.tab = "agents";
+    render();
+  },
+  async "update-agent"() {
+    await call("PATCH", `/api/agents/${state.editing}`, readAgentForm());
+    state.editing = null;
+    state.form = emptyForm();
+    toast("agent 수정됨");
+    await load();
+  },
+  async "cancel-edit"() {
+    state.editing = null;
+    state.form = emptyForm();
+    render();
+  },
+  async "delete-agent"(el) {
+    if (!confirm("이 agent를 삭제할까요? 과거 기록은 그대로 남습니다.")) return;
+    await call("DELETE", `/api/agents/${el.dataset.id}`);
+    toast("agent 삭제됨");
+    await load();
+  },
+  async "rebind"(el) {
+    const res = await call("POST", `/api/agents/${el.dataset.id}/rebind`, {});
+    state.candidates = res.candidates || [];
+    state.editing = state.editing || el.dataset.id;
+    toast(res.target ? `세션 재바인딩: ${res.target}` : `후보 ${state.candidates.length}개 — 하나를 고르세요`, !res.target);
+    await load();
+  },
+  async "pick-target"(el) {
+    await call("POST", `/api/agents/${state.editing}/rebind`, { target: el.dataset.target });
+    state.candidates = [];
+    toast("세션 바인딩됨");
+    await load();
+  },
+  async "wake"(el) {
+    try {
+      await call("POST", `/api/agents/${el.dataset.id}/wake`, {});
+      toast("wake 신호를 보냈습니다");
+    } catch (err) {
+      toast(`wake 실패: ${err.message}`, true);
+    }
+    await load();
+  },
+  async "open-inbox"(el) {
+    state.selected.inbox = el.dataset.id;
+    state.data.inboxDetail = await get(`/api/inbox/${el.dataset.id}`);
+    render();
+  },
+  async "open-event"(el) {
+    state.tab = "events";
+    state.selected.event = el.dataset.id;
+    state.data.eventDetail = await get(`/api/events/${el.dataset.id}`);
+    render();
+  },
+  async "open-artifact"(el) {
+    state.selected.artifact = el.dataset.id;
+    state.data.artifactDetail = await get(`/api/artifacts/${el.dataset.id}`);
+    render();
+  },
+  async "copy-json"() {
+    await navigator.clipboard.writeText(JSON.stringify(state.data.eventDetail.payload, null, 2));
+    toast("payload 복사됨");
+  },
+  async "copy-diff"() {
+    await navigator.clipboard.writeText(state.data.artifactDetail.diff || "");
+    toast("diff 복사됨");
+  },
+  async "create-project"() {
+    const form = readProjectForm();
+    if (!form.name) return toast("name은 필수입니다", true);
+    await call("POST", "/api/projects", form);
+    state.project = { id: null, name: "", repo: "", path: "", note: "" };
+    toast("프로젝트 등록됨");
+    await load();
+  },
+  async "edit-project"(el) {
+    const p = state.data.projects.find((x) => String(x.id) === String(el.dataset.id));
+    state.project = { id: p.id, name: p.name, repo: p.repo || "", path: p.path || "", note: p.note || "" };
+    render();
+  },
+  async "update-project"() {
+    await call("PATCH", `/api/projects/${state.project.id}`, readProjectForm());
+    state.project = { id: null, name: "", repo: "", path: "", note: "" };
+    toast("프로젝트 수정됨");
+    await load();
+  },
+  async "cancel-project"() {
+    state.project = { id: null, name: "", repo: "", path: "", note: "" };
+    render();
+  },
+  async "delete-project"(el) {
+    if (!confirm("이 프로젝트를 삭제할까요?")) return;
+    await call("DELETE", `/api/projects/${el.dataset.id}`);
+    toast("프로젝트 삭제됨");
+    await load();
+  },
+  async "toggle-rule"(el) {
+    const rules = state.data.settings.notifications.map((r, i) => (i === Number(el.dataset.key) ? { ...r, on: !r.on } : r));
+    await call("PUT", "/api/settings/notifications", { value: rules });
+    toast("알림 규칙 저장됨");
+    await load();
+  },
+  async "toggle-token"(el) {
+    const tokens = { ...state.data.settings.tokens };
+    tokens[el.dataset.key] = tokens[el.dataset.key] === false;
+    await call("PUT", "/api/settings/tokens", { value: tokens });
+    toast("토큰 표시 설정 저장됨");
+    await load();
+  },
+  async "retention"(el) {
+    const retention = { ...state.data.settings.retention, [el.dataset.key]: Number(el.dataset.days) };
+    await call("PUT", "/api/settings/retention", { value: retention });
+    toast("보관 기간 저장됨 (삭제는 2차)");
+    await load();
+  }
+};
+
+function wire() {
+  document.querySelectorAll("[data-tab]").forEach((el) => {
+    el.onclick = async () => {
+      state.tab = el.dataset.tab;
+      location.hash = state.tab;
+      render();
+      await loadDetail();
+      render();
+    };
+  });
+  document.querySelectorAll("[data-act]").forEach((el) => {
+    el.onclick = async () => {
+      const run = actions[el.dataset.act];
+      if (!run) return;
+      try {
+        await run(el);
+      } catch (err) {
+        toast(err.message, true);
+      }
+    };
+  });
+  const project = $("f-project");
+  if (project) {
+    project.onchange = () => {
+      if (project.value === "__new") {
+        keepAgentForm();
+        state.tab = "projects";
+        project.value = "";
+        render();
+      }
+    };
+  }
+}
+
+window.addEventListener("hashchange", async () => {
+  state.tab = location.hash.slice(1) || "overview";
+  render();
+  await loadDetail();
+  render();
+});
+
+await load();
+setInterval(async () => {
+  if (document.hidden) return;
+  if (document.activeElement && ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+  try {
+    await load();
+  } catch (err) {
+    $("sync").textContent = "연결 끊김";
+  }
+}, 5000);
+</script>
+</body>
+</html>
