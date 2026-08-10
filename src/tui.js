@@ -155,7 +155,8 @@ function railRows(tree, width) {
   for (const pm of tree.pms) {
     const mark = statusIcon(pm.status, state.spin);
     rows.push(`${c.faint}└${c.reset} ${mark.color}${mark.icon}${c.reset} ${c.fg}${cut(pm.name, width - 16)}${c.reset} ${c.blue}PM${c.reset}`);
-    rows.push(`   ${c.faint}${cut(`${pm.projectName || "project 미지정"} · ${pm.status}`, width - 5)}${c.reset}`);
+    const detail = pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
+    rows.push(`   ${c.faint}${cut(`${pm.projectName || "project 미지정"} · ${detail}`, width - 5)}${c.reset}`);
     for (const w of pm.children) {
       const wm = statusIcon(w.status, state.spin);
       rows.push(`   ${c.faint}└${c.reset} ${wm.color}${wm.icon}${c.reset} ${c.muted}${cut(w.name, width - 18)}${c.reset} ${c.faint}WORKER${c.reset}`);
@@ -187,6 +188,7 @@ function scrollBy(rows) {
 function statusIcon(status, spin) {
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
   if (status === "failed") return { icon: "✕", color: c.red };
+  if (status === "unbound") return { icon: "○", color: c.faint };
   if (status === "queued") return { icon: "◍", color: c.faint };
   if (status === "archived") return { icon: "·", color: c.faint };
   return { icon: "●", color: c.green };

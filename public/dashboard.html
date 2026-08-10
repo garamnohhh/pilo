@@ -31,25 +31,29 @@
   body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
   button, input, select, textarea { font: inherit; color: inherit }
   .mono { font-family: var(--mono) }
-  .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 28px; padding: 14px 28px;
+  html, body { height: 100%; overflow: hidden }
+  .topbar { flex: none; z-index: 20; display: flex; align-items: center; gap: 28px; padding: 14px 28px;
     background: rgba(8, 9, 10, .92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line) }
   .topbar .mark { font: 600 17px var(--mono); letter-spacing: -.03em; color: var(--strong) }
   .topbar .tag { font: 11px var(--mono); color: #5f6b64 }
   .topbar .state { margin-left: auto; display: flex; align-items: center; gap: 14px; font: 11px var(--mono); color: var(--muted) }
-  .app { display: grid; grid-template-columns: 216px 1fr; min-height: calc(100vh - 55px) }
+  body { display: flex; flex-direction: column }
+  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: 216px 1fr }
 
-  aside { border-right: 1px solid var(--line); background: var(--panel2); padding: 22px 12px }
+  aside { border-right: 1px solid var(--line); background: var(--panel2); padding: 22px 12px;
+    display: flex; flex-direction: column; overflow: hidden }
   .eyebrow { font: 10px var(--mono); letter-spacing: .14em; color: var(--faint); text-transform: uppercase; padding: 0 10px 12px }
   .tab { position: relative; display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; margin-bottom: 2px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: #6f7a73; font-size: 13px; text-align: left; cursor: pointer }
   .tab:hover { background: #121615; color: var(--text) }
   .tab.active { background: #121615; border-color: #232b28; color: var(--text) }
   .tab .num { font: 11px var(--mono); color: var(--faint); width: 16px }
   .badge { margin-left: auto; font: 10px var(--mono); padding: 2px 7px; border-radius: 999px; background: #151a18 }
-  .side-card { margin-top: 26px; padding: 14px 12px; border: 1px solid var(--line); border-radius: 9px; background: #0d100f; font: 11px var(--mono); color: #9aa59d }
+  .side-card { margin-top: auto; padding: 14px 12px; border: 1px solid var(--line); border-radius: 9px; background: #0d100f; font: 11px var(--mono); color: #9aa59d }
   .side-card .sub { margin-top: 7px; font-size: 10px; line-height: 1.7; color: var(--faint) }
 
-  main { padding: 30px 32px 60px; overflow-x: hidden }
-  header { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px }
+  main { padding: 30px 32px 60px; overflow-y: auto; overflow-x: hidden; min-height: 0 }
+  header { position: sticky; top: -30px; z-index: 10; display: flex; align-items: flex-end; gap: 16px;
+    margin: -30px -32px 24px; padding: 30px 32px 14px; background: var(--bg) }
   h1 { margin: 0 0 5px; font-size: 22px; font-weight: 600; letter-spacing: -.01em; color: var(--strong) }
   header p { margin: 0; font-size: 13px; color: var(--muted) }
   .pill { font: 11px var(--mono); padding: 7px 12px; border-radius: 7px; border: 1px solid #1e2422; color: var(--muted); white-space: nowrap }
@@ -70,6 +74,15 @@
   .head { font: 10px var(--mono); letter-spacing: .1em; color: var(--faint); text-transform: uppercase; border-bottom: 1px solid #171b19; padding: 9px 16px }
   .table { border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--panel) }
   .table .title { display: flex; align-items: center; padding: 13px 16px; border-bottom: 1px solid #171b19; font-size: 13px; color: var(--text); font-weight: 500 }
+  .inbox { display: grid; grid-template-columns: 340px 1fr; gap: 14px; height: calc(100vh - 190px); min-height: 340px }
+  .inbox > * { overflow-y: auto; min-height: 0 }
+  .inbox .table { display: flex; flex-direction: column }
+  .inbox .table .title { position: sticky; top: 0; background: var(--panel); z-index: 1 }
+  .daygroup { padding: 8px 16px; font: 10px var(--mono); letter-spacing: .1em; color: var(--faint);
+    text-transform: uppercase; background: var(--panel2); border-bottom: 1px solid #121615; position: sticky; top: 43px }
+  .step { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid #171b19 }
+  .step .body { font-size: 12.5px; line-height: 1.65; color: #b9c3bc; white-space: pre-wrap }
+  .step .body.short { max-height: 3.4em; overflow: hidden; mask-image: linear-gradient(#000 50%, transparent) }
   .empty { padding: 34px 16px; color: var(--faint); font: 12px var(--mono); text-align: center }
 
   .btn { font: 11px var(--mono); padding: 6px 11px; border-radius: 6px; border: 1px solid var(--line2); background: #131817; color: #9aa59d; cursor: pointer; white-space: nowrap }
@@ -134,7 +147,7 @@
 <div class="app">
   <aside>
     <div class="eyebrow">dashboard</div>
-    <nav id="tabs"></nav>
+    <nav id="tabs" style="flex:none"></nav>
     <div class="side-card" id="sideCard"></div>
   </aside>
   <main>
@@ -506,32 +519,58 @@ views.inbox = () => {
   if (!list.length) return `<div class="table"><div class="empty">inbox가 비어 있습니다. TUI에서 지시를 입력하면 여기에 쌓입니다.</div></div>`;
   const current = state.selected.inbox || list[0].id;
   const detail = state.data.inboxDetail;
-  const stateLabel = { queued: "대기", dispatched: "처리 중", replied: "완료", failed: "실패" };
-  return `<div class="split" style="grid-template-columns:340px 1fr">
+  const label = { queued: "대기", dispatched: "처리 중", replied: "완료", failed: "실패" };
+
+  let day = "";
+  const rows = list.map((i) => {
+    const group = dayLabel(i.createdAt);
+    const header = group === day ? "" : `<div class="daygroup">${esc(group)}</div>`;
+    day = group;
+    const done = i.status === "replied";
+    return `${header}<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
+      <span style="display:flex;align-items:center;gap:8px">
+        <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" ? "var(--red)" : "var(--amber)"}"></span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12.5px">${esc(firstLine(i.userRequest))}</span>
+      </span>
+      <span style="display:flex;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--faint)">
+        <span>${ago(i.createdAt)}</span><span>·</span><span>${esc(label[i.status] || i.status)}</span>
+        ${i.project ? `<span style="margin-left:auto;color:#67726b">${esc(i.project)}</span>` : ""}
+      </span>
+    </button>`;
+  }).join("");
+
+  return `<div class="inbox">
     <div class="table">
       <div class="title">요청 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length}건</span></div>
-      ${list.map((i) => {
-        const done = i.status === "replied";
-        return `<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
-          <span style="display:flex;align-items:center;gap:8px">
-            <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" ? "var(--red)" : "var(--amber)"}"></span>
-            <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12.5px">${esc(firstLine(i.userRequest))}</span>
-          </span>
-          <span style="display:flex;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--faint)">
-            <span>${ago(i.createdAt)}</span>
-            <span>·</span>
-            <span>${esc(stateLabel[i.status] || i.status)}</span>
-            ${i.project ? `<span style="margin-left:auto;color:#67726b">${esc(i.project)}</span>` : ""}
-          </span>
-        </button>`;
-      }).join("")}
+      ${rows}
     </div>
     ${detail && String(detail.id) === String(current) ? inboxDetail(detail) : `<div class="table"><div class="empty">요청을 선택하세요</div></div>`}
   </div>`;
 };
 
-// Requests usually start with the agent alias on its own line ("pilo\n…"); the
-// alias is not the summary, so skip it when there is more text.
+function dayLabel(at) {
+  if (!at) return "이전";
+  const d = new Date(at);
+  const today = new Date();
+  const same = (a, b) => a.toDateString() === b.toDateString();
+  if (same(d, today)) return "오늘";
+  const yesterday = new Date(today.getTime() - 86400000);
+  if (same(d, yesterday)) return "어제";
+  return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+}
+
+// pm_result is markdown written for a human reader; for a one-line preview the
+// syntax is just noise.
+function summarize(text, limit = 150) {
+  const flat = String(text || "")
+    .replace(/```[\s\S]*?```/g, " [코드] ")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/[*_`>]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return flat.length > limit ? flat.slice(0, limit) + "…" : flat || "(내용 없음)";
+}
+
 const firstLine = (text) => {
   const lines = String(text || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const names = (state.data?.agents || []).map((a) => a.name);
@@ -564,6 +603,7 @@ function inboxDetail(detail) {
       <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
         <span class="label">요청 in-${esc(detail.id)}</span>
         <span class="mono" style="font-size:10px;color:var(--faint)">${stamp(detail.createdAt)}</span>
+        <span class="mono" style="margin-left:auto;font-size:10px;color:var(--faint)">task ${detail.tasks.length}건</span>
       </div>
       <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${esc(detail.userRequest)}</div>
     </div>
@@ -577,20 +617,21 @@ function inboxDetail(detail) {
     </div>` : `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`}
 
     <div class="card">
-      <div class="label" style="margin-bottom:12px">처리 경로</div>
+      <div class="label" style="margin-bottom:4px">처리 경로</div>
       ${steps.length ? steps.map((t, i) => {
         const meta = STAGE[t.stage] || { label: t.stage, color: "var(--muted)" };
-        const long = String(t.text || "").length > 240;
-        const open = state.openTrace === `${detail.id}-${i}`;
-        return `<div style="display:flex;gap:12px;padding:12px 0;border-top:1px solid #171b19">
-          <span style="flex:none;width:64px;font:10px var(--mono);color:${meta.color}">${esc(meta.label)}</span>
+        const key = `${detail.id}-${i}`;
+        const open = state.openTrace === key;
+        const long = String(t.text || "").length > 160;
+        return `<div class="step">
+          <span style="flex:none;width:62px;font:10px var(--mono);color:${meta.color}">${esc(meta.label)}</span>
           <div style="flex:1;min-width:0">
             <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.who)} · ${ago(t.at)}</div>
-            <div style="margin-top:5px;font-size:12.5px;line-height:1.65;color:#b9c3bc;white-space:pre-wrap;${long && !open ? "max-height:5.4em;overflow:hidden;mask-image:linear-gradient(#000 60%,transparent)" : ""}">${esc(t.text)}</div>
-            ${long ? `<button class="btn small" style="margin-top:8px" data-act="toggle-trace" data-key="${detail.id}-${i}">${open ? "접기" : "전체 보기"}</button>` : ""}
+            <div class="body ${long && !open ? "short" : ""}" style="margin-top:5px">${esc(open || !long ? t.text : summarize(t.text, 220))}</div>
+            ${long ? `<button class="btn small" style="margin-top:8px" data-act="toggle-trace" data-key="${key}">${open ? "접기" : "전체 보기"}</button>` : ""}
           </div>
         </div>`;
-      }).join("") : `<div class="sub">아직 배분되지 않았습니다.</div>`}
+      }).join("") : `<div class="sub" style="padding-top:10px">아직 배분되지 않았습니다.</div>`}
     </div>
   </div>`;
 }
