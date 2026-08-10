@@ -156,7 +156,7 @@ const state = {
 };
 
 function emptyForm() {
-  return { name: "", role: "pm", parentAgentId: "", projectId: "", cwd: "", specialty: "", aliases: "", note: "", model: "" };
+  return { name: "", role: "pm", parentAgentId: "", projectId: "", projectName: "", cwd: "", specialty: "", aliases: "", note: "", model: "" };
 }
 
 const $ = (id) => document.getElementById(id);
@@ -187,11 +187,12 @@ async function call(method, path, body) {
 const get = (path) => call("GET", path);
 
 async function load() {
-  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup] = await Promise.all([
+  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions] = await Promise.all([
     get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox"),
-    get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup")
+    get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup"),
+    get("/api/sessions")
   ]);
-  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup };
+  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions };
   await loadDetail();
   $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
   render();
@@ -341,9 +342,27 @@ views.agents = () => {
         <h2 style="margin:0">조직도</h2><span class="mono" style="font-size:11px;color:#5f6b64">parent_agent_id tree</span>
         <span style="margin-left:auto;display:flex;gap:6px"><span class="role pilo">PILO</span><span class="role pm">PM</span><span class="role worker">WORKER</span></span>
       </div>${tree}</div>
-    ${agentForm(projects, pilo, pms)}
+    <div>${sessionCard()}${agentForm(projects, pilo, pms)}</div>
   </div>`;
 };
+
+function sessionCard() {
+  const sessions = state.data.sessions || [];
+  const free = sessions.filter((s) => !s.boundAgent);
+  return `<div class="card" style="margin-bottom:14px">
+    <h2>herdr 세션</h2>
+    <p class="hint">떠 있는 세션을 그대로 agent로 등록합니다. runtime·cwd·target은 herdr에서 읽어옵니다.</p>
+    ${sessions.length ? sessions.map((s) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
+      <span class="dot" style="background:${s.boundAgent ? "var(--faint)" : s.status === "working" ? "var(--amber)" : "var(--green)"}"></span>
+      <span style="color:var(--strong);width:52px;flex:none">${esc(s.runtime)}</span>
+      <span style="color:#67726b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.cwd)}">${esc(s.cwdShort)}</span>
+      ${s.boundAgent
+        ? `<span style="color:var(--faint);white-space:nowrap">→ ${esc(s.boundAgent.name)}</span>`
+        : `<button class="btn small" data-act="use-session" data-target="${esc(s.target)}">이 세션 추가</button>`}
+    </div>`).join("") : `<div class="sub" style="margin-top:10px">herdr 세션이 없습니다. 세션을 띄운 뒤 새로고침하세요.</div>`}
+    ${sessions.length && !free.length ? `<div class="note">모든 세션이 이미 등록되어 있습니다.</div>` : ""}
+  </div>`;
+}
 
 function pmNode(pm) {
   return `<div style="padding-top:16px">
@@ -393,6 +412,7 @@ function agentForm(projects, pilo, pms) {
     <div class="field"><div class="name">project <span class="hint">Projects 탭 기준</span></div>
       <select id="f-project"><option value="">— 미지정 —</option>
         ${projects.map((p) => `<option value="${p.id}" ${String(f.projectId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
+        ${f.projectName && !f.projectId ? `<option value="__auto" selected>+ ${esc(f.projectName)} (등록 시 생성)</option>` : ""}
         <option value="__new">+ 새 프로젝트 (Projects 탭)</option></select></div>
     <div class="field"><div class="name">cwd <span class="hint">herdr 세션 매칭 기준</span><span class="req">required</span></div>
       <input id="f-cwd" value="${esc(f.cwd)}" placeholder="~/work/project-d"></div>
@@ -638,7 +658,8 @@ function readAgentForm() {
     name: val("f-name"),
     role: state.form.role,
     parentAgentId: $("f-parent") ? $("f-parent").value || null : null,
-    projectId: $("f-project") && $("f-project").value !== "__new" ? $("f-project").value || null : null,
+    projectId: $("f-project") && !["__new", "__auto", ""].includes($("f-project").value) ? $("f-project").value : null,
+    projectName: $("f-project") && $("f-project").value === "__auto" ? state.form.projectName : "",
     cwd: val("f-cwd"),
     model: val("f-model"),
     specialty: val("f-specialty"),
@@ -649,7 +670,7 @@ function readAgentForm() {
 
 function keepAgentForm() {
   if (!$("f-name")) return;
-  state.form = { ...state.form, ...readAgentForm(), role: state.form.role };
+  state.form = { ...state.form, ...readAgentForm(), role: state.form.role, projectName: state.form.projectName };
 }
 
 function readProjectForm() {
@@ -666,6 +687,26 @@ const actions = {
     keepAgentForm();
     state.form.role = el.dataset.role;
     state.form.parentAgentId = "";
+    render();
+  },
+  async "use-session"(el) {
+    const session = (state.data.sessions || []).find((s) => s.target === el.dataset.target);
+    if (!session) return;
+    const { pilo, pms } = state.data.tree;
+    const role = pilo ? "pm" : "pilo";
+    state.editing = null;
+    state.candidates = [];
+    state.form = {
+      ...emptyForm(),
+      name: session.suggestedName,
+      role,
+      parentAgentId: role === "pm" ? (pilo ? pilo.id : "") : "",
+      projectId: session.suggestedProjectId || "",
+      projectName: session.suggestedProjectId ? "" : session.suggestedProjectName,
+      cwd: session.cwd
+    };
+    if (role === "pilo") state.form.name = "pilo";
+    toast(`${session.runtime} 세션을 폼에 채웠습니다 — role 확인 후 등록`);
     render();
   },
   async "create-agent"() {

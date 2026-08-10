@@ -45,9 +45,21 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
   return parent.id;
 }
 
+// One-click registration passes a project name instead of an id; make it exist.
+async function resolveProject(input) {
+  if (input.projectId) return input.projectId;
+  const name = (input.projectName || "").trim();
+  if (!name) return null;
+  const existing = await one("SELECT id FROM projects WHERE name = $1 AND archived_at IS NULL", [name]);
+  if (existing) return existing.id;
+  const row = await one("INSERT INTO projects (name, path) VALUES ($1, $2) RETURNING id", [name, input.cwd || ""]);
+  return row.id;
+}
+
 export async function createAgent(input) {
   const role = input.role || "pm";
   const parentAgentId = await validateHierarchy({ role, parentAgentId: input.parentAgentId || null });
+  const projectId = await resolveProject(input);
   const detected = await detectSession(input.cwd || "", input.runtime || "");
   const row = await one(
     `INSERT INTO agents (name, role, parent_agent_id, project_id, runtime, herdr_target, runtime_detected_at,
@@ -55,7 +67,7 @@ export async function createAgent(input) {
      VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 = '' THEN NULL ELSE now() END, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
-      input.name, role, parentAgentId, input.projectId || null, detected.runtime, detected.target,
+      input.name, role, parentAgentId, projectId, detected.runtime, detected.target,
       input.model || "", input.cwd || "", input.aliases || "", input.specialty || "", input.note || ""
     ]
   );
@@ -175,6 +187,30 @@ export async function wakeFailures(limit = 10) {
      WHERE e.type = 'wake_failed' ORDER BY e.created_at DESC LIMIT $1`,
     [limit]
   );
+}
+
+// herdr already knows runtime, cwd and pane id for every live session, so registration
+// is a pick from this list rather than something the user types out.
+export async function listSessions() {
+  const sessions = await herdr.sessions();
+  const agents = await query(
+    "SELECT id, name, role, herdr_target AS target, cwd FROM agents WHERE archived_at IS NULL"
+  );
+  const projects = await query("SELECT id, name, path FROM projects WHERE archived_at IS NULL");
+  const home = process.env.HOME || "";
+  return sessions.map((s) => {
+    const bound = agents.find((a) => a.target && a.target === s.target);
+    const suggestedName = (s.cwd.split("/").filter(Boolean).pop() || s.title || "agent").toLowerCase();
+    const project = projects.find((p) => p.name === suggestedName);
+    return {
+      ...s,
+      cwdShort: home && s.cwd.startsWith(home) ? "~" + s.cwd.slice(home.length) : s.cwd,
+      boundAgent: bound ? { id: bound.id, name: bound.name, role: bound.role } : null,
+      suggestedName,
+      suggestedProjectId: project ? project.id : null,
+      suggestedProjectName: suggestedName
+    };
+  });
 }
 
 export async function listProjects() {
