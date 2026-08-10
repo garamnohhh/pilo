@@ -73,3 +73,19 @@ test("hangul is inserted as typed", () => {
   const d = type(["한", "글", LEFT, "중"]);
   assert.equal(d.input, "한중글");
 });
+
+test("a pasted newline stays in the draft instead of sending", () => {
+  const start = key("\x1b[200~");
+  assert.equal(edit({ input: "", cursor: 0 }, start.ch, start.key).action, "paste-start");
+
+  const { ch, key: enter } = key("\r");
+  const pasted = edit({ input: "a", cursor: 1 }, ch, enter, { pasting: true });
+  assert.equal(pasted.input, "a\n");
+  assert.equal(pasted.action, undefined);
+
+  const end = key("\x1b[201~");
+  assert.equal(edit({ input: "a\nb", cursor: 3 }, end.ch, end.key).action, "paste-end");
+
+  // and once the paste is over, Enter submits again
+  assert.equal(edit({ input: "a\nb", cursor: 3 }, ch, enter).action, "send");
+});

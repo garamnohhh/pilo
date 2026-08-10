@@ -300,6 +300,9 @@ export async function listInbox(limit = 50) {
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.created_at AS "createdAt",
        (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = i.id) AS routed,
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id) AS "taskCount",
+       (SELECT string_agg(DISTINCT p.name, ', ') FROM tasks t
+          JOIN agents a ON a.id = t.to_agent_id JOIN projects p ON p.id = a.project_id
+        WHERE t.inbox_id = i.id) AS project,
        (SELECT body FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "finalReply"
      FROM inbox i ORDER BY i.created_at DESC LIMIT $1`,
     [limit]
