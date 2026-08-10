@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.js",
-    "check": "node --check src/server.js"
+    "check": "node --check src/server.js",
+    "test": "node --test src/*.test.js"
   },
   "dependencies": {
     "pg": "^8.22.0"
