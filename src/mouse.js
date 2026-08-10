@@ -9,15 +9,19 @@ const WHEEL_DOWN = 65;
 export const ENABLE = "\x1b[?1000h\x1b[?1006h";
 export const DISABLE = "\x1b[?1006l\x1b[?1000l";
 
-// Returns how far the wheel moved (positive = scroll up, toward older lines)
-// and the input with every mouse report removed.
+// Returns how far the wheel moved (positive = scroll up, toward older lines),
+// any left-button presses with their 1-based cell, and the input with every
+// mouse report removed.
 export function parseMouse(input) {
   let wheel = 0;
-  const rest = String(input).replace(SGR, (_match, button, _x, _y, kind) => {
+  const clicks = [];
+  const rest = String(input).replace(SGR, (_match, button, x, y, kind) => {
     const code = Number(button);
     if (kind === "M" && code === WHEEL_UP) wheel += 1;
-    if (kind === "M" && code === WHEEL_DOWN) wheel -= 1;
+    else if (kind === "M" && code === WHEEL_DOWN) wheel -= 1;
+    // button 0 press only: releases are "m", and drags carry the 32 bit
+    else if (kind === "M" && code === 0) clicks.push({ x: Number(x), y: Number(y) });
     return "";
   });
-  return { wheel, rest };
+  return { wheel, clicks, rest };
 }

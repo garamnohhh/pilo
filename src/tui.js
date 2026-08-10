@@ -31,6 +31,8 @@ const state = {
   pasting: false,
   filter: null,
   spin: 0,
+  folded: new Set(),
+  hits: new Map(),
   scroll: 0,
   maxScroll: 0,
   data: null
@@ -89,9 +91,15 @@ function wrap(text, width) {
   return out.length ? out : [""];
 }
 
+function foldedLine(item, width) {
+  const first = String(item.userRequest || "").split("\n").map((l) => l.trim()).find(Boolean) || "(빈 요청)";
+  const state = item.finalReply ? "완료" : "대기";
+  return `${c.faint}▸${c.reset} ${c.fg}${cut(first, width - 22)}${c.reset} ${c.faint}in-${item.id} · ${state}${c.reset}`;
+}
+
 function replyBlock(item, width) {
   const inner = Math.max(20, width - 4);
-  const rows = [`${c.line}╭─${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
+  const rows = [`${c.line}╭─${c.reset} ${c.faint}▾${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
   for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
   rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 :dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
@@ -137,26 +145,36 @@ function setupScreen(setup, width) {
   return rows;
 }
 
-function railRows(tree, width) {
+function railRows(tree, width, actions = []) {
   const rows = [`${c.faint}AGENT TREE${c.reset}`, ""];
+  actions.push(null, null);
   if (!tree.pilo) {
     rows.push(`${c.faint}대표 agent 없음${c.reset}`);
+    actions.push(null);
     return rows;
   }
 
   // The name gets a line to itself; role, project and workload go on the next one.
   // Cramming them onto one row is what turned every name into an ellipsis.
-  const entry = (indent, icon, name, meta, tag, tagColor) => {
+  const entry = (indent, icon, name, meta, tag, tagColor, action = null) => {
     rows.push(`${indent}${icon.color}${icon.icon}${c.reset} ${c.fg}${cut(name, width - indent.length - 2)}${c.reset}`);
+    actions.push(action);
     rows.push(`${indent}  ${tagColor}${tag}${c.reset} ${c.faint}${cut(meta, width - indent.length - tag.length - 3)}${c.reset}`);
+    actions.push(action);
   };
 
-  entry("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "대화 · 취합", "PILO", c.green);
+  // clicking the desk agent clears the project filter
+  entry("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "전체 보기", "PILO", c.green, {
+    type: "project",
+    name: null
+  });
   rows.push("");
+  actions.push(null);
 
   if (!tree.pms.length) {
     rows.push(`${c.faint}Project agent 없음${c.reset}`);
     rows.push(`${c.faint}:dash 에서 PM 등록${c.reset}`);
+    actions.push(null, null);
     return rows;
   }
 
@@ -165,11 +183,14 @@ function railRows(tree, width) {
       pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
     // most PMs are named after their project; repeating it just eats the line
     const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
-    entry("", statusIcon(pm.status, state.spin), pm.name, `${project}${load}`, "PM", c.blue);
+    const filter = { type: "project", name: pm.projectName || pm.name };
+    const active = state.filter && state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
+    entry("", statusIcon(pm.status, state.spin), `${active}${pm.name}`, `${project}${load}`, "PM", c.blue, filter);
     for (const w of pm.children) {
-      entry("  ", statusIcon(w.status, state.spin), w.name, w.specialty || w.status, "WORKER", c.muted);
+      entry("  ", statusIcon(w.status, state.spin), w.name, w.specialty || w.status, "WORKER", c.muted, filter);
     }
     rows.push("");
+    actions.push(null);
   }
   return rows;
 }
@@ -184,6 +205,30 @@ async function refresh() {
   ]);
   state.data = { setup, tree, inbox, overview, settings };
   return state.data;
+}
+
+function applyProject(name) {
+  state.filter = name || null;
+  state.scroll = 0;
+  note(name ? `필터: ${name}` : "필터 해제 — 전체 요청 표시");
+  render();
+}
+
+function handleClick({ x, y }) {
+  const hit = state.hits.get(y);
+  if (!hit) return;
+  const width = process.stdout.columns || 120;
+  const marginX = width > 60 ? 2 : 0;
+  const railWidth = width >= 96 ? Math.min(40, Math.max(30, Math.round(width * 0.28))) : 0;
+  const mainWidth = railWidth ? width - marginX * 2 - railWidth - 3 : width - marginX * 2;
+  const action = x > marginX + mainWidth + 1 ? hit.rail : hit.main;
+  if (!action) return;
+  if (action.type === "project") return applyProject(action.name);
+  if (action.type === "fold") {
+    if (state.folded.has(action.id)) state.folded.delete(action.id);
+    else state.folded.add(action.id);
+    render();
+  }
 }
 
 function scrollBy(rows) {
@@ -233,36 +278,61 @@ function render() {
 
   const visible = Math.max(8, height - 11);
   let rows = [];
+  let rowActions = [];
 
   if (setup.needsSetup) {
     rows = setupScreen(setup, outWidth).map((r) => "  " + r);
   } else {
     const feed = [];
+    const actions = [];
     const visibleInbox = state.filter
       ? inbox.filter((i) => (i.project || "").split(", ").includes(state.filter))
       : inbox;
     if (state.filter) {
-      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · :project all 로 해제${c.reset}`);
+      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 :project all 로 해제${c.reset}`);
+      actions.push({ type: "project", name: null });
       feed.push("");
+      actions.push(null);
     }
     for (const item of visibleInbox.slice().reverse()) {
-      feed.push(...wrap(item.userRequest, mainWidth - 6).map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`));
-      if (item.project) feed.push(`    ${c.faint}${item.project}${c.reset}`);
+      const fold = { type: "fold", id: String(item.id) };
+      if (state.folded.has(String(item.id))) {
+        feed.push("  " + foldedLine(item, mainWidth - 4));
+        actions.push(fold);
+        feed.push("");
+        actions.push(null);
+        continue;
+      }
+      const question = wrap(item.userRequest, mainWidth - 6).map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`);
+      feed.push(...question);
+      actions.push(...question.map(() => fold));
+      if (item.project) {
+        feed.push(`    ${c.faint}${item.project}${c.reset}`);
+        actions.push(null);
+      }
       feed.push("");
-      feed.push(...(item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r));
+      actions.push(null);
+      const block = (item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r);
+      feed.push(...block);
+      // only the header line folds, so clicking inside an answer does nothing
+      actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
       feed.push("");
+      actions.push(null);
     }
     for (const note of state.notes.slice(-3)) {
-      feed.push(...wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`));
-      feed.push("");
+      const lines = wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`);
+      feed.push(...lines, "");
+      actions.push(...lines.map(() => null), null);
     }
     if (feed.length <= (state.filter ? 2 : 0)) {
       feed.push(`  ${c.faint}${state.filter ? state.filter + " 프로젝트 요청 없음" : "아래 프롬프트에 지시를 입력하세요."} ${c.reset}`);
     }
     rows = feed;
+    rowActions = actions;
   }
 
-  const rail = railWidth ? railRows(tree, railWidth - 3) : [];
+  const railActions = [];
+  const rail = railWidth ? railRows(tree, railWidth - 3, railActions) : [];
 
   // scroll counts rows up from the bottom; 0 keeps the newest line in view
   state.maxScroll = Math.max(0, rows.length - visible);
@@ -274,14 +344,18 @@ function render() {
   } else if (state.maxScroll > 0) {
     shown[0] = `  ${c.faint}↑ 이전 기록 ${state.maxScroll}줄 · PgUp/⇧↑${c.reset}`;
   }
+  const first = Math.max(0, bottom - visible);
+  state.hits = new Map();
   for (let i = 0; i < visible; i++) {
     const left = pad(cut(shown[i] || "", mainWidth), mainWidth);
     if (!railWidth) emit(pre + left);
     else emit(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth - 3)}`);
+    // screen[0] is a blank line, so the terminal row is index + 1
+    state.hits.set(screen.length, { main: rowActions[first + i] || null, rail: railActions[i] || null });
   }
 
   emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   마우스 휠·PgUp/PgDn 스크롤   :project   :dash   :agents   :q${c.reset}`);
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠 스크롤   클릭: 요청 접기 · agent 필터   :help${c.reset}`);
   const inputLines = state.input.split("\n");
   for (let i = 0; i < inputLines.length - 1; i++) {
     emit(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
@@ -334,16 +408,29 @@ async function command(raw) {
       return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (:project <이름> / :project all)`);
     }
     if (wanted === "all" || wanted === "전체") {
-      state.filter = null;
-      return note("필터 해제 — 전체 요청 표시");
+      applyProject(null);
+      return;
     }
     const hit = projects.find((p) => p.toLowerCase() === wanted.toLowerCase());
     if (!hit) return note(`그런 프로젝트가 없다: ${wanted} (${projects.join(", ") || "등록된 프로젝트 없음"})`);
-    state.filter = hit;
-    return note(`필터: ${hit}`);
+    applyProject(hit);
+    return;
+  }
+  if (word === "fold" || word === "unfold") {
+    const target = rest.join("").replace(/^in-/, "");
+    const ids = (state.data?.inbox || []).map((i) => String(i.id));
+    if (target && target !== "all") {
+      if (!ids.includes(target)) return note(`in-${target} 를 찾을 수 없다`);
+      if (word === "fold") state.folded.add(target);
+      else state.folded.delete(target);
+      return note(`in-${target} ${word === "fold" ? "접음" : "폄"}`);
+    }
+    if (word === "fold") ids.forEach((id) => state.folded.add(id));
+    else state.folded.clear();
+    return note(word === "fold" ? `전체 접음 (${ids.length}건)` : "전체 폄");
   }
   if (word === "help") {
-    return note(":dash 대시보드   :agents agent tree   :inbox 미처리   :project <이름>|all 프로젝트 필터   :cost 토큰   :q 종료");
+    return note(":dash 대시보드   :agents tree   :inbox 미처리   :project <이름>|all 필터   :fold [id|all] 접기   :unfold   :cost   :q");
   }
   return note(`unknown command: :${word} — :help 참고`);
 }
@@ -385,8 +472,9 @@ const keys = new PassThrough();
 readline.emitKeypressEvents(keys);
 process.stdin.setRawMode(true);
 process.stdin.on("data", (chunk) => {
-  const { wheel, rest } = parseMouse(chunk);
+  const { wheel, clicks, rest } = parseMouse(chunk);
   if (wheel) scrollBy(wheel * 3);
+  for (const click of clicks) handleClick(click);
   if (rest.length) keys.write(rest);
 });
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
