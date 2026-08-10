@@ -19,7 +19,9 @@ const types = {
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".woff2": "font/woff2",
-  ".svg": "image/svg+xml"
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webmanifest": "application/manifest+json; charset=utf-8"
 };
 
 function json(res, code, payload) {
@@ -76,7 +78,7 @@ const routes = [
   ["PUT", /^\/api\/settings\/([a-z]+)$/, (m, body) => api.saveSetting(m[1], body.value)]
 ];
 
-async function serveStatic(res, pathname) {
+async function serveStatic(res, pathname, headOnly = false) {
   let path = pathname === "/" || pathname === "/dashboard" ? "/dashboard.html" : pathname;
   path = normalize(path).replace(/^(\.\.[/\\])+/, "");
   const file = join(publicDir, path);
@@ -87,9 +89,9 @@ async function serveStatic(res, pathname) {
   const ext = extname(file);
   res.writeHead(200, {
     "content-type": types[ext] || "application/octet-stream",
-    "cache-control": ext === ".woff2" ? "public, max-age=604800" : "no-store"
+    "cache-control": ext === ".woff2" || ext === ".png" ? "public, max-age=604800" : "no-store"
   });
-  res.end(await readFile(file));
+  res.end(headOnly ? undefined : await readFile(file));
 }
 
 // One place that maps method+path+body to a result, shared by HTTP, the unix
@@ -115,8 +117,8 @@ async function handle(req, res) {
     json(res, result.status, result.payload);
     return;
   }
-  if (req.method === "GET") {
-    await serveStatic(res, url.pathname);
+  if (req.method === "GET" || req.method === "HEAD") {
+    await serveStatic(res, url.pathname, req.method === "HEAD");
     return;
   }
   json(res, 404, { error: "not found" });

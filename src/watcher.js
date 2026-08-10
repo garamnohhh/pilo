@@ -5,15 +5,41 @@ import { recordWakeFailure } from "./api.js";
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
 
-// A failed wake counts as "recently attempted" too, otherwise a dead session
-// gets retried every tick and floods events and desktop notifications.
-async function alreadyWoken(column, id) {
+// Backoff, because an agent that has not answered yet should not be poked every
+// 90 seconds forever. Delays grow, and after GIVE_UP attempts we stop and say so.
+const BACKOFF_SECONDS = [90, 300, 900, 3600];
+const GIVE_UP = 6;
+
+async function shouldWake(column, id) {
   const row = await one(
-    `SELECT 1 AS hit FROM events WHERE type IN ('wake_sent', 'wake_failed') AND ${column} = $1
-       AND created_at > now() - interval '90 seconds' LIMIT 1`,
+    `SELECT count(*)::int AS attempts, max(created_at) AS last
+     FROM events WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1`,
     [id]
   );
-  return Boolean(row);
+  const attempts = row?.attempts || 0;
+  if (!attempts) return { wake: true, attempts };
+  if (attempts >= GIVE_UP) return { wake: false, attempts, giveUp: true };
+  const wait = BACKOFF_SECONDS[Math.min(attempts - 1, BACKOFF_SECONDS.length - 1)] * 1000;
+  return { wake: Date.now() - new Date(row.last).getTime() >= wait, attempts };
+}
+
+async function gaveUp(column, id, agent, extra) {
+  const already = await one(
+    `SELECT 1 AS hit FROM events WHERE type = 'wake_gave_up' AND ${column} = $1 LIMIT 1`,
+    [id]
+  );
+  if (already) return;
+  await logEvent({
+    type: "wake_gave_up",
+    title: `${agent?.name || "agent"} 응답 없음 — 재알림 중단`,
+    agentId: agent?.id || null,
+    ...extra,
+    payload: {
+      name: agent?.name,
+      attempts: GIVE_UP,
+      hint: "대시보드에서 wake again 을 누르면 다시 시도합니다"
+    }
+  });
 }
 
 async function wake(agent, message, { taskId = null, inboxId = null }) {
@@ -39,12 +65,17 @@ async function pumpInbox() {
   if (!pilo) return;
   const pending = await query("SELECT id FROM inbox WHERE status = 'queued' ORDER BY created_at LIMIT 5");
   for (const row of pending) {
-    if (await alreadyWoken("inbox_id", row.id)) continue;
+    const check = await shouldWake("inbox_id", row.id);
+    if (check.giveUp) {
+      await gaveUp("inbox_id", row.id, pilo, { inboxId: row.id });
+      continue;
+    }
+    if (!check.wake) continue;
     if (!pilo.herdr_target) {
       await recordWakeFailure(pilo, "SESSION_NOT_BOUND", null, row.id);
       continue;
     }
-    await wake(pilo, `[pilo:inbox] 요청 도착 #${row.id}`, { inboxId: row.id });
+    await wake(pilo, `[pilo:inbox] 요청 도착 #${row.id} — ${pilo.name} 앞. 'pilo inbox ${row.id}' 로 확인.`, { inboxId: row.id });
   }
 }
 
@@ -55,13 +86,24 @@ async function pumpTasks() {
      WHERE t.status = 'queued' AND a.archived_at IS NULL ORDER BY t.created_at LIMIT 10`
   );
   for (const task of pending) {
-    if (await alreadyWoken("task_id", task.id)) continue;
     const agent = { id: task.agent_id, name: task.name, herdr_target: task.herdr_target, runtime: task.runtime };
+    const check = await shouldWake("task_id", task.id);
+    if (check.giveUp) {
+      await gaveUp("task_id", task.id, agent, { taskId: task.id, inboxId: task.inbox_id });
+      continue;
+    }
+    if (!check.wake) continue;
     if (!agent.herdr_target) {
       await recordWakeFailure(agent, "SESSION_NOT_BOUND", task.id, task.inbox_id);
       continue;
     }
-    await wake(agent, `[pilo:task] 작업 도착 #${task.id}`, { taskId: task.id, inboxId: task.inbox_id });
+    // Name the agent: a bare "[pilo:task] #3" reads like "the pilo project" to a
+    // session that still knows the old agent-bus conventions.
+    await wake(
+      agent,
+      `[pilo:task] 작업 도착 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 로 읽고 'pilo done ${task.id}' 로 보고.`,
+      { taskId: task.id, inboxId: task.inbox_id }
+    );
   }
 }
 
@@ -81,11 +123,13 @@ async function pumpResults() {
   );
   for (const row of ready) {
     const woken = await one(
-      `SELECT 1 AS hit FROM events WHERE inbox_id = $1 AND type IN ('wake_sent', 'wake_failed') AND created_at > $2 LIMIT 1`,
+      `SELECT count(*)::int AS n, max(created_at) AS last FROM events
+       WHERE inbox_id = $1 AND type IN ('wake_sent', 'wake_failed') AND created_at > $2`,
       [row.id, row.ready_at]
     );
-    if (woken) continue;
-    await wake(pilo, `[pilo:result] 결과 도착 #${row.id}`, { inboxId: row.id });
+    if (woken.n >= GIVE_UP) continue;
+    if (woken.n && Date.now() - new Date(woken.last).getTime() < BACKOFF_SECONDS[Math.min(woken.n - 1, 3)] * 1000) continue;
+    await wake(pilo, `[pilo:result] 결과 도착 #${row.id} — 'pilo inbox ${row.id}' 로 취합 후 'pilo reply ${row.id}'.`, { inboxId: row.id });
   }
 }
 

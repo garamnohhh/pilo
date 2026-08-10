@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0a0d0c"/>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#242b28" stroke-width="8"/>
+  <text x="256" y="352" text-anchor="middle" font-family="IBM Plex Mono, Menlo, monospace" font-size="272" font-weight="600" letter-spacing="-8" fill="#eef2ee">P</text>
+</svg>
