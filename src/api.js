@@ -18,6 +18,24 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
 
 const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id WHERE a.archived_at IS NULL`;
 
+// Notification text has to say what happened, not just which pane it came from.
+function summarize(text, limit = 90) {
+  const flat = String(text || "")
+    .replace(/```[\s\S]*?```/g, " [코드] ")
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/[*_`>|]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return flat.length > limit ? flat.slice(0, limit) + "…" : flat;
+}
+
+async function notifyRule(when, title, body) {
+  const rules = (await getSetting("notifications", [])) || [];
+  const rule = rules.find((r) => r.when === when);
+  if (!rule?.on || rule.channel !== "desktop") return false;
+  return herdr.notify(title, body);
+}
+
 export async function listAgents() {
   return query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
 }
@@ -226,10 +244,16 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
     },
     runLog: [{ t: "00:00", text: `wake ${agent.name}` }, { t: "00:00", text: code }]
   });
-  const rules = (await getSetting("notifications", [])) || [];
-  if (rules.some((r) => r.when === "wake failed" && r.on)) {
-    await herdr.notify("pilo: wake failed", `${agent.name} — ${code}`);
-  }
+  const context = inboxId
+    ? await one("SELECT user_request AS request FROM inbox WHERE id = $1", [inboxId])
+    : null;
+  await notifyRule(
+    "wake failed",
+    `Pilo · ${agent.name} 깨우기 실패`,
+    [code, context?.request ? summarize(context.request, 60) : "", "대시보드에서 rebind 또는 wake again"]
+      .filter(Boolean)
+      .join(" — ")
+  );
 }
 
 // Only failures that still describe the present: one row per agent, dropped once
@@ -421,6 +445,21 @@ export async function saveTaskResult(id, input) {
       [id, task.to_agent_id, artifact.path, artifact.delta || "", artifact.diff || ""]
     );
   }
+  if (status === "failed") {
+    const info = await one(
+      `SELECT a.name AS agent, p.name AS project, i.user_request AS request
+       FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+         LEFT JOIN projects p ON p.id = a.project_id
+         LEFT JOIN inbox i ON i.id = t.inbox_id
+       WHERE t.id = $1`,
+      [id]
+    );
+    await notifyRule(
+      "task failed",
+      `Pilo · ${info?.project || info?.agent || "작업"} 실패 #${id}`,
+      summarize(input.error || input.pmResult || info?.request || "사유 없음", 110)
+    );
+  }
   await logEvent({
     type: "pm_result",
     title: input.title || `${task.agent || "agent"} result`,
@@ -446,6 +485,19 @@ export async function saveFinalReply(inboxId, input) {
     [inboxId, pilo?.id || null, input.body || "", Number(input.elapsedMs || 0)]
   );
   await query("UPDATE inbox SET status = 'replied', updated_at = now() WHERE id = $1", [inboxId]);
+  const context = await one(
+    `SELECT i.user_request AS request,
+       (SELECT string_agg(DISTINCT p.name, ', ') FROM tasks t
+          JOIN agents a2 ON a2.id = t.to_agent_id JOIN projects p ON p.id = a2.project_id
+        WHERE t.inbox_id = i.id) AS project
+     FROM inbox i WHERE i.id = $1`,
+    [inboxId]
+  );
+  await notifyRule(
+    "final_reply 도착",
+    `Pilo · ${context?.project || "답변"} 완료 in-${inboxId}`,
+    `${summarize(context?.request, 45)} → ${summarize(input.body, 70)}`
+  );
   await logEvent({
     type: "final_reply",
     title: (input.body || "").slice(0, 60),
