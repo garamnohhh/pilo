@@ -49,6 +49,7 @@ const routes = [
   ["PATCH", /^\/api\/agents\/(\d+)$/, (m, body) => api.updateAgent(Number(m[1]), body)],
   ["DELETE", /^\/api\/agents\/(\d+)$/, (m) => api.archiveAgent(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/rebind$/, (m, body) => api.rebindAgent(Number(m[1]), body.target || "")],
+  ["POST", /^\/api\/agents\/(\d+)\/dismiss-wake$/, (m) => api.dismissWakeFailures(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/wake$/, (m, body) => api.wakeAgent(Number(m[1]), body.message || "")],
   ["GET", /^\/api\/agents\/(\d+)\/rules$/, (m) => buildRules(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => api.applyRules(Number(m[1]))],
