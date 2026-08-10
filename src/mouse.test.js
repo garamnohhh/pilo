@@ -22,6 +22,22 @@ test("clicks and releases are dropped without scrolling", () => {
 
 test("key sequences that are not mouse reports pass through", () => {
   for (const seq of ["\r", "\x1b[13;2u", "\x1b[D", "\x1b[200~pasted\x1b[201~"]) {
-    assert.deepEqual(parseMouse(seq), { wheel: 0, rest: seq });
+    assert.deepEqual(parseMouse(seq), { wheel: 0, clicks: [], rest: seq });
   }
+});
+
+test("a left click reports its cell, a release does not", () => {
+  const { clicks } = parseMouse("\x1b[<0;12;7M");
+  assert.deepEqual(clicks, [{ x: 12, y: 7 }]);
+  assert.deepEqual(parseMouse("\x1b[<0;12;7m").clicks, []);
+});
+
+test("wheel notches are not mistaken for clicks", () => {
+  const { clicks, wheel } = parseMouse("\x1b[<64;1;1M\x1b[<65;1;1M");
+  assert.equal(clicks.length, 0);
+  assert.equal(wheel, 0);
+});
+
+test("a drag carries the motion bit and is ignored", () => {
+  assert.deepEqual(parseMouse("\x1b[<32;5;5M").clicks, []);
 });
