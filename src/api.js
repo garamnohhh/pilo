@@ -385,6 +385,31 @@ export async function listTasks(limit = 100) {
   );
 }
 
+// What an agent reads when it is woken with [pilo:task] 작업 도착 #N.
+export async function taskDetail(id) {
+  const row = await one(
+    `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
+       t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut", t.created_at AS "createdAt",
+       t.inbox_id AS "inboxId", t.parent_task_id AS "parentTaskId",
+       a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty,
+       f.name AS "fromAgent", i.user_request AS "userRequest", p.name AS project
+     FROM tasks t
+       LEFT JOIN agents a ON a.id = t.to_agent_id
+       LEFT JOIN agents f ON f.id = t.from_agent_id
+       LEFT JOIN projects p ON p.id = a.project_id
+       LEFT JOIN inbox i ON i.id = t.inbox_id
+     WHERE t.id = $1`,
+    [id]
+  );
+  if (!row) throw Object.assign(new Error("task not found"), { status: 404 });
+  const children = await query(
+    `SELECT t.id, t.title, t.status, t.pm_result AS "pmResult", a.name AS agent
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.parent_task_id = $1 ORDER BY t.created_at`,
+    [id]
+  );
+  return { ...row, children };
+}
+
 export async function listEvents(limit = 60) {
   return query(
     `SELECT e.id, e.type, e.title, e.created_at AS "createdAt", COALESCE(a.name, 'pilo') AS agent

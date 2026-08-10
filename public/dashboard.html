@@ -151,6 +151,7 @@ const state = {
   form: emptyForm(),
   editing: null,
   candidates: [],
+  rules: null,
   selected: { event: null, artifact: null, inbox: null },
   project: { id: null, name: "", repo: "", path: "", note: "" }
 };
@@ -329,6 +330,7 @@ views.agents = () => {
         <span class="name">${esc(pilo.name)}</span><span class="role pilo">PILO</span>
         <span class="meta">${esc(pilo.runtime || "runtime 미감지")} · ${esc(pilo.cwd || "cwd 없음")}</span>
         <span class="acts">
+          <button class="btn small" data-act="rules" data-id="${pilo.id}">rules</button>
           <button class="btn small" data-act="edit-agent" data-id="${pilo.id}">edit</button>
           <button class="btn small" disabled title="대표 agent는 삭제할 수 없습니다">delete</button>
         </span></div>
@@ -342,9 +344,27 @@ views.agents = () => {
         <h2 style="margin:0">조직도</h2><span class="mono" style="font-size:11px;color:#5f6b64">parent_agent_id tree</span>
         <span style="margin-left:auto;display:flex;gap:6px"><span class="role pilo">PILO</span><span class="role pm">PM</span><span class="role worker">WORKER</span></span>
       </div>${tree}</div>
-    <div>${sessionCard()}${agentForm(projects, pilo, pms)}</div>
+    <div>${rulesCard()}${sessionCard()}${agentForm(projects, pilo, pms)}</div>
   </div>`;
 };
+
+function rulesCard() {
+  const r = state.rules;
+  if (!r) return "";
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">지시문 — ${esc(r.agent.name)}</h2>
+      <button class="btn small" data-act="close-rules" style="margin-left:auto">닫기</button></div>
+    <p class="hint">아래 내용을 <span class="mono" style="color:#b9c3bc">${esc(r.file)}</span> 의
+      <span class="mono">pilo:begin ~ pilo:end</span> 블록에 씁니다.
+      ${r.exists ? (r.hasBlock ? "기존 블록만 교체되고" : "파일 끝에 덧붙고") : "파일이 새로 만들어지고"} 나머지 내용은 그대로 둡니다.</p>
+    <div class="code" style="max-height:260px;border:1px solid #171b19;border-radius:8px;background:var(--panel2)">
+      ${esc(r.preview).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="white-space:pre-wrap">${l}</span></div>`).join("")}
+    </div>
+    <button class="btn primary" style="margin-top:12px" data-act="write-rules" data-id="${r.agent.id}">
+      ${r.exists && r.hasBlock ? "지시문 갱신" : "지시문 쓰기"}</button>
+    <div class="note">쓴 뒤에는 해당 agent 세션을 재시작해야 새 지시문을 읽습니다.</div>
+  </div>`;
+}
 
 function sessionCard() {
   const sessions = state.data.sessions || [];
@@ -372,6 +392,7 @@ function pmNode(pm) {
       <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.runtime || "미감지")}</span>
       <span class="meta">${esc(pm.aliases || "")}</span>
       <span class="acts">
+        <button class="btn small" data-act="rules" data-id="${pm.id}">rules</button>
         <button class="btn small" data-act="edit-agent" data-id="${pm.id}">edit</button>
         <button class="btn small danger" data-act="delete-agent" data-id="${pm.id}">delete</button>
       </span></div>
@@ -385,6 +406,7 @@ function workerNode(w) {
     <span class="name" style="font-size:12px;color:#b9c3bc">${esc(w.name)}</span><span class="role worker">WORKER</span>
     <span class="meta">${esc(w.specialty || w.note || "")}</span>
     <span class="acts">
+      <button class="btn small" data-act="rules" data-id="${w.id}">rules</button>
       <button class="btn small" data-act="edit-agent" data-id="${w.id}">edit</button>
       <button class="btn small danger" data-act="delete-agent" data-id="${w.id}">delete</button>
     </span></div>`;
@@ -409,11 +431,11 @@ function agentForm(projects, pilo, pms) {
       }).join("")}</div></div>
     ${f.role === "pilo" ? "" : `<div class="field"><div class="name">parent <span class="hint">parent_agent_id</span><span class="req">required</span></div>
       <select id="f-parent">${parents.length ? parents.map((p) => `<option value="${p.id}" ${String(f.parentAgentId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("") : `<option value="">${f.role === "pm" ? "pilo agent를 먼저 등록" : "PM agent를 먼저 등록"}</option>`}</select></div>`}
-    <div class="field"><div class="name">project <span class="hint">Projects 탭 기준</span></div>
+    ${f.role === "pilo" ? "" : `<div class="field"><div class="name">project <span class="hint">이 agent가 담당할 프로젝트</span></div>
       <select id="f-project"><option value="">— 미지정 —</option>
         ${projects.map((p) => `<option value="${p.id}" ${String(f.projectId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
         ${f.projectName && !f.projectId ? `<option value="__auto" selected>+ ${esc(f.projectName)} (등록 시 생성)</option>` : ""}
-        <option value="__new">+ 새 프로젝트 (Projects 탭)</option></select></div>
+        <option value="__new">+ Projects 탭에서 직접 만들기…</option></select></div>`}
     <div class="field"><div class="name">cwd <span class="hint">herdr 세션 매칭 기준</span><span class="req">required</span></div>
       <input id="f-cwd" value="${esc(f.cwd)}" placeholder="~/work/project-d"></div>
     <div class="field"><div class="name">model <span class="hint">표시용 메모</span></div>
@@ -701,12 +723,27 @@ const actions = {
       name: session.suggestedName,
       role,
       parentAgentId: role === "pm" ? (pilo ? pilo.id : "") : "",
-      projectId: session.suggestedProjectId || "",
-      projectName: session.suggestedProjectId ? "" : session.suggestedProjectName,
+      projectId: role === "pilo" ? "" : session.suggestedProjectId || "",
+      projectName: role === "pilo" ? "" : session.suggestedProjectId ? "" : session.suggestedProjectName,
       cwd: session.cwd
     };
     if (role === "pilo") state.form.name = "pilo";
     toast(`${session.runtime} 세션을 폼에 채웠습니다 — role 확인 후 등록`);
+    render();
+  },
+  async "rules"(el) {
+    state.rules = await get(`/api/agents/${el.dataset.id}/rules`);
+    state.tab = "agents";
+    render();
+  },
+  async "close-rules"() {
+    state.rules = null;
+    render();
+  },
+  async "write-rules"(el) {
+    const res = await call("POST", `/api/agents/${el.dataset.id}/rules`, {});
+    toast(`${res.updated ? "갱신" : "생성"}: ${res.file}`);
+    state.rules = await get(`/api/agents/${el.dataset.id}/rules`);
     render();
   },
   async "create-agent"() {

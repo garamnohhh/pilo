@@ -5,6 +5,7 @@ import { join } from "node:path";
 export const home = join(process.env.PILO_HOME || homedir(), ".pilo");
 export const configFile = join(home, "config.toml");
 export const portFile = join(home, "port");
+export const pidFile = join(home, "server.pid");
 export const logDir = join(home, "logs");
 export const logFile = join(logDir, "pilo.log");
 
@@ -23,6 +24,12 @@ export function writePort(port) {
   ensureHome();
   writeFileSync(portFile, String(port));
   return port;
+}
+
+export function writePid(pid) {
+  ensureHome();
+  writeFileSync(pidFile, String(pid));
+  return pid;
 }
 
 export function readPort() {
