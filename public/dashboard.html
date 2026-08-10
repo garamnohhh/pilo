@@ -255,7 +255,7 @@ async function loadDetail() {
 function renderTabs() {
   const badges = {
     inbox: state.data.inbox?.filter((i) => i.status !== "replied").length || 0,
-    system: state.data.system?.wakeFailures?.length || 0
+    system: state.data.system?.wakeFailures?.length || 0 // already filtered to unresolved
   };
   $("tabs").innerHTML = TABS.map(([key, label]) => {
     const badge = badges[key];
@@ -298,7 +298,13 @@ views.overview = () => {
     ["agents", stats.agents, `${stats.pilo} pilo · ${stats.pm} pm · ${stats.worker} worker`],
     ["inbox today", stats.inboxToday.total, `${stats.inboxToday.replied} replied · ${stats.inboxToday.pending} 대기`],
     ["tokens", fmtTokens(stats.tokens.total), `in ${fmtTokens(stats.tokens.in)} · out ${fmtTokens(stats.tokens.out)} · today`],
-    ["failed", stats.failed.total, `wake ${stats.failed.wake} · task ${stats.failed.task}`]
+    [
+      "현재 문제",
+      stats.failed.total,
+      stats.failed.total
+        ? `wake ${stats.failed.wake} · task ${stats.failed.task}`
+        : `누적 ${(stats.history?.failedTasks ?? 0) + (stats.history?.wakeFailures ?? 0)}건은 Events에`
+    ]
   ];
   return `
     <div class="grid4">${cards.map(([l, v, s]) => `<div class="card"><div class="label">${l}</div>
@@ -341,7 +347,10 @@ function serviceCard(services) {
 
 function failureCard(failures) {
   if (!failures.length) {
-    return `<div class="card" style="margin-top:12px"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">모든 agent가 정상적으로 깨어났습니다.</p></div>`;
+    const past = state.data.overview?.stats?.history?.wakeFailures ?? 0;
+    return `<div class="card" style="margin-top:12px"><h2>wake 실패 없음</h2>
+      <p class="hint" style="margin:0">모든 agent가 세션에 연결돼 있습니다.
+      ${past ? `지난 실패 ${past}건은 <a href="#events" style="cursor:pointer">Events</a>에 기록으로 남아 있습니다.` : ""}</p></div>`;
   }
   return `<div class="fail" style="margin-top:12px">
     <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:var(--red)"></span>
@@ -351,10 +360,11 @@ function failureCard(failures) {
         <span style="color:oklch(0.75 0.14 25)">${esc(f.agent)}</span>
         <span style="color:var(--faint)">${esc(f.payload.code || "")}</span>
         <span style="margin-left:auto;color:#3e4744">${time(f.at)}</span></div>
-      <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")} · attempts ${esc(f.payload.attempts || 1)}</div>
+      <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")}${f.totalFailures > 1 ? ` · 누적 ${f.totalFailures}회` : ""}</div>
       <div style="display:flex;gap:7px;margin-top:10px">
         ${f.agentId ? `<button class="btn small" data-act="wake" data-id="${f.agentId}">wake again</button>
-        <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>` : ""}
+        <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>
+        <button class="btn small" data-act="dismiss-wake" data-id="${f.agentId}">확인함</button>` : ""}
         <button class="btn small" data-act="open-event" data-id="${f.id}">open log</button>
       </div></div>`).join("")}</div>`;
 }
@@ -798,13 +808,14 @@ views.system = () => {
           <div style="display:flex;gap:9px;font:11px var(--mono)"><span style="color:oklch(0.75 0.14 25)">${esc(f.agent)}</span>
             <span style="color:var(--faint)">${esc(f.payload.code || "")}</span><span style="margin-left:auto;color:#3e4744">${stamp(f.at)}</span></div>
           <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")}</div>
-          <div style="margin-top:7px;font:11px var(--mono);color:#5f6b64">attempts ${esc(f.payload.attempts || 1)} · runtime ${esc(f.payload.runtime || "—")}</div>
+          <div style="margin-top:7px;font:11px var(--mono);color:#5f6b64">누적 ${esc(f.totalFailures || 1)}회 · runtime ${esc(f.payload.runtime || "—")}</div>
           <div style="display:flex;gap:7px;margin-top:11px">
             ${f.agentId ? `<button class="btn small" data-act="wake" data-id="${f.agentId}">wake again</button>
-            <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>` : ""}
+            <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>
+            <button class="btn small" data-act="dismiss-wake" data-id="${f.agentId}">확인함</button>` : ""}
             <button class="btn small" data-act="open-event" data-id="${f.id}">open log</button></div>
         </div>`).join("")}</div>`
-      : `<div class="card"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">최근 기록된 실패가 없습니다.</p></div>`}
+      : `<div class="card"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">모든 agent가 세션에 연결돼 있습니다. 지난 기록은 Events 탭에 남습니다.</p></div>`}
       <div class="card" style="margin-top:12px"><h2>herdr 세션</h2><p class="hint">cwd가 같은 세션이 agent에 자동으로 바인딩됩니다.</p>
         ${sys.sessions.length ? sys.sessions.map((s) => `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
           <span class="dot" style="background:${s.status === "working" ? "var(--amber)" : "var(--green)"};margin-top:5px"></span>
@@ -963,6 +974,11 @@ const actions = {
     } catch (err) {
       toast(`wake 실패: ${err.message}`, true);
     }
+    await load();
+  },
+  async "dismiss-wake"(el) {
+    await call("POST", `/api/agents/${el.dataset.id}/dismiss-wake`, {});
+    toast("확인 처리됨 — 기록은 Events에 남습니다");
     await load();
   },
   async "open-inbox"(el) {

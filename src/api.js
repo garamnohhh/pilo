@@ -232,13 +232,41 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
   }
 }
 
+// Only failures that still describe the present: one row per agent, dropped once
+// a later wake succeeded, the session was rebound, or the user dismissed it.
+// Everything else stays in Events as history.
 export async function wakeFailures(limit = 10) {
   return query(
-    `SELECT e.id, e.created_at AS "at", e.payload, COALESCE(a.name, e.payload->>'name', '?') AS agent, a.id AS "agentId"
-     FROM events e LEFT JOIN agents a ON a.id = e.agent_id
-     WHERE e.type = 'wake_failed' ORDER BY e.created_at DESC LIMIT $1`,
+    `WITH latest AS (
+       SELECT DISTINCT ON (e.agent_id) e.id, e.agent_id, e.created_at, e.payload
+       FROM events e WHERE e.type = 'wake_failed' AND e.agent_id IS NOT NULL
+       ORDER BY e.agent_id, e.created_at DESC
+     )
+     SELECT l.id, l.created_at AS "at", l.payload, a.name AS agent, a.id AS "agentId",
+       (SELECT count(*)::int FROM events f WHERE f.type = 'wake_failed' AND f.agent_id = l.agent_id) AS "totalFailures"
+     FROM latest l JOIN agents a ON a.id = l.agent_id
+     WHERE a.archived_at IS NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM events s
+         WHERE s.agent_id = l.agent_id
+           AND s.type IN ('wake_sent', 'session_rebound', 'wake_dismissed')
+           AND s.created_at > l.created_at
+       )
+     ORDER BY l.created_at DESC LIMIT $1`,
     [limit]
   );
+}
+
+export async function dismissWakeFailures(id) {
+  const agent = await one("SELECT id, name FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
+  await logEvent({
+    type: "wake_dismissed",
+    title: `${agent.name} wake 실패 확인 처리`,
+    agentId: id,
+    payload: { name: agent.name }
+  });
+  return { id };
 }
 
 // herdr already knows runtime, cwd and pane id for every live session, so registration
@@ -558,9 +586,20 @@ export async function overview() {
        count(*) FILTER (WHERE status <> 'replied')::int AS pending
      FROM inbox WHERE created_at >= date_trunc('day', now())`
   );
-  const failedTasks = await one("SELECT count(*)::int AS n FROM tasks WHERE status = 'failed'");
-  const failedWakes = await one("SELECT count(*)::int AS n FROM events WHERE type = 'wake_failed'");
+  // "현재 문제" is what still needs a human: a failed task whose request never got
+  // an answer, and agents whose wake failure has not been resolved.
+  const openFailures = await one(
+    `SELECT count(*)::int AS n FROM tasks t
+     WHERE t.status = 'failed'
+       AND t.created_at > now() - interval '24 hours'
+       AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = t.inbox_id)`
+  );
+  const history = await one(
+    `SELECT (SELECT count(*) FROM tasks WHERE status = 'failed')::int AS tasks,
+            (SELECT count(*) FROM events WHERE type = 'wake_failed')::int AS wakes`
+  );
   const system = await systemStatus();
+  const failedWakes = { n: system.wakeFailures.length };
   return {
     stats: {
       agents: agents.length,
@@ -569,7 +608,8 @@ export async function overview() {
       worker: agents.filter((a) => a.role === "worker").length,
       inboxToday,
       tokens,
-      failed: { task: failedTasks.n, wake: failedWakes.n, total: failedTasks.n + failedWakes.n }
+      failed: { task: openFailures.n, wake: failedWakes.n, total: openFailures.n + failedWakes.n },
+      history: { failedTasks: history.tasks, wakeFailures: history.wakes }
     },
     tasks,
     services: system.services,
