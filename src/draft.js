@@ -22,14 +22,19 @@ function moveVertical(input, cursor, direction) {
   return Math.min(end + 1 + column, limit);
 }
 
-// Returns the next draft, and "send" when the line should be submitted.
-export function edit(draft, ch, key) {
+// Returns the next draft, and an action when the caller must react: "send" for a
+// submit, "paste-start"/"paste-end" around a bracketed paste.
+export function edit(draft, ch, key, options = {}) {
   const { input, cursor } = draft;
   const put = (text) => ({
     input: input.slice(0, cursor) + text + input.slice(cursor),
     cursor: cursor + text.length
   });
 
+  if (key?.name === "paste-start") return { input, cursor, action: "paste-start" };
+  if (key?.name === "paste-end") return { input, cursor, action: "paste-end" };
+  // Inside a paste every newline is content, never a submit.
+  if (options.pasting && (key?.name === "return" || key?.name === "enter")) return put("\n");
   if (isNewline(key)) return put("\n");
   if (isSend(key)) return { input, cursor, action: "send" };
 

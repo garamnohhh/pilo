@@ -22,7 +22,17 @@ const c = {
   line: "\x1b[38;2;28;33;31m"
 };
 
-const state = { input: "", cursor: 0, notes: [], busy: false, busySub: "" };
+const state = {
+  input: "",
+  cursor: 0,
+  notes: [],
+  pasting: false,
+  filter: null,
+  spin: 0,
+  data: null
+};
+
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 // Hangul and CJK take two terminal columns, so measure in columns, not characters.
@@ -129,7 +139,8 @@ function railRows(tree, width) {
     rows.push(`${c.faint}대표 agent 없음${c.reset}`);
     return rows;
   }
-  rows.push(`${c.green}●${c.reset} ${c.fg}${cut(tree.pilo.name, width - 12)}${c.reset} ${c.green}PILO${c.reset}`);
+  const piloIcon = statusIcon(tree.pilo.status, state.spin);
+  rows.push(`${piloIcon.color}${piloIcon.icon}${c.reset} ${c.fg}${cut(tree.pilo.name, width - 12)}${c.reset} ${c.green}PILO${c.reset}`);
   rows.push(`  ${c.faint}사용자와 대화 · 취합${c.reset}`);
   rows.push("");
   if (!tree.pms.length) {
@@ -138,18 +149,39 @@ function railRows(tree, width) {
     return rows;
   }
   for (const pm of tree.pms) {
-    const color = pm.status === "failed" ? c.red : pm.status === "running" ? c.amber : c.green;
-    rows.push(`${c.faint}└${c.reset} ${color}●${c.reset} ${c.fg}${cut(pm.name, width - 14)}${c.reset} ${c.blue}PM${c.reset}`);
-    rows.push(`   ${c.faint}${cut(pm.projectName || "project 미지정", width - 5)}${c.reset}`);
+    const mark = statusIcon(pm.status, state.spin);
+    rows.push(`${c.faint}└${c.reset} ${mark.color}${mark.icon}${c.reset} ${c.fg}${cut(pm.name, width - 16)}${c.reset} ${c.blue}PM${c.reset}`);
+    rows.push(`   ${c.faint}${cut(`${pm.projectName || "project 미지정"} · ${pm.status}`, width - 5)}${c.reset}`);
     for (const w of pm.children) {
-      rows.push(`   ${c.faint}└${c.reset} ${c.muted}${cut(w.name, width - 16)}${c.reset} ${c.faint}WORKER${c.reset}`);
+      const wm = statusIcon(w.status, state.spin);
+      rows.push(`   ${c.faint}└${c.reset} ${wm.color}${wm.icon}${c.reset} ${c.muted}${cut(w.name, width - 18)}${c.reset} ${c.faint}WORKER${c.reset}`);
     }
     rows.push("");
   }
   return rows;
 }
 
-async function render() {
+async function refresh() {
+  const [setup, tree, inbox, overview, settings] = await Promise.all([
+    api("/api/setup", { docker: true, herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
+    api("/api/agents/tree", { pilo: null, pms: [], orphanWorkers: [] }),
+    api("/api/inbox", []),
+    api("/api/overview", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
+    api("/api/settings", { tokens: { showInTui: true } })
+  ]);
+  state.data = { setup, tree, inbox, overview, settings };
+  return state.data;
+}
+
+function statusIcon(status, spin) {
+  if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
+  if (status === "failed") return { icon: "✕", color: c.red };
+  if (status === "queued") return { icon: "◍", color: c.faint };
+  if (status === "archived") return { icon: "·", color: c.faint };
+  return { icon: "●", color: c.green };
+}
+
+function render() {
   const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 34;
   const marginX = width > 60 ? 2 : 0;
@@ -158,22 +190,16 @@ async function render() {
   const railWidth = width >= 96 ? 30 : 0;
   const mainWidth = railWidth ? outWidth - railWidth - 3 : outWidth;
 
-  const [setup, tree, inbox, overview, settings] = await Promise.all([
-    api("/api/setup", { docker: true, herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
-    api("/api/agents/tree", { pilo: null, pms: [], orphanWorkers: [] }),
-    api("/api/inbox", []),
-    api("/api/overview", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
-    api("/api/settings", { tokens: { showInTui: true } })
-  ]);
-
-  process.stdout.write("\x1b[2J\x1b[H");
-  console.log("");
+  if (!state.data) return;
+  const { setup, tree, inbox, overview, settings } = state.data;
+  const screen = [""];
+  const emit = (text) => screen.push(text);
 
   const agentLabel = tree.pilo ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name}${c.reset}` : `${c.faint}● 대표 agent 없음${c.reset}`;
   const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.faint}${pretty(launchCwd)}${c.reset}`;
   const topRight = `${c.faint}:help — commands${c.reset}`;
-  console.log(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
-  console.log(pre + line(outWidth));
+  emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
+  emit(pre + line(outWidth));
 
   const running = tree.pms.filter((p) => p.status === "running").length;
   const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
@@ -181,8 +207,8 @@ async function render() {
   const showTokens = settings.tokens?.showInTui !== false;
   const statusRight = showTokens ? `${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset} ${c.faint}today${c.reset}` : "";
   const gap = Math.max(2, outWidth - cols(statusLeft) - cols(statusMid) - cols(statusRight) - 3);
-  console.log(pre + cut(`${statusLeft}   ${statusMid}${" ".repeat(gap)}${statusRight}`, outWidth));
-  console.log(pre + line(outWidth));
+  emit(pre + cut(`${statusLeft}   ${statusMid}${" ".repeat(gap)}${statusRight}`, outWidth));
+  emit(pre + line(outWidth));
 
   const visible = Math.max(8, height - 11);
   let rows = [];
@@ -191,8 +217,16 @@ async function render() {
     rows = setupScreen(setup, outWidth).map((r) => "  " + r);
   } else {
     const feed = [];
-    for (const item of [...inbox].reverse().slice(-6)) {
+    const visibleInbox = state.filter
+      ? inbox.filter((i) => (i.project || "").split(", ").includes(state.filter))
+      : inbox;
+    if (state.filter) {
+      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · :project all 로 해제${c.reset}`);
+      feed.push("");
+    }
+    for (const item of [...visibleInbox].reverse().slice(-6)) {
       feed.push(...wrap(item.userRequest, mainWidth - 6).map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`));
+      if (item.project) feed.push(`    ${c.faint}${item.project}${c.reset}`);
       feed.push("");
       feed.push(...(item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r));
       feed.push("");
@@ -201,8 +235,8 @@ async function render() {
       feed.push(...wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`));
       feed.push("");
     }
-    if (!feed.length) {
-      feed.push(`  ${c.faint}아래 프롬프트에 지시를 입력하세요. Pilo agent가 정리해서 final_reply로 답합니다.${c.reset}`);
+    if (feed.length <= (state.filter ? 2 : 0)) {
+      feed.push(`  ${c.faint}${state.filter ? state.filter + " 프로젝트 요청 없음" : "아래 프롬프트에 지시를 입력하세요."} ${c.reset}`);
     }
     rows = feed;
   }
@@ -211,25 +245,27 @@ async function render() {
   const shown = rows.slice(-visible);
   for (let i = 0; i < visible; i++) {
     const left = pad(cut(shown[i] || "", mainWidth), mainWidth);
-    if (!railWidth) console.log(pre + left);
-    else console.log(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth - 3)}`);
+    if (!railWidth) emit(pre + left);
+    else emit(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth - 3)}`);
   }
 
-  console.log(pre + line(outWidth));
-  console.log(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   :dash dashboard   :agents tree   :inbox 미처리   :cost tokens   :q quit${c.reset}`);
+  emit(pre + line(outWidth));
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   :project 필터   :dash   :agents   :inbox   :cost   :q${c.reset}`);
   const inputLines = state.input.split("\n");
   for (let i = 0; i < inputLines.length - 1; i++) {
-    console.log(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
+    emit(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
   }
-  process.stdout.write(pre + `${c.green}❯${c.reset} ${inputLines[inputLines.length - 1]}\x1b[?25h`);
+  emit(pre + `${c.green}❯${c.reset} ${inputLines[inputLines.length - 1]}`);
 
-  // Put the terminal cursor where the edit cursor is: count rows up from the last
-  // line, then step in by the column width of the text before the cursor.
+  // One write per frame: home, each row cleared to end of line, then clear the
+  // rest. Clearing the whole screen first is what made the display blink.
   const before = state.input.slice(0, state.cursor).split("\n");
-  const rowsUp = inputLines.length - before.length;
-  const column = marginX + 2 + cols(before[before.length - 1]);
-  if (rowsUp > 0) process.stdout.write(`\x1b[${rowsUp}A`);
-  process.stdout.write(`\r\x1b[${column}C`);
+  const cursorRow = screen.length - (inputLines.length - before.length);
+  const cursorCol = marginX + 3 + cols(before[before.length - 1]);
+  process.stdout.write(
+    "\x1b[H" + screen.map((row) => row + "\x1b[K").join("\n") + "\x1b[J" +
+    `\x1b[${cursorRow};${cursorCol}H\x1b[?25h`
+  );
 }
 
 function note(text) {
@@ -260,8 +296,23 @@ async function command(raw) {
     const t = o.stats.tokens;
     return note(`tokens ${tokens(t.total)} · in ${tokens(t.in)} · out ${tokens(t.out)} (today)`);
   }
+  if (word === "project" || word === "p") {
+    const wanted = rest.join(" ").trim();
+    const projects = [...new Set((state.data?.inbox || []).flatMap((i) => (i.project || "").split(", ").filter(Boolean)))];
+    if (!wanted) {
+      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (:project <이름> / :project all)`);
+    }
+    if (wanted === "all" || wanted === "전체") {
+      state.filter = null;
+      return note("필터 해제 — 전체 요청 표시");
+    }
+    const hit = projects.find((p) => p.toLowerCase() === wanted.toLowerCase());
+    if (!hit) return note(`그런 프로젝트가 없다: ${wanted} (${projects.join(", ") || "등록된 프로젝트 없음"})`);
+    state.filter = hit;
+    return note(`필터: ${hit}`);
+  }
   if (word === "help") {
-    return note(":dash 대시보드   :agents agent tree   :inbox 미처리 요청   :cost 토큰 사용량   :q 종료");
+    return note(":dash 대시보드   :agents agent tree   :inbox 미처리   :project <이름>|all 프로젝트 필터   :cost 토큰   :q 종료");
   }
   return note(`unknown command: :${word} — :help 참고`);
 }
@@ -280,16 +331,16 @@ async function send(text) {
 }
 
 function close() {
-  process.stdout.write("\x1b[<u");
+  process.stdout.write("\x1b[?2004l\x1b[<u\x1b[?1049l");
   process.stdin.setRawMode(false);
   process.stdin.pause();
-  process.stdout.write("\x1b[2J\x1b[H");
   process.exit(0);
 }
 
 // ponytail: no TTY means someone is smoke-testing the render, so draw one frame and stop.
 if (!process.stdin.isTTY) {
-  await render();
+  await refresh();
+  render();
   console.log("");
   process.exit(0);
 }
@@ -298,23 +349,32 @@ readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
-process.stdout.write("\x1b[>1u");
+process.stdout.write("\x1b[?1049h\x1b[>1u\x1b[?2004h");
 
 process.stdin.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
-  const next = edit({ input: state.input, cursor: state.cursor }, ch, key);
+
+  const next = edit({ input: state.input, cursor: state.cursor }, ch, key, { pasting: state.pasting });
+  if (next.action === "paste-start" || next.action === "paste-end") {
+    state.pasting = next.action === "paste-start";
+    render();
+    return;
+  }
   if (next.action === "send") {
     const text = state.input.replace(/\s+$/, "");
     state.input = "";
     state.cursor = 0;
-    if (text.trim()) await send(text);
+    if (text.trim()) {
+      await send(text);
+      await refresh();
+    }
   } else {
     state.input = next.input;
     state.cursor = next.cursor;
   }
-  await render();
+  render();
 });
 
 process.stdout.on("resize", render);
 setInterval(render, 4000).unref();
-await render();
+render();
