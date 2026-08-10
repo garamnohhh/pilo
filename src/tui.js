@@ -330,8 +330,12 @@ async function send(text) {
   }
 }
 
-function close() {
+function restoreTerminal() {
   process.stdout.write("\x1b[?2004l\x1b[<u\x1b[?1049l");
+}
+
+function close() {
+  restoreTerminal();
   process.stdin.setRawMode(false);
   process.stdin.pause();
   process.exit(0);
@@ -350,6 +354,15 @@ process.stdin.setRawMode(true);
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
 process.stdout.write("\x1b[?1049h\x1b[>1u\x1b[?2004h");
+
+// A crash must not leave the user staring at an empty alternate screen.
+process.on("exit", restoreTerminal);
+for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => close());
+process.on("uncaughtException", (err) => {
+  restoreTerminal();
+  console.error(err.stack || err.message);
+  process.exit(1);
+});
 
 process.stdin.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
@@ -376,5 +389,25 @@ process.stdin.on("keypress", async (ch, key) => {
 });
 
 process.stdout.on("resize", render);
-setInterval(render, 4000).unref();
+
+// Data on a timer, frames on demand. Typing no longer waits on five HTTP calls.
+setInterval(async () => {
+  await refresh();
+  render();
+}, 2500).unref();
+
+// The spinner only ticks while something is actually running.
+setInterval(() => {
+  const tree = state.data?.tree;
+  const busy =
+    tree &&
+    [tree.pilo, ...(tree.pms || []), ...(tree.pms || []).flatMap((p) => p.children || [])].some(
+      (a) => a && a.status === "running"
+    );
+  if (!busy) return;
+  state.spin += 1;
+  render();
+}, 120).unref();
+
+await refresh();
 render();
