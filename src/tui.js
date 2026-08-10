@@ -354,7 +354,7 @@ async function send(text) {
 }
 
 function restoreTerminal() {
-  process.stdout.write(MOUSE_OFF + "\x1b[?2004l\x1b[<u\x1b[?1049l");
+  process.stdout.write(MOUSE_OFF + "\x1b[?2004l\x1b[<u\x1b[?1049l\x1b[23;0t");
 }
 
 function close() {
@@ -383,7 +383,8 @@ process.stdin.on("data", (chunk) => {
 });
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
-process.stdout.write("\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
+// Push the current title so it can be restored, then name the tab.
+process.stdout.write("\x1b[22;0t\x1b]0;pilo\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
