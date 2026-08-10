@@ -29,6 +29,8 @@ const state = {
   pasting: false,
   filter: null,
   spin: 0,
+  scroll: 0,
+  maxScroll: 0,
   data: null
 };
 
@@ -224,7 +226,7 @@ function render() {
       feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · :project all 로 해제${c.reset}`);
       feed.push("");
     }
-    for (const item of [...visibleInbox].reverse().slice(-6)) {
+    for (const item of visibleInbox.slice().reverse()) {
       feed.push(...wrap(item.userRequest, mainWidth - 6).map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`));
       if (item.project) feed.push(`    ${c.faint}${item.project}${c.reset}`);
       feed.push("");
@@ -242,7 +244,17 @@ function render() {
   }
 
   const rail = railWidth ? railRows(tree, railWidth - 3) : [];
-  const shown = rows.slice(-visible);
+
+  // scroll counts rows up from the bottom; 0 keeps the newest line in view
+  state.maxScroll = Math.max(0, rows.length - visible);
+  state.scroll = Math.min(state.scroll, state.maxScroll);
+  const bottom = rows.length - state.scroll;
+  const shown = rows.slice(Math.max(0, bottom - visible), bottom);
+  if (state.scroll > 0) {
+    shown[0] = `  ${c.amber}↑${c.reset} ${c.faint}위로 ${state.scroll}줄 · PgDn/⇧↓ 로 최근으로${c.reset}`;
+  } else if (state.maxScroll > 0) {
+    shown[0] = `  ${c.faint}↑ 이전 기록 ${state.maxScroll}줄 · PgUp/⇧↑${c.reset}`;
+  }
   for (let i = 0; i < visible; i++) {
     const left = pad(cut(shown[i] || "", mainWidth), mainWidth);
     if (!railWidth) emit(pre + left);
@@ -250,7 +262,7 @@ function render() {
   }
 
   emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   :project 필터   :dash   :agents   :inbox   :cost   :q${c.reset}`);
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   PgUp/PgDn 스크롤   :project   :dash   :agents   :q${c.reset}`);
   const inputLines = state.input.split("\n");
   for (let i = 0; i < inputLines.length - 1; i++) {
     emit(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
@@ -367,6 +379,14 @@ process.on("uncaughtException", (err) => {
 process.stdin.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
 
+  const page = Math.max(3, (process.stdout.rows || 34) - 14);
+  const scrollBy = (rows) => {
+    state.scroll = Math.max(0, Math.min(state.maxScroll, state.scroll + rows));
+    render();
+  };
+  if (key.name === "pageup" || (key.shift && key.name === "up")) return scrollBy(page);
+  if (key.name === "pagedown" || (key.shift && key.name === "down")) return scrollBy(-page);
+
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, { pasting: state.pasting });
   if (next.action === "paste-start" || next.action === "paste-end") {
     state.pasting = next.action === "paste-start";
@@ -377,11 +397,13 @@ process.stdin.on("keypress", async (ch, key) => {
     const text = state.input.replace(/\s+$/, "");
     state.input = "";
     state.cursor = 0;
+    state.scroll = 0;
     if (text.trim()) {
       await send(text);
       await refresh();
     }
   } else {
+    if (next.input !== state.input) state.scroll = 0;
     state.input = next.input;
     state.cursor = next.cursor;
   }
