@@ -5,7 +5,8 @@ import { extname, join, normalize } from "node:path";
 
 import { migrate, root } from "./db.js";
 import * as api from "./api.js";
-import { ensureHome, writePort, readPort } from "./paths.js";
+import { buildRules, writeRules } from "./rules.js";
+import { ensureHome, writePort, writePid, readPort } from "./paths.js";
 import { startWatcher } from "./watcher.js";
 
 const publicDir = join(root, "public");
@@ -46,6 +47,8 @@ const routes = [
   ["DELETE", /^\/api\/agents\/(\d+)$/, (m) => api.archiveAgent(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/rebind$/, (m, body) => api.rebindAgent(Number(m[1]), body.target || "")],
   ["POST", /^\/api\/agents\/(\d+)\/wake$/, (m, body) => api.wakeAgent(Number(m[1]), body.message || "")],
+  ["GET", /^\/api\/agents\/(\d+)\/rules$/, (m) => buildRules(Number(m[1]))],
+  ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => writeRules(Number(m[1]))],
 
   ["GET", /^\/api\/projects$/, () => api.listProjects()],
   ["POST", /^\/api\/projects$/, (_m, body) => api.createProject(body)],
@@ -59,6 +62,7 @@ const routes = [
   ["POST", /^\/api\/inbox\/(\d+)\/reply$/, (m, body) => api.saveFinalReply(Number(m[1]), body)],
 
   ["GET", /^\/api\/tasks$/, () => api.listTasks()],
+  ["GET", /^\/api\/tasks\/(\d+)$/, (m) => api.taskDetail(Number(m[1]))],
   ["POST", /^\/api\/tasks\/(\d+)\/result$/, (m, body) => api.saveTaskResult(Number(m[1]), body)],
 
   ["GET", /^\/api\/events$/, () => api.listEvents()],
@@ -123,6 +127,15 @@ function listen(server, port, attemptsLeft) {
   });
 }
 
+// Two servers on one database means two watchers waking the same sessions.
+const running = await fetch(`http://127.0.0.1:${readPort()}/health`)
+  .then((r) => (r.ok ? r.json() : null))
+  .catch(() => null);
+if (running?.name === "Pilo") {
+  console.log(`Pilo is already running on port ${running.port}`);
+  process.exit(0);
+}
+
 const ran = await migrate();
 if (ran.length) console.log(`migrations applied: ${ran.join(", ")}`);
 ensureHome();
@@ -133,5 +146,6 @@ const server = createServer((req, res) => {
 
 const port = await listen(server, wanted, 20);
 writePort(port);
+writePid(process.pid);
 startWatcher();
 console.log(`Pilo listening on http://127.0.0.1:${port}`);
