@@ -1,5 +1,6 @@
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
+import { writeRules } from "./rules.js";
 import { paths, readPort } from "./paths.js";
 
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
@@ -77,7 +78,16 @@ export async function createAgent(input) {
     agentId: row.id,
     payload: { name: input.name, role, parent_agent_id: parentAgentId, runtime: detected.runtime, target: detected.target }
   });
-  return { id: row.id, candidates: detected.candidates };
+  // Registration is also when the agent's instruction file gets written, if asked for.
+  let rules = null;
+  if (input.writeRules) {
+    try {
+      rules = await writeRules(row.id);
+    } catch (err) {
+      rules = { error: err.message };
+    }
+  }
+  return { id: row.id, candidates: detected.candidates, rules };
 }
 
 export async function updateAgent(id, input) {

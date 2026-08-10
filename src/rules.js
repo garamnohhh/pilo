@@ -139,10 +139,19 @@ export async function buildRules(id) {
     exists = false;
   }
 
+  const inside = current.includes(BEGIN) && current.includes(END)
+    ? current.slice(current.indexOf(BEGIN), current.indexOf(END))
+    : "";
+  const conflicts = current
+    .split("\n")
+    .map((text, i) => ({ line: i + 1, text: text.trim() }))
+    .filter((l) => /bus\.sh|agent-bus/.test(l.text) && !inside.includes(l.text));
+
   return {
     agent: { id: agent.id, name: agent.name, role: agent.role, runtime: agent.runtime },
     file,
     exists,
+    conflicts,
     hasBlock: current.includes(BEGIN),
     block: `${BEGIN}\n${body}\n${END}`,
     preview: body

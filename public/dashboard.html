@@ -157,7 +157,7 @@ const state = {
 };
 
 function emptyForm() {
-  return { name: "", role: "pm", parentAgentId: "", projectId: "", projectName: "", cwd: "", specialty: "", aliases: "", note: "", model: "" };
+  return { name: "", role: "pm", parentAgentId: "", projectId: "", projectName: "", cwd: "", specialty: "", aliases: "", note: "", model: "", runtime: "", writeRules: true };
 }
 
 const $ = (id) => document.getElementById(id);
@@ -360,6 +360,11 @@ function rulesCard() {
     <div class="code" style="max-height:260px;border:1px solid #171b19;border-radius:8px;background:var(--panel2)">
       ${esc(r.preview).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="white-space:pre-wrap">${l}</span></div>`).join("")}
     </div>
+    ${r.conflicts?.length ? `<div class="note" style="border-color:#3a2a28;color:#c9a49c;margin-top:12px">
+      이 파일에 agent-bus 지시문이 ${r.conflicts.length}줄 남아 있습니다 — 같이 두면 agent가 어느 쪽을 따를지 모릅니다.
+      ${r.conflicts.slice(0, 6).map((c) => `<div style="color:#8b968e">L${c.line} ${esc(c.text.slice(0, 70))}</div>`).join("")}
+      ${r.conflicts.length > 6 ? `<div style="color:#5f6b64">…외 ${r.conflicts.length - 6}줄</div>` : ""}
+    </div>` : ""}
     <button class="btn primary" style="margin-top:12px" data-act="write-rules" data-id="${r.agent.id}">
       ${r.exists && r.hasBlock ? "지시문 갱신" : "지시문 쓰기"}</button>
     <div class="note">쓴 뒤에는 해당 agent 세션을 재시작해야 새 지시문을 읽습니다.</div>
@@ -438,8 +443,10 @@ function agentForm(projects, pilo, pms) {
         <option value="__new">+ Projects 탭에서 직접 만들기…</option></select></div>`}
     <div class="field"><div class="name">cwd <span class="hint">herdr 세션 매칭 기준</span><span class="req">required</span></div>
       <input id="f-cwd" value="${esc(f.cwd)}" placeholder="~/work/project-d"></div>
-    <div class="field"><div class="name">model <span class="hint">표시용 메모</span></div>
-      <input id="f-model" value="${esc(f.model)}" placeholder="claude-sonnet"></div>
+    <div class="field"><div class="name">runtime <span class="hint">herdr가 감지한 값</span></div>
+      <input value="${esc(f.runtime || "등록 시 cwd로 자동 감지")}" disabled style="color:${f.runtime ? "var(--green)" : "var(--faint)"}"></div>
+    <div class="field"><div class="name">model <span class="hint">선택 — sonnet, opus 같은 메모</span></div>
+      <input id="f-model" value="${esc(f.model)}" placeholder="비워둬도 됩니다"></div>
     <div class="field"><div class="name">specialty <span class="hint">전문 영역</span></div>
       <input id="f-specialty" value="${esc(f.specialty)}" placeholder="backend, migration"></div>
     <div class="field"><div class="name">aliases <span class="hint">쉼표로 구분</span></div>
@@ -455,6 +462,9 @@ function agentForm(projects, pilo, pms) {
       ${state.candidates.map((c) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 0">
         <span>${esc(c.runtime)} · ${esc(c.target)} · ${esc(c.title || "")}</span>
         <button class="btn small" data-act="pick-target" data-target="${esc(c.target)}" style="margin-left:auto">bind</button></div>`).join("")}</div>` : ""}
+    ${state.editing ? "" : `<label style="display:flex;align-items:center;gap:9px;margin:14px 0 0;font:11px var(--mono);color:#9aa59d;cursor:pointer">
+      <input type="checkbox" id="f-write-rules" ${f.writeRules ? "checked" : ""} style="width:auto;margin:0">
+      등록과 함께 ${f.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md"} 에 지시문 쓰기</label>`}
     <button class="btn primary" data-act="${state.editing ? "update-agent" : "create-agent"}">${state.editing ? "save agent" : "register agent"}</button>
   </div>`;
 }
@@ -686,7 +696,8 @@ function readAgentForm() {
     model: val("f-model"),
     specialty: val("f-specialty"),
     aliases: val("f-aliases"),
-    note: val("f-note")
+    note: val("f-note"),
+    writeRules: $("f-write-rules") ? $("f-write-rules").checked : false
   };
 }
 
@@ -725,7 +736,8 @@ const actions = {
       parentAgentId: role === "pm" ? (pilo ? pilo.id : "") : "",
       projectId: role === "pilo" ? "" : session.suggestedProjectId || "",
       projectName: role === "pilo" ? "" : session.suggestedProjectId ? "" : session.suggestedProjectName,
-      cwd: session.cwd
+      cwd: session.cwd,
+      runtime: session.runtime
     };
     if (role === "pilo") state.form.name = "pilo";
     toast(`${session.runtime} 세션을 폼에 채웠습니다 — role 확인 후 등록`);
@@ -752,7 +764,9 @@ const actions = {
     const res = await call("POST", "/api/agents", form);
     state.candidates = res.candidates || [];
     state.form = emptyForm();
-    toast(state.candidates.length > 1 ? "등록됨 — 세션 후보가 여러 개입니다" : "agent 등록됨");
+    const wrote = res.rules && !res.rules.error ? ` · ${res.rules.file.split("/").pop()} ${res.rules.updated ? "갱신" : "생성"}` : "";
+    if (res.rules?.error) toast(`등록됨, 지시문 실패: ${res.rules.error}`, true);
+    else toast(`${state.candidates.length > 1 ? "등록됨 — 세션 후보 여러 개" : "agent 등록됨"}${wrote}`);
     await load();
   },
   async "edit-agent"(el) {
