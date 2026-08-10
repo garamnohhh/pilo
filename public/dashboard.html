@@ -366,8 +366,8 @@ function rulesCard() {
       ${r.conflicts.length > 6 ? `<div style="color:#5f6b64">…외 ${r.conflicts.length - 6}줄</div>` : ""}
     </div>` : ""}
     <button class="btn primary" style="margin-top:12px" data-act="write-rules" data-id="${r.agent.id}">
-      ${r.exists && r.hasBlock ? "지시문 갱신" : "지시문 쓰기"}</button>
-    <div class="note">쓴 뒤에는 해당 agent 세션을 재시작해야 새 지시문을 읽습니다.</div>
+      ${r.exists && r.hasBlock ? "지시문 갱신하고 세션에 반영" : "지시문 쓰고 세션에 반영"}</button>
+    <div class="note">파일을 쓴 뒤 해당 세션에 <span class="mono" style="color:#b9c3bc">[pilo:rules]</span> 프롬프트를 보내 바로 읽게 합니다. 세션 재시작은 필요 없습니다.</div>
   </div>`;
 }
 
@@ -464,7 +464,7 @@ function agentForm(projects, pilo, pms) {
         <button class="btn small" data-act="pick-target" data-target="${esc(c.target)}" style="margin-left:auto">bind</button></div>`).join("")}</div>` : ""}
     ${state.editing ? "" : `<label style="display:flex;align-items:center;gap:9px;margin:14px 0 0;font:11px var(--mono);color:#9aa59d;cursor:pointer">
       <input type="checkbox" id="f-write-rules" ${f.writeRules ? "checked" : ""} style="width:auto;margin:0">
-      등록과 함께 ${f.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md"} 에 지시문 쓰기</label>`}
+      등록과 함께 ${f.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md"} 쓰고 세션에 반영</label>`}
     <button class="btn primary" data-act="${state.editing ? "update-agent" : "create-agent"}">${state.editing ? "save agent" : "register agent"}</button>
   </div>`;
 }
@@ -754,7 +754,11 @@ const actions = {
   },
   async "write-rules"(el) {
     const res = await call("POST", `/api/agents/${el.dataset.id}/rules`, {});
-    toast(`${res.updated ? "갱신" : "생성"}: ${res.file}`);
+    toast(
+      `${res.updated ? "갱신" : "생성"}: ${res.file.split("/").pop()}` +
+        (res.notified ? " · 세션에 반영 요청 보냄" : ` · 세션 알림 실패 (${res.reason})`),
+      !res.notified
+    );
     state.rules = await get(`/api/agents/${el.dataset.id}/rules`);
     render();
   },
@@ -764,7 +768,9 @@ const actions = {
     const res = await call("POST", "/api/agents", form);
     state.candidates = res.candidates || [];
     state.form = emptyForm();
-    const wrote = res.rules && !res.rules.error ? ` · ${res.rules.file.split("/").pop()} ${res.rules.updated ? "갱신" : "생성"}` : "";
+    const wrote = res.rules && !res.rules.error
+      ? ` · ${res.rules.file.split("/").pop()} ${res.rules.updated ? "갱신" : "생성"}${res.rules.notified ? " · 세션 반영" : ""}`
+      : "";
     if (res.rules?.error) toast(`등록됨, 지시문 실패: ${res.rules.error}`, true);
     else toast(`${state.candidates.length > 1 ? "등록됨 — 세션 후보 여러 개" : "agent 등록됨"}${wrote}`);
     await load();

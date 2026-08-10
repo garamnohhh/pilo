@@ -5,7 +5,7 @@ import { extname, join, normalize } from "node:path";
 
 import { migrate, root } from "./db.js";
 import * as api from "./api.js";
-import { buildRules, writeRules } from "./rules.js";
+import { buildRules } from "./rules.js";
 import { ensureHome, writePort, writePid, readPort } from "./paths.js";
 import { startWatcher } from "./watcher.js";
 
@@ -48,7 +48,7 @@ const routes = [
   ["POST", /^\/api\/agents\/(\d+)\/rebind$/, (m, body) => api.rebindAgent(Number(m[1]), body.target || "")],
   ["POST", /^\/api\/agents\/(\d+)\/wake$/, (m, body) => api.wakeAgent(Number(m[1]), body.message || "")],
   ["GET", /^\/api\/agents\/(\d+)\/rules$/, (m) => buildRules(Number(m[1]))],
-  ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => writeRules(Number(m[1]))],
+  ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => api.applyRules(Number(m[1]))],
 
   ["GET", /^\/api\/projects$/, () => api.listProjects()],
   ["POST", /^\/api\/projects$/, (_m, body) => api.createProject(body)],
