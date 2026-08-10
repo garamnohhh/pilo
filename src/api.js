@@ -3,9 +3,18 @@ import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
 import { paths, readPort } from "./paths.js";
 
+// agents.status was never written to, so an agent looked idle forever. Derive it
+// from the work it actually holds.
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
-  a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note, a.status,
-  a.created_at AS "createdAt", p.name AS "projectName"`;
+  a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note,
+  a.created_at AS "createdAt", p.name AS "projectName",
+  (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
+  CASE
+    WHEN a.herdr_target = '' THEN 'unbound'
+    WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
+    WHEN (SELECT t.status FROM tasks t WHERE t.to_agent_id = a.id ORDER BY t.created_at DESC LIMIT 1) = 'failed' THEN 'failed'
+    ELSE 'idle'
+  END AS status`;
 
 const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id WHERE a.archived_at IS NULL`;
 
