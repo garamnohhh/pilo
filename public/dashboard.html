@@ -24,7 +24,12 @@
   body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
   button, input, select, textarea { font: inherit; color: inherit }
   .mono { font-family: var(--mono) }
-  .app { display: grid; grid-template-columns: 216px 1fr; min-height: 100vh }
+  .topbar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 28px; padding: 14px 28px;
+    background: rgba(8, 9, 10, .92); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line) }
+  .topbar .mark { font: 600 17px var(--mono); letter-spacing: -.03em; color: var(--strong) }
+  .topbar .tag { font: 11px var(--mono); color: #5f6b64 }
+  .topbar .state { margin-left: auto; display: flex; align-items: center; gap: 14px; font: 11px var(--mono); color: var(--muted) }
+  .app { display: grid; grid-template-columns: 216px 1fr; min-height: calc(100vh - 55px) }
 
   aside { border-right: 1px solid var(--line); background: var(--panel2); padding: 22px 12px }
   .eyebrow { font: 10px var(--mono); letter-spacing: .14em; color: var(--faint); text-transform: uppercase; padding: 0 10px 12px }
@@ -112,6 +117,13 @@
 </style>
 </head>
 <body>
+<div class="topbar">
+  <div style="display:flex;align-items:center;gap:10px">
+    <span class="mark">Pilo</span>
+    <span class="tag">local agent desk</span>
+  </div>
+  <div class="state" id="topstate"></div>
+</div>
 <div class="app">
   <aside>
     <div class="eyebrow">dashboard</div>
@@ -233,6 +245,12 @@ function renderTabs() {
   }).join("");
   const s = state.data.setup || {};
   const st = state.data.overview?.stats || {};
+  const server = state.data.system?.services?.find((x) => x.name === "server");
+  $("topstate").innerHTML = `
+    <span><span class="dot" style="background:${stateColor(server?.state)};margin-right:6px"></span>${esc(server?.state || "unknown")}</span>
+    <span style="color:var(--faint)">agents ${st.agents ?? 0}</span>
+    <span style="color:var(--faint)">inbox ${st.inboxToday?.pending ?? 0} 대기</span>
+    <span style="color:${st.failed?.total ? "var(--red)" : "var(--faint)"}">failed ${st.failed?.total ?? 0}</span>`;
   $("sideCard").innerHTML = `
     <div style="display:flex;align-items:center;gap:7px">
       <span class="dot" style="background:${s.herdr ? "var(--green)" : "var(--red)"}"></span>
