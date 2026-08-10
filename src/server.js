@@ -38,6 +38,7 @@ const routes = [
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
 
+  ["GET", /^\/api\/sessions$/, () => api.listSessions()],
   ["GET", /^\/api\/agents$/, () => api.listAgents()],
   ["GET", /^\/api\/agents\/tree$/, () => api.agentTree()],
   ["POST", /^\/api\/agents$/, (_m, body) => api.createAgent(body)],
