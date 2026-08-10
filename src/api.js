@@ -46,6 +46,39 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
   return parent.id;
 }
 
+// Writing the file is only half of it: the session is already running, so tell it to
+// re-read the file instead of waiting for a restart.
+export async function applyRules(id) {
+  const written = await writeRules(id);
+  const agent = await one(
+    "SELECT id, name, herdr_target, runtime FROM agents WHERE id = $1 AND archived_at IS NULL",
+    [id]
+  );
+  let notified = false;
+  let reason = "";
+  if (!agent?.herdr_target) {
+    reason = "세션이 바인딩되지 않아 알리지 못했습니다";
+  } else {
+    try {
+      await herdr.prompt(
+        agent.herdr_target,
+        `[pilo:rules] 지시문이 갱신됐다. ${written.file} 의 pilo:begin ~ pilo:end 블록을 읽고 지금부터 그대로 동작해.`
+      );
+      notified = true;
+    } catch (err) {
+      reason = err.message;
+      await recordWakeFailure(agent, err.message);
+    }
+  }
+  await logEvent({
+    type: "rules_written",
+    title: `${agent?.name || id} 지시문 ${written.updated ? "갱신" : "생성"}`,
+    agentId: id,
+    payload: { file: written.file, updated: written.updated, notified, reason }
+  });
+  return { ...written, notified, reason };
+}
+
 // One-click registration passes a project name instead of an id; make it exist.
 async function resolveProject(input) {
   if (input.projectId) return input.projectId;
@@ -82,7 +115,7 @@ export async function createAgent(input) {
   let rules = null;
   if (input.writeRules) {
     try {
-      rules = await writeRules(row.id);
+      rules = await applyRules(row.id);
     } catch (err) {
       rules = { error: err.message };
     }
