@@ -91,15 +91,9 @@ function wrap(text, width) {
   return out.length ? out : [""];
 }
 
-function foldedLine(item, width) {
-  const first = String(item.userRequest || "").split("\n").map((l) => l.trim()).find(Boolean) || "(빈 요청)";
-  const state = item.finalReply ? "완료" : "대기";
-  return `${c.faint}▸${c.reset} ${c.fg}${cut(first, width - 22)}${c.reset} ${c.faint}in-${item.id} · ${state}${c.reset}`;
-}
-
 function replyBlock(item, width) {
   const inner = Math.max(20, width - 4);
-  const rows = [`${c.line}╭─${c.reset} ${c.faint}▾${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
+  const rows = [`${c.line}╭─${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
   for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
   rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 :dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
@@ -296,28 +290,31 @@ function render() {
     }
     for (const item of visibleInbox.slice().reverse()) {
       const fold = { type: "fold", id: String(item.id) };
-      if (state.folded.has(String(item.id))) {
-        feed.push("  " + foldedLine(item, mainWidth - 4));
-        actions.push(fold);
-        feed.push("");
-        actions.push(null);
-        continue;
+      const folded = state.folded.has(String(item.id));
+      // folding hides the answer; the question keeps its green prompt mark and,
+      // when folded, its first two lines
+      const lines = wrap(item.userRequest, mainWidth - 6);
+      const shownLines = folded ? lines.slice(0, 2) : lines;
+      const question = shownLines.map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`);
+      if (folded && lines.length > shownLines.length) {
+        question[question.length - 1] += `${c.faint} …${c.reset}`;
       }
-      const question = wrap(item.userRequest, mainWidth - 6).map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`);
       feed.push(...question);
       actions.push(...question.map(() => fold));
       if (item.project) {
-        feed.push(`    ${c.faint}${item.project}${c.reset}`);
-        actions.push(null);
+        feed.push(`    ${c.faint}${item.project}${folded ? ` · ${item.finalReply ? "완료" : "대기"}` : ""}${c.reset}`);
+        actions.push(fold);
       }
       feed.push("");
       actions.push(null);
-      const block = (item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r);
-      feed.push(...block);
-      // only the header line folds, so clicking inside an answer does nothing
-      actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
-      feed.push("");
-      actions.push(null);
+      if (!folded) {
+        const block = (item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r);
+        feed.push(...block);
+        // only the header line folds, so clicking inside an answer does nothing
+        actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
+        feed.push("");
+        actions.push(null);
+      }
     }
     for (const note of state.notes.slice(-3)) {
       const lines = wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`);
