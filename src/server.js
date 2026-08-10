@@ -1,13 +1,14 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 import { migrate, root } from "./db.js";
 import * as api from "./api.js";
 import { buildRules } from "./rules.js";
-import { ensureHome, writePort, writePid, readPort } from "./paths.js";
+import { ensureHome, writePort, writePid, writeSocket, readPort, socketPath } from "./paths.js";
 import { startWatcher } from "./watcher.js";
+import { startSpool } from "./spool.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -91,15 +92,27 @@ async function serveStatic(res, pathname) {
   res.end(await readFile(file));
 }
 
+// One place that maps method+path+body to a result, shared by HTTP, the unix
+// socket and the file spool.
+export async function dispatch(method, pathname, body = {}) {
+  for (const [routeMethod, pattern, run] of routes) {
+    if (routeMethod !== method) continue;
+    const match = pattern.exec(pathname);
+    if (!match) continue;
+    const payload = (await run(match, body)) ?? { ok: true };
+    return { status: method === "POST" ? 201 : 200, payload };
+  }
+  return null;
+}
+
 async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
-  for (const [method, pattern, run] of routes) {
-    if (req.method !== method) continue;
-    const match = pattern.exec(url.pathname);
-    if (!match) continue;
+  const method = req.method;
+  const known = routes.some(([m, pattern]) => m === method && pattern.test(url.pathname));
+  if (known) {
     const body = method === "GET" || method === "DELETE" ? {} : await readBody(req);
-    const result = await run(match, body, url);
-    json(res, method === "POST" ? 201 : 200, result ?? { ok: true });
+    const result = await dispatch(method, url.pathname, body);
+    json(res, result.status, result.payload);
     return;
   }
   if (req.method === "GET") {
@@ -147,5 +160,29 @@ const server = createServer((req, res) => {
 const port = await listen(server, wanted, 20);
 writePort(port);
 writePid(process.pid);
+
+// Same API over a unix socket. Agents run inside sandboxes that block TCP, and a
+// socket is a file, so `pilo` subcommands keep working with network access off.
+const socketServer = createServer((req, res) => {
+  handle(req, res).catch((err) => json(res, err.status || 500, { error: err.message }));
+});
+try {
+  if (existsSync(socketPath)) unlinkSync(socketPath);
+  await new Promise((resolve, reject) => {
+    socketServer.once("error", reject);
+    socketServer.listen(socketPath, resolve);
+  });
+  chmodSync(socketPath, 0o600);
+  writeSocket(socketPath);
+  process.on("exit", () => {
+    try {
+      unlinkSync(socketPath);
+    } catch {}
+  });
+} catch (err) {
+  console.error(`socket unavailable (${err.message}); TCP only`);
+}
+
+startSpool(dispatch);
 startWatcher();
-console.log(`Pilo listening on http://127.0.0.1:${port}`);
+console.log(`Pilo listening on http://127.0.0.1:${port} and ${socketPath}`);
