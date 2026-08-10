@@ -20,29 +20,22 @@ function piloRules(agent, base, agents) {
 
 너는 Pilo의 대표 agent(\`role=pilo\`)다. 사용자는 Pilo TUI로 말하고, 화면에는 네가 저장한 \`final_reply\`만 보인다.
 
-API base: \`${base}\`
+모든 조작은 \`pilo\` CLI로 한다. CLI는 unix socket으로 붙고, sandbox가 소켓까지 막으면 파일 spool로 자동 전환한다.
+HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 않는다 — sandbox에서 막힌다.
 
 ### wake 처리
 
 | 받은 메시지 | 할 일 |
 | --- | --- |
-| \`[pilo:inbox] 요청 도착 #N\` | \`GET ${base}/api/inbox/N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
-| \`[pilo:result] 결과 도착 #N\` | \`GET ${base}/api/inbox/N\` 으로 \`tasks[].pmResult\` 확인 → \`final_reply\` 저장 |
-
-### task 생성
+| \`[pilo:inbox] 요청 도착 #N\` | \`pilo inbox N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
+| \`[pilo:result] 결과 도착 #N\` | \`pilo inbox N\` 으로 \`tasks[].pmResult\` 확인 → \`pilo reply\` 로 최종 답변 저장 |
 
 \`\`\`bash
-curl -s -X POST ${base}/api/inbox/N/tasks \\
-  -H 'content-type: application/json' \\
-  -d '{"toAgentId": 2, "fromAgentId": ${agent.id}, "title": "짧은 제목", "request": "PM이 읽을 요청 전문"}'
-\`\`\`
-
-### 최종 답변 저장
-
-\`\`\`bash
-curl -s -X POST ${base}/api/inbox/N/reply \\
-  -H 'content-type: application/json' \\
-  -d '{"body": "사용자에게 보여줄 최종 답변"}'
+pilo inbox                       # 미처리 요청 목록
+pilo inbox N                     # 요청 원문 + task 상태
+pilo agents                      # id · name · role · project
+pilo send <agentId> N "요청 전문"   # PM에게 task 생성
+pilo reply N "사용자에게 보여줄 최종 답변"
 \`\`\`
 
 ### 등록된 agent
@@ -51,14 +44,14 @@ curl -s -X POST ${base}/api/inbox/N/reply \\
 | --- | --- | --- | --- | --- | --- |
 ${roster || "| — | 아직 PM이 없다 | | | | |"}
 
-목록이 오래됐으면 \`GET ${base}/api/agents\` 로 다시 읽는다.
+목록이 오래됐으면 \`pilo agents\` 로 다시 읽는다.
 
 ### 규칙
 
 - 프로젝트 작업을 직접 하지 않는다. 라우팅과 취합만 한다.
 - 담당 PM이 없는 요청만 직접 답한다.
 - 중간 안내("요청 등록했습니다")는 저장하지 않는다. 저장하는 것은 \`final_reply\` 하나뿐이다.
-- PM이 실패(\`status=failed\`)로 보고하면 그 사실과 원인을 \`final_reply\`에 담는다.
+- PM이 실패로 보고하면 그 사실과 원인을 \`final_reply\`에 담는다.
 - 계층 밖 협업은 만들지 않는다. 다른 프로젝트가 필요하면 그 PM에게 별도 task를 만든다.`;
 }
 
@@ -66,45 +59,39 @@ function workerRules(agent, base) {
   const kind = agent.role === "pm" ? "PM agent" : "worker agent";
   const extra =
     agent.role === "pm"
-      ? `- 필요하면 자기 worker에게 task를 만든다: \`POST ${base}/api/inbox/<inboxId>/tasks\` 에 \`{"toAgentId": <workerId>, "parentTaskId": N, ...}\`.
+      ? `- 필요하면 자기 worker에게 task를 만든다: \`pilo send <workerId> <inboxId> "요청"\`.
 - worker 결과를 취합해 하나의 \`pmResult\`로 보고한다.`
       : `- 결과는 자기 parent PM이 취합한다. 사용자에게 직접 보고하지 않는다.`;
   return `## Pilo ${kind}
 
 너는 Pilo의 ${kind}(\`role=${agent.role}\`, id \`${agent.id}\`, name \`${agent.name}\`)다.
 
-API base: \`${base}\`
+모든 조작은 \`pilo\` CLI로 한다. unix socket을 쓰고, 막히면 파일 spool로 자동 전환하므로 sandbox 네트워크가 꺼져 있어도 동작한다.
+\`curl\`로 HTTP를 직접 부르지 않는다.
 
 ### wake 처리
 
 \`[pilo:task] 작업 도착 #N\` 을 받으면 \`N\`을 task id로 본다.
 
 \`\`\`bash
-curl -s ${base}/api/tasks/N
+pilo task N                      # request(요청 전문) · userRequest(사용자 원문) 확인
+pilo done N "20줄 이하 보고" --in 12000 --out 3000
+pilo done N "실패 사유" --status failed --error "SESSION_NOT_FOUND"
 \`\`\`
 
-\`request\` 가 요청 전문이고 \`userRequest\` 가 사용자 원문이다.
-
-### 완료 보고
+변경 파일(diff)이나 실행 로그까지 남기려면 전체 형태로 보낸다.
 
 \`\`\`bash
-curl -s -X POST ${base}/api/tasks/N/result \\
-  -H 'content-type: application/json' \\
-  -d '{
-    "pmResult": "20줄 이하 보고",
-    "status": "done",
-    "tokensIn": 0,
-    "tokensOut": 0,
-    "runLog": [{"t": "00:12", "text": "무엇을 했는지"}],
-    "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "변경 내용"}]
-  }'
+pilo api POST /api/tasks/N/result '{
+  "pmResult": "보고", "status": "done", "tokensIn": 0, "tokensOut": 0,
+  "runLog": [{"t": "00:12", "text": "무엇을 했는지"}],
+  "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "변경 내용"}]
+}'
 \`\`\`
-
-실패하면 \`"status": "failed"\` 와 \`"error"\` 를 함께 보낸다.
 
 ### 규칙
 
-- \`tokensIn\`/\`tokensOut\` 은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
+- \`--in\`/\`--out\` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
 - 보고는 20줄 이하. 확인한 파일, 핵심 요약, 남은 TODO, 사용자 확인 필요를 담는다.
 - 변경한 파일은 \`artifacts\` 에 넣는다. 대시보드 Artifacts 탭에서 diff로 열린다.
 - 긴 로그는 \`runLog\` 로 보낸다. 사용자 화면에는 올라가지 않는다.

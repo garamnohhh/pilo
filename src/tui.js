@@ -1,7 +1,7 @@
 import readline from "node:readline";
 import { spawn } from "node:child_process";
 import { readPort } from "./paths.js";
-import { isNewline, isSend, isPrintable } from "./keys.js";
+import { edit } from "./draft.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
 const base = `http://127.0.0.1:${port}`;
@@ -22,7 +22,7 @@ const c = {
   line: "\x1b[38;2;28;33;31m"
 };
 
-const state = { input: "", notes: [], busy: false, busySub: "" };
+const state = { input: "", cursor: 0, notes: [], busy: false, busySub: "" };
 
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
 // Hangul and CJK take two terminal columns, so measure in columns, not characters.
@@ -216,12 +216,20 @@ async function render() {
   }
 
   console.log(pre + line(outWidth));
-  console.log(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   :dash dashboard   :agents tree   :inbox 미처리   :cost tokens   :q quit${c.reset}`);
+  console.log(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   :dash dashboard   :agents tree   :inbox 미처리   :cost tokens   :q quit${c.reset}`);
   const inputLines = state.input.split("\n");
   for (let i = 0; i < inputLines.length - 1; i++) {
     console.log(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
   }
   process.stdout.write(pre + `${c.green}❯${c.reset} ${inputLines[inputLines.length - 1]}\x1b[?25h`);
+
+  // Put the terminal cursor where the edit cursor is: count rows up from the last
+  // line, then step in by the column width of the text before the cursor.
+  const before = state.input.slice(0, state.cursor).split("\n");
+  const rowsUp = inputLines.length - before.length;
+  const column = marginX + 2 + cols(before[before.length - 1]);
+  if (rowsUp > 0) process.stdout.write(`\x1b[${rowsUp}A`);
+  process.stdout.write(`\r\x1b[${column}C`);
 }
 
 function note(text) {
@@ -294,16 +302,15 @@ process.stdout.write("\x1b[>1u");
 
 process.stdin.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
-  if (isNewline(key)) {
-    state.input += "\n";
-  } else if (isSend(key)) {
+  const next = edit({ input: state.input, cursor: state.cursor }, ch, key);
+  if (next.action === "send") {
     const text = state.input.replace(/\s+$/, "");
     state.input = "";
+    state.cursor = 0;
     if (text.trim()) await send(text);
-  } else if (key.name === "backspace") {
-    state.input = state.input.slice(0, -1);
-  } else if (isPrintable(ch, key)) {
-    state.input += ch;
+  } else {
+    state.input = next.input;
+    state.cursor = next.cursor;
   }
   await render();
 });
