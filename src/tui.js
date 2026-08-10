@@ -1,7 +1,9 @@
 import readline from "node:readline";
+import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { readPort } from "./paths.js";
 import { edit } from "./draft.js";
+import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
 const base = `http://127.0.0.1:${port}`;
@@ -175,6 +177,13 @@ async function refresh() {
   return state.data;
 }
 
+function scrollBy(rows) {
+  const next = Math.max(0, Math.min(state.maxScroll, state.scroll + rows));
+  if (next === state.scroll) return;
+  state.scroll = next;
+  render();
+}
+
 function statusIcon(status, spin) {
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
   if (status === "failed") return { icon: "✕", color: c.red };
@@ -262,7 +271,7 @@ function render() {
   }
 
   emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   PgUp/PgDn 스크롤   :project   :dash   :agents   :q${c.reset}`);
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   마우스 휠·PgUp/PgDn 스크롤   :project   :dash   :agents   :q${c.reset}`);
   const inputLines = state.input.split("\n");
   for (let i = 0; i < inputLines.length - 1; i++) {
     emit(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
@@ -343,7 +352,7 @@ async function send(text) {
 }
 
 function restoreTerminal() {
-  process.stdout.write("\x1b[?2004l\x1b[<u\x1b[?1049l");
+  process.stdout.write(MOUSE_OFF + "\x1b[?2004l\x1b[<u\x1b[?1049l");
 }
 
 function close() {
@@ -361,11 +370,18 @@ if (!process.stdin.isTTY) {
   process.exit(0);
 }
 
-readline.emitKeypressEvents(process.stdin);
+// Keys go through a filtered stream so mouse reports never reach readline.
+const keys = new PassThrough();
+readline.emitKeypressEvents(keys);
 process.stdin.setRawMode(true);
+process.stdin.on("data", (chunk) => {
+  const { wheel, rest } = parseMouse(chunk);
+  if (wheel) scrollBy(wheel * 3);
+  if (rest.length) keys.write(rest);
+});
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
-process.stdout.write("\x1b[?1049h\x1b[>1u\x1b[?2004h");
+process.stdout.write("\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
@@ -376,14 +392,10 @@ process.on("uncaughtException", (err) => {
   process.exit(1);
 });
 
-process.stdin.on("keypress", async (ch, key) => {
+keys.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
 
   const page = Math.max(3, (process.stdout.rows || 34) - 14);
-  const scrollBy = (rows) => {
-    state.scroll = Math.max(0, Math.min(state.maxScroll, state.scroll + rows));
-    render();
-  };
   if (key.name === "pageup" || (key.shift && key.name === "up")) return scrollBy(page);
   if (key.name === "pagedown" || (key.shift && key.name === "down")) return scrollBy(-page);
 
