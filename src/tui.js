@@ -1,6 +1,7 @@
 import readline from "node:readline";
 import { spawn } from "node:child_process";
 import { readPort } from "./paths.js";
+import { isNewline, isSend, isPrintable } from "./keys.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
 const base = `http://127.0.0.1:${port}`;
@@ -215,8 +216,12 @@ async function render() {
   }
 
   console.log(pre + line(outWidth));
-  console.log(pre + `${c.faint}↵ send   :dash dashboard   :agents tree   :inbox 미처리   :cost tokens   :q quit${c.reset}`);
-  process.stdout.write(pre + `${c.green}❯${c.reset} ${state.input}\x1b[?25h`);
+  console.log(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   :dash dashboard   :agents tree   :inbox 미처리   :cost tokens   :q quit${c.reset}`);
+  const inputLines = state.input.split("\n");
+  for (let i = 0; i < inputLines.length - 1; i++) {
+    console.log(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
+  }
+  process.stdout.write(pre + `${c.green}❯${c.reset} ${inputLines[inputLines.length - 1]}\x1b[?25h`);
 }
 
 function note(text) {
@@ -254,7 +259,7 @@ async function command(raw) {
 }
 
 async function send(text) {
-  if (text.startsWith(":")) return command(text);
+  if (text.startsWith(":")) return command(text.replace(/\n/g, " "));
   const res = await fetch(`${base}/api/inbox`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -267,6 +272,7 @@ async function send(text) {
 }
 
 function close() {
+  process.stdout.write("\x1b[<u");
   process.stdin.setRawMode(false);
   process.stdin.pause();
   process.stdout.write("\x1b[2J\x1b[H");
@@ -282,14 +288,23 @@ if (!process.stdin.isTTY) {
 
 readline.emitKeypressEvents(process.stdin);
 process.stdin.setRawMode(true);
+// Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
+// from Enter. Terminals without it ignore the request and Ctrl+J still works.
+process.stdout.write("\x1b[>1u");
+
 process.stdin.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
-  if (key.name === "return") {
-    const text = state.input.trim();
+  if (isNewline(key)) {
+    state.input += "\n";
+  } else if (isSend(key)) {
+    const text = state.input.replace(/\s+$/, "");
     state.input = "";
-    if (text) await send(text);
-  } else if (key.name === "backspace") state.input = state.input.slice(0, -1);
-  else if (ch && !key.ctrl && !key.meta) state.input += ch;
+    if (text.trim()) await send(text);
+  } else if (key.name === "backspace") {
+    state.input = state.input.slice(0, -1);
+  } else if (isPrintable(ch, key)) {
+    state.input += ch;
+  }
   await render();
 });
 
