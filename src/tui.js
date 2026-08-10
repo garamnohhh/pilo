@@ -143,23 +143,31 @@ function railRows(tree, width) {
     rows.push(`${c.faint}대표 agent 없음${c.reset}`);
     return rows;
   }
-  const piloIcon = statusIcon(tree.pilo.status, state.spin);
-  rows.push(`${piloIcon.color}${piloIcon.icon}${c.reset} ${c.fg}${cut(tree.pilo.name, width - 12)}${c.reset} ${c.green}PILO${c.reset}`);
-  rows.push(`  ${c.faint}사용자와 대화 · 취합${c.reset}`);
+
+  // The name gets a line to itself; role, project and workload go on the next one.
+  // Cramming them onto one row is what turned every name into an ellipsis.
+  const entry = (indent, icon, name, meta, tag, tagColor) => {
+    rows.push(`${indent}${icon.color}${icon.icon}${c.reset} ${c.fg}${cut(name, width - indent.length - 2)}${c.reset}`);
+    rows.push(`${indent}  ${tagColor}${tag}${c.reset} ${c.faint}${cut(meta, width - indent.length - tag.length - 3)}${c.reset}`);
+  };
+
+  entry("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "대화 · 취합", "PILO", c.green);
   rows.push("");
+
   if (!tree.pms.length) {
     rows.push(`${c.faint}Project agent 없음${c.reset}`);
     rows.push(`${c.faint}:dash 에서 PM 등록${c.reset}`);
     return rows;
   }
+
   for (const pm of tree.pms) {
-    const mark = statusIcon(pm.status, state.spin);
-    rows.push(`${c.faint}└${c.reset} ${mark.color}${mark.icon}${c.reset} ${c.fg}${cut(pm.name, width - 16)}${c.reset} ${c.blue}PM${c.reset}`);
-    const detail = pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
-    rows.push(`   ${c.faint}${cut(`${pm.projectName || "project 미지정"} · ${detail}`, width - 5)}${c.reset}`);
+    const load =
+      pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
+    // most PMs are named after their project; repeating it just eats the line
+    const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
+    entry("", statusIcon(pm.status, state.spin), pm.name, `${project}${load}`, "PM", c.blue);
     for (const w of pm.children) {
-      const wm = statusIcon(w.status, state.spin);
-      rows.push(`   ${c.faint}└${c.reset} ${wm.color}${wm.icon}${c.reset} ${c.muted}${cut(w.name, width - 18)}${c.reset} ${c.faint}WORKER${c.reset}`);
+      entry("  ", statusIcon(w.status, state.spin), w.name, w.specialty || w.status, "WORKER", c.muted);
     }
     rows.push("");
   }
@@ -200,7 +208,7 @@ function render() {
   const marginX = width > 60 ? 2 : 0;
   const outWidth = Math.max(40, width - marginX * 2);
   const pre = " ".repeat(marginX);
-  const railWidth = width >= 96 ? 30 : 0;
+  const railWidth = width >= 96 ? Math.min(40, Math.max(30, Math.round(width * 0.28))) : 0;
   const mainWidth = railWidth ? outWidth - railWidth - 3 : outWidth;
 
   if (!state.data) return;
