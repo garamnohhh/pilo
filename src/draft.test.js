@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { edit } from "./draft.js";
+import { edit, layoutDraft, rowAt } from "./draft.js";
 
 function key(sequence) {
   const stream = new PassThrough();
@@ -138,4 +138,69 @@ test("ordinary text still deletes one character at a time", () => {
   const back = key("\x7f");
   const after = edit({ input: "abc", cursor: 3 }, back.ch, back.key, { atoms: ["⟦paste #1⟧"] });
   assert.equal(after.input, "ab");
+});
+
+// The bug: ↑/↓ walked whole logical lines while the prompt wraps them, so the
+// drawn cursor and the edit index drifted apart.
+const WIDTH = 20;
+const up = key("\x1b[A");
+const down = key("\x1b[B");
+const left = key("\x1b[D");
+const right = key("\x1b[C");
+
+function press(draft, k, opts = { width: WIDTH }) {
+  return edit(draft, k.ch, k.key, opts);
+}
+
+test("up moves one drawn row, not one logical line", () => {
+  // one logical line that wraps into three rows of 20 columns
+  const input = "a".repeat(50);
+  const rows = layoutDraft(input, WIDTH);
+  assert.equal(rows.length, 3);
+  const atLastRow = { input, cursor: 45 };
+  const once = press(atLastRow, up);
+  assert.equal(once.cursor, 25, "lands on the row above, same column");
+  const twice = press(once, up);
+  assert.equal(twice.cursor, 5);
+  assert.equal(press(twice, up).cursor, 5, "stops at the top row");
+});
+
+test("typing after up then right goes where the cursor is drawn", () => {
+  const input = `${"a".repeat(30)}\nbottom`;
+  const rows = layoutDraft(input, WIDTH);
+  const start = { input, cursor: input.length };
+  const moved = press(press(start, up), right);
+  const row = rows[rowAt(rows, moved.cursor)];
+  const typed = press(moved, key("X"));
+  const after = layoutDraft(typed.input, WIDTH);
+  assert.equal(
+    after[rowAt(after, typed.cursor - 1)].text.includes("X"),
+    true,
+    "the X landed in the row the cursor was on"
+  );
+  assert.equal(typed.input.slice(row.start, row.start + row.text.length + 1).includes("X"), true);
+});
+
+test("backspace after vertical motion deletes from the drawn row", () => {
+  const input = `${"a".repeat(30)}\nbottom line`;
+  const moved = press({ input, cursor: input.length }, up);
+  const erased = press(moved, key("\x7f"));
+  assert.equal(erased.input.endsWith("bottom line"), true, "the lower line is untouched");
+  assert.equal(erased.input.length, input.length - 1);
+});
+
+test("home and end work on the drawn row", () => {
+  const input = "a".repeat(50);
+  const home = press({ input, cursor: 45 }, key("\x1b[H"));
+  assert.equal(home.cursor, 40);
+  const end = press(home, key("\x1b[F"));
+  assert.equal(end.cursor, 50);
+});
+
+test("hangul columns count double when moving between rows", () => {
+  const input = "가".repeat(30);
+  const rows = layoutDraft(input, WIDTH);
+  assert.equal(rows[0].text.length, 10, "ten wide characters fill twenty columns");
+  const moved = press({ input, cursor: 25 }, up);
+  assert.equal(moved.cursor, 15);
 });

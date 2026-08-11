@@ -2,7 +2,7 @@ import readline from "node:readline";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { readPort } from "./paths.js";
-import { edit } from "./draft.js";
+import { edit, layoutDraft } from "./draft.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
@@ -294,39 +294,19 @@ function expandPastes(text) {
   return out;
 }
 
+// The prompt occupies the full width minus the marker and its space.
+function draftWidth() {
+  const width = process.stdout.columns || 120;
+  const marginX = width > 60 ? 2 : 0;
+  return Math.max(20, width - marginX * 2 - 2);
+}
+
 function scrollBy(rows) {
   if (rows < 0 && state.scroll === 0) state.pad = Math.max(0, state.pad + rows);
   const next = Math.max(0, Math.min(state.maxScroll, state.scroll + rows));
   if (next === state.scroll) return;
   state.scroll = next;
   render();
-}
-
-// The terminal wraps a long draft line on its own, which threw off the cursor row
-// and made an edit look like it hit a different line. Wrap it here instead, and
-// compute the cursor from the same layout that gets drawn.
-function layoutDraft(input, width) {
-  const rows = [];
-  let index = 0;
-  for (const line of input.split("\n")) {
-    let start = 0;
-    let used = 0;
-    let chunk = "";
-    for (const ch of line) {
-      const w = wide.test(ch) ? 2 : 1;
-      if (used + w > width) {
-        rows.push({ text: chunk, start: index + start });
-        start += chunk.length;
-        chunk = "";
-        used = 0;
-      }
-      chunk += ch;
-      used += w;
-    }
-    rows.push({ text: chunk, start: index + start });
-    index += line.length + 1;
-  }
-  return rows;
 }
 
 function statusIcon(status, spin) {
@@ -459,7 +439,7 @@ function render() {
 
   emit(pre + line(outWidth));
   emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠 스크롤   클릭: 요청 접기 · agent 필터   :help${c.reset}`);
-  const draft = layoutDraft(state.input, outWidth - 2);
+  const draft = layoutDraft(state.input, draftWidth());
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
   draft.forEach((row, i) => {
@@ -660,7 +640,8 @@ keys.on("keypress", async (ch, key) => {
 
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
     pasting: state.pasting,
-    atoms: [...state.pastes.keys()]
+    atoms: [...state.pastes.keys()],
+    width: draftWidth()
   });
   if (next.action === "paste-start") {
     state.pasting = true;
