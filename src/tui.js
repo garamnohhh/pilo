@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { parseCommand, HELP } from "./commands.js";
+import { alignTables } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
@@ -120,7 +121,9 @@ function replyBlock(item, width) {
   const rows = [
     `${c.line}╭─${c.reset} ${c.green}${who}${c.reset} ${c.line}${"─".repeat(fill)}${c.reset} ${c.faint}${right}${c.reset} ${c.line}─╮${c.reset}`
   ];
-  for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
+  for (const part of wrap(alignTables(item.finalReply, inner - 2), inner - 2)) {
+    rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
+  }
   rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 /dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
   return rows;
@@ -392,7 +395,8 @@ function render() {
   const agentLabel = tree.pilo
     ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name} agent${c.reset}`
     : `${c.faint}● 대표 agent 없음${c.reset}`;
-  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.line}${launchCwd}${c.reset}`;
+  const agentHome = pretty(tree.pilo?.cwd || launchCwd);
+  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.muted}${agentHome}${c.reset}`;
   const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
@@ -434,7 +438,8 @@ function render() {
       const folded = isFolded(item.id, fromNewest);
       // folding hides the answer; the question keeps its green prompt mark and,
       // when folded, its first two lines
-      const lines = wrap(item.userRequest, mainWidth - 6);
+      // questions carry tables too, and the raw pipes are just as unreadable there
+      const lines = wrap(alignTables(item.userRequest, mainWidth - 6), mainWidth - 6);
       const shownLines = folded ? lines.slice(0, 2) : lines;
       const question = shownLines.map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`);
       if (folded && lines.length > shownLines.length) {
