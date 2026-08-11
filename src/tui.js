@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { parseCommand, HELP } from "./commands.js";
+import { alignTables } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
@@ -70,7 +71,8 @@ function cut(s, n) {
 const line = (n) => c.line + "─".repeat(Math.max(1, n)) + c.reset;
 const cell = (s, n) => pad(cut(s, n), n);
 const pretty = (p) => String(p || "").replace(process.env.HOME || "", "~");
-const tokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0));
+const tokens = (n) =>
+  n >= 1_000_000 ? (n / 1_000_000).toFixed(1) + "M" : n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0);
 
 async function api(path, fallback) {
   try {
@@ -101,23 +103,38 @@ function wrap(text, width) {
   return out.length ? out : [""];
 }
 
+function elapsed(from, to) {
+  if (!from || !to) return "";
+  const ms = new Date(to) - new Date(from);
+  if (ms < 0) return "";
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return min < 60 ? `${min}m ${sec % 60}s` : `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+
 function replyBlock(item, width) {
-  const inner = Math.max(20, width - 4);
-  const rows = [`${c.line}╭─${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
-  for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
+  const inner = Math.max(20, width - 8);
+  const meta = [item.routed, elapsed(item.createdAt, item.repliedAt)].filter(Boolean).join(" · ");
+  const head = `${c.green}FINAL_REPLY${c.reset}${meta ? ` ${c.faint}${meta}${c.reset}` : ""}`;
+  const rows = [`${c.line}╭─${c.reset} ${head}${pad("", Math.max(0, inner - cols(head) - 12))}${c.faint}in-${item.id} ▾${c.reset}`];
+  for (const part of wrap(alignTables(item.finalReply, inner - 2), inner - 2)) {
+    rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
+  }
   rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 /dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
-  return rows;
+  // the sender label sits to the left of the box, as in the design
+  return rows.map((row, i) => `${i === 0 ? `${c.green}pilo${c.reset} ` : "     "}${row}`);
 }
 
 function waitingBlock(item, width) {
-  const inner = Math.max(20, width - 4);
+  const inner = Math.max(20, width - 8);
   const sub = item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중";
   return [
     `${c.line}╭┈${c.reset} ${c.green}Pilo agent 정리 중…${c.reset} ${c.faint}in-${item.id}${c.reset}`,
     `${c.line}┊${c.reset} ${c.faint}${cut(sub, inner - 2)}${c.reset}`,
     `${c.line}╰${"┈".repeat(inner)}${c.reset}`
-  ];
+  ].map((row, i) => `${i === 0 ? `${c.green}pilo${c.reset} ` : "     "}${row}`);
 }
 
 function setupScreen(setup, width) {
@@ -161,20 +178,27 @@ function railRows(tree, width, actions = []) {
   // Two lines per agent: the name with its branch, then role and status underneath,
   // with the branch bars carried down so the hierarchy stays visible.
   // name on the left, role badge flush right, a faint rule filling the gap
-  const put = (branch, spine, icon, name, tag, tagColor, meta, action) => {
-    const room = width - cols(branch) - 2 - tag.length - 2;
+  // one line per agent: name left, role badge and status right, as in the design
+  const put = (branch, icon, name, tag, tagColor, meta, action) => {
+    const badge = `[${tag}]`;
+    const right = `${tagColor}${badge}${c.reset} ${c.faint}${meta}${c.reset}`;
+    const rightCols = badge.length + 1 + cols(meta);
+    const room = width - cols(branch) - 2 - rightCols - 1;
     const label = cut(name, Math.max(6, room));
-    const fill = width - cols(branch) - 2 - cols(label) - tag.length - 2;
-    const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${rule}${tagColor}${tag}${c.reset}`);
-    actions.push(action);
-    rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
+    const gap = Math.max(1, width - cols(branch) - 2 - cols(label) - rightCols);
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${" ".repeat(gap)}${right}`);
     actions.push(action);
   };
 
   const all = { type: "project", name: null };
-  put("", "  ", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", c.green,
-    tree.pilo.activity || "전체 보기", all);
+  put("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", c.green,
+    tree.pilo.status === "running" ? "작업 중" : tree.pilo.status, all);
+  if (tree.pilo.activity) {
+    rows.push(`  ${c.faint}${cut(tree.pilo.activity, width - 2)}${c.reset}`);
+    actions.push(all);
+  }
+  rows.push("");
+  actions.push(null);
 
   const bar = `${c.faint}│${c.reset}`;
   const pms = tree.pms;
@@ -190,19 +214,15 @@ function railRows(tree, width, actions = []) {
           : pm.status === "unbound"
             ? "세션 미연결"
             : pm.status;
-    const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
     const filter = { type: "project", name: pm.projectName || pm.name };
-    const marker = state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
-    rows.push(`${bar}`);
-    actions.push(null);
-    put(elbow, spine, statusIcon(pm.status, state.spin), `${marker}${pm.name}`, "PM", c.blue, `${project}${load}`, filter);
+    const marker = state.filter === filter.name ? `${c.green}◂${c.reset}` : "";
+    put(elbow, statusIcon(pm.status, state.spin), `${marker}${pm.name}`, "PM", c.blue, load, filter);
 
     pm.children.forEach((w, k) => {
       const lastChild = k === pm.children.length - 1;
       const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
-      const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
-      const wLoad = w.status === "blocked" ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}` : w.specialty || w.status;
-      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter);
+      const wLoad = w.status === "blocked" ? "결정 대기" : w.status;
+      put(childBranch, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter);
     });
   });
 
@@ -364,8 +384,12 @@ function render() {
   const screen = [""];
   const emit = (text) => screen.push(text);
 
-  const agentLabel = tree.pilo ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name}${c.reset}` : `${c.faint}● 대표 agent 없음${c.reset}`;
-  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.faint}${pretty(launchCwd)}${c.reset}`;
+  const scope = state.filter
+    ? `${c.green}${state.filter}${c.reset} ${c.faint}필터${c.reset}`
+    : `${c.muted}전체 요청${c.reset}`;
+  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${scope}${
+    state.filter ? ` ${c.faint}· PILO 클릭 또는 /project all${c.reset}` : ""
+  }`;
   const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
@@ -374,9 +398,12 @@ function render() {
   const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
   const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}`;
   const showTokens = settings.tokens?.showInTui !== false;
-  const statusRight = showTokens ? `${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset} ${c.faint}today${c.reset}` : "";
-  const gap = Math.max(2, outWidth - cols(statusLeft) - cols(statusMid) - cols(statusRight) - 3);
-  emit(pre + cut(`${statusLeft}   ${statusMid}${" ".repeat(gap)}${statusRight}`, outWidth));
+  const statusRight = showTokens
+    ? `${c.line}│${c.reset} ${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset} ${c.faint}today${c.reset}`
+    : "";
+  const right = `${statusMid} ${statusRight}`;
+  const gap = Math.max(2, outWidth - cols(statusLeft) - cols(right));
+  emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
 
   const visible = Math.max(8, height - 11);
@@ -473,13 +500,36 @@ function render() {
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
   draft.forEach((row, i) => {
-    emit(pre + `${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`);
+    const text = `${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`;
+    emit(pre + (railWidth ? pad(cut(text, mainWidth), mainWidth) + ` ${c.line}│${c.reset}` : text));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
       cursorRow = screen.length;
       cursorCol = marginX + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
     }
   });
+
+  const hintWidth = railWidth ? mainWidth : outWidth;
+  const hints = HELP.split("   ");
+  const perLine = [];
+  let current = "";
+  for (const hint of hints) {
+    if (cols(current) + cols(hint) + 3 > hintWidth - 4) {
+      perLine.push(current);
+      current = hint;
+    } else {
+      current = current ? `${current}   ${hint}` : hint;
+    }
+  }
+  if (current) perLine.push(current);
+  const boxed = [
+    `${c.line}╭${"─".repeat(hintWidth - 2)}╮${c.reset}`,
+    ...perLine.map((row) => `${c.line}│${c.reset} ${c.faint}${pad(row, hintWidth - 4)}${c.reset} ${c.line}│${c.reset}`),
+    `${c.line}╰${"─".repeat(hintWidth - 2)}╯${c.reset}`
+  ];
+  for (const row of boxed) {
+    emit(pre + (railWidth ? pad(cut(row, mainWidth), mainWidth) + ` ${c.line}│${c.reset}` : row));
+  }
 
   // One write per frame: home, each row cleared to end of line, then clear the
   // rest. Clearing the whole screen first is what made the display blink.
