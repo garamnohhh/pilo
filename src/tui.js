@@ -410,10 +410,12 @@ function render() {
   const emit = (text) => screen.push(text);
 
   const agentLabel = tree.pilo
-    ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name} agent${c.reset}`
+    ? `${c.green}●${c.reset} ${c.bold}${c.fg}${tree.pilo.name} agent${c.reset}`
     : `${c.faint}● 대표 agent 없음${c.reset}`;
   const agentHome = pretty(tree.pilo?.cwd || launchCwd);
-  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.muted}${agentHome}${c.reset}`;
+  const topLeft =
+    `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
+    `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
   const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
