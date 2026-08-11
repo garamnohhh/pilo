@@ -58,8 +58,13 @@ ${roster || "| — | 아직 PM이 없다 | | | | |"}
 - 계층 밖 협업은 만들지 않는다. 다른 프로젝트가 필요하면 그 PM에게 별도 task를 만든다.`;
 }
 
-function workerRules(agent, base) {
+function workerRules(agent, base, children = []) {
   const kind = agent.role === "pm" ? "PM agent" : "worker agent";
+  const roster = children.length
+    ? `\n### 내 worker\n\n| id | name | specialty |\n| --- | --- | --- |\n${children
+        .map((w) => `| ${w.id} | ${w.name} | ${w.specialty || "—"} |`)
+        .join("\n")}\n`
+    : "";
   const extra =
     agent.role === "pm"
       ? `- 필요하면 자기 worker에게 task를 만든다: \`pilo send <workerId> <inboxId> "요청"\`.
@@ -92,6 +97,7 @@ pilo api POST /api/tasks/N/result '{
 }'
 \`\`\`
 
+${roster}
 ### 규칙
 
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
@@ -114,11 +120,13 @@ export async function buildRules(id) {
 
   const base = `http://127.0.0.1:${readPort()}`;
   const agents = await query(
-    `SELECT a.id, a.name, a.role, a.aliases, a.specialty, p.name AS "projectName"
+    `SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.parent_agent_id AS "parentAgentId",
+       p.name AS "projectName"
      FROM agents a LEFT JOIN projects p ON p.id = a.project_id
      WHERE a.archived_at IS NULL ORDER BY a.role, a.name`
   );
-  const body = agent.role === "pilo" ? piloRules(agent, base, agents) : workerRules(agent, base);
+  const children = agents.filter((a) => a.role === "worker" && String(a.parentAgentId) === String(agent.id));
+  const body = agent.role === "pilo" ? piloRules(agent, base, agents) : workerRules(agent, base, children);
   const file = join(agent.cwd, ruleFile(agent));
 
   let current = "";

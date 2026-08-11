@@ -123,6 +123,29 @@ export async function applyRules(id) {
   return { ...written, notified, reason };
 }
 
+// Anyone whose instructions just went stale gets them again, without the user
+// having to remember which rules buttons to press.
+async function propagateRules(reason, ids) {
+  const pilo = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  const targets = [...new Set([...ids, pilo?.id].filter(Boolean).map(String))];
+  const results = [];
+  for (const id of targets) {
+    try {
+      const written = await applyRules(id);
+      results.push({ id, file: written.file, notified: written.notified });
+    } catch (err) {
+      results.push({ id, error: err.message });
+    }
+  }
+  await logEvent({
+    type: "rules_broadcast",
+    title: `${reason} — 지시문 ${results.length}건 재발행`,
+    agentId: pilo?.id || null,
+    payload: { reason, results }
+  });
+  return results;
+}
+
 // One-click registration passes a project name instead of an id; make it exist.
 async function resolveProject(input) {
   if (input.projectId) return input.projectId;
@@ -164,7 +187,9 @@ export async function createAgent(input) {
       rules = { error: err.message };
     }
   }
-  return { id: row.id, candidates: detected.candidates, rules };
+  // the desk agent's roster changed, and a new worker changes its PM's roster too
+  const broadcast = await propagateRules(`${input.name} 등록`, [parentAgentId].filter(Boolean));
+  return { id: row.id, candidates: detected.candidates, rules, broadcast };
 }
 
 export async function updateAgent(id, input) {
@@ -194,7 +219,12 @@ export async function updateAgent(id, input) {
       input.specialty ?? current.specialty, input.note ?? current.note
     ]
   );
-  return { id };
+  const broadcast = await propagateRules(`${input.name ?? current.name} 수정`, [
+    id,
+    current.parent_agent_id,
+    parentAgentId
+  ]);
+  return { id, broadcast };
 }
 
 export async function archiveAgent(id) {
@@ -203,9 +233,12 @@ export async function archiveAgent(id) {
   if (agent.role === "pilo") throw Object.assign(new Error("the pilo agent cannot be deleted"), { status: 400 });
   const kids = await one("SELECT count(*)::int AS n FROM agents WHERE parent_agent_id = $1 AND archived_at IS NULL", [id]);
   if (kids.n > 0) throw Object.assign(new Error(`${kids.n} child agent(s) still attached`), { status: 400 });
+  const parent = await one("SELECT parent_agent_id FROM agents WHERE id = $1", [id]);
   await query("UPDATE agents SET archived_at = now(), status = 'archived', updated_at = now() WHERE id = $1", [id]);
   await logEvent({ type: "agent_archived", title: `${agent.name} archived`, agentId: id, payload: { name: agent.name } });
-  return { id };
+  // the agent is gone, so only the ones that still reference it are refreshed
+  const broadcast = await propagateRules(`${agent.name} 삭제`, [parent?.parent_agent_id].filter(Boolean));
+  return { id, broadcast };
 }
 
 export async function rebindAgent(id, target) {
