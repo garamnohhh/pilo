@@ -521,6 +521,25 @@ async function command(raw) {
     applyProject(hit);
     return;
   }
+  if (word === "blocked") {
+    const rows = await api("/api/blocked", []);
+    return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : "결정 대기 없음");
+  }
+  if (word === "answer") {
+    const [id, ...text] = rest;
+    if (!id || !text.length) return note("사용법: :answer <taskId> <답변>");
+    try {
+      const res = await fetch(`${base}/api/tasks/${id}/answer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ body: text.join(" ") })
+      });
+      const data = await res.json();
+      return note(res.ok ? `#${id} 회신 저장 — agent 를 다시 깨웁니다` : `실패: ${data.error}`);
+    } catch (err) {
+      return note(`실패: ${err.message}`);
+    }
+  }
   if (word === "fold" || word === "unfold") {
     const target = rest.join("").replace(/^in-/, "");
     const ids = (state.data?.inbox || []).map((i) => String(i.id));
@@ -550,7 +569,7 @@ async function command(raw) {
     return note(word === "fold" ? `전체 접음 (${ids.length}건)` : `전체 폄 (${ids.length}건)`);
   }
   if (word === "help") {
-    return note(":dash 대시보드   :agents tree   :inbox 미처리   :project <이름>|all 필터   :fold [id|all|default]   :unfold   :cost   :q");
+    return note(":dash   :agents   :inbox   :project <이름>|all   :blocked   :answer <id> <답변>   :fold [id|all|default]   :unfold   :cost   :q");
   }
   return note(`unknown command: :${word} — :help 참고`);
 }

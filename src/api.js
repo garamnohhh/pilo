@@ -557,6 +557,43 @@ export async function saveTaskResult(id, input) {
   return { id, status };
 }
 
+// A blocked task goes back into the queue once the user answers, and the watcher
+// wakes the agent again with the answer attached.
+export async function answerTask(id, body) {
+  const task = await one(
+    `SELECT t.id, t.status, t.inbox_id, t.blocked_question, a.name AS agent, a.id AS agent_id
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1`,
+    [id]
+  );
+  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (task.status !== "blocked") throw Object.assign(new Error(`task #${id} is ${task.status}, not blocked`), { status: 400 });
+  if (!String(body || "").trim()) throw Object.assign(new Error("answer is empty"), { status: 400 });
+
+  await query(
+    "UPDATE tasks SET answer = $2, status = 'queued', updated_at = now() WHERE id = $1",
+    [id, body]
+  );
+  await logEvent({
+    type: "task_answered",
+    title: `${task.agent || "agent"} 결정 회신 #${id}`,
+    taskId: id,
+    inboxId: task.inbox_id,
+    agentId: task.agent_id,
+    payload: { question: task.blocked_question, answer: body }
+  });
+  return { id, status: "queued" };
+}
+
+export async function blockedTasks(limit = 10) {
+  return query(
+    `SELECT t.id, t.blocked_question AS question, t.title, t.updated_at AS "at",
+       a.name AS agent, a.id AS "agentId", p.name AS project, t.inbox_id AS "inboxId"
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN projects p ON p.id = a.project_id
+     WHERE t.status = 'blocked' ORDER BY t.updated_at DESC LIMIT $1`,
+    [limit]
+  );
+}
+
 export async function saveFinalReply(inboxId, input) {
   const pilo = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const row = await one(
@@ -604,6 +641,7 @@ export async function taskDetail(id) {
   const row = await one(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
        t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut", t.created_at AS "createdAt",
+       t.blocked_question AS "blockedQuestion", t.answer,
        t.inbox_id AS "inboxId", t.parent_task_id AS "parentTaskId",
        a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty,
        f.name AS "fromAgent", i.user_request AS "userRequest", p.name AS project
@@ -731,6 +769,7 @@ export async function overview() {
   );
   const system = await systemStatus();
   const failedWakes = { n: system.wakeFailures.length };
+  const blocked = await blockedTasks(5);
   return {
     stats: {
       agents: agents.length,
@@ -743,6 +782,7 @@ export async function overview() {
       history: { failedTasks: history.tasks, wakeFailures: history.wakes }
     },
     tasks,
+    blocked,
     services: system.services,
     paths: system.paths,
     wakeFailures: system.wakeFailures

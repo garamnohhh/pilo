@@ -11,9 +11,14 @@ const BACKOFF_SECONDS = [90, 300, 900, 3600];
 const GIVE_UP = 6;
 
 async function shouldWake(column, id) {
+  // An answer resets the clock: attempts before it should not hold back the retry.
   const row = await one(
     `SELECT count(*)::int AS attempts, max(created_at) AS last
-     FROM events WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1`,
+     FROM events
+     WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1
+       AND created_at > COALESCE(
+         (SELECT max(created_at) FROM events WHERE type = 'task_answered' AND ${column} = $1),
+         to_timestamp(0))`,
     [id]
   );
   const attempts = row?.attempts || 0;
@@ -81,7 +86,7 @@ async function pumpInbox() {
 
 async function pumpTasks() {
   const pending = await query(
-    `SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.herdr_target, a.runtime
+    `SELECT t.id, t.inbox_id, t.answer, a.id AS agent_id, a.name, a.herdr_target, a.runtime
      FROM tasks t JOIN agents a ON a.id = t.to_agent_id
      WHERE t.status = 'queued' AND a.archived_at IS NULL ORDER BY t.created_at LIMIT 10`
   );
@@ -101,7 +106,9 @@ async function pumpTasks() {
     // session that still knows the old agent-bus conventions.
     await wake(
       agent,
-      `[pilo:task] 작업 도착 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 로 읽고 'pilo done ${task.id}' 로 보고.`,
+      task.answer
+        ? `[pilo:task] 결정 회신 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 의 answer 를 읽고 이어서 진행.`
+        : `[pilo:task] 작업 도착 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 로 읽고 'pilo done ${task.id}' 로 보고.`,
       { taskId: task.id, inboxId: task.inbox_id }
     );
   }
