@@ -24,6 +24,22 @@ function moveVertical(input, cursor, direction) {
 
 // Returns the next draft, and an action when the caller must react: "send" for a
 // submit, "paste-start"/"paste-end" around a bracketed paste.
+// Word boundaries for Option+arrow: skip the whitespace you are sitting on, then
+// the run of word characters.
+function wordLeft(input, cursor) {
+  let i = cursor;
+  while (i > 0 && /\s/.test(input[i - 1])) i -= 1;
+  while (i > 0 && !/\s/.test(input[i - 1])) i -= 1;
+  return i;
+}
+
+function wordRight(input, cursor) {
+  let i = cursor;
+  while (i < input.length && /\s/.test(input[i])) i += 1;
+  while (i < input.length && !/\s/.test(input[i])) i += 1;
+  return i;
+}
+
 export function edit(draft, ch, key, options = {}) {
   const { input, cursor } = draft;
   const put = (text) => ({
@@ -37,6 +53,10 @@ export function edit(draft, ch, key, options = {}) {
   if (options.pasting && (key?.name === "return" || key?.name === "enter")) return put("\n");
   if (isNewline(key)) return put("\n");
   if (isSend(key)) return { input, cursor, action: "send" };
+
+  // Option+arrow (and the Esc+b/f form iTerm2 sends) move by word
+  if (key?.meta && (key.name === "left" || key.name === "b")) return { input, cursor: wordLeft(input, cursor) };
+  if (key?.meta && (key.name === "right" || key.name === "f")) return { input, cursor: wordRight(input, cursor) };
 
   switch (key?.name) {
     case "left":
