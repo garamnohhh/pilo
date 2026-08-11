@@ -89,3 +89,29 @@ test("a pasted newline stays in the draft instead of sending", () => {
   // and once the paste is over, Enter submits again
   assert.equal(edit({ input: "a\nb", cursor: 3 }, ch, enter).action, "send");
 });
+
+test("option+arrow moves by word", () => {
+  const start = { input: "hello brave new world", cursor: 21 };
+  const left = key("\x1b[1;3D");
+  const one = edit(start, left.ch, left.key);
+  assert.equal(one.cursor, 16, "to the start of 'world'");
+  const two = edit(one, left.ch, left.key);
+  assert.equal(two.cursor, 12, "to the start of 'new'");
+
+  const right = key("\x1b[1;3C");
+  assert.equal(edit(two, right.ch, right.key).cursor, 15, "to the end of 'new'");
+});
+
+test("esc+b and esc+f do the same as option+arrow", () => {
+  const b = key("\x1bb");
+  const f = key("\x1bf");
+  assert.equal(edit({ input: "one two", cursor: 7 }, b.ch, b.key).cursor, 4);
+  assert.equal(edit({ input: "one two", cursor: 0 }, f.ch, f.key).cursor, 3);
+});
+
+test("word motion stops at both ends", () => {
+  const b = key("\x1bb");
+  const f = key("\x1bf");
+  assert.equal(edit({ input: "word", cursor: 0 }, b.ch, b.key).cursor, 0);
+  assert.equal(edit({ input: "word", cursor: 4 }, f.ch, f.key).cursor, 4);
+});

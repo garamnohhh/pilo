@@ -34,6 +34,8 @@ const state = {
   folded: new Set(),
   unfolded: new Set(),
   hits: new Map(),
+  rowCount: 0,
+  pad: 0,
   scroll: 0,
   maxScroll: 0,
   data: null
@@ -220,8 +222,20 @@ function handleClick({ x, y }) {
   if (!action) return;
   if (action.type === "project") return applyProject(action.name);
   if (action.type === "fold") {
+    // The view is anchored to the bottom, so opening an answer would push the
+    // clicked line upward. Shift the scroll by exactly what was added below it.
+    const before = state.rowCount;
     toggleFold(action.id, action.fromNewest);
     render();
+    const grew = state.rowCount - before;
+    if (grew < 0) {
+      state.pad += -grew;
+    } else if (grew > 0) {
+      const fromPad = Math.min(state.pad, grew);
+      state.pad -= fromPad;
+      state.scroll = Math.max(0, Math.min(state.maxScroll, state.scroll + grew - fromPad));
+    }
+    if (grew) render();
   }
 }
 
@@ -247,10 +261,38 @@ function toggleFold(id, fromNewest) {
 }
 
 function scrollBy(rows) {
+  if (rows < 0 && state.scroll === 0) state.pad = Math.max(0, state.pad + rows);
   const next = Math.max(0, Math.min(state.maxScroll, state.scroll + rows));
   if (next === state.scroll) return;
   state.scroll = next;
   render();
+}
+
+// The terminal wraps a long draft line on its own, which threw off the cursor row
+// and made an edit look like it hit a different line. Wrap it here instead, and
+// compute the cursor from the same layout that gets drawn.
+function layoutDraft(input, width) {
+  const rows = [];
+  let index = 0;
+  for (const line of input.split("\n")) {
+    let start = 0;
+    let used = 0;
+    let chunk = "";
+    for (const ch of line) {
+      const w = wide.test(ch) ? 2 : 1;
+      if (used + w > width) {
+        rows.push({ text: chunk, start: index + start });
+        start += chunk.length;
+        chunk = "";
+        used = 0;
+      }
+      chunk += ch;
+      used += w;
+    }
+    rows.push({ text: chunk, start: index + start });
+    index += line.length + 1;
+  }
+  return rows;
 }
 
 function statusIcon(status, spin) {
@@ -354,16 +396,20 @@ function render() {
   const railActions = [];
   const rail = railWidth ? railRows(tree, railWidth - 3, railActions) : [];
 
-  // scroll counts rows up from the bottom; 0 keeps the newest line in view
-  state.maxScroll = Math.max(0, rows.length - visible);
+  // scroll counts rows up from the bottom; 0 keeps the newest line in view.
+  // pad is blank space kept below the feed so folding does not shove the line
+  // the user clicked away from where they clicked it.
+  const total = rows.length + state.pad;
+  state.maxScroll = Math.max(0, total - visible);
   state.scroll = Math.min(state.scroll, state.maxScroll);
-  const bottom = rows.length - state.scroll;
+  const bottom = total - state.scroll;
   const shown = rows.slice(Math.max(0, bottom - visible), bottom);
   if (state.scroll > 0) {
     shown[0] = `  ${c.amber}↑${c.reset} ${c.faint}위로 ${state.scroll}줄 · PgDn/⇧↓ 로 최근으로${c.reset}`;
   } else if (state.maxScroll > 0) {
     shown[0] = `  ${c.faint}↑ 이전 기록 ${state.maxScroll}줄 · PgUp/⇧↑${c.reset}`;
   }
+  state.rowCount = rows.length;
   const first = Math.max(0, bottom - visible);
   state.hits = new Map();
   for (let i = 0; i < visible; i++) {
@@ -376,17 +422,20 @@ function render() {
 
   emit(pre + line(outWidth));
   emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠 스크롤   클릭: 요청 접기 · agent 필터   :help${c.reset}`);
-  const inputLines = state.input.split("\n");
-  for (let i = 0; i < inputLines.length - 1; i++) {
-    emit(pre + `${c.faint}│${c.reset} ${inputLines[i]}`);
-  }
-  emit(pre + `${c.green}❯${c.reset} ${inputLines[inputLines.length - 1]}`);
+  const draft = layoutDraft(state.input, outWidth - 2);
+  let cursorRow = screen.length + 1;
+  let cursorCol = marginX + 3;
+  draft.forEach((row, i) => {
+    emit(pre + `${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`);
+    const end = row.start + row.text.length;
+    if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
+      cursorRow = screen.length;
+      cursorCol = marginX + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
+    }
+  });
 
   // One write per frame: home, each row cleared to end of line, then clear the
   // rest. Clearing the whole screen first is what made the display blink.
-  const before = state.input.slice(0, state.cursor).split("\n");
-  const cursorRow = screen.length - (inputLines.length - before.length);
-  const cursorCol = marginX + 3 + cols(before[before.length - 1]);
   process.stdout.write(
     "\x1b[H" + screen.map((row) => row + "\x1b[K").join("\n") + "\x1b[J" +
     `\x1b[${cursorRow};${cursorCol}H\x1b[?25h`
@@ -544,6 +593,7 @@ keys.on("keypress", async (ch, key) => {
     state.input = "";
     state.cursor = 0;
     state.scroll = 0;
+    state.pad = 0;
     if (text.trim()) {
       await send(text);
       await refresh();
