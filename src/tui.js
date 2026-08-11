@@ -117,7 +117,8 @@ function elapsed(from, to) {
 function cardBlock({ box, title, titleColor, right, body, footer, glyphs }) {
   const [tl, tr, bl, br, h, v] = glyphs;
   const inner = box - 2;
-  const fill = Math.max(1, inner - cols(title) - cols(right) - 4);
+  // corners 2, the two rule glyphs beside them, and four spaces
+  const fill = Math.max(1, box - 8 - cols(title) - cols(right));
   const rows = [
     `${c.line}${tl}${h}${c.reset} ${titleColor}${title}${c.reset} ${c.line}${h.repeat(fill)}${c.reset} ` +
       `${c.faint}${right}${c.reset} ${c.line}${h}${tr}${c.reset}`
@@ -414,7 +415,7 @@ function render() {
     : `${c.faint}● 대표 agent 없음${c.reset}`;
   const agentHome = pretty(tree.pilo?.cwd || launchCwd);
   const topLeft =
-    `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
+    `${c.bold}${c.strong}Pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
     `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
   const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
@@ -781,8 +782,10 @@ process.stdin.on("data", (chunk) => {
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
 // Push the current title so it can be restored, then name the tab.
-process.title = "pilo";
-process.stdout.write("\x1b[22;0t\x1b]1;pilo\x07\x1b]2;pilo\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
+// iTerm draws "title (job)", so a title of our own would read "Pilo (Pilo)".
+// Clear the title and let the process name alone name the tab.
+process.title = "Pilo";
+process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
