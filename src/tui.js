@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
+import { parseCommand, HELP } from "./commands.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
@@ -104,7 +105,7 @@ function replyBlock(item, width) {
   const inner = Math.max(20, width - 4);
   const rows = [`${c.line}╭─${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
   for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
-  rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 :dash${c.reset}`);
+  rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 /dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
   return rows;
 }
@@ -144,7 +145,7 @@ function setupScreen(setup, width) {
     rows.push(`  ${c.faint}${cut(ok ? desc : cmd || desc, width - 4)}${c.reset}`);
   }
   rows.push("");
-  rows.push(`${c.faint}:dash 로 대시보드를 열어 등록하세요.${c.reset}`);
+  rows.push(`${c.faint}/dash 로 대시보드를 열어 등록하세요.${c.reset}`);
   return rows;
 }
 
@@ -391,7 +392,7 @@ function render() {
       ? inbox.filter((i) => (i.project || "").split(", ").includes(state.filter))
       : inbox;
     if (state.filter) {
-      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 :project all 로 해제${c.reset}`);
+      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 /project all 로 해제${c.reset}`);
       actions.push({ type: "project", name: null });
       feed.push("");
       actions.push(null);
@@ -467,7 +468,7 @@ function render() {
   }
 
   emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   :copy 복사   :mouse 선택모드   :help${c.reset}`);
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   /copy 복사   /mouse 선택모드   /help${c.reset}`);
   const draft = layoutDraft(state.input, draftWidth());
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
@@ -504,10 +505,11 @@ function liveNotes() {
   return state.notes.slice(-2);
 }
 
-async function command(raw) {
-  const [word, ...rest] = raw.slice(1).trim().toLowerCase().split(/\s+/);
-  if (word === "q" || word === "quit") return close();
-  if (word === "dash" || word === "dashboard") {
+async function command(parsed) {
+  const word = parsed.name;
+  const rest = parsed.args;
+  if (word === "exit") return close();
+  if (word === "dash") {
     spawn("open", [dashboardUrl + (rest[0] ? `#${rest[0]}` : "")], { detached: true, stdio: "ignore" }).unref();
     return note("대시보드를 열었습니다.");
   }
@@ -528,11 +530,11 @@ async function command(raw) {
     const t = o.stats.tokens;
     return note(`tokens ${tokens(t.total)} · in ${tokens(t.in)} · out ${tokens(t.out)} (today)`);
   }
-  if (word === "project" || word === "p") {
+  if (word === "project") {
     const wanted = rest.join(" ").trim();
     const projects = [...new Set((state.data?.inbox || []).flatMap((i) => (i.project || "").split(", ").filter(Boolean)))];
     if (!wanted) {
-      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (:project <이름> / :project all)`);
+      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (/project <이름> · /project all)`);
     }
     if (wanted === "all" || wanted === "전체") {
       applyProject(null);
@@ -550,7 +552,7 @@ async function command(raw) {
     return note(
       on
         ? "마우스 켜짐 — 휠 스크롤과 클릭 접기 사용. 드래그 선택은 iTerm2 Option, kitty/WezTerm Shift"
-        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 :mouse"
+        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 /mouse"
     );
   }
   if (word === "copy") {
@@ -574,7 +576,7 @@ async function command(raw) {
       if (!answered) return note("복사할 답변이 아직 없다", { sticky: true });
       return copyOut(`in-${answered.id} 답변`, answered.finalReply);
     }
-    return note("사용법: :copy [last | in-65 | task-389 | draft]", { sticky: true });
+    return note("사용법: /copy [last | in-65 | task-389 | draft]", { sticky: true });
   }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
@@ -582,7 +584,7 @@ async function command(raw) {
   }
   if (word === "answer") {
     const [id, ...text] = rest;
-    if (!id || !text.length) return note("사용법: :answer <taskId> <답변>");
+    if (!id || !text.length) return note("사용법: /answer <taskId> <답변>");
     try {
       const res = await fetch(`${base}/api/tasks/${id}/answer`, {
         method: "POST",
@@ -624,13 +626,14 @@ async function command(raw) {
     return note(word === "fold" ? `전체 접음 (${ids.length}건)` : `전체 폄 (${ids.length}건)`);
   }
   if (word === "help") {
-    return note(":dash   :agents   :inbox   :project   :blocked   :answer <id> <답변>   :copy [last|in-N|draft]   :mouse 선택 복사   :fold   :unfold   :q");
+    return note(HELP);
   }
-  return note(`unknown command: :${word} — :help 참고`, { sticky: true });
+  return note(`unknown command: /${word} — /help 참고`, { sticky: true });
 }
 
 async function send(text) {
-  if (text.startsWith(":")) return command(text.replace(/\n/g, " "));
+  const parsed = parseCommand(text.replace(/\n/g, " "));
+  if (parsed) return command(parsed);
   const res = await fetch(`${base}/api/inbox`, {
     method: "POST",
     headers: { "content-type": "application/json" },
