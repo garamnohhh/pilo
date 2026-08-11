@@ -32,6 +32,7 @@ const state = {
   filter: null,
   spin: 0,
   folded: new Set(),
+  unfolded: new Set(),
   hits: new Map(),
   scroll: 0,
   maxScroll: 0,
@@ -219,9 +220,29 @@ function handleClick({ x, y }) {
   if (!action) return;
   if (action.type === "project") return applyProject(action.name);
   if (action.type === "fold") {
-    if (state.folded.has(action.id)) state.folded.delete(action.id);
-    else state.folded.add(action.id);
+    toggleFold(action.id, action.fromNewest);
     render();
+  }
+}
+
+// Older requests are folded by default; only the newest two open on their own.
+const OPEN_BY_DEFAULT = 2;
+
+function isFolded(id, fromNewest) {
+  const key = String(id);
+  if (state.unfolded.has(key)) return false;
+  if (state.folded.has(key)) return true;
+  return fromNewest >= OPEN_BY_DEFAULT;
+}
+
+function toggleFold(id, fromNewest) {
+  const key = String(id);
+  if (isFolded(key, fromNewest)) {
+    state.unfolded.add(key);
+    state.folded.delete(key);
+  } else {
+    state.folded.add(key);
+    state.unfolded.delete(key);
   }
 }
 
@@ -288,9 +309,11 @@ function render() {
       feed.push("");
       actions.push(null);
     }
-    for (const item of visibleInbox.slice().reverse()) {
-      const fold = { type: "fold", id: String(item.id) };
-      const folded = state.folded.has(String(item.id));
+    const ordered = visibleInbox.slice().reverse();
+    ordered.forEach((item, index) => {
+      const fromNewest = ordered.length - 1 - index;
+      const fold = { type: "fold", id: String(item.id), fromNewest };
+      const folded = isFolded(item.id, fromNewest);
       // folding hides the answer; the question keeps its green prompt mark and,
       // when folded, its first two lines
       const lines = wrap(item.userRequest, mainWidth - 6);
@@ -315,7 +338,7 @@ function render() {
         feed.push("");
         actions.push(null);
       }
-    }
+    });
     for (const note of state.notes.slice(-3)) {
       const lines = wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`);
       feed.push(...lines, "");
@@ -416,18 +439,33 @@ async function command(raw) {
   if (word === "fold" || word === "unfold") {
     const target = rest.join("").replace(/^in-/, "");
     const ids = (state.data?.inbox || []).map((i) => String(i.id));
+    if (target === "default") {
+      state.folded.clear();
+      state.unfolded.clear();
+      return note(`기본값 복귀 — 최신 ${OPEN_BY_DEFAULT}건만 펼침`);
+    }
     if (target && target !== "all") {
       if (!ids.includes(target)) return note(`in-${target} 를 찾을 수 없다`);
-      if (word === "fold") state.folded.add(target);
-      else state.folded.delete(target);
+      if (word === "fold") {
+        state.folded.add(target);
+        state.unfolded.delete(target);
+      } else {
+        state.unfolded.add(target);
+        state.folded.delete(target);
+      }
       return note(`in-${target} ${word === "fold" ? "접음" : "폄"}`);
     }
-    if (word === "fold") ids.forEach((id) => state.folded.add(id));
-    else state.folded.clear();
-    return note(word === "fold" ? `전체 접음 (${ids.length}건)` : "전체 폄");
+    if (word === "fold") {
+      state.unfolded.clear();
+      ids.forEach((id) => state.folded.add(id));
+    } else {
+      state.folded.clear();
+      ids.forEach((id) => state.unfolded.add(id));
+    }
+    return note(word === "fold" ? `전체 접음 (${ids.length}건)` : `전체 폄 (${ids.length}건)`);
   }
   if (word === "help") {
-    return note(":dash 대시보드   :agents tree   :inbox 미처리   :project <이름>|all 필터   :fold [id|all] 접기   :unfold   :cost   :q");
+    return note(":dash 대시보드   :agents tree   :inbox 미처리   :project <이름>|all 필터   :fold [id|all|default]   :unfold   :cost   :q");
   }
   return note(`unknown command: :${word} — :help 참고`);
 }
