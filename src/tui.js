@@ -162,11 +162,12 @@ function railRows(tree, width, actions = []) {
   // with the branch bars carried down so the hierarchy stays visible.
   // name on the left, role badge flush right, a faint rule filling the gap
   const put = (branch, spine, icon, name, tag, tagColor, meta, action) => {
-    const room = width - cols(branch) - 2 - tag.length - 2;
+    const badge = `[${tag}]`;
+    const room = width - cols(branch) - 2 - badge.length - 2;
     const label = cut(name, Math.max(6, room));
-    const fill = width - cols(branch) - 2 - cols(label) - tag.length - 2;
+    const fill = width - cols(branch) - 2 - cols(label) - badge.length - 2;
     const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${rule}${tagColor}${tag}${c.reset}`);
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${rule}${tagColor}${badge}${c.reset}`);
     actions.push(action);
     rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
     actions.push(action);
@@ -242,6 +243,10 @@ function handleClick({ x, y }) {
   const mainWidth = railWidth ? width - marginX * 2 - railWidth - 3 : width - marginX * 2;
   const action = x > marginX + mainWidth + 1 ? hit.rail : hit.main;
   if (!action) return;
+  if (action.type === "dash") {
+    spawn("open", [`${dashboardUrl}#${action.tab}`], { detached: true, stdio: "ignore" }).unref();
+    return note("대시보드 Agents 탭을 열었다");
+  }
   if (action.type === "project") return applyProject(action.name);
   if (action.type === "fold") {
     // The view is anchored to the bottom, so opening an answer would push the
@@ -374,12 +379,15 @@ function render() {
   const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
   const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}`;
   const showTokens = settings.tokens?.showInTui !== false;
-  const statusRight = showTokens ? `${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset} ${c.faint}today${c.reset}` : "";
-  const gap = Math.max(2, outWidth - cols(statusLeft) - cols(statusMid) - cols(statusRight) - 3);
-  emit(pre + cut(`${statusLeft}   ${statusMid}${" ".repeat(gap)}${statusRight}`, outWidth));
+  const statusRight = showTokens
+    ? ` ${c.line}│${c.reset} ${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset}`
+    : "";
+  const right = `${statusMid}${statusRight}`;
+  const gap = Math.max(2, outWidth - cols(statusLeft) - cols(right));
+  emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
 
-  const visible = Math.max(8, height - 11);
+  const visible = Math.max(8, height - 13);
   let rows = [];
   let rowActions = [];
 
@@ -443,6 +451,29 @@ function render() {
   const railActions = [];
   const rail = railWidth ? railRows(tree, railWidth - 3, railActions) : [];
 
+  // A dotted box pinned to the bottom of the rail, inside the same slots the feed
+  // uses, so no coordinate anywhere else moves.
+  if (railWidth) {
+    const inner = railWidth - 5;
+    const box = [
+      `${c.faint}┌${"┈".repeat(inner)}┐${c.reset}`,
+      `${c.faint}┊${c.reset} ${c.muted}${pad(cut("register agent", inner - 2), inner - 2)}${c.reset} ${c.faint}┊${c.reset}`,
+      `${c.faint}┊${c.reset} ${c.faint}${pad(cut("/dash agents", inner - 2), inner - 2)}${c.reset} ${c.faint}┊${c.reset}`,
+      `${c.faint}└${"┈".repeat(inner)}┘${c.reset}`
+    ];
+    const open = { type: "dash", tab: "agents" };
+    // Pin it to the bottom when the tree leaves room. A tall tree keeps its rows;
+    // the box is dropped rather than cutting agents off.
+    if (rail.length <= visible - box.length) {
+      while (rail.length < visible - box.length) {
+        rail.push("");
+        railActions.push(null);
+      }
+      rail.push(...box);
+      for (const _ of box) railActions.push(open);
+    }
+  }
+
   // scroll counts rows up from the bottom; 0 keeps the newest line in view.
   // pad is blank space kept below the feed so folding does not shove the line
   // the user clicked away from where they clicked it.
@@ -467,13 +498,24 @@ function render() {
     state.hits.set(screen.length, { main: rowActions[first + i] || null, rail: railActions[i] || null });
   }
 
-  emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   /copy 복사   /mouse 선택모드   /help${c.reset}`);
+  // Everything below the feed keeps the divider so the rail reaches the bottom.
+  let railTail = visible;
+  const withRail = (text) =>
+    railWidth
+      ? `${pad(cut(text, mainWidth), mainWidth)} ${c.line}│${c.reset} ${cut(rail[railTail++] || "", railWidth - 3)}`
+      : text;
+
+  const hint = "↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   /copy 복사   /mouse 선택모드   /help";
+  const boxWidth = railWidth ? mainWidth : outWidth;
+  emit(pre + withRail(`${c.line}╭${"─".repeat(Math.max(2, boxWidth - 2))}╮${c.reset}`));
+  emit(pre + withRail(`${c.line}│${c.reset} ${c.faint}${pad(cut(hint, boxWidth - 4), boxWidth - 4)}${c.reset} ${c.line}│${c.reset}`));
+  emit(pre + withRail(`${c.line}╰${"─".repeat(Math.max(2, boxWidth - 2))}╯${c.reset}`));
+
   const draft = layoutDraft(state.input, draftWidth());
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
   draft.forEach((row, i) => {
-    emit(pre + `${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`);
+    emit(pre + withRail(`${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
       cursorRow = screen.length;
