@@ -112,31 +112,48 @@ function elapsed(from, to) {
   return min < 60 ? `${min}m ${sec % 60}s` : `${Math.floor(min / 60)}h ${min % 60}m`;
 }
 
-function replyBlock(item, width) {
-  const inner = Math.max(20, width - 4);
-  const who = item.routed || "pilo";
-  const took = elapsed(item.createdAt, item.repliedAt);
-  const right = took ? `in-${item.id} │ ${took}` : `in-${item.id}`;
-  const fill = Math.max(1, inner - cols(who) - cols(right) - 6);
+// One card shape for both states, so a request that is still running looks like
+// the same thing it will become.
+function cardBlock({ box, title, titleColor, right, body, footer, glyphs }) {
+  const [tl, tr, bl, br, h, v] = glyphs;
+  const inner = box - 2;
+  const fill = Math.max(1, inner - cols(title) - cols(right) - 4);
   const rows = [
-    `${c.line}╭─${c.reset} ${c.green}${who}${c.reset} ${c.line}${"─".repeat(fill)}${c.reset} ${c.faint}${right}${c.reset} ${c.line}─╮${c.reset}`
+    `${c.line}${tl}${h}${c.reset} ${titleColor}${title}${c.reset} ${c.line}${h.repeat(fill)}${c.reset} ` +
+      `${c.faint}${right}${c.reset} ${c.line}${h}${tr}${c.reset}`
   ];
-  for (const part of wrap(alignTables(item.finalReply, inner - 2), inner - 2)) {
-    rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
-  }
-  rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 /dash${c.reset}`);
-  rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
+  const put = (text, color) => rows.push(`${c.line}${v}${c.reset} ${color}${pad(text, inner - 2)}${c.reset} ${c.line}${v}${c.reset}`);
+  for (const part of body) put(part, c.fg);
+  if (footer) put(footer, c.faint);
+  rows.push(`${c.line}${bl}${h.repeat(inner)}${br}${c.reset}`);
   return rows;
 }
 
+function replyBlock(item, width) {
+  const box = Math.max(24, width - 2);
+  const took = elapsed(item.createdAt, item.repliedAt);
+  return cardBlock({
+    box,
+    title: item.routed || "pilo",
+    titleColor: c.green,
+    right: took ? `in-${item.id} │ ${took}` : `in-${item.id}`,
+    body: wrap(alignTables(item.finalReply, box - 4), box - 4),
+    footer: "실행 로그 · 변경 파일 · 아티팩트는 /dash",
+    glyphs: ["╭", "╮", "╰", "╯", "─", "│"]
+  });
+}
+
 function waitingBlock(item, width) {
-  const inner = Math.max(20, width - 4);
-  const sub = item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중";
-  return [
-    `${c.line}╭┈${c.reset} ${c.green}Pilo agent 정리 중…${c.reset} ${c.faint}in-${item.id}${c.reset}`,
-    `${c.line}┊${c.reset} ${c.faint}${cut(sub, inner - 2)}${c.reset}`,
-    `${c.line}╰${"┈".repeat(inner)}${c.reset}`
-  ];
+  const box = Math.max(24, width - 2);
+  return cardBlock({
+    box,
+    title: item.routed || "배분 대기",
+    titleColor: c.amber,
+    right: `in-${item.id}`,
+    body: [item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중"],
+    footer: "",
+    glyphs: ["╭", "╮", "╰", "╯", "┈", "┊"]
+  });
 }
 
 function setupScreen(setup, width) {
