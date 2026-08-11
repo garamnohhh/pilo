@@ -47,6 +47,18 @@ export function edit(draft, ch, key, options = {}) {
     cursor: cursor + text.length
   });
 
+  // A pasted blob shows as one placeholder token; editing it character by
+  // character would leave a broken marker, so it deletes whole.
+  const atoms = options.atoms || [];
+  const atomBefore = atoms.find((a) => a && input.slice(0, cursor).endsWith(a));
+  const atomAfter = atoms.find((a) => a && input.slice(cursor).startsWith(a));
+  if (key?.name === "backspace" && atomBefore) {
+    return { input: input.slice(0, cursor - atomBefore.length) + input.slice(cursor), cursor: cursor - atomBefore.length };
+  }
+  if (key?.name === "delete" && atomAfter) {
+    return { input: input.slice(0, cursor) + input.slice(cursor + atomAfter.length), cursor };
+  }
+
   if (key?.name === "paste-start") return { input, cursor, action: "paste-start" };
   if (key?.name === "paste-end") return { input, cursor, action: "paste-end" };
   // Inside a paste every newline is content, never a submit.
