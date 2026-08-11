@@ -155,10 +155,15 @@ function railRows(tree, width, actions = []) {
 
   // Two lines per agent: the name with its branch, then role and status underneath,
   // with the branch bars carried down so the hierarchy stays visible.
+  // name on the left, role badge flush right, a faint rule filling the gap
   const put = (branch, spine, icon, name, tag, tagColor, meta, action) => {
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${cut(name, width - cols(branch) - 2)}${c.reset}`);
+    const room = width - cols(branch) - 2 - tag.length - 2;
+    const label = cut(name, Math.max(6, room));
+    const fill = width - cols(branch) - 2 - cols(label) - tag.length - 2;
+    const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${rule}${tagColor}${tag}${c.reset}`);
     actions.push(action);
-    rows.push(`${spine}${tagColor}${tag}${c.reset} ${c.faint}${cut(meta, width - cols(spine) - tag.length - 1)}${c.reset}`);
+    rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
     actions.push(action);
   };
 
