@@ -115,3 +115,27 @@ test("word motion stops at both ends", () => {
   assert.equal(edit({ input: "word", cursor: 0 }, b.ch, b.key).cursor, 0);
   assert.equal(edit({ input: "word", cursor: 4 }, f.ch, f.key).cursor, 4);
 });
+
+test("backspace removes a pasted blob whole", () => {
+  const token = "⟦paste #1 · 200줄 · 5.3k자⟧";
+  const opts = { atoms: [token] };
+  const back = key("\x7f");
+  const input = `앞말 ${token}`;
+  const after = edit({ input, cursor: input.length }, back.ch, back.key, opts);
+  assert.equal(after.input, "앞말 ");
+  assert.equal(after.cursor, 3);
+});
+
+test("delete removes a pasted blob whole from the front", () => {
+  const token = "⟦paste #2 · 5줄 · 90자⟧";
+  const del = key("\x1b[3~");
+  const after = edit({ input: `${token}뒤`, cursor: 0 }, del.ch, del.key, { atoms: [token] });
+  assert.equal(after.input, "뒤");
+  assert.equal(after.cursor, 0);
+});
+
+test("ordinary text still deletes one character at a time", () => {
+  const back = key("\x7f");
+  const after = edit({ input: "abc", cursor: 3 }, back.ch, back.key, { atoms: ["⟦paste #1⟧"] });
+  assert.equal(after.input, "ab");
+});

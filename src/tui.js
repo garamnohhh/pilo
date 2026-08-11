@@ -29,6 +29,8 @@ const state = {
   cursor: 0,
   notes: [],
   pasting: false,
+  pasteBuffer: "",
+  pastes: new Map(),
   filter: null,
   spin: 0,
   folded: new Set(),
@@ -261,6 +263,23 @@ function toggleFold(id, fromNewest) {
     state.folded.add(key);
     state.unfolded.delete(key);
   }
+}
+
+let pasteSeq = 0;
+
+// The draft holds this token verbatim; send() swaps it back for the real text.
+function placeholderFor(text, lines) {
+  pasteSeq += 1;
+  const size = text.length >= 1000 ? `${(text.length / 1000).toFixed(1)}k자` : `${text.length}자`;
+  const token = `⟦paste #${pasteSeq} · ${lines}줄 · ${size}⟧`;
+  state.pastes.set(token, text);
+  return token;
+}
+
+function expandPastes(text) {
+  let out = text;
+  for (const [token, value] of state.pastes) out = out.split(token).join(value);
+  return out;
 }
 
 function scrollBy(rows) {
@@ -585,18 +604,44 @@ keys.on("keypress", async (ch, key) => {
   if (key.name === "pageup" || (key.shift && key.name === "up")) return scrollBy(page);
   if (key.name === "pagedown" || (key.shift && key.name === "down")) return scrollBy(-page);
 
-  const next = edit({ input: state.input, cursor: state.cursor }, ch, key, { pasting: state.pasting });
-  if (next.action === "paste-start" || next.action === "paste-end") {
-    state.pasting = next.action === "paste-start";
+  // While a paste is in flight the characters go to a buffer, not the draft, so a
+  // long blob can be swapped for a placeholder once we know how big it is.
+  if (state.pasting && key.name !== "paste-end") {
+    if (key.name === "return" || key.name === "enter") state.pasteBuffer += "\n";
+    else if (ch && !key.ctrl && !key.meta) state.pasteBuffer += ch;
+    return;
+  }
+
+  const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
+    pasting: state.pasting,
+    atoms: [...state.pastes.keys()]
+  });
+  if (next.action === "paste-start") {
+    state.pasting = true;
+    state.pasteBuffer = "";
+    render();
+    return;
+  }
+  if (next.action === "paste-end") {
+    state.pasting = false;
+    const text = state.pasteBuffer;
+    state.pasteBuffer = "";
+    const lines = text.split("\n").length;
+    const inline = lines <= 2 && text.length <= 200;
+    const insert = inline ? text : placeholderFor(text, lines);
+    state.input = state.input.slice(0, state.cursor) + insert + state.input.slice(state.cursor);
+    state.cursor += insert.length;
+    state.scroll = 0;
     render();
     return;
   }
   if (next.action === "send") {
-    const text = state.input.replace(/\s+$/, "");
+    const text = expandPastes(state.input).replace(/\s+$/, "");
     state.input = "";
     state.cursor = 0;
     state.scroll = 0;
     state.pad = 0;
+    state.pastes.clear();
     if (text.trim()) {
       await send(text);
       await refresh();
