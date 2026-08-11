@@ -109,7 +109,7 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     fi
     ;;
   logs) tail -f "$LOG" ;;
-  inbox|agents|send|reply|task|done|block|api)
+  inbox|agents|send|reply|task|done|block|blocked|answer|api)
     # agent commands go over the unix socket, so they work with sandbox network off
     exec node "$ROOT/src/cli.js" "$@"
     ;;

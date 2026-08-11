@@ -111,6 +111,8 @@ const USAGE = `pilo agent commands
   pilo task <id>                받은 작업 원문
   pilo done <taskId> <보고>     작업 결과 보고  [--in 토큰 --out 토큰 --status done|failed]
   pilo block <taskId> <질문>    사용자 결정 대기로 표시 (spinner 대신 '결정 대기')
+  pilo blocked                  결정 대기 중인 작업 목록
+  pilo answer <taskId> <답변>   결정 회신 — 그 작업이 다시 큐로 돌아감
   pilo api <METHOD> <path> [json]        그 외 모든 엔드포인트`;
 
 const commands = {
@@ -185,6 +187,19 @@ const commands = {
       tokensOut: Number(opts.out || 0)
     });
     return out(`task #${res.id} ${res.status} — 사용자 결정 대기`);
+  },
+
+  async blocked() {
+    const rows = await call("GET", "/api/blocked");
+    if (!rows.length) return out("결정 대기 중인 작업 없음");
+    return out(rows.map((r) => `#${r.id} ${r.agent} · ${r.project || "—"}\n   ${r.question}`).join("\n"));
+  },
+
+  async answer(args) {
+    const [taskId, ...text] = args;
+    if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <답변>");
+    const res = await call("POST", `/api/tasks/${taskId}/answer`, { body: text.join(" ") });
+    return out(`task #${res.id} ${res.status} — agent 를 다시 깨웁니다`);
   },
 
   async api([method, path, body]) {
