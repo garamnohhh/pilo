@@ -237,10 +237,7 @@ function applyProject(name) {
 function handleClick({ x, y }) {
   const hit = state.hits.get(y);
   if (!hit) return;
-  const width = process.stdout.columns || 120;
-  const marginX = width > 60 ? 2 : 0;
-  const railWidth = width >= 96 ? Math.min(40, Math.max(30, Math.round(width * 0.28))) : 0;
-  const mainWidth = railWidth ? width - marginX * 2 - railWidth - 3 : width - marginX * 2;
+  const { marginX, mainWidth } = paneWidths();
   const action = x > marginX + mainWidth + 1 ? hit.rail : hit.main;
   if (!action) return;
   if (action.type === "dash") {
@@ -330,10 +327,21 @@ async function copyOut(label, text) {
   }
 }
 
-function draftWidth() {
+// One place decides the columns, so the renderer and the editor cannot disagree.
+function paneWidths() {
   const width = process.stdout.columns || 120;
   const marginX = width > 60 ? 2 : 0;
-  return Math.max(20, width - marginX * 2 - 2);
+  const outWidth = Math.max(40, width - marginX * 2);
+  const railWidth = width >= 96 ? Math.min(40, Math.max(30, Math.round(width * 0.28))) : 0;
+  const mainWidth = railWidth ? outWidth - railWidth - 3 : outWidth;
+  return { width, marginX, outWidth, railWidth, mainWidth };
+}
+
+// The prompt lives inside the chat pane; ignoring the rail is what hid typing
+// behind the agent tree.
+function draftWidth() {
+  const { mainWidth } = paneWidths();
+  return Math.max(20, mainWidth - 2);
 }
 
 function scrollBy(rows) {
@@ -356,13 +364,9 @@ function statusIcon(status, spin) {
 }
 
 function render() {
-  const width = process.stdout.columns || 120;
   const height = process.stdout.rows || 34;
-  const marginX = width > 60 ? 2 : 0;
-  const outWidth = Math.max(40, width - marginX * 2);
+  const { width, marginX, outWidth, railWidth, mainWidth } = paneWidths();
   const pre = " ".repeat(marginX);
-  const railWidth = width >= 96 ? Math.min(40, Math.max(30, Math.round(width * 0.28))) : 0;
-  const mainWidth = railWidth ? outWidth - railWidth - 3 : outWidth;
 
   if (!state.data) return;
   const { setup, tree, inbox, overview, settings } = state.data;
@@ -449,23 +453,25 @@ function render() {
   }
 
   const railActions = [];
-  const rail = railWidth ? railRows(tree, railWidth - 3, railActions) : [];
+  const rail = railWidth ? railRows(tree, railWidth, railActions) : [];
 
   // A dotted box pinned to the bottom of the rail, inside the same slots the feed
   // uses, so no coordinate anywhere else moves.
+  const draft = layoutDraft(state.input, draftWidth());
   if (railWidth) {
-    const inner = railWidth - 5;
+    const label = "register agent - /dash agents";
+    const inner = Math.max(cols(label) + 2, railWidth - 2);
     const box = [
-      `${c.faint}┌${"┈".repeat(inner)}┐${c.reset}`,
-      `${c.faint}┊${c.reset} ${c.muted}${pad(cut("register agent", inner - 2), inner - 2)}${c.reset} ${c.faint}┊${c.reset}`,
-      `${c.faint}┊${c.reset} ${c.faint}${pad(cut("/dash agents", inner - 2), inner - 2)}${c.reset} ${c.faint}┊${c.reset}`,
-      `${c.faint}└${"┈".repeat(inner)}┘${c.reset}`
+      `${c.line}╭${"─".repeat(inner)}╮${c.reset}`,
+      `${c.line}│${c.reset} ${c.muted}${pad(cut(label, inner - 2), inner - 2)}${c.reset} ${c.line}│${c.reset}`,
+      `${c.line}╰${"─".repeat(inner)}╯${c.reset}`
     ];
     const open = { type: "dash", tab: "agents" };
-    // Pin it to the bottom when the tree leaves room. A tall tree keeps its rows;
-    // the box is dropped rather than cutting agents off.
-    if (rail.length <= visible - box.length) {
-      while (rail.length < visible - box.length) {
+    // The rail column keeps drawing past the feed, so the box sits on the last
+    // rows of the screen rather than inside the feed area.
+    const slots = visible + 3 + draft.length;
+    if (rail.length <= slots - box.length) {
+      while (rail.length < slots - box.length) {
         rail.push("");
         railActions.push(null);
       }
@@ -493,17 +499,23 @@ function render() {
   for (let i = 0; i < visible; i++) {
     const left = pad(cut(shown[i] || "", mainWidth), mainWidth);
     if (!railWidth) emit(pre + left);
-    else emit(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth - 3)}`);
+    else emit(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth)}`);
     // screen[0] is a blank line, so the terminal row is index + 1
     state.hits.set(screen.length, { main: rowActions[first + i] || null, rail: railActions[i] || null });
   }
 
   // Everything below the feed keeps the divider so the rail reaches the bottom.
   let railTail = visible;
-  const withRail = (text) =>
-    railWidth
-      ? `${pad(cut(text, mainWidth), mainWidth)} ${c.line}│${c.reset} ${cut(rail[railTail++] || "", railWidth - 3)}`
-      : text;
+  // Rows under the feed carry rail content too, so their clicks must be recorded
+  // as well — otherwise the register box draws but does nothing.
+  const withRail = (text) => {
+    if (!railWidth) return text;
+    const action = railActions[railTail] || null;
+    const row = `${pad(cut(text, mainWidth), mainWidth)} ${c.line}│${c.reset} ${cut(rail[railTail] || "", railWidth)}`;
+    railTail += 1;
+    state.hits.set(screen.length + 1, { main: null, rail: action });
+    return row;
+  };
 
   const hint = "↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   /copy 복사   /mouse 선택모드   /help";
   const boxWidth = railWidth ? mainWidth : outWidth;
@@ -511,7 +523,6 @@ function render() {
   emit(pre + withRail(`${c.line}│${c.reset} ${c.faint}${pad(cut(hint, boxWidth - 4), boxWidth - 4)}${c.reset} ${c.line}│${c.reset}`));
   emit(pre + withRail(`${c.line}╰${"─".repeat(Math.max(2, boxWidth - 2))}╯${c.reset}`));
 
-  const draft = layoutDraft(state.input, draftWidth());
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
   draft.forEach((row, i) => {
