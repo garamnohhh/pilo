@@ -366,7 +366,7 @@ function render() {
 
   const agentLabel = tree.pilo ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name}${c.reset}` : `${c.faint}● 대표 agent 없음${c.reset}`;
   const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.faint}${pretty(launchCwd)}${c.reset}`;
-  const topRight = `${c.faint}:help — commands${c.reset}`;
+  const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
 
