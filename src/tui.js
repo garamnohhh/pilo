@@ -1,6 +1,9 @@
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
@@ -28,6 +31,7 @@ const state = {
   input: "",
   cursor: 0,
   notes: [],
+  mouse: true,
   pasting: false,
   pasteBuffer: "",
   pastes: new Map(),
@@ -295,6 +299,31 @@ function expandPastes(text) {
 }
 
 // The prompt occupies the full width minus the marker and its space.
+// Mouse reporting hands drags to us, which is what stops the terminal from
+// selecting text. Turning it off gives native selection back.
+function setMouse(on) {
+  state.mouse = on;
+  process.stdout.write(on ? MOUSE_ON : MOUSE_OFF);
+}
+
+async function copyOut(label, text) {
+  if (!text || !text.trim()) return note(`복사할 내용이 없다: ${label}`, { sticky: true });
+  const done = await new Promise((resolve) => {
+    const child = spawn("pbcopy");
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
+    child.stdin.end(text);
+  });
+  if (done) return note(`${label} 복사됨 (${text.length}자)`);
+  const file = join(homedir(), ".pilo", "last-copy.txt");
+  try {
+    writeFileSync(file, text);
+    return note(`클립보드 실패 — ${file} 에 저장했다`, { sticky: true });
+  } catch (err) {
+    return note(`복사 실패: ${err.message}`, { sticky: true });
+  }
+}
+
 function draftWidth() {
   const width = process.stdout.columns || 120;
   const marginX = width > 60 ? 2 : 0;
@@ -438,7 +467,7 @@ function render() {
   }
 
   emit(pre + line(outWidth));
-  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠 스크롤   클릭: 요청 접기 · agent 필터   :help${c.reset}`);
+  emit(pre + `${c.faint}↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   :copy 복사   :mouse 선택모드   :help${c.reset}`);
   const draft = layoutDraft(state.input, draftWidth());
   let cursorRow = screen.length + 1;
   let cursorCol = marginX + 3;
@@ -514,6 +543,39 @@ async function command(raw) {
     applyProject(hit);
     return;
   }
+  if (word === "mouse") {
+    const wanted = rest.join("").toLowerCase();
+    const on = wanted ? ["on", "켜기", "true"].includes(wanted) : !state.mouse;
+    setMouse(on);
+    return note(
+      on
+        ? "마우스 켜짐 — 휠 스크롤과 클릭 접기 사용. 드래그 선택은 iTerm2 Option, kitty/WezTerm Shift"
+        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 :mouse"
+    );
+  }
+  if (word === "copy") {
+    const what = rest.join(" ").trim() || "last";
+    if (what === "draft" || what === "입력") return copyOut("입력창", expandPastes(state.input));
+    const inboxMatch = what.match(/^(?:in-)?(\d+)$/);
+    if (inboxMatch) {
+      const detail = await api(`/api/inbox/${inboxMatch[1]}`, null);
+      if (!detail) return note(`in-${inboxMatch[1]} 을 찾을 수 없다`, { sticky: true });
+      const reply = detail.replies[detail.replies.length - 1];
+      return copyOut(`in-${detail.id}`, `요청: ${detail.userRequest}\n\n답변: ${reply?.body || "(아직 없음)"}`);
+    }
+    const taskMatch = what.match(/^task-?(\d+)$/);
+    if (taskMatch) {
+      const task = await api(`/api/tasks/${taskMatch[1]}`, null);
+      if (!task) return note(`task #${taskMatch[1]} 을 찾을 수 없다`, { sticky: true });
+      return copyOut(`task #${task.id}`, task.pmResult || task.request);
+    }
+    if (what === "last" || what === "마지막") {
+      const answered = (state.data?.inbox || []).find((i) => i.finalReply);
+      if (!answered) return note("복사할 답변이 아직 없다", { sticky: true });
+      return copyOut(`in-${answered.id} 답변`, answered.finalReply);
+    }
+    return note("사용법: :copy [last | in-65 | task-389 | draft]", { sticky: true });
+  }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
     return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : "결정 대기 없음");
@@ -562,7 +624,7 @@ async function command(raw) {
     return note(word === "fold" ? `전체 접음 (${ids.length}건)` : `전체 폄 (${ids.length}건)`);
   }
   if (word === "help") {
-    return note(":dash   :agents   :inbox   :project <이름>|all   :blocked   :answer <id> <답변>   :fold [id|all|default]   :unfold   :cost   :q");
+    return note(":dash   :agents   :inbox   :project   :blocked   :answer <id> <답변>   :copy [last|in-N|draft]   :mouse 선택 복사   :fold   :unfold   :q");
   }
   return note(`unknown command: :${word} — :help 참고`, { sticky: true });
 }
