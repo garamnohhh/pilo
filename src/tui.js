@@ -208,7 +208,7 @@ function railRows(tree, width, actions = []) {
 
   if (!pms.length) {
     rows.push(`${c.faint}└─ Project agent 없음${c.reset}`);
-    rows.push(`${c.faint}   :dash 에서 PM 등록${c.reset}`);
+    rows.push(`${c.faint}   /dash 에서 PM 등록${c.reset}`);
     actions.push(null, null);
   }
   return rows;
@@ -515,7 +515,7 @@ async function command(parsed) {
   }
   if (word === "agents") {
     const tree = await api("/api/agents/tree", { pilo: null, pms: [] });
-    if (!tree.pilo) return note("등록된 agent가 없습니다. :dash agents 에서 등록하세요.");
+    if (!tree.pilo) return note("등록된 agent가 없습니다. /dash agents 에서 등록하세요.");
     const parts = [`${tree.pilo.name} ●`];
     for (const pm of tree.pms) parts.push(`${pm.name} ${pm.status} (${pm.children.map((w) => w.name).join(", ") || "worker 없음"})`);
     return note(parts.join(" │ "));
