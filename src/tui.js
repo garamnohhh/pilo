@@ -417,8 +417,9 @@ function render() {
         actions.push(null);
       }
     });
-    for (const note of state.notes.slice(-3)) {
-      const lines = wrap(note, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${c.muted}${x}${c.reset}`);
+    for (const item of liveNotes()) {
+      const tint = item.sticky ? c.red : c.muted;
+      const lines = wrap(item.text, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${tint}${x}${c.reset}`);
       feed.push(...lines, "");
       actions.push(...lines.map(() => null), null);
     }
@@ -478,8 +479,20 @@ function render() {
   );
 }
 
-function note(text) {
-  state.notes.push(text);
+// Command output is an answer to something the user just typed, not state: it
+// says its piece and gets out of the way. Failures stay until the next one.
+const NOTE_TTL = 8000;
+
+function note(text, { sticky = false } = {}) {
+  state.notes = state.notes.filter((n) => n.sticky !== true || sticky !== true);
+  state.notes.push({ text, at: Date.now(), sticky });
+  if (!sticky) setTimeout(render, NOTE_TTL + 50).unref?.();
+}
+
+function liveNotes() {
+  const now = Date.now();
+  state.notes = state.notes.filter((n) => n.sticky || now - n.at < NOTE_TTL);
+  return state.notes.slice(-2);
 }
 
 async function command(raw) {
@@ -517,7 +530,7 @@ async function command(raw) {
       return;
     }
     const hit = projects.find((p) => p.toLowerCase() === wanted.toLowerCase());
-    if (!hit) return note(`그런 프로젝트가 없다: ${wanted} (${projects.join(", ") || "등록된 프로젝트 없음"})`);
+    if (!hit) return note(`그런 프로젝트가 없다: ${wanted} (${projects.join(", ") || "등록된 프로젝트 없음"})`, { sticky: true });
     applyProject(hit);
     return;
   }
@@ -535,9 +548,9 @@ async function command(raw) {
         body: JSON.stringify({ body: text.join(" ") })
       });
       const data = await res.json();
-      return note(res.ok ? `#${id} 회신 저장 — agent 를 다시 깨웁니다` : `실패: ${data.error}`);
+      return note(res.ok ? `#${id} 회신 저장 — agent 를 다시 깨웁니다` : `실패: ${data.error}`, { sticky: !res.ok });
     } catch (err) {
-      return note(`실패: ${err.message}`);
+      return note(`실패: ${err.message}`, { sticky: true });
     }
   }
   if (word === "fold" || word === "unfold") {
@@ -549,7 +562,7 @@ async function command(raw) {
       return note(`기본값 복귀 — 최신 ${OPEN_BY_DEFAULT}건만 펼침`);
     }
     if (target && target !== "all") {
-      if (!ids.includes(target)) return note(`in-${target} 를 찾을 수 없다`);
+      if (!ids.includes(target)) return note(`in-${target} 를 찾을 수 없다`, { sticky: true });
       if (word === "fold") {
         state.folded.add(target);
         state.unfolded.delete(target);
@@ -571,7 +584,7 @@ async function command(raw) {
   if (word === "help") {
     return note(":dash   :agents   :inbox   :project <이름>|all   :blocked   :answer <id> <답변>   :fold [id|all|default]   :unfold   :cost   :q");
   }
-  return note(`unknown command: :${word} — :help 참고`);
+  return note(`unknown command: :${word} — :help 참고`, { sticky: true });
 }
 
 async function send(text) {
@@ -583,7 +596,7 @@ async function send(text) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    return note(`요청 저장 실패: ${err.error || res.status}`);
+    return note(`요청 저장 실패: ${err.error || res.status}`, { sticky: true });
   }
 }
 
