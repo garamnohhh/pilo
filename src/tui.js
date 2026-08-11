@@ -101,9 +101,25 @@ function wrap(text, width) {
   return out.length ? out : [""];
 }
 
+function elapsed(from, to) {
+  if (!from || !to) return "";
+  const ms = new Date(to) - new Date(from);
+  if (ms < 0) return "";
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${sec}s`;
+  const min = Math.floor(sec / 60);
+  return min < 60 ? `${min}m ${sec % 60}s` : `${Math.floor(min / 60)}h ${min % 60}m`;
+}
+
 function replyBlock(item, width) {
   const inner = Math.max(20, width - 4);
-  const rows = [`${c.line}╭─${c.reset} ${c.green}FINAL_REPLY${c.reset} ${c.faint}in-${item.id}${c.reset}`];
+  const who = item.routed || "pilo";
+  const took = elapsed(item.createdAt, item.repliedAt);
+  const right = took ? `in-${item.id} │ ${took}` : `in-${item.id}`;
+  const fill = Math.max(1, inner - cols(who) - cols(right) - 6);
+  const rows = [
+    `${c.line}╭─${c.reset} ${c.green}${who}${c.reset} ${c.line}${"─".repeat(fill)}${c.reset} ${c.faint}${right}${c.reset} ${c.line}─╮${c.reset}`
+  ];
   for (const part of wrap(item.finalReply, inner - 2)) rows.push(`${c.line}│${c.reset} ${c.fg}${part}${c.reset}`);
   rows.push(`${c.line}│${c.reset} ${c.faint}실행 로그 · 변경 파일 · 아티팩트는 /dash${c.reset}`);
   rows.push(`${c.line}╰${"─".repeat(inner)}${c.reset}`);
@@ -373,8 +389,10 @@ function render() {
   const screen = [""];
   const emit = (text) => screen.push(text);
 
-  const agentLabel = tree.pilo ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name}${c.reset}` : `${c.faint}● 대표 agent 없음${c.reset}`;
-  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.faint}${pretty(launchCwd)}${c.reset}`;
+  const agentLabel = tree.pilo
+    ? `${c.green}●${c.reset} ${c.muted}${tree.pilo.name} agent${c.reset}`
+    : `${c.faint}● 대표 agent 없음${c.reset}`;
+  const topLeft = `${c.bold}${c.strong}pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ${c.line}${launchCwd}${c.reset}`;
   const topRight = `${c.faint}/help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
@@ -730,7 +748,8 @@ process.stdin.on("data", (chunk) => {
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
 // Push the current title so it can be restored, then name the tab.
-process.stdout.write("\x1b[22;0t\x1b]0;pilo\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
+process.title = "pilo";
+process.stdout.write("\x1b[22;0t\x1b]1;pilo\x07\x1b]2;pilo\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
