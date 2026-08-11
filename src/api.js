@@ -9,8 +9,11 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
+  (SELECT t.blocked_question FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked'
+    ORDER BY t.updated_at DESC LIMIT 1) AS "blockedQuestion",
   CASE
     WHEN a.herdr_target = '' THEN 'unbound'
+    WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
     -- the desk agent holds no tasks of its own; it is busy while a request is open
     WHEN a.role = 'pilo' AND EXISTS (
@@ -485,10 +488,36 @@ export async function saveTaskResult(id, input) {
   const status = input.status || "done";
   await query(
     `UPDATE tasks SET pm_result = $2, status = $3, error = $4, tokens_in = $5, tokens_out = $6,
+       blocked_question = $7,
        done_at = CASE WHEN $3 IN ('done', 'failed') THEN now() ELSE done_at END, updated_at = now()
      WHERE id = $1`,
-    [id, input.pmResult || "", status, input.error || "", Number(input.tokensIn || 0), Number(input.tokensOut || 0)]
+    [
+      id, input.pmResult || "", status, input.error || "",
+      Number(input.tokensIn || 0), Number(input.tokensOut || 0),
+      status === "blocked" ? input.question || input.pmResult || "" : ""
+    ]
   );
+
+  if (status === "blocked") {
+    const info = await one(
+      `SELECT a.name AS agent, p.name AS project FROM tasks t
+         LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN projects p ON p.id = a.project_id
+       WHERE t.id = $1`,
+      [id]
+    );
+    await logEvent({
+      type: "task_blocked",
+      title: `${info?.agent || "agent"} 결정 대기 #${id}`,
+      taskId: id,
+      agentId: task.to_agent_id,
+      payload: { question: input.question || "", agent: info?.agent, project: info?.project }
+    });
+    await notifyRule(
+      "approval needed",
+      `Pilo · ${info?.project || info?.agent || "작업"} 결정 대기 #${id}`,
+      summarize(input.question || input.pmResult || "확인이 필요합니다", 110)
+    );
+  }
   for (const artifact of input.artifacts || []) {
     await query(
       "INSERT INTO artifacts (task_id, agent_id, path, delta, diff) VALUES ($1, $2, $3, $4, $5)",

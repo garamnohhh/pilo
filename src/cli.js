@@ -110,6 +110,7 @@ const USAGE = `pilo agent commands
   pilo reply <inboxId> <본문>   final_reply 저장 (사용자 화면에 뜨는 유일한 값)
   pilo task <id>                받은 작업 원문
   pilo done <taskId> <보고>     작업 결과 보고  [--in 토큰 --out 토큰 --status done|failed]
+  pilo block <taskId> <질문>    사용자 결정 대기로 표시 (spinner 대신 '결정 대기')
   pilo api <METHOD> <path> [json]        그 외 모든 엔드포인트`;
 
 const commands = {
@@ -170,6 +171,20 @@ const commands = {
       tokensOut: Number(opts.out || 0)
     });
     return out(`task #${res.id} ${res.status}`);
+  },
+
+  async block(args) {
+    const { rest, opts } = flags(args);
+    const [taskId, ...text] = rest;
+    if (!taskId || !text.length) throw new Error("usage: pilo block <taskId> <질문>");
+    const res = await call("POST", `/api/tasks/${taskId}/result`, {
+      pmResult: opts.note || text.join(" "),
+      question: text.join(" "),
+      status: "blocked",
+      tokensIn: Number(opts.in || 0),
+      tokensOut: Number(opts.out || 0)
+    });
+    return out(`task #${res.id} ${res.status} — 사용자 결정 대기`);
   },
 
   async api([method, path, body]) {
