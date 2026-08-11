@@ -12,9 +12,26 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   CASE
     WHEN a.herdr_target = '' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
+    -- the desk agent holds no tasks of its own; it is busy while a request is open
+    WHEN a.role = 'pilo' AND EXISTS (
+      SELECT 1 FROM inbox i
+      WHERE i.status IN ('queued', 'dispatched')
+        AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)
+    ) THEN 'running'
     WHEN (SELECT t.status FROM tasks t WHERE t.to_agent_id = a.id ORDER BY t.created_at DESC LIMIT 1) = 'failed' THEN 'failed'
     ELSE 'idle'
-  END AS status`;
+  END AS status,
+  CASE WHEN a.role = 'pilo' THEN (
+    SELECT CASE WHEN i.status = 'queued' THEN '요청 분해 in-' || i.id ELSE '결과 취합 in-' || i.id END
+      || COALESCE(' · ' || (
+           SELECT string_agg(DISTINCT p2.name, ', ') FROM tasks t2
+             JOIN agents a2 ON a2.id = t2.to_agent_id JOIN projects p2 ON p2.id = a2.project_id
+           WHERE t2.inbox_id = i.id), '')
+    FROM inbox i
+    WHERE i.status IN ('queued', 'dispatched')
+      AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)
+    ORDER BY i.created_at DESC LIMIT 1
+  ) END AS activity`;
 
 const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id WHERE a.archived_at IS NULL`;
 

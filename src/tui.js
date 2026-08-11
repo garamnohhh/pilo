@@ -151,43 +151,46 @@ function railRows(tree, width, actions = []) {
     return rows;
   }
 
-  // The name gets a line to itself; role, project and workload go on the next one.
-  // Cramming them onto one row is what turned every name into an ellipsis.
-  const entry = (indent, icon, name, meta, tag, tagColor, action = null) => {
-    rows.push(`${indent}${icon.color}${icon.icon}${c.reset} ${c.fg}${cut(name, width - indent.length - 2)}${c.reset}`);
+  // Two lines per agent: the name with its branch, then role and status underneath,
+  // with the branch bars carried down so the hierarchy stays visible.
+  const put = (branch, spine, icon, name, tag, tagColor, meta, action) => {
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${cut(name, width - cols(branch) - 2)}${c.reset}`);
     actions.push(action);
-    rows.push(`${indent}  ${tagColor}${tag}${c.reset} ${c.faint}${cut(meta, width - indent.length - tag.length - 3)}${c.reset}`);
+    rows.push(`${spine}${tagColor}${tag}${c.reset} ${c.faint}${cut(meta, width - cols(spine) - tag.length - 1)}${c.reset}`);
     actions.push(action);
   };
 
-  // clicking the desk agent clears the project filter
-  entry("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "전체 보기", "PILO", c.green, {
-    type: "project",
-    name: null
-  });
-  rows.push("");
-  actions.push(null);
+  const all = { type: "project", name: null };
+  put("", "  ", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", c.green,
+    tree.pilo.activity || "전체 보기", all);
 
-  if (!tree.pms.length) {
-    rows.push(`${c.faint}Project agent 없음${c.reset}`);
-    rows.push(`${c.faint}:dash 에서 PM 등록${c.reset}`);
-    actions.push(null, null);
-    return rows;
-  }
-
-  for (const pm of tree.pms) {
-    const load =
-      pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
-    // most PMs are named after their project; repeating it just eats the line
+  const bar = `${c.faint}│${c.reset}`;
+  const pms = tree.pms;
+  pms.forEach((pm, i) => {
+    const last = i === pms.length - 1;
+    const elbow = `${c.faint}${last ? "└─" : "├─"}${c.reset} `;
+    const spine = `${last ? " " : bar}    `;
+    const load = pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
     const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
     const filter = { type: "project", name: pm.projectName || pm.name };
-    const active = state.filter && state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
-    entry("", statusIcon(pm.status, state.spin), `${active}${pm.name}`, `${project}${load}`, "PM", c.blue, filter);
-    for (const w of pm.children) {
-      entry("  ", statusIcon(w.status, state.spin), w.name, w.specialty || w.status, "WORKER", c.muted, filter);
-    }
-    rows.push("");
+    const marker = state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
+    rows.push(`${bar}`);
     actions.push(null);
+    put(elbow, spine, statusIcon(pm.status, state.spin), `${marker}${pm.name}`, "PM", c.blue, `${project}${load}`, filter);
+
+    pm.children.forEach((w, k) => {
+      const lastChild = k === pm.children.length - 1;
+      const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
+      const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
+      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted,
+        w.specialty || w.status, filter);
+    });
+  });
+
+  if (!pms.length) {
+    rows.push(`${c.faint}└─ Project agent 없음${c.reset}`);
+    rows.push(`${c.faint}   :dash 에서 PM 등록${c.reset}`);
+    actions.push(null, null);
   }
   return rows;
 }
