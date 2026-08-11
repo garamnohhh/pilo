@@ -1,10 +1,9 @@
 // Pure editing model for the prompt: text plus a cursor offset. Keeping it out of
 // the render loop makes it testable without a terminal.
 import { isNewline, isSend, isPrintable } from "./keys.js";
+import { wide, cols } from "./width.js";
 
-// Hangul and CJK occupy two terminal columns.
-export const wide = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦]/;
-export const cols = (s) => [...String(s).replace(/\x1b\[[0-9;]*m/g, "")].reduce((n, ch) => n + (wide.test(ch) ? 2 : 1), 0);
+export { wide, cols } from "./width.js";
 
 // The prompt wraps long lines, so a "line" on screen is not a line in the string.
 // Vertical motion has to follow what is drawn, which means both share this layout.

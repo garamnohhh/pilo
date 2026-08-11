@@ -81,7 +81,15 @@ const routes = [
   ["PUT", /^\/api\/settings\/([a-z]+)$/, (m, body) => api.saveSetting(m[1], body.value)]
 ];
 
+// Two modules the dashboard imports directly; everything else under src stays put.
+const SHARED_MODULES = new Set(["/markdown.js", "/width.js"]);
+
 async function serveStatic(res, pathname, headOnly = false) {
+  if (SHARED_MODULES.has(pathname)) {
+    res.writeHead(200, { "content-type": types[".js"], "cache-control": "no-store" });
+    res.end(headOnly ? undefined : await readFile(join(root, "src", pathname.slice(1))));
+    return;
+  }
   let path = pathname === "/" || pathname === "/dashboard" ? "/dashboard.html" : pathname;
   path = normalize(path).replace(/^(\.\.[/\\])+/, "");
   const file = join(publicDir, path);

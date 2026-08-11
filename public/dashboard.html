@@ -128,6 +128,10 @@
   .note { margin-top: 14px; padding: 11px 13px; border-radius: 8px; border: 1px dashed #232927; font: 10px/1.8 var(--mono); color: #5f6b64 }
   .fail { padding: 18px; border: 1px solid oklch(0.40 0.10 25 / .35); border-radius: 11px; background: oklch(0.26 0.05 25 / .14) }
   .fail .item { margin-top: 12px; padding: 12px; border-radius: 9px; background: #0b0d0c; border: 1px solid #1e2422 }
+  table.md { border-collapse: collapse; margin: 8px 0; font: 11px var(--mono); width: 100%; display: block; overflow-x: auto }
+  table.md th, table.md td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; white-space: nowrap }
+  table.md th { background: var(--panel2); color: var(--text); font-weight: 500 }
+  table.md td { color: #b9c3bc }
   .toast { position: fixed; right: 20px; bottom: 20px; padding: 11px 15px; border-radius: 9px; border: 1px solid var(--line2); background: #101413; font: 12px var(--mono); color: var(--text); opacity: 0; transition: opacity .18s; pointer-events: none }
   .toast.show { opacity: 1 }
   .toast.bad { border-color: #3a2a28; color: #f0c2b8 }
@@ -166,6 +170,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
+import { tablesToHtml } from "/markdown.js";
 const TABS = [
   ["overview", "Overview", "agent 상태 · 최근 task · 런타임"],
   ["agents", "Agents", "role 조직도와 agent 등록"],
@@ -194,6 +199,8 @@ function emptyForm() {
 }
 
 const $ = (id) => document.getElementById(id);
+// Agent prose often carries markdown tables; show them as tables.
+const prose = (text) => tablesToHtml(text, esc) ?? esc(text);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const time = (v) => (v ? new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const stamp = (v) => (v ? new Date(v).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
@@ -632,7 +639,7 @@ function inboxDetail(detail) {
         <span class="mono" style="font-size:10px;color:var(--faint)">${stamp(detail.createdAt)}</span>
         <span class="mono" style="margin-left:auto;font-size:10px;color:var(--faint)">task ${detail.tasks.length}건</span>
       </div>
-      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${esc(detail.userRequest)}</div>
+      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(detail.userRequest)}</div>
     </div>
 
     ${reply ? `<div class="card" style="border-color:#24312c;background:linear-gradient(180deg,#101413,#0b0e0d)">
@@ -640,7 +647,7 @@ function inboxDetail(detail) {
         <span class="role pilo">최종 답변</span>
         <span class="mono" style="font-size:10px;color:var(--faint)">${esc(reply.agent || "pilo")} · ${ago(reply.createdAt)}</span>
       </div>
-      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${esc(reply.body)}</div>
+      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(reply.body)}</div>
     </div>` : `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`}
 
     <div class="card">
@@ -654,7 +661,7 @@ function inboxDetail(detail) {
           <span style="flex:none;width:62px;font:10px var(--mono);color:${meta.color}">${esc(meta.label)}</span>
           <div style="flex:1;min-width:0">
             <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.who)} · ${ago(t.at)}</div>
-            <div class="body ${long && !open ? "short" : ""}" style="margin-top:5px">${esc(open || !long ? t.text : summarize(t.text, 220))}</div>
+            <div class="body ${long && !open ? "short" : ""}" style="margin-top:5px">${open || !long ? prose(t.text) : esc(summarize(t.text, 220))}</div>
             ${long ? `<button class="btn small" style="margin-top:8px" data-act="toggle-trace" data-key="${key}">${open ? "접기" : "전체 보기"}</button>` : ""}
           </div>
         </div>`;
