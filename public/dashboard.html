@@ -197,7 +197,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const time = (v) => (v ? new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const stamp = (v) => (v ? new Date(v).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
-const stateColor = (s) => ({ failed: "var(--red)", down: "var(--red)", running: "var(--amber)", degraded: "var(--amber)", queued: "var(--faint)", archived: "var(--faint)" }[s] || "var(--green)");
+const stateColor = (s) => ({ failed: "var(--red)", down: "var(--red)", running: "var(--amber)", degraded: "var(--amber)", blocked: "var(--blue)", queued: "var(--faint)", archived: "var(--faint)", unbound: "var(--faint)" }[s] || "var(--green)");
 
 let toastTimer;
 function toast(message, bad = false) {
@@ -443,7 +443,7 @@ function pmNode(pm) {
     <div class="node">
       <span class="dot" style="background:${stateColor(pm.status)}"></span>
       <span class="name">${esc(pm.name)}</span><span class="role pm">PM</span>
-      <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.runtime || "미감지")}</span>
+      <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.status === "blocked" ? "결정 대기" : pm.runtime || "미감지")}</span>
       <span class="meta">${esc(pm.aliases || "")}</span>
       <span class="acts">
         <button class="btn small" data-act="rules" data-id="${pm.id}">rules</button>

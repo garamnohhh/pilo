@@ -177,7 +177,14 @@ function railRows(tree, width, actions = []) {
     const last = i === pms.length - 1;
     const elbow = `${c.faint}${last ? "└─" : "├─"}${c.reset} `;
     const spine = `${last ? " " : bar}    `;
-    const load = pm.status === "running" ? `작업 ${pm.openTasks}건` : pm.status === "unbound" ? "세션 미연결" : pm.status;
+    const load =
+      pm.status === "blocked"
+        ? `결정 대기 · ${pm.blockedQuestion || "확인 필요"}`
+        : pm.status === "running"
+          ? `작업 ${pm.openTasks}건`
+          : pm.status === "unbound"
+            ? "세션 미연결"
+            : pm.status;
     const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
     const filter = { type: "project", name: pm.projectName || pm.name };
     const marker = state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
@@ -189,8 +196,8 @@ function railRows(tree, width, actions = []) {
       const lastChild = k === pm.children.length - 1;
       const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
       const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
-      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted,
-        w.specialty || w.status, filter);
+      const wLoad = w.status === "blocked" ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}` : w.specialty || w.status;
+      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter);
     });
   });
 
@@ -324,6 +331,8 @@ function layoutDraft(input, width) {
 
 function statusIcon(status, spin) {
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
+  // waiting on a person, not on work: a spinner here would be a lie
+  if (status === "blocked") return { icon: "◆", color: c.blue };
   if (status === "failed") return { icon: "✕", color: c.red };
   if (status === "unbound") return { icon: "○", color: c.faint };
   if (status === "queued") return { icon: "◍", color: c.faint };
