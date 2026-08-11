@@ -476,18 +476,24 @@ function render() {
   // A dotted box pinned to the bottom of the rail, inside the same slots the feed
   // uses, so no coordinate anywhere else moves.
   const draft = layoutDraft(state.input, draftWidth());
+  // header rows: blank, title, rule, status, rule
+  const HEAD_ROWS = 5;
+  const filler = Math.max(0, height - HEAD_ROWS - visible - 3 - draft.length - 1);
   if (railWidth) {
     const label = "register agent - /dash agents";
     const inner = Math.max(cols(label) + 2, railWidth - 2);
+    const room = inner - 2;
+    const left = Math.max(0, Math.floor((room - cols(label)) / 2));
+    const centred = " ".repeat(left) + label;
     const box = [
       `${c.line}╭${"─".repeat(inner)}╮${c.reset}`,
-      `${c.line}│${c.reset} ${c.muted}${pad(cut(label, inner - 2), inner - 2)}${c.reset} ${c.line}│${c.reset}`,
+      `${c.line}│${c.reset} ${c.muted}${pad(cut(centred, room), room)}${c.reset} ${c.line}│${c.reset}`,
       `${c.line}╰${"─".repeat(inner)}╯${c.reset}`
     ];
     const open = { type: "dash", tab: "agents" };
-    // The rail column keeps drawing past the feed, so the box sits on the last
-    // rows of the screen rather than inside the feed area.
-    const slots = visible + 3 + draft.length;
+    // The rail column keeps drawing to the bottom padding, so the box sits on the
+    // last rows of the screen rather than inside the feed area.
+    const slots = visible + 3 + draft.length + filler;
     if (rail.length <= slots - box.length) {
       while (rail.length < slots - box.length) {
         rail.push("");
@@ -551,6 +557,9 @@ function render() {
       cursorCol = marginX + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
     }
   });
+
+  // Keep the divider going to the bottom, one row of padding left over.
+  for (let i = 0; i < filler; i++) emit(pre + withRail(""));
 
   // One write per frame: home, each row cleared to end of line, then clear the
   // rest. Clearing the whole screen first is what made the display blink.
