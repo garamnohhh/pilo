@@ -1,7 +1,7 @@
 // Pure editing model for the prompt: text plus a cursor offset. Keeping it out of
 // the render loop makes it testable without a terminal.
 import { isNewline, isSend, isPrintable } from "./keys.js";
-import { wide, cols } from "./width.js";
+import { charWidth, cols } from "./width.js";
 
 export { wide, cols } from "./width.js";
 
@@ -15,7 +15,7 @@ export function layoutDraft(input, width) {
     let used = 0;
     let chunk = "";
     for (const ch of line) {
-      const w = wide.test(ch) ? 2 : 1;
+      const w = charWidth(ch);
       if (used + w > width) {
         rows.push({ text: chunk, start: index + start });
         start += chunk.length;
@@ -45,7 +45,7 @@ export function rowAt(rows, cursor) {
 function indexAtColumn(row, column) {
   let used = 0;
   for (let i = 0; i < row.text.length; i++) {
-    const w = wide.test(row.text[i]) ? 2 : 1;
+    const w = charWidth(row.text[i]);
     if (used + w > column) return row.start + i;
     used += w;
   }

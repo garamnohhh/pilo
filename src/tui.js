@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
+import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { parseCommand, HELP } from "./commands.js";
 import { alignTables } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
@@ -52,17 +53,16 @@ const state = {
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const strip = (s) => s.replace(/\x1b\[[0-9;]*m/g, "");
-// Hangul and CJK take two terminal columns, so measure in columns, not characters.
-const wide = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦]/;
-const cols = (s) => [...strip(s)].reduce((n, ch) => n + (wide.test(ch) ? 2 : 1), 0);
 const pad = (s, n) => s + " ".repeat(Math.max(0, n - cols(s)));
 function cut(s, n) {
   if (cols(s) <= n) return s;
   let out = "";
   let used = 0;
+  // the ellipsis is itself ambiguous, so reserve whatever it will really cost
+  const tail = charWidth("…");
   for (const ch of strip(s)) {
-    const w = wide.test(ch) ? 2 : 1;
-    if (used + w > n - 1) break;
+    const w = charWidth(ch);
+    if (used + w > n - tail) break;
     out += ch;
     used += w;
   }
@@ -773,16 +773,32 @@ if (!process.stdin.isTTY) {
   process.exit(0);
 }
 
+// Arrows, curly quotes and box drawing are East Asian Ambiguous: one column in
+// most terminals, two in the ones configured for CJK. Guessing wrong tilts every
+// row that carries one, so print a → on a scratch line and ask where the cursor
+// landed. Terminals that stay silent keep the one-column default.
+function probeAmbiguous() {
+  return new Promise((resolve) => {
+    const done = (n) => {
+      clearTimeout(timer);
+      process.stdin.off("data", onData);
+      if (n) setAmbiguousWidth(n);
+      resolve();
+    };
+    const onData = (chunk) => {
+      const hit = /\x1b\[\d+;(\d+)R/.exec(String(chunk));
+      if (hit) done(Number(hit[1]) - 1);
+    };
+    const timer = setTimeout(() => done(0), 200);
+    process.stdin.on("data", onData);
+    process.stdout.write("\x1b[H\x1b[2K→\x1b[6n");
+  });
+}
+
 // Keys go through a filtered stream so mouse reports never reach readline.
 const keys = new PassThrough();
 readline.emitKeypressEvents(keys);
 process.stdin.setRawMode(true);
-process.stdin.on("data", (chunk) => {
-  const { wheel, clicks, rest } = parseMouse(chunk);
-  if (wheel) scrollBy(wheel * 3);
-  for (const click of clicks) handleClick(click);
-  if (rest.length) keys.write(rest);
-});
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
 // Push the current title so it can be restored, then name the tab.
@@ -790,6 +806,15 @@ process.stdin.on("data", (chunk) => {
 // Clear the title and let the process name alone name the tab.
 process.title = "Pilo";
 process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
+
+// The probe reads its own reply, so it runs before the key stream is wired up.
+await probeAmbiguous();
+process.stdin.on("data", (chunk) => {
+  const { wheel, clicks, rest } = parseMouse(chunk);
+  if (wheel) scrollBy(wheel * 3);
+  for (const click of clicks) handleClick(click);
+  if (rest.length) keys.write(rest);
+});
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
