@@ -69,6 +69,7 @@ const routes = [
   ["GET", /^\/api\/tasks\/(\d+)$/, (m) => api.taskDetail(Number(m[1]))],
   ["POST", /^\/api\/tasks\/(\d+)\/answer$/, (m, body) => api.answerTask(Number(m[1]), body.body || body.answer || "")],
   ["GET", /^\/api\/blocked$/, () => api.blockedTasks()],
+  ["POST", /^\/api\/tasks\/(\d+)\/progress$/, (m, body) => api.noteProgress(Number(m[1]), body.text || body.progress || "")],
   ["POST", /^\/api\/tasks\/(\d+)\/result$/, (m, body) => api.saveTaskResult(Number(m[1]), body)],
 
   ["GET", /^\/api\/events$/, () => api.listEvents()],

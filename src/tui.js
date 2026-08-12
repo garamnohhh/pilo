@@ -146,12 +146,17 @@ function replyBlock(item, width) {
 
 function waitingBlock(item, width) {
   const box = Math.max(24, width - 2);
+  // The agent's own progress note when there is one; it is not the answer, so it
+  // stays in the waiting card and never reaches the reply slot.
+  const body = item.progress
+    ? wrap(`${SPINNER[state.spin % SPINNER.length]} ${item.progress}`, box - 4)
+    : [item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중"];
   return cardBlock({
     box,
     title: item.routed || "배분 대기",
     titleColor: c.amber,
-    right: `in-${item.id}`,
-    body: [item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중"],
+    right: item.progressBy && item.progressBy !== item.routed ? `${item.progressBy} · in-${item.id}` : `in-${item.id}`,
+    body,
     footer: "",
     glyphs: ["╭", "╮", "╰", "╯", "┈", "┊"]
   });
@@ -224,7 +229,7 @@ function railRows(tree, width, actions = []) {
       pm.status === "blocked"
         ? `결정 대기 · ${pm.blockedQuestion || "확인 필요"}`
         : pm.status === "running"
-          ? `작업 ${pm.openTasks}건`
+          ? pm.progress || `작업 ${pm.openTasks}건`
           : pm.status === "unbound"
             ? "세션 미연결"
             : pm.status;
@@ -242,7 +247,10 @@ function railRows(tree, width, actions = []) {
       const lastChild = k === pm.children.length - 1;
       const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
       const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
-      const wLoad = w.status === "blocked" ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}` : w.specialty || w.status;
+      const wLoad =
+        w.status === "blocked"
+          ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}`
+          : (w.status === "running" && w.progress) || w.specialty || w.status;
       put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter, picked);
     });
   });

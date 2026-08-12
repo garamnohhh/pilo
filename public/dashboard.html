@@ -322,7 +322,10 @@ views.overview = () => {
         <div class="row head" style="grid-template-columns:74px 1fr 140px 84px 74px"><span>time</span><span>task</span><span>agent</span><span>status</span><span>tokens</span></div>
         ${tasks.length ? tasks.map((t) => `<div class="row" style="grid-template-columns:74px 1fr 140px 84px 74px">
           <span class="mono" style="font-size:11px;color:#5f6b64">${time(t.createdAt)}</span>
-          <span style="color:var(--text);padding-right:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title || t.request || "(untitled)")}</span>
+          <span style="color:var(--text);padding-right:16px;overflow:hidden;min-width:0">
+            <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title || t.request || "(untitled)")}</span>
+            ${t.progress ? `<span style="display:block;margin-top:3px;font:11px var(--mono);color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">진행 · ${esc(t.progress)}</span>` : ""}
+          </span>
           <span class="mono" style="font-size:11px">${esc(t.agent || "—")}</span>
           <span class="mono" style="font-size:11px;color:${stateColor(t.status)}">${esc(t.status)}</span>
           <span class="mono" style="font-size:11px">${fmtTokens(Number(t.tokensIn) + Number(t.tokensOut))}</span>
@@ -650,6 +653,17 @@ function inboxDetail(detail) {
       <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(reply.body)}</div>
     </div>` : `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`}
 
+    ${detail.tasks.some((t) => t.progress) ? `<div class="card">
+      <div class="label" style="margin-bottom:8px">진행 상황</div>
+      ${detail.tasks.filter((t) => t.progress).map((t) => `<div class="step">
+        <span style="flex:none;width:62px;font:10px var(--mono);color:var(--amber)">진행</span>
+        <div style="flex:1;min-width:0">
+          <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.agent || "agent")} · task #${esc(t.id)} · ${ago(t.progressAt)}</div>
+          <div class="body" style="margin-top:5px">${prose(t.progress)}</div>
+        </div>
+      </div>`).join("")}
+    </div>` : ""}
+
     <div class="card">
       <div class="label" style="margin-bottom:4px">처리 경로</div>
       ${steps.length ? steps.map((t, i) => {
@@ -675,7 +689,7 @@ views.events = () => {
   if (!list.length) return `<div class="table"><div class="empty">기록된 event가 없습니다.</div></div>`;
   const current = state.selected.event || list[0].id;
   const d = state.data.eventDetail;
-  const typeColor = (t) => ({ pm_result: "var(--blue)", final_reply: "var(--green)", wake_failed: "var(--red)" }[t] || "var(--faint)");
+  const typeColor = (t) => ({ pm_result: "var(--blue)", final_reply: "var(--green)", wake_failed: "var(--red)", task_progress: "var(--amber)" }[t] || "var(--faint)");
   return `<div class="split" style="grid-template-columns:300px 1fr">
     <div class="table">${list.map((e) => `<button class="list-item ${String(e.id) === String(current) ? "on" : ""}" data-act="open-event" data-id="${e.id}">
       <span style="display:flex;gap:8px;font:11px var(--mono)"><span style="color:${typeColor(e.type)}">${esc(e.type)}</span>
