@@ -23,7 +23,15 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
       WHERE i.status IN ('queued', 'dispatched')
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)
     ) THEN 'running'
-    WHEN (SELECT t.status FROM tasks t WHERE t.to_agent_id = a.id ORDER BY t.created_at DESC LIMIT 1) = 'failed' THEN 'failed'
+    -- failed means "still needs you": a recent failure whose request never got
+    -- an answer. The same rule the overview counts by, so the tree and the
+    -- status bar cannot disagree. Older failures are history, not a state.
+    WHEN EXISTS (
+      SELECT 1 FROM tasks t
+      WHERE t.to_agent_id = a.id AND t.status = 'failed'
+        AND t.created_at > now() - interval '24 hours'
+        AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = t.inbox_id)
+    ) THEN 'failed'
     ELSE 'idle'
   END AS status,
   CASE WHEN a.role = 'pilo' THEN (

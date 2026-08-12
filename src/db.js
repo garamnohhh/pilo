@@ -2,11 +2,11 @@ import { readFile, readdir } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { databaseUrl } from "./paths.js";
 
 export const root = normalize(join(fileURLToPath(import.meta.url), "../.."));
 
-const connectionString =
-  process.env.PILO_DATABASE_URL || "postgres://pilo:pilo@127.0.0.1:15432/pilo";
+const connectionString = databaseUrl();
 
 export const pool = new pg.Pool({ connectionString, max: 8 });
 
