@@ -421,10 +421,13 @@ export async function listInbox(limit = 50) {
         WHERE t.inbox_id = i.id) AS project,
        (SELECT body FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "finalReply",
        (SELECT f.created_at FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "repliedAt",
+       -- only while the work is open: a note left by a task that has since
+       -- finished is history, not what is happening now
        (SELECT t.progress FROM tasks t WHERE t.inbox_id = i.id AND t.progress <> ''
-          ORDER BY t.progress_at DESC LIMIT 1) AS progress,
+          AND t.status IN ('queued', 'running') ORDER BY t.progress_at DESC LIMIT 1) AS progress,
        (SELECT a.name FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
-        WHERE t.inbox_id = i.id AND t.progress <> '' ORDER BY t.progress_at DESC LIMIT 1) AS "progressBy"
+        WHERE t.inbox_id = i.id AND t.progress <> '' AND t.status IN ('queued', 'running')
+        ORDER BY t.progress_at DESC LIMIT 1) AS "progressBy"
      FROM inbox i ORDER BY i.created_at DESC LIMIT $1`,
     [limit]
   );
