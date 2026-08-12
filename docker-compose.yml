@@ -5,7 +5,9 @@ services:
     environment:
       POSTGRES_DB: pilo
       POSTGRES_USER: pilo
-      POSTGRES_PASSWORD: pilo
+      # Local container on 127.0.0.1 only. Set PILO_DB_PASSWORD (and the matching
+      # PILO_DATABASE_URL) before the first 'pilo up' to use your own.
+      POSTGRES_PASSWORD: ${PILO_DB_PASSWORD:-pilo}
     ports:
       - "15432:5432"
     volumes:

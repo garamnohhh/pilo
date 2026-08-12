@@ -35,6 +35,16 @@ Agent sessions live in [herdr](https://github.com/) — Pilo detects them with `
 
 State lives in `~/.pilo/` (`config.toml`, `port`, `logs/`).
 
+The database is a container bound to `127.0.0.1:15432` with the development
+credentials `pilo:pilo`. To use your own, set both before the very first
+`pilo up` — PostgreSQL only applies the password when it initialises its
+volume:
+
+```bash
+export PILO_DB_PASSWORD='…'
+export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
+```
+
 ## Design Contract
 
 The dashboard and TUI must match `design/Pilo.dc.html`.
