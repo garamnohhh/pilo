@@ -1,6 +1,17 @@
 node_modules/
+
+# secrets and anything derived from the machine this runs on
 .env
 .env.*
 .pilo.pid
 pilo.log
+*.log
+
+# editor and OS droppings
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
 .playwright-mcp/
