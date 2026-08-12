@@ -162,12 +162,25 @@ function waitingBlock(item, width) {
   });
 }
 
-// The project a request landed in, or the agents holding it. Nothing at all
-// until it has been handed out — an unrouted request looks as it always did.
-function routedBadge(item) {
+// The project a request landed in, or the agents holding it. A request that was
+// never handed out is the desk agent's own work, so it says PILO. The colour is
+// the one the tree gives that role, so the two read as the same thing.
+function routedBadge(item, tree) {
   const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
-  if (!parts.length) return "";
-  return `[${parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ")}]`;
+  if (!parts.length) return { text: "[PILO]", color: c.green };
+  const text = `[${parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ")}]`;
+  return { text, color: badgeColor(parts, tree) };
+}
+
+// Match on the agent names a request was routed to, and on the project names
+// they answer for — the badge shows whichever the request carries.
+function badgeColor(parts, tree) {
+  const pms = tree?.pms || [];
+  const workers = pms.flatMap((pm) => pm.children || []);
+  const owns = (agents) => agents.some((a) => parts.includes(a.name) || parts.includes(a.projectName));
+  if (owns(pms)) return c.blue;
+  if (owns(workers)) return c.muted;
+  return c.blue;
 }
 
 function setupScreen(setup, width) {
@@ -293,8 +306,8 @@ function applyProject(name) {
 function handleClick({ x, y }) {
   const hit = state.hits.get(y);
   if (!hit) return;
-  const { marginX, mainWidth } = paneWidths();
-  const action = x > marginX + mainWidth + 1 ? hit.rail : hit.main;
+  const { marginX, railWidth } = paneWidths();
+  const action = railWidth && x <= marginX + railWidth ? hit.rail : hit.main;
   if (!action) return;
   if (action.type === "dash") {
     spawn("open", [`${dashboardUrl}#${action.tab}`], { detached: true, stdio: "ignore" }).unref();
@@ -481,14 +494,14 @@ function render() {
       // Once a request has been handed out, the question wears the name of
       // whoever holds it. The badge takes its columns from the text so nothing
       // spills past the rail.
-      const badge = routedBadge(item);
-      const textWidth = mainWidth - 6 - (badge ? cols(badge) + 1 : 0);
+      const badge = routedBadge(item, tree);
+      const textWidth = mainWidth - 6 - (cols(badge.text) + 1);
       const lines = wrap(alignTables(item.userRequest, textWidth), textWidth);
       const shownLines = folded ? lines.slice(0, 2) : lines;
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : c.green + "❯" + c.reset;
-        const tag = badge ? `${i ? " ".repeat(cols(badge)) : `${c.blue}${badge}${c.reset}`} ` : "";
-        return `  ${mark} ${tag}${c.fg}${x}${c.reset}`;
+        const tag = i ? " ".repeat(cols(badge.text)) : `${badge.color}${badge.text}${c.reset}`;
+        return `  ${mark} ${tag} ${c.fg}${x}${c.reset}`;
       });
       if (folded && lines.length > shownLines.length) {
         question[question.length - 1] += `${c.faint} …${c.reset}`;
@@ -575,9 +588,11 @@ function render() {
   const first = Math.max(0, bottom - visible);
   state.hits = new Map();
   for (let i = 0; i < visible; i++) {
-    const left = pad(cut(shown[i] || "", mainWidth), mainWidth);
-    if (!railWidth) emit(pre + left);
-    else emit(pre + `${left} ${c.line}│${c.reset} ${cut(rail[i] || "", railWidth)}`);
+    // The tree goes first and the answer text last. Anything the width model
+    // misjudges then only moves the tail of its own row, where nothing lines up
+    // against anything — the rail and its divider are past caring by then.
+    if (!railWidth) emit(pre + cut(shown[i] || "", mainWidth));
+    else emit(pre + `${pad(cut(rail[i] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(shown[i] || "", mainWidth)}`);
     // screen[0] is a blank line, so the terminal row is index + 1
     state.hits.set(screen.length, { main: rowActions[first + i] || null, rail: railActions[i] || null });
   }
@@ -589,7 +604,7 @@ function render() {
   const withRail = (text) => {
     if (!railWidth) return text;
     const action = railActions[railTail] || null;
-    const row = `${pad(cut(text, mainWidth), mainWidth)} ${c.line}│${c.reset} ${cut(rail[railTail] || "", railWidth)}`;
+    const row = `${pad(cut(rail[railTail] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(text, mainWidth)}`;
     railTail += 1;
     state.hits.set(screen.length + 1, { main: null, rail: action });
     return row;
@@ -601,14 +616,15 @@ function render() {
   emit(pre + withRail(`${c.line}│${c.reset} ${c.faint}${pad(cut(hint, boxWidth - 4), boxWidth - 4)}${c.reset} ${c.line}│${c.reset}`));
   emit(pre + withRail(`${c.line}╰${"─".repeat(Math.max(2, boxWidth - 2))}╯${c.reset}`));
 
+  const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
   let cursorRow = screen.length + 1;
-  let cursorCol = marginX + 3;
+  let cursorCol = mainLeft + 3;
   draft.forEach((row, i) => {
     emit(pre + withRail(`${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
       cursorRow = screen.length;
-      cursorCol = marginX + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
+      cursorCol = mainLeft + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
     }
   });
 
@@ -803,20 +819,29 @@ if (!process.stdin.isTTY) {
 // row that carries one, so print a → on a scratch line and ask where the cursor
 // landed. Terminals that stay silent keep the one-column default.
 function probeAmbiguous() {
+  const forced = Number(process.env.PILO_AMBIGUOUS_WIDTH || 0);
+  if (forced) {
+    setAmbiguousWidth(forced, forced);
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
-    const done = (n) => {
+    let seen = [];
+    const done = () => {
       clearTimeout(timer);
       process.stdin.off("data", onData);
-      if (n) setAmbiguousWidth(n);
+      // Two answers, in the order the glyphs were printed: the arrow stands for
+      // ambiguous text, the rule for the box drawing the layout is made of.
+      if (seen.length >= 2) setAmbiguousWidth(seen[0] - 1, seen[1] - seen[0]);
+      process.stdout.write("\x1b[H\x1b[2K");
       resolve();
     };
     const onData = (chunk) => {
-      const hit = /\x1b\[\d+;(\d+)R/.exec(String(chunk));
-      if (hit) done(Number(hit[1]) - 1);
+      for (const hit of String(chunk).matchAll(/\x1b\[\d+;(\d+)R/g)) seen.push(Number(hit[1]));
+      if (seen.length >= 2) done();
     };
-    const timer = setTimeout(() => done(0), 200);
+    const timer = setTimeout(done, 200);
     process.stdin.on("data", onData);
-    process.stdout.write("\x1b[H\x1b[2K→\x1b[6n");
+    process.stdout.write("\x1b[H\x1b[2K→\x1b[6n─\x1b[6n");
   });
 }
 
