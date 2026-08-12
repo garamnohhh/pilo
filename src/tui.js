@@ -198,13 +198,13 @@ function railRows(tree, width, actions = []) {
   // Two lines per agent: the name with its branch, then role and status underneath,
   // with the branch bars carried down so the hierarchy stays visible.
   // name on the left, role badge flush right, a faint rule filling the gap
-  const put = (branch, spine, icon, name, tag, tagColor, meta, action) => {
+  const put = (branch, spine, icon, name, tag, tagColor, meta, action, nameColor = c.fg) => {
     const badge = `[${tag}]`;
     const room = width - cols(branch) - 2 - badge.length - 2;
     const label = cut(name, Math.max(6, room));
     const fill = width - cols(branch) - 2 - cols(label) - badge.length - 2;
     const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${c.fg}${label}${c.reset}${rule}${tagColor}${badge}${c.reset}`);
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}${rule}${tagColor}${badge}${c.reset}`);
     actions.push(action);
     rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
     actions.push(action);
@@ -230,17 +230,20 @@ function railRows(tree, width, actions = []) {
             : pm.status;
     const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
     const filter = { type: "project", name: pm.projectName || pm.name };
-    const marker = state.filter === filter.name ? `${c.green}◂${c.reset} ` : "";
+    // The selection used to be a ◂ in front of the name. It is an East Asian
+    // Ambiguous glyph, so terminals that draw those double-width knocked that
+    // one row out of line. Colour costs no columns.
+    const picked = state.filter === filter.name ? c.green : c.fg;
     rows.push(`${bar}`);
     actions.push(null);
-    put(elbow, spine, statusIcon(pm.status, state.spin), `${marker}${pm.name}`, "PM", c.blue, `${project}${load}`, filter);
+    put(elbow, spine, statusIcon(pm.status, state.spin), pm.name, "PM", c.blue, `${project}${load}`, filter, picked);
 
     pm.children.forEach((w, k) => {
       const lastChild = k === pm.children.length - 1;
       const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
       const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
       const wLoad = w.status === "blocked" ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}` : w.specialty || w.status;
-      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter);
+      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter, picked);
     });
   });
 
@@ -490,6 +493,7 @@ function render() {
     }
     if (feed.length <= (state.filter ? 2 : 0)) {
       feed.push(`  ${c.faint}${state.filter ? state.filter + " 프로젝트 요청 없음" : "아래 프롬프트에 지시를 입력하세요."} ${c.reset}`);
+      actions.push(null);
     }
     rows = feed;
     rowActions = actions;
