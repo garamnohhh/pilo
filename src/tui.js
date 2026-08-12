@@ -162,6 +162,14 @@ function waitingBlock(item, width) {
   });
 }
 
+// The project a request landed in, or the agents holding it. Nothing at all
+// until it has been handed out — an unrouted request looks as it always did.
+function routedBadge(item) {
+  const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
+  if (!parts.length) return "";
+  return `[${parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ")}]`;
+}
+
 function setupScreen(setup, width) {
   const rows = [];
   rows.push(`${c.amber}●${c.reset} ${c.strong}setup required${c.reset}`);
@@ -470,9 +478,18 @@ function render() {
       // folding hides the answer; the question keeps its green prompt mark and,
       // when folded, its first two lines
       // questions carry tables too, and the raw pipes are just as unreadable there
-      const lines = wrap(alignTables(item.userRequest, mainWidth - 6), mainWidth - 6);
+      // Once a request has been handed out, the question wears the name of
+      // whoever holds it. The badge takes its columns from the text so nothing
+      // spills past the rail.
+      const badge = routedBadge(item);
+      const textWidth = mainWidth - 6 - (badge ? cols(badge) + 1 : 0);
+      const lines = wrap(alignTables(item.userRequest, textWidth), textWidth);
       const shownLines = folded ? lines.slice(0, 2) : lines;
-      const question = shownLines.map((x, i) => `  ${i ? " " : c.green + "❯" + c.reset} ${c.fg}${x}${c.reset}`);
+      const question = shownLines.map((x, i) => {
+        const mark = i ? " " : c.green + "❯" + c.reset;
+        const tag = badge ? `${i ? " ".repeat(cols(badge)) : `${c.blue}${badge}${c.reset}`} ` : "";
+        return `  ${mark} ${tag}${c.fg}${x}${c.reset}`;
+      });
       if (folded && lines.length > shownLines.length) {
         question[question.length - 1] += `${c.faint} …${c.reset}`;
       }
