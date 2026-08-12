@@ -11,6 +11,8 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
   (SELECT t.blocked_question FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked'
     ORDER BY t.updated_at DESC LIMIT 1) AS "blockedQuestion",
+  (SELECT t.progress FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')
+     AND t.progress <> '' ORDER BY t.progress_at DESC LIMIT 1) AS progress,
   CASE
     WHEN a.herdr_target = '' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
@@ -418,7 +420,11 @@ export async function listInbox(limit = 50) {
           JOIN agents a ON a.id = t.to_agent_id JOIN projects p ON p.id = a.project_id
         WHERE t.inbox_id = i.id) AS project,
        (SELECT body FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "finalReply",
-       (SELECT f.created_at FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "repliedAt"
+       (SELECT f.created_at FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "repliedAt",
+       (SELECT t.progress FROM tasks t WHERE t.inbox_id = i.id AND t.progress <> ''
+          ORDER BY t.progress_at DESC LIMIT 1) AS progress,
+       (SELECT a.name FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+        WHERE t.inbox_id = i.id AND t.progress <> '' ORDER BY t.progress_at DESC LIMIT 1) AS "progressBy"
      FROM inbox i ORDER BY i.created_at DESC LIMIT $1`,
     [limit]
   );
@@ -433,6 +439,7 @@ export async function inboxDetail(id) {
   const tasks = await query(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error, t.tokens_in AS "tokensIn",
        t.tokens_out AS "tokensOut", t.created_at AS "createdAt", t.done_at AS "doneAt",
+       t.progress, t.progress_at AS "progressAt",
        a.name AS agent, a.role AS "agentRole", pa.name AS "parentAgent"
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN agents pa ON pa.id = t.from_agent_id
      WHERE t.inbox_id = $1 ORDER BY t.created_at`,
@@ -585,6 +592,40 @@ export async function answerTask(id, body) {
   return { id, status: "queued" };
 }
 
+// A note left while the work is still running. It never touches pm_result, so
+// the user's answer slot stays the agent's final word.
+export async function noteProgress(id, text) {
+  const note = String(text || "").trim();
+  if (!note) throw Object.assign(new Error("progress note is empty"), { status: 400 });
+  const task = await one(
+    `SELECT t.id, t.status, t.inbox_id, t.to_agent_id, a.name AS agent
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1`,
+    [id]
+  );
+  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (["done", "failed"].includes(task.status)) {
+    throw Object.assign(new Error(`task #${id} is already ${task.status}`), { status: 400 });
+  }
+
+  // A note is proof the agent picked the task up, so a queued one is now running.
+  await query(
+    `UPDATE tasks SET progress = $2, progress_at = now(), updated_at = now(),
+       status = CASE WHEN status = 'queued' THEN 'running' ELSE status END,
+       claimed_at = COALESCE(claimed_at, now())
+     WHERE id = $1`,
+    [id, note]
+  );
+  await logEvent({
+    type: "task_progress",
+    title: `${task.agent || "agent"} 진행 #${id}`,
+    taskId: id,
+    inboxId: task.inbox_id,
+    agentId: task.to_agent_id,
+    payload: { text: note }
+  });
+  return { id, progress: note };
+}
+
 export async function blockedTasks(limit = 10) {
   return query(
     `SELECT t.id, t.blocked_question AS question, t.title, t.updated_at AS "at",
@@ -628,7 +669,7 @@ export async function saveFinalReply(inboxId, input) {
 export async function listTasks(limit = 100) {
   return query(
     `SELECT t.id, t.title, t.request, t.status, t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut",
-       t.created_at AS "createdAt", t.inbox_id AS "inboxId",
+       t.created_at AS "createdAt", t.inbox_id AS "inboxId", t.progress, t.progress_at AS "progressAt",
        a.name AS agent, pa.name AS "parentAgent"
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
        LEFT JOIN agents pa ON pa.id = (SELECT to_agent_id FROM tasks p WHERE p.id = t.parent_task_id)
@@ -642,7 +683,8 @@ export async function taskDetail(id) {
   const row = await one(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
        t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut", t.created_at AS "createdAt",
-       t.blocked_question AS "blockedQuestion", t.answer,
+       t.blocked_question AS "blockedQuestion", t.answer, t.progress AS "progressNote",
+       t.progress_at AS "progressAt",
        t.inbox_id AS "inboxId", t.parent_task_id AS "parentTaskId",
        a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty,
        f.name AS "fromAgent", i.user_request AS "userRequest", p.name AS project
@@ -655,12 +697,17 @@ export async function taskDetail(id) {
     [id]
   );
   if (!row) throw Object.assign(new Error("task not found"), { status: 404 });
+  const progress = await query(
+    `SELECT payload->>'text' AS text, created_at AS "at" FROM events
+     WHERE task_id = $1 AND type = 'task_progress' ORDER BY created_at`,
+    [id]
+  );
   const children = await query(
     `SELECT t.id, t.title, t.status, t.pm_result AS "pmResult", a.name AS agent
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.parent_task_id = $1 ORDER BY t.created_at`,
     [id]
   );
-  return { ...row, children };
+  return { ...row, progress, children };
 }
 
 export async function listEvents(limit = 60) {

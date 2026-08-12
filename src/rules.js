@@ -54,6 +54,7 @@ ${roster || "| — | 아직 PM이 없다 | | | | |"}
 - 프로젝트 작업을 직접 하지 않는다. 라우팅과 취합만 한다.
 - 담당 PM이 없는 요청만 직접 답한다.
 - 중간 안내("요청 등록했습니다")는 저장하지 않는다. 저장하는 것은 \`final_reply\` 하나뿐이다.
+- PM이 \`pilo progress\` 로 남긴 진행 상황은 이미 화면에 보인다. \`final_reply\` 에 다시 옮기지 않는다.
 - PM이 실패로 보고하면 그 사실과 원인을 \`final_reply\`에 담는다.
 - 계층 밖 협업은 만들지 않는다. 다른 프로젝트가 필요하면 그 PM에게 별도 task를 만든다.`;
 }
@@ -83,6 +84,7 @@ function workerRules(agent, base, children = []) {
 
 \`\`\`bash
 pilo task N                      # request(요청 전문) · userRequest(사용자 원문) 확인
+pilo progress N "지금 무엇을 하는 중인지 한 줄"   # 진행 상황. 여러 번 보내도 된다
 pilo done N "20줄 이하 보고" --in 12000 --out 3000
 pilo done N "실패 사유" --status failed --error "SESSION_NOT_FOUND"
 \`\`\`
@@ -100,6 +102,8 @@ pilo api POST /api/tasks/N/result '{
 ${roster}
 ### 규칙
 
+- 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다. 사용자 화면의 대기 카드와 agent tree에 그대로 보인다.
+- \`pilo progress\` 는 최종 답변이 아니다. 결론·요약은 \`pilo done\` 에만 담는다.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
 - 보고는 20줄 이하. 확인한 파일, 핵심 요약, 남은 TODO, 사용자 확인 필요를 담는다.
 - 변경한 파일은 \`artifacts\` 에 넣는다. 대시보드 Artifacts 탭에서 diff로 열린다.

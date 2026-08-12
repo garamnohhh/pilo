@@ -109,6 +109,7 @@ const USAGE = `pilo agent commands
   pilo send <agentId> <inboxId> <요청>   PM에게 task 생성  [--title 제목]
   pilo reply <inboxId> <본문>   final_reply 저장 (사용자 화면에 뜨는 유일한 값)
   pilo task <id>                받은 작업 원문
+  pilo progress <taskId> <한 줄>  진행 상황 남기기 (최종 답변과 별개, 여러 번 가능)
   pilo done <taskId> <보고>     작업 결과 보고  [--in 토큰 --out 토큰 --status done|failed]
   pilo block <taskId> <질문>    사용자 결정 대기로 표시 (spinner 대신 '결정 대기')
   pilo blocked                  결정 대기 중인 작업 목록
@@ -159,6 +160,13 @@ const commands = {
   async task([id]) {
     if (!id) throw new Error("usage: pilo task <id>");
     return out(await call("GET", `/api/tasks/${id}`));
+  },
+
+  async progress(args) {
+    const [taskId, ...text] = args;
+    if (!taskId || !text.length) throw new Error("usage: pilo progress <taskId> <한 줄>");
+    const res = await call("POST", `/api/tasks/${taskId}/progress`, { text: text.join(" ") });
+    return out(`task #${res.id} 진행: ${res.progress}`);
   },
 
   async done(args) {
