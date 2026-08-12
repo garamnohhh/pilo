@@ -23,9 +23,10 @@ function clip(text, width) {
   if (cols(text) <= width) return text;
   let out = "";
   let used = 0;
+  const tail = cols("…");
   for (const ch of text) {
     const w = cols(ch);
-    if (used + w > width - 1) break;
+    if (used + w > width - tail) break;
     out += ch;
     used += w;
   }

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { alignTables, tablesToHtml } from "./markdown.js";
 import { cols } from "./draft.js";
+import { setAmbiguousWidth } from "./width.js";
 
 const TABLE = `| 규칙 | 언제 | 채널 |
 | --- | --- | --- |
@@ -50,4 +51,16 @@ test("html rendering produces a table element, or null without one", () => {
   assert.match(html, /<th>규칙<\/th>/);
   assert.match(html, /<td>task failed<\/td>/);
   assert.equal(tablesToHtml("표 없음", (s) => s), null);
+});
+
+test("a trimmed cell stays inside the pane when … is drawn double width", () => {
+  const wide = `| 컬럼 | ${"길".repeat(40)} |\n| --- | --- |\n| a | b |`;
+  try {
+    setAmbiguousWidth(2);
+    for (const line of alignTables(wide, 40).split("\n")) {
+      assert.ok(cols(line) <= 40, `line too wide: ${cols(line)}`);
+    }
+  } finally {
+    setAmbiguousWidth(1);
+  }
 });
