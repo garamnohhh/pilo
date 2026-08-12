@@ -82,6 +82,11 @@
     text-transform: uppercase; background: var(--panel2); border-bottom: 1px solid #121615; position: sticky; top: 43px }
   .step { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid #171b19 }
   .step .body { font-size: 12.5px; line-height: 1.65; color: #b9c3bc; white-space: pre-wrap }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--line) }
+  .chip { padding: 3px 9px; border: 1px solid var(--line); border-radius: 999px; background: transparent;
+    color: var(--faint); font: 10px var(--mono); cursor: pointer }
+  .chip:hover { color: var(--text) }
+  .chip.on { border-color: #2f5f4c; color: var(--green) }
   .step .body.short { max-height: 3.4em; overflow: hidden; mask-image: linear-gradient(#000 50%, transparent) }
   .empty { padding: 34px 16px; color: var(--faint); font: 12px var(--mono); text-align: center }
 
@@ -191,6 +196,7 @@ const state = {
   rules: null,
   openTrace: null,
   selected: { event: null, artifact: null, inbox: null },
+  inboxFilter: null,
   project: { id: null, name: "", repo: "", path: "", note: "" }
 };
 
@@ -287,13 +293,34 @@ function renderTabs() {
     <div class="sub">${s.sessions || 0} sessions<br>${st.pilo || 0} pilo · ${st.pm || 0} pm · ${st.worker || 0} worker</div>`;
 }
 
+// Every refresh rebuilds #view, and a rebuilt element starts at scrollTop 0, so
+// the inbox panes and code blocks jumped back to the top every 5 seconds.
+// Remember where each scroller was and put it back. On a tab change the old
+// positions belong to a different view, so they are not carried over.
+const SCROLLERS = "main, .inbox > *, #view .code, #view .table";
+
+function scrollState() {
+  return [...document.querySelectorAll(SCROLLERS)].map((n) => n.scrollTop);
+}
+
+function restoreScroll(tops) {
+  [...document.querySelectorAll(SCROLLERS)].forEach((n, i) => {
+    if (tops[i]) n.scrollTop = tops[i];
+  });
+}
+
+let renderedTab = null;
+
 function render() {
   const meta = TABS.find((t) => t[0] === state.tab) || TABS[0];
+  const tops = renderedTab === state.tab ? scrollState() : [];
   $("tabTitle").textContent = meta[1];
   $("tabDesc").textContent = meta[2];
   renderTabs();
   $("view").innerHTML = views[state.tab]();
   wire();
+  renderedTab = state.tab;
+  if (tops.length) restoreScroll(tops);
 }
 
 /* ---------- views ---------- */
@@ -324,7 +351,7 @@ views.overview = () => {
           <span class="mono" style="font-size:11px;color:#5f6b64">${time(t.createdAt)}</span>
           <span style="color:var(--text);padding-right:16px;overflow:hidden;min-width:0">
             <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title || t.request || "(untitled)")}</span>
-            ${t.progress ? `<span style="display:block;margin-top:3px;font:11px var(--mono);color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">진행 · ${esc(t.progress)}</span>` : ""}
+            ${t.progress && !["done", "failed"].includes(t.status) ? `<span style="display:block;margin-top:3px;font:11px var(--mono);color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">진행 · ${esc(t.progress)}</span>` : ""}
           </span>
           <span class="mono" style="font-size:11px">${esc(t.agent || "—")}</span>
           <span class="mono" style="font-size:11px;color:${stateColor(t.status)}">${esc(t.status)}</span>
@@ -554,16 +581,39 @@ function currentTarget() {
 // Who a request went to, once it has gone anywhere. Project first — that is the
 // name the user thinks in — and the agents only when there is no project.
 function routedBadge(item) {
-  const names = item.project || item.routed || "";
-  const parts = names.split(", ").filter(Boolean);
-  if (!parts.length) return "";
-  return parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ");
+  const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
+  // Nobody was handed it, so the desk agent answered it itself.
+  if (!parts.length) return { text: "PILO", color: "var(--green)" };
+  const text = parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ");
+  const pms = (state.data.tree?.pms) || [];
+  const workers = pms.flatMap((pm) => pm.children || []);
+  const owns = (agents) => agents.some((a) => parts.includes(a.name) || parts.includes(a.projectName));
+  return { text, color: owns(pms) || !owns(workers) ? "var(--blue)" : "var(--muted)" };
+}
+
+// Same rule the TUI filters by: a request belongs to every project it was
+// handed to, and one that has been handed nowhere is 미배분.
+const inboxProjects = (item) => String(item.project || "").split(", ").filter(Boolean);
+
+function matchesFilter(item) {
+  if (!state.inboxFilter) return true;
+  const names = inboxProjects(item);
+  return state.inboxFilter === "__none" ? !names.length : names.includes(state.inboxFilter);
 }
 
 views.inbox = () => {
-  const list = state.data.inbox;
-  if (!list.length) return `<div class="table"><div class="empty">inbox가 비어 있습니다. TUI에서 지시를 입력하면 여기에 쌓입니다.</div></div>`;
-  const current = state.selected.inbox || list[0].id;
+  const all = state.data.inbox;
+  if (!all.length) return `<div class="table"><div class="empty">inbox가 비어 있습니다. TUI에서 지시를 입력하면 여기에 쌓입니다.</div></div>`;
+  const names = [...new Set(all.flatMap(inboxProjects))].sort();
+  const list = all.filter(matchesFilter);
+  const chip = (name, text) => `<button class="chip ${state.inboxFilter === name ? "on" : ""}" data-act="filter-inbox" data-name="${esc(name || "")}">${esc(text)}</button>`;
+  const chips = `<div class="chips">${chip(null, "전체")}${names.map((n) => chip(n, n)).join("")}${
+    all.some((i) => !inboxProjects(i).length) ? chip("__none", "PILO") : ""}</div>`;
+
+  // Keep the open request selected while it survives the filter.
+  const current = list.some((i) => String(i.id) === String(state.selected.inbox))
+    ? state.selected.inbox
+    : list[0]?.id;
   const detail = state.data.inboxDetail;
   const label = { queued: "대기", dispatched: "처리 중", replied: "완료", failed: "실패" };
 
@@ -576,7 +626,7 @@ views.inbox = () => {
     return `${header}<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
       <span style="display:flex;align-items:center;gap:8px">
         <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" ? "var(--red)" : "var(--amber)"}"></span>
-        ${routedBadge(i) ? `<span style="flex:none;font:10px var(--mono);color:var(--blue)">[${esc(routedBadge(i))}]</span>` : ""}
+        <span style="flex:none;font:10px var(--mono);color:${routedBadge(i).color}">[${esc(routedBadge(i).text)}]</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12.5px">${esc(firstLine(i.userRequest))}</span>
       </span>
       <span style="display:flex;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--faint)">
@@ -588,8 +638,10 @@ views.inbox = () => {
 
   return `<div class="inbox">
     <div class="table">
-      <div class="title">요청 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length}건</span></div>
-      ${rows}
+      <div class="title">요청 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length}건${
+        state.inboxFilter ? ` / ${all.length}` : ""}</span></div>
+      ${chips}
+      ${rows || `<div class="empty">이 필터에 맞는 요청이 없습니다.</div>`}
     </div>
     ${detail && String(detail.id) === String(current) ? inboxDetail(detail) : `<div class="table"><div class="empty">요청을 선택하세요</div></div>`}
   </div>`;
@@ -642,6 +694,10 @@ const STAGE = {
   final_reply: { label: "최종 답변", color: "var(--green)" }
 };
 
+// A note is only news while its task is still open; once the task is done the
+// result speaks for it, and the note stays in Events as history.
+const inFlight = (t) => t.progress && !["done", "failed"].includes(t.status);
+
 function inboxDetail(detail) {
   const reply = detail.replies[detail.replies.length - 1];
   const steps = detail.trace.filter((t) => t.stage !== "inbox");
@@ -663,9 +719,9 @@ function inboxDetail(detail) {
       <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(reply.body)}</div>
     </div>` : `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`}
 
-    ${detail.tasks.some((t) => t.progress) ? `<div class="card">
+    ${detail.tasks.some(inFlight) ? `<div class="card">
       <div class="label" style="margin-bottom:8px">진행 상황</div>
-      ${detail.tasks.filter((t) => t.progress).map((t) => `<div class="step">
+      ${detail.tasks.filter(inFlight).map((t) => `<div class="step">
         <span style="flex:none;width:62px;font:10px var(--mono);color:var(--amber)">진행</span>
         <div style="flex:1;min-width:0">
           <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.agent || "agent")} · task #${esc(t.id)} · ${ago(t.progressAt)}</div>
@@ -1037,6 +1093,18 @@ const actions = {
     toast("확인 처리됨 — 기록은 Events에 남습니다");
     await load();
   },
+  async "filter-inbox"(el) {
+    const name = el.dataset.name || null;
+    state.inboxFilter = state.inboxFilter === name ? null : name;
+    const shown = state.data.inbox.filter(matchesFilter);
+    // The detail pane follows the list, so pull the first survivor into it.
+    if (shown.length && !shown.some((i) => String(i.id) === String(state.selected.inbox))) {
+      state.selected.inbox = shown[0].id;
+      state.data.inboxDetail = await get(`/api/inbox/${shown[0].id}`);
+    }
+    render();
+  },
+
   async "open-inbox"(el) {
     state.selected.inbox = el.dataset.id;
     state.data.inboxDetail = await get(`/api/inbox/${el.dataset.id}`);
