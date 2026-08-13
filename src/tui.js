@@ -43,7 +43,6 @@ const state = {
   folded: new Set(),
   unfolded: new Set(),
   hits: new Map(),
-  seenExternal: new Set(),
   rowCount: 0,
   pad: 0,
   scroll: 0,
@@ -283,7 +282,8 @@ function railRows(tree, width, actions = []) {
     const picked = state.filter === filter.name ? c.green : c.fg;
     rows.push(`${bar}`);
     actions.push(null);
-    const pmIcon = seen.external ? { icon: "◐", color: c.blue } : statusIcon(pm.status, state.spin);
+    // A running session spins even when Pilo has nothing on it.
+    const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
     put(elbow, spine, pmIcon, pm.name, "PM", c.blue, `${project}${load}`, filter, picked);
 
     pm.children.forEach((w, k) => {
@@ -299,7 +299,7 @@ function railRows(tree, width, actions = []) {
               ? "실패 · 확인 필요"
               : w.specialty || w.status;
       const wSeen = sessionLine(w, wBase);
-      const wIcon = wSeen.external ? { icon: "◐", color: c.blue } : statusIcon(w.status, state.spin);
+      const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
       put(childBranch, childSpine, wIcon, w.name, "WORKER", c.muted, wSeen.text, filter, picked);
     });
   });
@@ -449,40 +449,16 @@ function scrollBy(rows) {
   render();
 }
 
-// Two axes on one line: what Pilo has given the agent, and what herdr says the
-// session is actually doing. The pairing is what tells you something is wrong —
-// a running task on a quiet session, or a busy session Pilo never asked for.
-const AGO = (since) => {
-  if (!since) return "";
-  const mins = Math.round((Date.now() - new Date(since)) / 60000);
-  return mins < 1 ? "1분 미만" : mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`;
-};
-
-// A session that finished long ago is not news; only a fresh one is worth saying.
-const FRESH_MS = 10 * 60 * 1000;
-const fresh = (since) => since && Date.now() - new Date(since) < FRESH_MS;
-
+// The tree shows two things about an agent: the work Pilo gave it, and whether
+// its session is actually running right now. No inference beyond that — a busy
+// session is just a busy session, whoever started it.
 function sessionLine(agent, base) {
   const seen = agent.sessionStatus || "";
-  const since = agent.sessionSince;
-  if (agent.status === "unbound") return { text: "세션 미연결", external: false };
-  if (agent.status === "idle") {
-    if (seen === "working") return { text: `밖에서 작업 중 · ${AGO(since)}`, external: true };
-    if (seen === "done" && fresh(since)) return { text: "밖에서 작업 끝남", external: true };
-    if (!seen) return { text: "idle · 세션 끊김", external: false };
-    return { text: "idle · 세션 대기", external: false };
-  }
-  const tail =
-    seen === "working"
-      ? "세션 실행 중"
-      : seen === "idle"
-        ? agent.status === "running" ? `세션 응답 없음 ${AGO(since)}` : "세션 대기"
-        : seen === "done"
-          ? agent.status === "running" ? "세션 종료됨" : "세션 대기"
-          : seen
-            ? `세션 ${seen}`
-            : "세션 끊김";
-  return { text: `${base} · ${tail}`, external: false };
+  if (agent.status === "unbound") return { text: "세션 미연결", busy: false };
+  const busy = seen === "working";
+  const tail = busy ? "실행 중" : seen ? "대기" : "세션 끊김";
+  if (agent.status === "idle") return { text: busy ? "실행 중" : tail === "대기" ? "idle" : tail, busy };
+  return { text: `${base} · ${tail}`, busy };
 }
 
 function statusIcon(status, spin) {
@@ -503,13 +479,6 @@ function render() {
 
   if (!state.data) return;
   const { setup, tree, inbox, overview, settings } = state.data;
-  // Work that happened outside Pilo shows up here once. The desk agent is not
-  // woken for it — it reads the event when it next has reason to.
-  for (const item of overview.external || []) {
-    if (state.seenExternal.has(item.id)) continue;
-    state.seenExternal.add(item.id);
-    note(`${item.agent} 밖에서 작업 ${item.duration || ""} · ${item.summary || "요약 대기"}`);
-  }
   const screen = [""];
   const emit = (text) => screen.push(text);
 

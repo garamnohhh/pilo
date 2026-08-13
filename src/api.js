@@ -79,35 +79,6 @@ export async function listAgents() {
   return query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
 }
 
-// External work waiting on its one-line summary, newest first. Small on purpose:
-// this is a notice, not a feed.
-export async function externalWork(limit = 5) {
-  return query(
-    `SELECT e.id, e.created_at AS "at", a.name AS agent, a.id AS "agentId",
-       e.payload->>'duration' AS duration, e.payload->>'summary' AS summary
-     FROM events e LEFT JOIN agents a ON a.id = e.agent_id
-     WHERE e.type = 'external_work' AND e.created_at > now() - interval '12 hours'
-     ORDER BY e.created_at DESC LIMIT $1`,
-    [limit]
-  );
-}
-
-// The agent answers the [pilo:external] wake with one line. It lands on the event
-// and nowhere else: never a task result, never a final reply.
-export async function saveExternalSummary(id, summary) {
-  const text = String(summary || "").trim();
-  if (!text) throw Object.assign(new Error("summary is empty"), { status: 400 });
-  const event = await one("SELECT id, type, agent_id FROM events WHERE id = $1", [id]);
-  if (!event || event.type !== "external_work") {
-    throw Object.assign(new Error("external_work event not found"), { status: 404 });
-  }
-  await query(
-    "UPDATE events SET payload = jsonb_set(payload, '{summary}', to_jsonb($2::text)) WHERE id = $1",
-    [id, text]
-  );
-  return { id, summary: text };
-}
-
 export async function agentTree() {
   const agents = await listAgents();
   const pilo = agents.find((a) => a.role === "pilo") || null;
@@ -885,7 +856,6 @@ export async function overview() {
   const system = await systemStatus();
   const failedWakes = { n: system.wakeFailures.length };
   const blocked = await blockedTasks(5);
-  const external = await externalWork(5);
   return {
     stats: {
       agents: agents.length,
@@ -899,7 +869,6 @@ export async function overview() {
     },
     tasks,
     blocked,
-    external,
     services: system.services,
     paths: system.paths,
     wakeFailures: system.wakeFailures
