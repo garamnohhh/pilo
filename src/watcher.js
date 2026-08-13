@@ -102,8 +102,8 @@ async function pumpTasks() {
       await recordWakeFailure(agent, "SESSION_NOT_BOUND", task.id, task.inbox_id);
       continue;
     }
-    // Name the agent: a bare "[pilo:task] #3" reads like "the pilo project" to a
-    // session that still knows the old agent-bus conventions.
+    // Name the agent: a bare "[pilo:task] #3" reads like "the pilo project" from
+    // inside a session that works on several of them.
     await wake(
       agent,
       task.answer
@@ -140,11 +140,132 @@ async function pumpResults() {
   }
 }
 
+// How long a session must stay busy before it counts as work, and how long it
+// must stay quiet afterwards before we believe it finished. Slash commands and
+// stray keystrokes flicker for a moment; real work does not.
+const EXTERNAL_MIN_MS = Number(process.env.PILO_EXTERNAL_MIN_MS || 5000);
+const EXTERNAL_SETTLE_MS = Number(process.env.PILO_EXTERNAL_SETTLE_MS || 60000);
+
+// A busy spell counts as work Pilo should know about when it lasted long enough
+// to be more than a keystroke, and no Pilo task was open to explain it.
+export const countsAsExternal = ({ busyMs, covered }) => busyMs >= EXTERNAL_MIN_MS && !covered;
+// And it is only reported once the session has been quiet long enough that we
+// believe it finished rather than paused.
+export const settled = ({ quietMs }) => quietMs >= EXTERNAL_SETTLE_MS;
+
+// Was any Pilo task open while the session was busy? Then the work came from
+// here and needs no summary.
+async function coveredByTask(agentId, from, to) {
+  const row = await one(
+    `SELECT 1 AS hit FROM tasks
+     WHERE to_agent_id = $1
+       AND COALESCE(claimed_at, created_at) <= $3
+       AND COALESCE(done_at, now()) >= $2
+     LIMIT 1`,
+    [agentId, from, to]
+  );
+  return Boolean(row);
+}
+
+// Track what herdr says each bound session is doing. A busy spell that Pilo did
+// not cause becomes an external_work event once it has been quiet long enough,
+// and the agent is asked for one line about it.
+export async function pumpSessions() {
+  const live = await herdr.sessions();
+  const agents = await query(
+    `SELECT a.id, a.name, a.role, a.herdr_target, s.status, s.title, s.seq, s.since,
+       s.pending_since, s.pending_started, s.pending_seq
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.archived_at IS NULL AND a.herdr_target <> '' AND a.role <> 'pilo'`
+  );
+
+  for (const agent of agents) {
+    const session = live.find((s) => s.target === agent.herdr_target);
+    const status = session?.status || "";
+    const seq = session?.seq || 0;
+    const title = session?.title || "";
+    const changed = status !== (agent.status || "");
+
+    // A busy spell just ended. Remember it; whether it counts is decided once it
+    // has stayed quiet for the settle window.
+    let pendingSince = agent.pending_since;
+    let pendingStarted = agent.pending_started;
+    let pendingSeq = agent.pending_seq;
+    if (changed && agent.status === "working" && status !== "working") {
+      const startedAt = agent.since ? new Date(agent.since) : null;
+      const busyMs = startedAt ? Date.now() - startedAt.getTime() : 0;
+      const covered = await coveredByTask(agent.id, agent.since, new Date());
+      if (countsAsExternal({ busyMs, covered })) {
+        pendingSince = new Date();
+        pendingStarted = agent.since;
+        pendingSeq = agent.seq;
+      }
+    }
+    // Busy again inside the settle window: the same piece of work continues.
+    if (status === "working" && pendingSince) {
+      pendingSince = null;
+      pendingStarted = null;
+      pendingSeq = null;
+    }
+
+    await query(
+      `INSERT INTO agent_sessions (agent_id, target, status, title, seq, since, pending_since, pending_started, pending_seq, updated_at)
+       VALUES ($1, $2, $3, $4, $5, now(), $6, $7, $8, now())
+       ON CONFLICT (agent_id) DO UPDATE SET
+         target = EXCLUDED.target, status = EXCLUDED.status, title = EXCLUDED.title, seq = EXCLUDED.seq,
+         since = CASE WHEN agent_sessions.status = EXCLUDED.status THEN agent_sessions.since ELSE now() END,
+         pending_since = EXCLUDED.pending_since, pending_started = EXCLUDED.pending_started,
+         pending_seq = EXCLUDED.pending_seq, updated_at = now()`,
+      [agent.id, agent.herdr_target, status, title, seq, pendingSince, pendingStarted, pendingSeq]
+    );
+
+    if (!pendingSince || !settled({ quietMs: Date.now() - new Date(pendingSince).getTime() })) continue;
+
+    // One event per busy spell: herdr's sequence number is the key.
+    const already = await one(
+      `SELECT 1 AS hit FROM events
+       WHERE type = 'external_work' AND agent_id = $1 AND (payload->>'seq')::bigint = $2 LIMIT 1`,
+      [agent.id, pendingSeq || 0]
+    );
+    await query(
+      "UPDATE agent_sessions SET pending_since = NULL, pending_started = NULL, pending_seq = NULL WHERE agent_id = $1",
+      [agent.id]
+    );
+    if (already) continue;
+
+    const seconds = Math.max(1, Math.round((new Date(pendingSince) - new Date(pendingStarted)) / 1000));
+    const duration = seconds < 60 ? `${seconds}초` : `${Math.round(seconds / 60)}분`;
+    const eventId = await logEvent({
+      type: "external_work",
+      title: `${agent.name} 밖에서 작업 · ${duration}`,
+      agentId: agent.id,
+      payload: {
+        seq: pendingSeq || 0,
+        started: pendingStarted,
+        ended: pendingSince,
+        seconds,
+        duration,
+        title,
+        source: "herdr",
+        summary: ""
+      }
+    });
+    // The agent is the only one who knows what it did. Ask once, never again.
+    await wake(
+      { id: agent.id, name: agent.name, herdr_target: agent.herdr_target },
+      `[pilo:external] Pilo 밖에서 ${duration} 작업한 기록이 있다. 직전 작업을 한 줄로 정리해 ` +
+        `'pilo external ${eventId} "한 줄 요약"' 로 저장해라. 지금 하는 일은 계속해.`,
+      {}
+    );
+  }
+}
+
 async function tick() {
   try {
     await pumpInbox();
     await pumpTasks();
     await pumpResults();
+    await pumpSessions();
   } catch (err) {
     console.error("watcher:", err.message);
   }

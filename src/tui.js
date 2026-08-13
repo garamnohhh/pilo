@@ -43,6 +43,7 @@ const state = {
   folded: new Set(),
   unfolded: new Set(),
   hits: new Map(),
+  seenExternal: new Set(),
   rowCount: 0,
   pad: 0,
   scroll: 0,
@@ -146,6 +147,24 @@ function replyBlock(item, width) {
 
 function waitingBlock(item, width) {
   const box = Math.max(24, width - 2);
+  // Work finished and nobody wrote the answer. That is not progress, so it gets
+  // its own card instead of a spinner that would never stop.
+  if (item.needsReply) {
+    const many = Number(item.taskCount || 0) > 1;
+    return cardBlock({
+      box,
+      title: "답변 저장 필요",
+      titleColor: c.red,
+      right: `in-${item.id}`,
+      body: [
+        many
+          ? `${item.routed || "agent"} 결과 ${item.taskCount}건 도착 · 취합해서 저장해야 함`
+          : `${item.routed || "agent"} 결과 도착 · 최종 답변 미저장`
+      ],
+      footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 /dash`,
+      glyphs: ["╭", "╮", "╰", "╯", "─", "│"]
+    });
+  }
   // The agent's own progress note when there is one; it is not the answer, so it
   // stays in the waiting card and never reaches the reply slot.
   const body = item.progress
@@ -246,14 +265,16 @@ function railRows(tree, width, actions = []) {
     const last = i === pms.length - 1;
     const elbow = `${c.faint}${last ? "└─" : "├─"}${c.reset} `;
     const spine = `${last ? " " : bar}    `;
-    const load =
+    const base =
       pm.status === "blocked"
         ? `결정 대기 · ${pm.blockedQuestion || "확인 필요"}`
         : pm.status === "running"
           ? pm.progress || `작업 ${pm.openTasks}건`
-          : pm.status === "unbound"
-            ? "세션 미연결"
+          : pm.status === "failed"
+            ? "실패 · 확인 필요"
             : pm.status;
+    const seen = sessionLine(pm, base);
+    const load = seen.text;
     const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
     const filter = { type: "project", name: pm.projectName || pm.name };
     // The selection used to be a ◂ in front of the name. It is an East Asian
@@ -262,17 +283,24 @@ function railRows(tree, width, actions = []) {
     const picked = state.filter === filter.name ? c.green : c.fg;
     rows.push(`${bar}`);
     actions.push(null);
-    put(elbow, spine, statusIcon(pm.status, state.spin), pm.name, "PM", c.blue, `${project}${load}`, filter, picked);
+    const pmIcon = seen.external ? { icon: "◐", color: c.blue } : statusIcon(pm.status, state.spin);
+    put(elbow, spine, pmIcon, pm.name, "PM", c.blue, `${project}${load}`, filter, picked);
 
     pm.children.forEach((w, k) => {
       const lastChild = k === pm.children.length - 1;
       const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
       const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
-      const wLoad =
+      const wBase =
         w.status === "blocked"
           ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}`
-          : (w.status === "running" && w.progress) || w.specialty || w.status;
-      put(childBranch, childSpine, statusIcon(w.status, state.spin), w.name, "WORKER", c.muted, wLoad, filter, picked);
+          : w.status === "running"
+            ? w.progress || `작업 ${w.openTasks}건`
+            : w.status === "failed"
+              ? "실패 · 확인 필요"
+              : w.specialty || w.status;
+      const wSeen = sessionLine(w, wBase);
+      const wIcon = wSeen.external ? { icon: "◐", color: c.blue } : statusIcon(w.status, state.spin);
+      put(childBranch, childSpine, wIcon, w.name, "WORKER", c.muted, wSeen.text, filter, picked);
     });
   });
 
@@ -421,6 +449,42 @@ function scrollBy(rows) {
   render();
 }
 
+// Two axes on one line: what Pilo has given the agent, and what herdr says the
+// session is actually doing. The pairing is what tells you something is wrong —
+// a running task on a quiet session, or a busy session Pilo never asked for.
+const AGO = (since) => {
+  if (!since) return "";
+  const mins = Math.round((Date.now() - new Date(since)) / 60000);
+  return mins < 1 ? "1분 미만" : mins < 60 ? `${mins}분` : `${Math.floor(mins / 60)}시간 ${mins % 60}분`;
+};
+
+// A session that finished long ago is not news; only a fresh one is worth saying.
+const FRESH_MS = 10 * 60 * 1000;
+const fresh = (since) => since && Date.now() - new Date(since) < FRESH_MS;
+
+function sessionLine(agent, base) {
+  const seen = agent.sessionStatus || "";
+  const since = agent.sessionSince;
+  if (agent.status === "unbound") return { text: "세션 미연결", external: false };
+  if (agent.status === "idle") {
+    if (seen === "working") return { text: `밖에서 작업 중 · ${AGO(since)}`, external: true };
+    if (seen === "done" && fresh(since)) return { text: "밖에서 작업 끝남", external: true };
+    if (!seen) return { text: "idle · 세션 끊김", external: false };
+    return { text: "idle · 세션 대기", external: false };
+  }
+  const tail =
+    seen === "working"
+      ? "세션 실행 중"
+      : seen === "idle"
+        ? agent.status === "running" ? `세션 응답 없음 ${AGO(since)}` : "세션 대기"
+        : seen === "done"
+          ? agent.status === "running" ? "세션 종료됨" : "세션 대기"
+          : seen
+            ? `세션 ${seen}`
+            : "세션 끊김";
+  return { text: `${base} · ${tail}`, external: false };
+}
+
 function statusIcon(status, spin) {
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
   // waiting on a person, not on work: a spinner here would be a lie
@@ -439,6 +503,13 @@ function render() {
 
   if (!state.data) return;
   const { setup, tree, inbox, overview, settings } = state.data;
+  // Work that happened outside Pilo shows up here once. The desk agent is not
+  // woken for it — it reads the event when it next has reason to.
+  for (const item of overview.external || []) {
+    if (state.seenExternal.has(item.id)) continue;
+    state.seenExternal.add(item.id);
+    note(`${item.agent} 밖에서 작업 ${item.duration || ""} · ${item.summary || "요약 대기"}`);
+  }
   const screen = [""];
   const emit = (text) => screen.push(text);
 
@@ -509,7 +580,8 @@ function render() {
       feed.push(...question);
       actions.push(...question.map(() => fold));
       if (item.project) {
-        feed.push(`    ${c.faint}${item.project}${folded ? ` · ${item.finalReply ? "완료" : "대기"}` : ""}${c.reset}`);
+        const short = item.finalReply ? "완료" : item.needsReply ? "답변 저장 필요" : "대기";
+        feed.push(`    ${c.faint}${item.project}${folded ? ` · ${short}` : ""}${c.reset}`);
         actions.push(fold);
       }
       feed.push("");

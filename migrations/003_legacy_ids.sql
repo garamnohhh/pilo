@@ -1,4 +1,4 @@
--- Room for the agent-bus history: keep the original ids so old references
+-- Room for the imported history: keep the original ids so old references
 -- ("#142") still resolve after the import.
 ALTER TABLE inbox ADD COLUMN IF NOT EXISTS legacy_id BIGINT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS legacy_id BIGINT;
