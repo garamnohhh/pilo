@@ -360,7 +360,6 @@ views.overview = () => {
       </div>
       <div>
         ${blockedCard(state.data.overview.blocked || [])}
-        ${externalCard(state.data.overview.external || [])}
         ${serviceCard(services)}
         ${failureCard(wakeFailures)}
       </div>
@@ -488,35 +487,13 @@ function sessionCard() {
   </div>`;
 }
 
-// Session badge: what herdr says the pane is doing, next to what Pilo asked for.
-// A busy session with nothing from Pilo is the one worth noticing.
+// Whether the pane is actually running something, whoever started it.
 function sessionBadge(a) {
-  const seen = a.sessionStatus || "";
   if (!a.herdrTarget) return "";
-  const external = a.status === "idle" && (seen === "working" || seen === "done");
-  const label = seen === "working"
-    ? (a.status === "idle" ? "밖에서 작업 중" : "세션 실행 중")
-    : seen === "idle"
-      ? (a.status === "running" ? "세션 응답 없음" : "세션 대기")
-      : seen === "done"
-        ? (a.status === "running" ? "세션 종료됨" : "밖에서 작업 끝남")
-        : seen ? `세션 ${seen}` : "세션 끊김";
-  const color = external ? "var(--blue)" : seen === "working" ? "var(--amber)" : "var(--faint)";
-  return `<span class="meta" style="color:${color}">${esc(label)}</span>`;
-}
-
-// Pilo did not order this work; it is here so it is not invisible, and it stays
-// out of the request feed on purpose.
-function externalCard(list) {
-  if (!list.length) return "";
-  return `<div class="table" style="margin-top:14px">
-    <div class="title">Pilo 밖 작업 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">최근 12시간</span></div>
-    ${list.map((e) => `<div class="row" style="grid-template-columns:110px 60px 1fr">
-      <span class="mono" style="font-size:11px">${esc(e.agent || "agent")}</span>
-      <span class="mono" style="font-size:11px;color:var(--faint)">${esc(e.duration || "")}</span>
-      <span style="color:${e.summary ? "var(--text)" : "var(--faint)"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.summary || "요약 대기")}</span>
-    </div>`).join("")}
-  </div>`;
+  const seen = a.sessionStatus || "";
+  const busy = seen === "working";
+  const label = busy ? "세션 실행 중" : seen ? "세션 대기" : "세션 끊김";
+  return `<span class="meta" style="color:${busy ? "var(--amber)" : "var(--faint)"}">${esc(label)}</span>`;
 }
 
 function pmNode(pm) {
