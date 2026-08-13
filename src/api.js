@@ -13,6 +13,8 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     ORDER BY t.updated_at DESC LIMIT 1) AS "blockedQuestion",
   (SELECT t.progress FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')
      AND t.progress <> '' ORDER BY t.progress_at DESC LIMIT 1) AS progress,
+  -- what herdr last said the bound session was doing, kept by the watcher
+  s.status AS "sessionStatus", s.since AS "sessionSince",
   CASE
     WHEN a.herdr_target = '' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
@@ -35,7 +37,12 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     ELSE 'idle'
   END AS status,
   CASE WHEN a.role = 'pilo' THEN (
-    SELECT CASE WHEN i.status = 'queued' THEN '요청 분해 in-' || i.id ELSE '결과 취합 in-' || i.id END
+    SELECT CASE
+             WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
+              AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
+               THEN '답변 저장 필요 in-' || i.id
+             WHEN i.status = 'queued' THEN '요청 분해 in-' || i.id
+             ELSE '결과 취합 in-' || i.id END
       || COALESCE(' · ' || (
            SELECT string_agg(DISTINCT p2.name, ', ') FROM tasks t2
              JOIN agents a2 ON a2.id = t2.to_agent_id JOIN projects p2 ON p2.id = a2.project_id
@@ -46,7 +53,9 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     ORDER BY i.created_at DESC LIMIT 1
   ) END AS activity`;
 
-const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id WHERE a.archived_at IS NULL`;
+const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id
+  LEFT JOIN agent_sessions s ON s.agent_id = a.id
+  WHERE a.archived_at IS NULL`;
 
 // Notification text has to say what happened, not just which pane it came from.
 function summarize(text, limit = 90) {
@@ -70,6 +79,35 @@ export async function listAgents() {
   return query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
 }
 
+// External work waiting on its one-line summary, newest first. Small on purpose:
+// this is a notice, not a feed.
+export async function externalWork(limit = 5) {
+  return query(
+    `SELECT e.id, e.created_at AS "at", a.name AS agent, a.id AS "agentId",
+       e.payload->>'duration' AS duration, e.payload->>'summary' AS summary
+     FROM events e LEFT JOIN agents a ON a.id = e.agent_id
+     WHERE e.type = 'external_work' AND e.created_at > now() - interval '12 hours'
+     ORDER BY e.created_at DESC LIMIT $1`,
+    [limit]
+  );
+}
+
+// The agent answers the [pilo:external] wake with one line. It lands on the event
+// and nowhere else: never a task result, never a final reply.
+export async function saveExternalSummary(id, summary) {
+  const text = String(summary || "").trim();
+  if (!text) throw Object.assign(new Error("summary is empty"), { status: 400 });
+  const event = await one("SELECT id, type, agent_id FROM events WHERE id = $1", [id]);
+  if (!event || event.type !== "external_work") {
+    throw Object.assign(new Error("external_work event not found"), { status: 404 });
+  }
+  await query(
+    "UPDATE events SET payload = jsonb_set(payload, '{summary}', to_jsonb($2::text)) WHERE id = $1",
+    [id, text]
+  );
+  return { id, summary: text };
+}
+
 export async function agentTree() {
   const agents = await listAgents();
   const pilo = agents.find((a) => a.role === "pilo") || null;
@@ -86,7 +124,12 @@ async function detectSession(cwd, runtime) {
   if (!cwd) return { runtime: runtime || "", target: "", candidates: [] };
   const { bound, candidates } = await herdr.detect(cwd, runtime);
   if (bound) return { runtime: bound.runtime, target: bound.target, candidates };
-  return { runtime: runtime || "", target: "", candidates };
+  // Too many sessions to bind one, but if they are all the same kind we still
+  // know what the agent runs — enough to write the right instruction file and to
+  // narrow the next detection.
+  const kinds = new Set(candidates.map((c) => c.runtime).filter(Boolean));
+  const shared = kinds.size === 1 ? [...kinds][0] : "";
+  return { runtime: runtime || shared, target: "", candidates };
 }
 
 async function validateHierarchy({ role, parentAgentId, id = null }) {
@@ -258,8 +301,16 @@ export async function rebindAgent(id, target) {
   const agent = await one("SELECT id, name, cwd, runtime FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
   if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
   if (target) {
-    await query("UPDATE agents SET herdr_target = $2, runtime_detected_at = now(), updated_at = now() WHERE id = $1", [id, target]);
-    return { id, target, candidates: [] };
+    // Picking a session also settles which runtime the agent is: without it the
+    // next detection has nothing to narrow two sessions in one directory by, and
+    // the instructions would go to the wrong file.
+    const picked = (await herdr.candidates(agent.cwd, "")).find((s) => s.target === target);
+    const runtime = picked?.runtime || agent.runtime || "";
+    await query(
+      "UPDATE agents SET herdr_target = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1",
+      [id, target, runtime]
+    );
+    return { id, target, runtime, candidates: [] };
   }
   const detected = await herdr.detect(agent.cwd, agent.runtime);
   if (!detected.bound) {
@@ -435,7 +486,12 @@ export async function listInbox(limit = 50) {
           AND t.status IN ('queued', 'running') ORDER BY t.progress_at DESC LIMIT 1) AS progress,
        (SELECT a.name FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
         WHERE t.inbox_id = i.id AND t.progress <> '' AND t.status IN ('queued', 'running')
-        ORDER BY t.progress_at DESC LIMIT 1) AS "progressBy"
+        ORDER BY t.progress_at DESC LIMIT 1) AS "progressBy",
+       -- Every task has finished and nobody wrote the answer: the work is done,
+       -- the user just cannot see it yet.
+       (EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
+        AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
+        AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply"
      FROM inbox i ORDER BY i.created_at DESC LIMIT $1`,
     [limit]
   );
@@ -829,6 +885,7 @@ export async function overview() {
   const system = await systemStatus();
   const failedWakes = { n: system.wakeFailures.length };
   const blocked = await blockedTasks(5);
+  const external = await externalWork(5);
   return {
     stats: {
       agents: agents.length,
@@ -842,6 +899,7 @@ export async function overview() {
     },
     tasks,
     blocked,
+    external,
     services: system.services,
     paths: system.paths,
     wakeFailures: system.wakeFailures

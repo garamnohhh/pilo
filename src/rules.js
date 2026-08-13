@@ -46,8 +46,6 @@ ${roster || "| — | 아직 PM이 없다 | | | | |"}
 
 목록이 오래됐으면 \`pilo agents\` 로 다시 읽는다.
 
-과거 agent-bus 기록은 Pilo DB로 옮겨졌다. 예전 번호(\`#142\`)는 \`legacy_id\` 로 남아 있고
-현재 번호와 다르다. 대시보드 Events/Inbox 에서 확인한다.
 
 ### 규칙
 
@@ -84,6 +82,7 @@ function workerRules(agent, base, children = []) {
 
 \`\`\`bash
 pilo task N                      # request(요청 전문) · userRequest(사용자 원문) 확인
+pilo external <eventId> "한 줄"   # [pilo:external] wake 응답. Pilo 밖에서 한 작업 요약
 pilo progress N "지금 무엇을 하는 중인지 한 줄"   # 진행 상황. 여러 번 보내도 된다
 pilo done N "20줄 이하 보고" --in 12000 --out 3000
 pilo done N "실패 사유" --status failed --error "SESSION_NOT_FOUND"
@@ -104,6 +103,7 @@ ${roster}
 
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다. 사용자 화면의 대기 카드와 agent tree에 그대로 보인다.
 - \`pilo progress\` 는 최종 답변이 아니다. 결론·요약은 \`pilo done\` 에만 담는다.
+- \`[pilo:external]\` wake 는 사용자가 Pilo 밖에서 직접 시킨 작업을 기록하려는 것이다. 한 줄만 저장하고 하던 일은 계속한다.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
 - 보고는 20줄 이하. 확인한 파일, 핵심 요약, 남은 TODO, 사용자 확인 필요를 담는다.
 - 변경한 파일은 \`artifacts\` 에 넣는다. 대시보드 Artifacts 탭에서 diff로 열린다.
@@ -144,16 +144,10 @@ export async function buildRules(id) {
   const inside = current.includes(BEGIN) && current.includes(END)
     ? current.slice(current.indexOf(BEGIN), current.indexOf(END))
     : "";
-  const conflicts = current
-    .split("\n")
-    .map((text, i) => ({ line: i + 1, text: text.trim() }))
-    .filter((l) => /bus\.sh|agent-bus/.test(l.text) && !inside.includes(l.text));
-
   return {
     agent: { id: agent.id, name: agent.name, role: agent.role, runtime: agent.runtime },
     file,
     exists,
-    conflicts,
     hasBlock: current.includes(BEGIN),
     block: `${BEGIN}\n${body}\n${END}`,
     preview: body

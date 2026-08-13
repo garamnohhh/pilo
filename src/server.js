@@ -72,6 +72,9 @@ const routes = [
   ["POST", /^\/api\/tasks\/(\d+)\/progress$/, (m, body) => api.noteProgress(Number(m[1]), body.text || body.progress || "")],
   ["POST", /^\/api\/tasks\/(\d+)\/result$/, (m, body) => api.saveTaskResult(Number(m[1]), body)],
 
+  ["GET", /^\/api\/external$/, () => api.externalWork()],
+  ["POST", /^\/api\/external\/(\d+)$/, (m, body) => api.saveExternalSummary(Number(m[1]), body.summary || body.text || "")],
+
   ["GET", /^\/api\/events$/, () => api.listEvents()],
   ["GET", /^\/api\/events\/(\d+)$/, (m) => api.eventDetail(Number(m[1]))],
 

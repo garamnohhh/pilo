@@ -360,6 +360,7 @@ views.overview = () => {
       </div>
       <div>
         ${blockedCard(state.data.overview.blocked || [])}
+        ${externalCard(state.data.overview.external || [])}
         ${serviceCard(services)}
         ${failureCard(wakeFailures)}
       </div>
@@ -463,11 +464,6 @@ function rulesCard() {
     <div class="code" style="max-height:260px;border:1px solid #171b19;border-radius:8px;background:var(--panel2)">
       ${esc(r.preview).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="white-space:pre-wrap">${l}</span></div>`).join("")}
     </div>
-    ${r.conflicts?.length ? `<div class="note" style="border-color:#3a2a28;color:#c9a49c;margin-top:12px">
-      이 파일에 agent-bus 지시문이 ${r.conflicts.length}줄 남아 있습니다 — 같이 두면 agent가 어느 쪽을 따를지 모릅니다.
-      ${r.conflicts.slice(0, 6).map((c) => `<div style="color:#8b968e">L${c.line} ${esc(c.text.slice(0, 70))}</div>`).join("")}
-      ${r.conflicts.length > 6 ? `<div style="color:#5f6b64">…외 ${r.conflicts.length - 6}줄</div>` : ""}
-    </div>` : ""}
     <button class="btn primary" style="margin-top:12px" data-act="write-rules" data-id="${r.agent.id}">
       ${r.exists && r.hasBlock ? "지시문 갱신하고 세션에 반영" : "지시문 쓰고 세션에 반영"}</button>
     <div class="note">파일을 쓴 뒤 해당 세션에 <span class="mono" style="color:#b9c3bc">[pilo:rules]</span> 프롬프트를 보내 바로 읽게 합니다. 세션 재시작은 필요 없습니다.</div>
@@ -492,12 +488,44 @@ function sessionCard() {
   </div>`;
 }
 
+// Session badge: what herdr says the pane is doing, next to what Pilo asked for.
+// A busy session with nothing from Pilo is the one worth noticing.
+function sessionBadge(a) {
+  const seen = a.sessionStatus || "";
+  if (!a.herdrTarget) return "";
+  const external = a.status === "idle" && (seen === "working" || seen === "done");
+  const label = seen === "working"
+    ? (a.status === "idle" ? "밖에서 작업 중" : "세션 실행 중")
+    : seen === "idle"
+      ? (a.status === "running" ? "세션 응답 없음" : "세션 대기")
+      : seen === "done"
+        ? (a.status === "running" ? "세션 종료됨" : "밖에서 작업 끝남")
+        : seen ? `세션 ${seen}` : "세션 끊김";
+  const color = external ? "var(--blue)" : seen === "working" ? "var(--amber)" : "var(--faint)";
+  return `<span class="meta" style="color:${color}">${esc(label)}</span>`;
+}
+
+// Pilo did not order this work; it is here so it is not invisible, and it stays
+// out of the request feed on purpose.
+function externalCard(list) {
+  if (!list.length) return "";
+  return `<div class="table" style="margin-top:14px">
+    <div class="title">Pilo 밖 작업 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">최근 12시간</span></div>
+    ${list.map((e) => `<div class="row" style="grid-template-columns:110px 60px 1fr">
+      <span class="mono" style="font-size:11px">${esc(e.agent || "agent")}</span>
+      <span class="mono" style="font-size:11px;color:var(--faint)">${esc(e.duration || "")}</span>
+      <span style="color:${e.summary ? "var(--text)" : "var(--faint)"};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.summary || "요약 대기")}</span>
+    </div>`).join("")}
+  </div>`;
+}
+
 function pmNode(pm) {
   return `<div style="padding-top:16px">
     <div class="node">
       <span class="dot" style="background:${stateColor(pm.status)}"></span>
       <span class="name">${esc(pm.name)}</span><span class="role pm">PM</span>
       <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.status === "blocked" ? "결정 대기" : pm.runtime || "미감지")}</span>
+      ${sessionBadge(pm)}
       <span class="meta">${esc(pm.aliases || "")}</span>
       <span class="acts">
         <button class="btn small" data-act="rules" data-id="${pm.id}">rules</button>
@@ -512,6 +540,7 @@ function workerNode(w) {
   return `<div class="node" style="margin-top:10px;padding:10px 14px;border-color:#171b19;background:var(--panel2)">
     <span class="dot" style="background:${stateColor(w.status)}"></span>
     <span class="name" style="font-size:12px;color:#b9c3bc">${esc(w.name)}</span><span class="role worker">WORKER</span>
+    ${sessionBadge(w)}
     <span class="meta">${esc(w.specialty || w.note || "")}</span>
     <span class="acts">
       <button class="btn small" data-act="rules" data-id="${w.id}">rules</button>
@@ -616,6 +645,7 @@ views.inbox = () => {
     : list[0]?.id;
   const detail = state.data.inboxDetail;
   const label = { queued: "대기", dispatched: "처리 중", replied: "완료", failed: "실패" };
+  const stateOf = (i) => (i.needsReply ? "답변 저장 필요" : label[i.status] || i.status);
 
   let day = "";
   const rows = list.map((i) => {
@@ -625,12 +655,12 @@ views.inbox = () => {
     const done = i.status === "replied";
     return `${header}<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
       <span style="display:flex;align-items:center;gap:8px">
-        <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" ? "var(--red)" : "var(--amber)"}"></span>
+        <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" || i.needsReply ? "var(--red)" : "var(--amber)"}"></span>
         <span style="flex:none;font:10px var(--mono);color:${routedBadge(i).color}">[${esc(routedBadge(i).text)}]</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12.5px">${esc(firstLine(i.userRequest))}</span>
       </span>
       <span style="display:flex;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--faint)">
-        <span>${ago(i.createdAt)}</span><span>·</span><span>${esc(label[i.status] || i.status)}</span>
+        <span>${ago(i.createdAt)}</span><span>·</span><span style="${i.needsReply ? "color:var(--red)" : ""}">${esc(stateOf(i))}</span>
         ${i.project ? `<span style="margin-left:auto;color:#67726b">${esc(i.project)}</span>` : ""}
       </span>
     </button>`;
@@ -698,6 +728,30 @@ const STAGE = {
 // result speaks for it, and the note stays in Events as history.
 const inFlight = (t) => t.progress && !["done", "failed"].includes(t.status);
 
+// Every task finished and no answer was written. The dashboard does not write
+// it either — it shows what the answer would be made of and leaves the wording
+// to the desk agent.
+function needsReplyCard(detail) {
+  const finished = detail.tasks.filter((t) => ["done", "failed"].includes(t.status));
+  const waiting = detail.tasks.length && finished.length === detail.tasks.length;
+  if (!waiting) {
+    return `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${
+      esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`;
+  }
+  const one = finished.length === 1 ? finished[0] : null;
+  return `<div class="card" style="border-color:#3a2422">
+    <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
+      <span class="role" style="color:var(--red);border-color:#3a2422">답변 저장 필요</span>
+      <span class="mono" style="font-size:10px;color:var(--faint)">task ${finished.length}건 완료 · final_reply 없음</span>
+      ${one ? `<button class="btn small" data-act="copy-pm-result" data-id="${one.id}" style="margin-left:auto">PM 결과 복사</button>` : ""}
+    </div>
+    ${one
+      ? `<div class="sub" style="margin-bottom:8px">${esc(one.agent || "agent")}의 결과를 그대로 쓰거나 다듬어 저장하세요 — <code>pilo reply ${esc(detail.id)} "…"</code></div>
+         <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(one.pmResult || "(결과 본문 없음)")}</div>`
+      : `<div class="sub">${esc(finished.map((t) => t.agent).filter(Boolean).join(", "))} 결과 ${finished.length}건을 취합해 하나의 답변으로 저장해야 합니다 — <code>pilo reply ${esc(detail.id)} "…"</code></div>`}
+  </div>`;
+}
+
 function inboxDetail(detail) {
   const reply = detail.replies[detail.replies.length - 1];
   const steps = detail.trace.filter((t) => t.stage !== "inbox");
@@ -717,7 +771,7 @@ function inboxDetail(detail) {
         <span class="mono" style="font-size:10px;color:var(--faint)">${esc(reply.agent || "pilo")} · ${ago(reply.createdAt)}</span>
       </div>
       <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(reply.body)}</div>
-    </div>` : `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`}
+    </div>` : needsReplyCard(detail)}
 
     ${detail.tasks.some(inFlight) ? `<div class="card">
       <div class="label" style="margin-bottom:8px">진행 상황</div>
@@ -1121,6 +1175,12 @@ const actions = {
     state.data.artifactDetail = await get(`/api/artifacts/${el.dataset.id}`);
     render();
   },
+  async "copy-pm-result"(el) {
+    const task = (state.data.inboxDetail?.tasks || []).find((t) => String(t.id) === String(el.dataset.id));
+    await navigator.clipboard.writeText(task?.pmResult || "");
+    toast("PM 결과 복사됨");
+  },
+
   async "copy-json"() {
     await navigator.clipboard.writeText(JSON.stringify(state.data.eventDetail.payload, null, 2));
     toast("payload 복사됨");

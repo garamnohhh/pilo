@@ -114,6 +114,7 @@ const USAGE = `pilo agent commands
   pilo block <taskId> <질문>    사용자 결정 대기로 표시 (spinner 대신 '결정 대기')
   pilo blocked                  결정 대기 중인 작업 목록
   pilo answer <taskId> <답변>   결정 회신 — 그 작업이 다시 큐로 돌아감
+  pilo external <eventId> <한 줄>  Pilo 밖에서 한 작업의 요약 저장 ([pilo:external] wake 응답)
   pilo api <METHOD> <path> [json]        그 외 모든 엔드포인트`;
 
 const commands = {
@@ -208,6 +209,13 @@ const commands = {
     if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <답변>");
     const res = await call("POST", `/api/tasks/${taskId}/answer`, { body: text.join(" ") });
     return out(`task #${res.id} ${res.status} — agent 를 다시 깨웁니다`);
+  },
+
+  async external(args) {
+    const [eventId, ...text] = args;
+    if (!eventId || !text.length) throw new Error("usage: pilo external <eventId> <한 줄 요약>");
+    const res = await call("POST", `/api/external/${eventId}`, { summary: text.join(" ") });
+    return out(`external #${res.id} 요약 저장됨`);
   },
 
   async api([method, path, body]) {

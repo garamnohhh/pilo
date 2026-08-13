@@ -18,8 +18,20 @@ export async function available() {
   }
 }
 
-// `herdr agent list` gives us runtime (codex|claude), status, cwd and pane_id per session.
+// Several readers want the session list within the same second — the tree poll,
+// the watcher tick, the setup panel. One call serves them all.
+let cache = { at: 0, rows: [] };
+const CACHE_MS = Number(process.env.PILO_HERDR_CACHE_MS || 1500);
+
 export async function sessions() {
+  if (Date.now() - cache.at < CACHE_MS) return cache.rows;
+  const rows = await readSessions();
+  cache = { at: Date.now(), rows };
+  return rows;
+}
+
+// `herdr agent list` gives us runtime (codex|claude), status, cwd and pane_id per session.
+async function readSessions() {
   let out;
   try {
     out = await herdr(["agent", "list"]);
@@ -39,6 +51,9 @@ export async function sessions() {
     cwd: a.cwd || a.foreground_cwd || "",
     target: a.pane_id || "",
     terminalId: a.terminal_id || "",
+    // herdr bumps this on every state change; it is the key that keeps one
+    // working spell from being reported twice.
+    seq: Number(a.state_change_seq || 0),
     title: a.terminal_title_stripped || a.terminal_title || ""
   }));
 }
