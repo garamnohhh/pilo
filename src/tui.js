@@ -95,12 +95,15 @@ function badge(tag) {
 // Card surfaces: a tint painted to the card's full width, and the accent bar that
 // stands in for a left border.
 const CARD = {
-  reply: { tint: bg(15, 19, 18), accent: fg(62, 212, 156) },
-  waiting: { tint: bg(12, 16, 14), accent: fg(47, 107, 82) }
+  reply: { tint: bg(15, 19, 18) },
+  waiting: { tint: bg(12, 16, 14) }
 };
 const BAR = "▌";
-// The waiting dot pulses between the accent green and a dimmer one.
-const PULSE_DIM = fg(31, 107, 77);
+// One colour per state, worn by the question's mark and by the card's accent bar
+// so the two read as the same thing.
+const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
+// The waiting dot pulses between that state colour and a dimmer one.
+const PULSE_DIM = fg(120, 100, 46);
 
 const state = {
   input: "",
@@ -190,8 +193,8 @@ function elapsed(from, to) {
 // down the left edge, a tint carried to the card's full width — padding included,
 // or the background would stop where the text does — and a blank tinted row above
 // and below for breathing room.
-function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
-  const paint = CARD[surface] || CARD.reply;
+function cardBlock({ box, title, titleColor, right, body, footer, surface, state = "done" }) {
+  const paint = { ...(CARD[surface] || CARD.reply), accent: STATE_COLOUR[state] || STATE_COLOUR.done };
   // The accent bar owns the first column and the tint carries to the card's full
   // width; two spaces of padding on each side keep the text off both edges.
   const text = Math.max(8, box - 5);
@@ -214,17 +217,23 @@ function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
   return rows;
 }
 
-function replyBlock(item, width) {
+function replyBlock(item, width, tagged) {
   const box = Math.max(24, width - 2);
   const took = elapsed(item.createdAt, item.repliedAt);
+  // The question above already names who answered. The header repeats it only
+  // when it would say something different — several agents on one request, where
+  // the badge collapses the list and the header can spell it out.
+  const who = item.routed || "";
+  const extra = who && who !== (tagged?.plain || "") ? ` ${c.green}${who}${c.reset}` : "";
   return cardBlock({
     box,
-    title: `${badge("FINAL_REPLY")} ${c.green}${item.routed || "pilo"}${c.reset}`,
+    title: `${badge("FINAL_REPLY")}${extra}`,
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
     body: wrap(alignTables(item.finalReply, box - 5), box - 5),
     footer: "실행 로그 · 변경 파일 · 아티팩트는 :dash",
-    surface: "reply"
+    surface: "reply",
+    state: "done"
   });
 }
 
@@ -245,14 +254,15 @@ function waitingBlock(item, width) {
           : `${item.routed || "agent"} 결과 도착 · 최종 답변 미저장`
       ],
       footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 :dash`,
-      surface: "reply"
+      surface: "reply",
+      state: "attention"
     });
   }
   // Work in flight: one line — a pulsing dot, the agent's own words if it left
   // any, and who is holding it, pushed to the right edge.
-  const paint = CARD.waiting;
+  const paint = { ...CARD.waiting, accent: STATE_COLOUR.working };
   const text = Math.max(8, box - 5);
-  const dot = `${state.pulse ? c.green : PULSE_DIM}●${c.reset}${paint.tint}`;
+  const dot = `${state.pulse ? STATE_COLOUR.working : PULSE_DIM}●${c.reset}${paint.tint}`;
   const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
   const who = item.routed || "";
   const room = text - cols(who) - 3;
@@ -279,7 +289,7 @@ function routedBadge(item, tree) {
     : "PILO";
   const paint = parts.length ? badgePaint(parts, tree) : BADGE.PILO;
   const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
-  return { width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
+  return { plain, width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
 }
 
 // Match on the agent names a request was routed to, and on the project names
@@ -642,7 +652,7 @@ function render() {
       // swaps the glyph instead.
       const state = item.finalReply ? "done" : item.needsReply ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[state] : "❯";
-      const markColour = { done: c.green, working: c.amber, attention: c.red }[state];
+      const markColour = STATE_COLOUR[state];
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
@@ -659,7 +669,7 @@ function render() {
         if (!item.finalReply && !item.needsReply) waiting += 1;
         // The bar lines up with the question's badge, not with the ❯: the mark and
         // the space after it are the two columns the card is indented past.
-        const block = (item.finalReply ? replyBlock(item, mainWidth - 6) : waitingBlock(item, mainWidth - 6)).map((r) => "    " + r);
+        const block = (item.finalReply ? replyBlock(item, mainWidth - 6, tagged) : waitingBlock(item, mainWidth - 6)).map((r) => "    " + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing
         actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
