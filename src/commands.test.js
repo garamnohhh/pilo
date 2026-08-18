@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { parseCommand } from "./commands.js";
 
 test("slash commands are recognised", () => {
-  assert.deepEqual(parseCommand("/dash"), { name: "dash", args: [] });
+  assert.deepEqual(parseCommand(":dash"), { name: "dash", args: [] });
+  assert.deepEqual(parseCommand("/dash"), { name: "dash", args: [] }, "the old slash form still works");
   assert.deepEqual(parseCommand("/answer 12 B안으로"), { name: "answer", args: ["12", "B안으로"] });
   assert.equal(parseCommand("/exit").name, "exit");
 });
