@@ -653,7 +653,9 @@ function render() {
       actions.push(null);
       if (!folded) {
         if (!item.finalReply && !item.needsReply) waiting += 1;
-        const block = (item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r);
+        // The bar lines up with the question's badge, not with the ❯: the mark and
+        // the space after it are the two columns the card is indented past.
+        const block = (item.finalReply ? replyBlock(item, mainWidth - 6) : waitingBlock(item, mainWidth - 6)).map((r) => "    " + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing
         actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
