@@ -82,7 +82,9 @@ const SMALL = { A: "ᴀ", B: "ʙ", C: "ᴄ", D: "ᴅ", E: "ᴇ", F: "ꜰ", G: "�
   X: "x", Y: "ʏ", Z: "ᴢ", _: " " };
 const smallCaps = (tag) => [...tag].map((ch) => SMALL[ch] || ch).join("");
 
-const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : ` ${smallCaps(tag)} `);
+// No padding inside the badge: the fill hugs the letters, and the two spaces
+// before it do the separating.
+const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : smallCaps(tag));
 function badge(tag) {
   const paint = BADGE[tag] || BADGE.WORKER;
   return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.bg}${paint.fg}${badgeText(tag)}${c.reset}`;
@@ -274,7 +276,7 @@ function routedBadge(item, tree) {
       : parts.join(" · ")
     : "PILO";
   const paint = parts.length ? badgePaint(parts, tree) : BADGE.PILO;
-  const label = ASCII || COLOR === "none" ? `[${plain}]` : ` ${plain} `;
+  const label = ASCII || COLOR === "none" ? `[${plain}]` : plain;
   return { width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
 }
 
