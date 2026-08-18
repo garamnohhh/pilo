@@ -1,5 +1,6 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
+import { t } from "./text.js";
 import { recordWakeFailure } from "./api.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
@@ -36,13 +37,13 @@ async function gaveUp(column, id, agent, extra) {
   if (already) return;
   await logEvent({
     type: "wake_gave_up",
-    title: `${agent?.name || "agent"} 응답 없음 — 재알림 중단`,
+    title: t("event.gaveUp", { agent: agent?.name || "agent" }),
     agentId: agent?.id || null,
     ...extra,
     payload: {
       name: agent?.name,
       attempts: GIVE_UP,
-      hint: "대시보드에서 wake again 을 누르면 다시 시도합니다"
+      hint: "press wake again in the dashboard to retry"
     }
   });
 }
@@ -52,7 +53,7 @@ async function wake(agent, message, { taskId = null, inboxId = null }) {
     await herdr.prompt(agent.herdr_target, message);
     await logEvent({
       type: "wake_sent",
-      title: `${agent.name} woken`,
+      title: t("event.woken", { agent: agent.name }),
       agentId: agent.id,
       taskId,
       inboxId,
@@ -80,7 +81,7 @@ async function pumpInbox() {
       await recordWakeFailure(pilo, "SESSION_NOT_BOUND", null, row.id);
       continue;
     }
-    await wake(pilo, `[pilo:inbox] 요청 도착 #${row.id} — ${pilo.name} 앞. 'pilo inbox ${row.id}' 로 확인.`, { inboxId: row.id });
+    await wake(pilo, t("wake.inbox", { id: row.id, agent: pilo.name }), { inboxId: row.id });
   }
 }
 
@@ -107,8 +108,8 @@ async function pumpTasks() {
     await wake(
       agent,
       task.answer
-        ? `[pilo:task] 결정 회신 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 의 answer 를 읽고 이어서 진행.`
-        : `[pilo:task] 작업 도착 #${task.id} — ${agent.name} 앞. 'pilo task ${task.id}' 로 읽고 'pilo done ${task.id}' 로 보고.`,
+        ? t("wake.answer", { id: task.id, agent: agent.name })
+        : t("wake.task", { id: task.id, agent: agent.name }),
       { taskId: task.id, inboxId: task.inbox_id }
     );
   }
@@ -136,7 +137,7 @@ async function pumpResults() {
     );
     if (woken.n >= GIVE_UP) continue;
     if (woken.n && Date.now() - new Date(woken.last).getTime() < BACKOFF_SECONDS[Math.min(woken.n - 1, 3)] * 1000) continue;
-    await wake(pilo, `[pilo:result] 결과 도착 #${row.id} — 'pilo inbox ${row.id}' 로 취합 후 'pilo reply ${row.id}'.`, { inboxId: row.id });
+    await wake(pilo, t("wake.result", { id: row.id }), { inboxId: row.id });
   }
 }
 

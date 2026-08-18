@@ -2,6 +2,7 @@ import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
 import { paths, readPort } from "./paths.js";
+import { t } from "./text.js";
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -40,9 +41,9 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     SELECT CASE
              WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
               AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
-               THEN '답변 저장 필요 in-' || i.id
-             WHEN i.status = 'queued' THEN '요청 분해 in-' || i.id
-             ELSE '결과 취합 in-' || i.id END
+               THEN 'writing reply in-' || i.id
+             WHEN i.status = 'queued' THEN 'splitting in-' || i.id
+             ELSE 'gathering in-' || i.id END
       || COALESCE(' · ' || (
            SELECT string_agg(DISTINCT p2.name, ', ') FROM tasks t2
              JOIN agents a2 ON a2.id = t2.to_agent_id JOIN projects p2 ON p2.id = a2.project_id
@@ -60,7 +61,7 @@ const AGENT_JOIN = `FROM agents a LEFT JOIN projects p ON p.id = a.project_id
 // Notification text has to say what happened, not just which pane it came from.
 function summarize(text, limit = 90) {
   const flat = String(text || "")
-    .replace(/```[\s\S]*?```/g, " [코드] ")
+    .replace(/```[\s\S]*?```/g, " [code] ")
     .replace(/^#{1,6}\s*/gm, "")
     .replace(/[*_`>|]/g, "")
     .replace(/\s+/g, " ")
@@ -128,12 +129,12 @@ export async function applyRules(id) {
   let notified = false;
   let reason = "";
   if (!agent?.herdr_target) {
-    reason = "세션이 바인딩되지 않아 알리지 못했습니다";
+    reason = "no session bound, so nothing was sent";
   } else {
     try {
       await herdr.prompt(
         agent.herdr_target,
-        `[pilo:rules] 지시문이 갱신됐다. ${written.file} 의 pilo:begin ~ pilo:end 블록을 읽고 지금부터 그대로 동작해.`
+        t("wake.rules", { file: written.file })
       );
       notified = true;
     } catch (err) {
@@ -143,7 +144,7 @@ export async function applyRules(id) {
   }
   await logEvent({
     type: "rules_written",
-    title: `${agent?.name || id} 지시문 ${written.updated ? "갱신" : "생성"}`,
+    title: t("event.rulesWritten", { agent: agent?.name || id, action: written.updated ? t("event.rulesUpdated") : t("event.rulesCreated") }),
     agentId: id,
     payload: { file: written.file, updated: written.updated, notified, reason }
   });
@@ -166,7 +167,7 @@ async function propagateRules(reason, ids) {
   }
   await logEvent({
     type: "rules_broadcast",
-    title: `${reason} — 지시문 ${results.length}건 재발행`,
+    title: t("event.rulesBroadcast", { reason, count: results.length }),
     agentId: pilo?.id || null,
     payload: { reason, results }
   });
@@ -201,7 +202,7 @@ export async function createAgent(input) {
   );
   await logEvent({
     type: role === "worker" ? "worker_spawned" : "agent_registered",
-    title: `${input.name} registered`,
+    title: t("event.registered", { agent: input.name }),
     agentId: row.id,
     payload: { name: input.name, role, parent_agent_id: parentAgentId, runtime: detected.runtime, target: detected.target }
   });
@@ -215,7 +216,7 @@ export async function createAgent(input) {
     }
   }
   // the desk agent's roster changed, and a new worker changes its PM's roster too
-  const broadcast = await propagateRules(`${input.name} 등록`, [parentAgentId].filter(Boolean));
+  const broadcast = await propagateRules(`${input.name} registered`, [parentAgentId].filter(Boolean));
   return { id: row.id, candidates: detected.candidates, rules, broadcast };
 }
 
@@ -246,7 +247,7 @@ export async function updateAgent(id, input) {
       input.specialty ?? current.specialty, input.note ?? current.note
     ]
   );
-  const broadcast = await propagateRules(`${input.name ?? current.name} 수정`, [
+  const broadcast = await propagateRules(`${input.name ?? current.name} updated`, [
     id,
     current.parent_agent_id,
     parentAgentId
@@ -262,9 +263,9 @@ export async function archiveAgent(id) {
   if (kids.n > 0) throw Object.assign(new Error(`${kids.n} child agent(s) still attached`), { status: 400 });
   const parent = await one("SELECT parent_agent_id FROM agents WHERE id = $1", [id]);
   await query("UPDATE agents SET archived_at = now(), status = 'archived', updated_at = now() WHERE id = $1", [id]);
-  await logEvent({ type: "agent_archived", title: `${agent.name} archived`, agentId: id, payload: { name: agent.name } });
+  await logEvent({ type: "agent_archived", title: t("event.archived", { agent: agent.name }), agentId: id, payload: { name: agent.name } });
   // the agent is gone, so only the ones that still reference it are refreshed
-  const broadcast = await propagateRules(`${agent.name} 삭제`, [parent?.parent_agent_id].filter(Boolean));
+  const broadcast = await propagateRules(`${agent.name} removed`, [parent?.parent_agent_id].filter(Boolean));
   return { id, broadcast };
 }
 
@@ -291,7 +292,7 @@ export async function rebindAgent(id, target) {
     "UPDATE agents SET herdr_target = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1",
     [id, detected.bound.target, detected.bound.runtime]
   );
-  await logEvent({ type: "session_rebound", title: `${agent.name} rebound`, agentId: id, payload: { target: detected.bound.target } });
+  await logEvent({ type: "session_rebound", title: t("event.rebound", { agent: agent.name }), agentId: id, payload: { target: detected.bound.target } });
   return { id, target: detected.bound.target, candidates: detected.candidates };
 }
 
@@ -299,8 +300,8 @@ export async function wakeAgent(id, message) {
   const agent = await one("SELECT id, name, herdr_target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
   if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
   try {
-    await herdr.prompt(agent.herdr_target, message || `[pilo] ${agent.name} 확인 요청`);
-    await logEvent({ type: "wake_sent", title: `${agent.name} woken`, agentId: id, payload: { target: agent.herdr_target } });
+    await herdr.prompt(agent.herdr_target, message || t("wake.check", { agent: agent.name }));
+    await logEvent({ type: "wake_sent", title: t("event.woken", { agent: agent.name }), agentId: id, payload: { target: agent.herdr_target } });
     return { ok: true };
   } catch (err) {
     await recordWakeFailure(agent, err.message);
@@ -315,7 +316,7 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
   );
   await logEvent({
     type: "wake_failed",
-    title: `wake failed — ${code}`,
+    title: t("event.wakeFailed", { code }),
     agentId: agent.id,
     taskId,
     inboxId,
@@ -325,7 +326,7 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
       attempts: prior.n + 1,
       runtime: agent.runtime || "",
       target: agent.herdr_target || "",
-      hint: code === "SESSION_NOT_FOUND" ? "herdr 세션 재바인딩 필요" : "herdr 세션 상태 확인 필요"
+      hint: code === "SESSION_NOT_FOUND" ? "rebind the herdr session" : "check the herdr session"
     },
     runLog: [{ t: "00:00", text: `wake ${agent.name}` }, { t: "00:00", text: code }]
   });
@@ -334,8 +335,8 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
     : null;
   await notifyRule(
     "wake failed",
-    `Pilo · ${agent.name} 깨우기 실패`,
-    [code, context?.request ? summarize(context.request, 60) : "", "대시보드에서 rebind 또는 wake again"]
+    `Pilo · could not wake ${agent.name}`,
+    [code, context?.request ? summarize(context.request, 60) : "", "rebind or wake again in the dashboard"]
       .filter(Boolean)
       .join(" — ")
   );
@@ -371,7 +372,7 @@ export async function dismissWakeFailures(id) {
   if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
   await logEvent({
     type: "wake_dismissed",
-    title: `${agent.name} wake 실패 확인 처리`,
+    title: t("event.dismissed", { agent: agent.name }),
     agentId: id,
     payload: { name: agent.name }
   });
@@ -553,15 +554,15 @@ export async function saveTaskResult(id, input) {
     );
     await logEvent({
       type: "task_blocked",
-      title: `${info?.agent || "agent"} 결정 대기 #${id}`,
+      title: t("event.blocked", { agent: info?.agent || "agent", id }),
       taskId: id,
       agentId: task.to_agent_id,
       payload: { question: input.question || "", agent: info?.agent, project: info?.project }
     });
     await notifyRule(
       "approval needed",
-      `Pilo · ${info?.project || info?.agent || "작업"} 결정 대기 #${id}`,
-      summarize(input.question || input.pmResult || "확인이 필요합니다", 110)
+      `Pilo · ${info?.project || info?.agent || "task"} needs a decision #${id}`,
+      summarize(input.question || input.pmResult || "needs a decision", 110)
     );
   }
   for (const artifact of input.artifacts || []) {
@@ -581,8 +582,8 @@ export async function saveTaskResult(id, input) {
     );
     await notifyRule(
       "task failed",
-      `Pilo · ${info?.project || info?.agent || "작업"} 실패 #${id}`,
-      summarize(input.error || input.pmResult || info?.request || "사유 없음", 110)
+      `Pilo · ${info?.project || info?.agent || "task"} failed #${id}`,
+      summarize(input.error || input.pmResult || info?.request || "no reason given", 110)
     );
   }
   await logEvent({
@@ -621,7 +622,7 @@ export async function answerTask(id, body) {
   );
   await logEvent({
     type: "task_answered",
-    title: `${task.agent || "agent"} 결정 회신 #${id}`,
+    title: t("event.answered", { agent: task.agent || "agent", id }),
     taskId: id,
     inboxId: task.inbox_id,
     agentId: task.agent_id,
@@ -655,7 +656,7 @@ export async function noteProgress(id, text) {
   );
   await logEvent({
     type: "task_progress",
-    title: `${task.agent || "agent"} 진행 #${id}`,
+    title: t("event.progress", { agent: task.agent || "agent", id }),
     taskId: id,
     inboxId: task.inbox_id,
     agentId: task.to_agent_id,
@@ -690,8 +691,8 @@ export async function saveFinalReply(inboxId, input) {
     [inboxId]
   );
   await notifyRule(
-    "final_reply 도착",
-    `Pilo · ${context?.project || "답변"} 완료 in-${inboxId}`,
+    "final_reply saved",
+    `Pilo · ${context?.project || "reply"} done in-${inboxId}`,
     `${summarize(context?.request, 45)} → ${summarize(input.body, 70)}`
   );
   await logEvent({
@@ -716,7 +717,7 @@ export async function listTasks(limit = 100) {
   );
 }
 
-// What an agent reads when it is woken with [pilo:task] 작업 도착 #N.
+// What an agent reads when it is woken with a [pilo:task] message.
 export async function taskDetail(id) {
   const row = await one(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
@@ -824,9 +825,9 @@ export async function systemStatus() {
     sessions,
     wakeFailures: failures,
     commands: [
-      { cmd: "pilo up", desc: "postgres + 서버 기동" },
-      { cmd: "pilo status", desc: "서비스 상태" },
-      { cmd: "pilo doctor", desc: "진단" }
+      { cmd: "pilo up", desc: "start postgres and the server" },
+      { cmd: "pilo status", desc: "service status" },
+      { cmd: "pilo doctor", desc: "diagnostics" }
     ]
   };
 }
@@ -841,7 +842,7 @@ export async function overview() {
        count(*) FILTER (WHERE status <> 'replied')::int AS pending
      FROM inbox WHERE created_at >= date_trunc('day', now())`
   );
-  // "현재 문제" is what still needs a human: a failed task whose request never got
+  // The failure count is what still needs a human: a failed task whose request never got
   // an answer, and agents whose wake failure has not been resolved.
   const openFailures = await one(
     `SELECT count(*)::int AS n FROM tasks t

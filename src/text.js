@@ -1,0 +1,272 @@
+// Every string Pilo writes for itself lives here. Requests, reports and replies
+// are the user's own words and never pass through this file.
+//
+// English is what ships; PILO_LANG=ko switches the whole surface. Keys are
+// grouped by where they appear, and a missing key falls back to English rather
+// than to nothing.
+const EN = {
+  // status words in the agent tree
+  "state.idle": "idle",
+  "state.running": "running",
+  "state.blocked": "blocked",
+  "state.failed": "failed",
+  "state.unbound": "unbound",
+
+  // the tree itself
+  "tree.title": "AGENT TREE",
+  "tree.noDesk": "no desk agent",
+  "tree.noPm": "no project agents — register in :dash",
+  "tree.register": "register agent - :dash agents",
+  "tree.sessionOff": "session not bound",
+  "tree.sessionQuiet": "quiet",
+  "tree.sessionBusy": "running",
+  "tree.sessionGone": "session lost",
+
+  // request cards
+  "card.replyBadge": "FINAL_REPLY",
+  "card.replyFooter": "run log · changed files · artifacts in :dash",
+  "card.needsReply": "writing reply",
+  "card.needsReplyOne": "all tasks done · waiting on the reply",
+  "card.needsReplyMany": "{count} results in · waiting on one reply",
+  "card.waiting": "working · waiting on the result",
+  "card.queued": "received · the desk agent is looking",
+
+  // the feed and the prompt
+  "feed.empty": "type an instruction below.",
+  "feed.emptyFiltered": "nothing for {project}",
+  "feed.older": "↑ {count} lines above · PgUp/⇧↑",
+  "feed.scrolled": "↑ {count} lines up · PgDn/⇧↓ for the latest",
+  "feed.placeholder": "ask anything  ·  :dash for the dashboard",
+  "feed.filter": "filter: {project} · click PILO or :project all to clear",
+  "header.help": ":help — commands",
+
+  // notes the TUI writes back
+  "note.filterOn": "filter: {project}",
+  "note.filterOff": "filter cleared — all requests",
+  "note.noAgents": "no agents registered. add one in :dash agents.",
+  "note.copied": "copied {what}",
+  "note.nothingToCopy": "nothing to copy",
+  "note.copyUsage": "usage: :copy [last | in-65 | task-389 | draft]",
+  "note.mouseOn": "mouse on — wheel scrolls, click selects",
+  "note.mouseOff": "mouse off — drag to select as usual. PgUp/PgDn scrolls; :mouse to undo",
+  "note.dashOpened": "opened the dashboard",
+  "note.agentsTab": "opened the dashboard's Agents tab",
+  "note.unknown": "unknown command: :{word} — see :help",
+  "note.didYouMean": "unknown command. did you mean {names}?",
+  "note.sendFailed": "could not save the request: {reason}",
+  "note.projects": "projects: {list}   filter: {current}   (:project <name> · :project all)",
+  "note.none": "none",
+  "note.all": "all",
+  "note.noBlocked": "nothing waiting on a decision",
+  "note.answered": "answered #{id} — the agent is being woken",
+  "note.answerUsage": 'usage: :answer <taskId> <answer>',
+
+  // setup screen
+  "setup.title": "setup required",
+  "setup.lead": "what Pilo needs to start. one command, `pilo up`; agents are registered in the dashboard.",
+  "setup.duplicate": "{count} agents claim role=pilo",
+  "setup.duplicateHint": "there must be exactly one. remove the others in the dashboard.",
+  "setup.docker": "Docker runtime",
+  "setup.dockerOk": "container runtime found (OrbStack recommended)",
+  "setup.herdr": "herdr running",
+  "setup.herdrOk": "{count} agent sessions found",
+  "setup.herdrHint": "start herdr first, or agents have nothing to attach to",
+  "setup.postgres": "PostgreSQL up",
+  "setup.postgresOk": "with pgvector · Docker Compose",
+  "setup.desk": "desk agent registered (role=pilo)",
+  "setup.deskOk": "one agent to talk to",
+  "setup.pm": "PM agents (optional)",
+  "setup.pmOk": "Pilo works with the desk agent alone",
+  "setup.register": "dashboard → Agents → register agent",
+  "setup.open": "open the dashboard with :dash to register.",
+
+  // CLI
+  "cli.inboxEmpty": "inbox is empty",
+  "cli.noAgents": "no agents registered",
+  "cli.taskSent": "task #{id} → agent {agent}",
+  "cli.replySaved": "final_reply #{id} saved (in-{inbox})",
+  "cli.progressSaved": "task #{id} progress: {text}",
+  "cli.result": "task #{id} {status}",
+  "cli.blocked": "task #{id} {status} — waiting on the user",
+  "cli.noBlocked": "nothing waiting on a decision",
+  "cli.answered": "task #{id} {status} — waking the agent",
+
+  // events
+  "event.woken": "{agent} woken",
+  "event.wakeFailed": "wake failed — {code}",
+  "event.gaveUp": "{agent} not answering — stopped retrying",
+  "event.registered": "{agent} registered",
+  "event.archived": "{agent} archived",
+  "event.rebound": "{agent} rebound",
+  "event.rulesWritten": "{agent} instructions {action}",
+  "event.rulesCreated": "written",
+  "event.rulesUpdated": "updated",
+  "event.rulesBroadcast": "{reason} — instructions reissued for {count}",
+  "event.blocked": "{agent} waiting on a decision #{id}",
+  "event.answered": "{agent} decision returned #{id}",
+  "event.progress": "{agent} progress #{id}",
+  "event.dismissed": "{agent} wake failures dismissed",
+
+  // wake messages, which the instruction files quote verbatim
+  "wake.inbox": "[pilo:inbox] request #{id} — for {agent}. read it with 'pilo inbox {id}'.",
+  "wake.task": "[pilo:task] task #{id} — for {agent}. read it with 'pilo task {id}', report with 'pilo done {id}'.",
+  "wake.answer": "[pilo:task] decision returned #{id} — for {agent}. read the answer in 'pilo task {id}' and carry on.",
+  "wake.result": "[pilo:result] results in for #{id} — gather them with 'pilo inbox {id}', then 'pilo reply {id}'.",
+  "wake.rules": "[pilo:rules] your instructions changed. read the pilo:begin ~ pilo:end block in {file} and follow it from now on.",
+  "wake.check": "[pilo] {agent}, please check in",
+
+  // dashboard chrome
+  "dash.tab.overview": "Overview",
+  "dash.tab.overview.desc": "agent state · recent tasks · runtime",
+  "dash.tab.agents": "Agents",
+  "dash.tab.agents.desc": "the tree, and where agents are registered",
+  "dash.tab.inbox": "Inbox",
+  "dash.tab.inbox.desc": "what was asked, and how it was handled",
+  "dash.tab.events": "Events",
+  "dash.tab.events.desc": "pm_result · final_reply · raw events",
+  "dash.tab.artifacts": "Artifacts",
+  "dash.tab.artifacts.desc": "files the agents changed",
+  "dash.tab.projects": "Projects",
+  "dash.tab.projects.desc": "projects, their paths, and who owns them",
+  "dash.tab.commands": "Commands",
+  "dash.tab.commands.desc": "what you can type, in the TUI and the CLI",
+  "dash.tab.settings": "Settings",
+  "dash.tab.settings.desc": "notifications · tokens · retention",
+  "dash.tab.system": "System",
+  "dash.tab.system.desc": "server · wake · dashboard state and paths"
+};
+
+const KO = {
+  "state.idle": "대기",
+  "state.running": "작업 중",
+  "state.blocked": "결정 대기",
+  "state.failed": "실패",
+  "state.unbound": "세션 없음",
+
+  "tree.title": "AGENT TREE",
+  "tree.noDesk": "대표 agent 없음",
+  "tree.noPm": "project agent 없음 — :dash 에서 등록",
+  "tree.register": "register agent - :dash agents",
+  "tree.sessionOff": "세션 미연결",
+  "tree.sessionQuiet": "대기",
+  "tree.sessionBusy": "실행 중",
+  "tree.sessionGone": "세션 끊김",
+
+  "card.replyBadge": "FINAL_REPLY",
+  "card.replyFooter": "실행 로그 · 변경 파일 · 아티팩트는 :dash",
+  "card.needsReply": "답변 작성 중",
+  "card.needsReplyOne": "작업 완료 · 최종 답변 대기",
+  "card.needsReplyMany": "결과 {count}건 도착 · 최종 답변 대기",
+  "card.waiting": "작업 중 · 결과 대기",
+  "card.queued": "요청 접수 · 대표 agent 확인 중",
+
+  "feed.empty": "아래 프롬프트에 지시를 입력하세요.",
+  "feed.emptyFiltered": "{project} 요청 없음",
+  "feed.older": "↑ 이전 기록 {count}줄 · PgUp/⇧↑",
+  "feed.scrolled": "↑ 위로 {count}줄 · PgDn/⇧↓ 로 최근으로",
+  "feed.placeholder": "무엇이든 물어보세요  ·  :dash 로 대시보드",
+  "feed.filter": "필터: {project} · PILO 클릭 또는 :project all 로 해제",
+  "header.help": ":help — 명령",
+
+  "note.filterOn": "필터: {project}",
+  "note.filterOff": "필터 해제 — 전체 요청 표시",
+  "note.noAgents": "등록된 agent가 없습니다. :dash agents 에서 등록하세요.",
+  "note.copied": "{what} 복사됨",
+  "note.nothingToCopy": "복사할 내용 없음",
+  "note.copyUsage": "사용법: :copy [last | in-65 | task-389 | draft]",
+  "note.mouseOn": "마우스 켜짐 — 휠 스크롤, 클릭 선택",
+  "note.mouseOff": "마우스 꺼짐 — 드래그로 복사. 스크롤은 PgUp/PgDn, 되돌리려면 :mouse",
+  "note.dashOpened": "대시보드를 열었습니다",
+  "note.agentsTab": "대시보드 Agents 탭을 열었습니다",
+  "note.unknown": "알 수 없는 명령: :{word} — :help 참고",
+  "note.didYouMean": "알 수 없는 명령입니다. 혹시 {names}?",
+  "note.sendFailed": "요청 저장 실패: {reason}",
+  "note.projects": "프로젝트: {list}   현재 필터: {current}   (:project <이름> · :project all)",
+  "note.none": "없음",
+  "note.all": "전체",
+  "note.noBlocked": "결정 대기 중인 작업 없음",
+  "note.answered": "#{id} 회신 저장 — agent를 깨웁니다",
+  "note.answerUsage": "사용법: :answer <taskId> <답변>",
+
+  "setup.title": "설정이 필요합니다",
+  "setup.lead": "기동에 필요한 항목입니다. 명령은 `pilo up` 하나뿐이고, agent 등록은 대시보드에서 합니다.",
+  "setup.duplicate": "role=pilo agent가 {count}개 감지됨",
+  "setup.duplicateHint": "대표 agent는 정확히 하나여야 합니다. 대시보드에서 하나만 남기세요.",
+  "setup.docker": "Docker runtime",
+  "setup.dockerOk": "컨테이너 런타임 감지됨 (OrbStack 권장)",
+  "setup.herdr": "herdr 실행 중",
+  "setup.herdrOk": "agent 세션 {count}개 감지됨",
+  "setup.herdrHint": "herdr를 먼저 띄워야 agent를 붙일 수 있습니다",
+  "setup.postgres": "PostgreSQL 기동",
+  "setup.postgresOk": "pgvector 포함 · Docker Compose",
+  "setup.desk": "대표 agent 등록 (role=pilo)",
+  "setup.deskOk": "사용자와 대화할 agent 1개",
+  "setup.pm": "PM agent 등록 (선택)",
+  "setup.pmOk": "PM이 없어도 대표 agent와 대화는 가능합니다",
+  "setup.register": "dashboard → Agents → register agent",
+  "setup.open": ":dash 로 대시보드를 열어 등록하세요.",
+
+  "cli.inboxEmpty": "inbox 비어 있음",
+  "cli.noAgents": "등록된 agent 없음",
+  "cli.taskSent": "task #{id} → agent {agent}",
+  "cli.replySaved": "final_reply #{id} 저장됨 (in-{inbox})",
+  "cli.progressSaved": "task #{id} 진행: {text}",
+  "cli.result": "task #{id} {status}",
+  "cli.blocked": "task #{id} {status} — 사용자 결정 대기",
+  "cli.noBlocked": "결정 대기 중인 작업 없음",
+  "cli.answered": "task #{id} {status} — agent 를 다시 깨웁니다",
+
+  "event.woken": "{agent} 깨움",
+  "event.wakeFailed": "wake 실패 — {code}",
+  "event.gaveUp": "{agent} 응답 없음 — 재알림 중단",
+  "event.registered": "{agent} 등록",
+  "event.archived": "{agent} 보관",
+  "event.rebound": "{agent} 세션 재연결",
+  "event.rulesWritten": "{agent} 지시문 {action}",
+  "event.rulesCreated": "생성",
+  "event.rulesUpdated": "갱신",
+  "event.rulesBroadcast": "{reason} — 지시문 {count}건 재발행",
+  "event.blocked": "{agent} 결정 대기 #{id}",
+  "event.answered": "{agent} 결정 회신 #{id}",
+  "event.progress": "{agent} 진행 #{id}",
+  "event.dismissed": "{agent} wake 실패 확인 처리",
+
+  "wake.inbox": "[pilo:inbox] 요청 도착 #{id} — {agent} 앞. 'pilo inbox {id}' 로 확인.",
+  "wake.task": "[pilo:task] 작업 도착 #{id} — {agent} 앞. 'pilo task {id}' 로 읽고 'pilo done {id}' 로 보고.",
+  "wake.answer": "[pilo:task] 결정 회신 #{id} — {agent} 앞. 'pilo task {id}' 의 answer 를 읽고 이어서 진행.",
+  "wake.result": "[pilo:result] 결과 도착 #{id} — 'pilo inbox {id}' 로 취합 후 'pilo reply {id}'.",
+  "wake.rules": "[pilo:rules] 지시문이 갱신됐다. {file} 의 pilo:begin ~ pilo:end 블록을 읽고 지금부터 그대로 동작해.",
+  "wake.check": "[pilo] {agent} 확인 요청",
+
+  "dash.tab.overview": "Overview",
+  "dash.tab.overview.desc": "agent 상태 · 최근 task · 런타임",
+  "dash.tab.agents": "Agents",
+  "dash.tab.agents.desc": "조직도와 agent 등록",
+  "dash.tab.inbox": "Inbox",
+  "dash.tab.inbox.desc": "사용자 입력과 처리 경로",
+  "dash.tab.events": "Events",
+  "dash.tab.events.desc": "pm_result · final_reply · event 원문",
+  "dash.tab.artifacts": "Artifacts",
+  "dash.tab.artifacts.desc": "agent가 만든 파일과 변경 내용",
+  "dash.tab.projects": "Projects",
+  "dash.tab.projects.desc": "프로젝트 · 경로 · 담당 PM",
+  "dash.tab.commands": "Commands",
+  "dash.tab.commands.desc": "TUI와 CLI에서 쓰는 명령",
+  "dash.tab.settings": "Settings",
+  "dash.tab.settings.desc": "알림 · 토큰 표기 · 보관 기간",
+  "dash.tab.system": "System",
+  "dash.tab.system.desc": "server · wake · dashboard 상태와 경로"
+};
+
+export const LANGS = { en: EN, ko: KO };
+// The dashboard imports this file too, where there is no process to read.
+const wanted = typeof process === "undefined" ? "" : process.env.PILO_LANG || "";
+export const lang = LANGS[wanted] ? wanted : "en";
+
+// t("card.needsReplyMany", { count: 3 }). Unknown keys come back as the key
+// itself, which is louder in a screenshot than an empty string.
+export function t(key, vars = {}) {
+  const table = LANGS[lang] || EN;
+  const line = table[key] ?? EN[key] ?? key;
+  return String(line).replace(/\{(\w+)\}/g, (_, name) => (vars[name] === undefined ? `{${name}}` : String(vars[name])));
+}
