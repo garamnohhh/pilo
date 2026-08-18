@@ -224,11 +224,10 @@ function cardBlock({ box, title, titleColor, right, body, footer, surface, state
 function replyBlock(item, width, tagged) {
   const box = Math.max(24, width - 2);
   const took = elapsed(item.createdAt, item.repliedAt);
-  // The question above already names who answered. The header repeats it only
-  // when it would say something different — several agents on one request, where
-  // the badge collapses the list and the header can spell it out.
+  // The question above already names who answered, one badge each. The header
+  // adds the names only when the badges had to collapse them into a count.
   const who = item.routed || "";
-  const extra = who && who !== (tagged?.plain || "") ? ` ${c.green}${who}${c.reset}` : "";
+  const extra = who && tagged?.hidden ? ` ${c.green}${who}${c.reset}` : "";
   return cardBlock({
     box,
     title: `${badge("FINAL_REPLY")}${extra}`,
@@ -281,29 +280,52 @@ function waitingBlock(item, width) {
   ];
 }
 
-// The project a request landed in, or the agents holding it. A request that was
-// never handed out is the desk agent's own work, so it says PILO. The colour is
-// the one the tree gives that role, so the two read as the same thing.
+// Who actually holds the request: one badge per agent, each in the colour its
+// role wears in the tree, so a PM and its worker are told apart at a glance. A
+// request nobody was given is the desk agent's own, and says PILO.
+//
+// Three names is where a row starts losing its question, so at most three are
+// spelled out and the rest collapse into a count.
+const BADGE_LIMIT = 3;
+const NAME_LIMIT = 18;
+
 function routedBadge(item, tree) {
-  const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
-  const plain = parts.length
-    ? parts.length > 2
-      ? `${parts[0]} +${parts.length - 1}`
-      : parts.join(" · ")
-    : "PILO";
-  const paint = parts.length ? badgePaint(parts, tree) : BADGE.PILO;
-  const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
-  return { plain, width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
+  const names = String(item.routed || "").split(", ").map((x) => x.trim()).filter(Boolean);
+  if (!names.length) {
+    const label = ASCII || COLOR === "none" ? "[PILO]" : smallCaps("PILO");
+    return {
+      shown: [],
+      hidden: 0,
+      width: cols(label),
+      text: ASCII || COLOR === "none" ? label : `${BADGE.PILO.bg}${BADGE.PILO.fg}${label}${c.reset}`
+    };
+  }
+
+  const shown = names.slice(0, BADGE_LIMIT);
+  const hidden = names.length - shown.length;
+  const chip = (name, paint) => {
+    const plain = cut(name, NAME_LIMIT);
+    const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
+    return { label, text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
+  };
+  const chips = shown.map((name) => chip(name, rolePaint(name, tree)));
+  if (hidden) chips.push(chip(`+${hidden}`, BADGE.WORKER));
+  // One space between chips: two would read as separate things rather than one
+  // list of holders.
+  return {
+    shown,
+    hidden,
+    width: chips.reduce((n, x) => n + cols(x.label), 0) + (chips.length - 1),
+    text: chips.map((x) => x.text).join(" ")
+  };
 }
 
-// Match on the agent names a request was routed to, and on the project names
-// they answer for — the badge takes the colour of whoever holds it.
-function badgePaint(parts, tree) {
+// A name belongs to whichever row of the tree carries it.
+function rolePaint(name, tree) {
+  if (tree?.pilo && tree.pilo.name === name) return BADGE.PILO;
   const pms = tree?.pms || [];
-  const workers = pms.flatMap((pm) => pm.children || []);
-  const owns = (agents) => agents.some((a) => parts.includes(a.name) || parts.includes(a.projectName));
-  if (owns(pms)) return BADGE.PM;
-  if (owns(workers)) return BADGE.WORKER;
+  if (pms.some((pm) => pm.name === name)) return BADGE.PM;
+  if (pms.flatMap((pm) => pm.children || []).some((w) => w.name === name)) return BADGE.WORKER;
   return BADGE.PM;
 }
 
