@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
-import { parseCommand, HELP } from "./commands.js";
+import { parseCommand, suggest, HELP } from "./commands.js";
 import { alignTables } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
@@ -1059,6 +1059,13 @@ keys.on("keypress", async (ch, key) => {
   }
   if (next.action === "send") {
     const text = expandPastes(state.input).replace(/\s+$/, "");
+    // A near-miss on a command is held back rather than sent: the draft stays put
+    // so the fix is one edit away, and the desk agent is spared a typo to answer.
+    const near = suggest(text);
+    if (near) {
+      note(`알 수 없는 명령입니다. 혹시 ${near.matches.map((x) => ":" + x).join(" 또는 ")}?`);
+      return render();
+    }
     state.input = "";
     state.cursor = 0;
     state.scroll = 0;

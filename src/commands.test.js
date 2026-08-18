@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCommand } from "./commands.js";
+import { parseCommand, suggest } from "./commands.js";
 
 test("slash commands are recognised", () => {
   assert.deepEqual(parseCommand(":dash"), { name: "dash", args: [] });
@@ -34,4 +34,14 @@ test("a path or ordinary text starting with a slash is not a command", () => {
 test("case does not matter", () => {
   assert.equal(parseCommand("/DASH").name, "dash");
   assert.equal(parseCommand("/Exit").name, "exit");
+});
+
+test("a near-miss on a command is offered back, a sentence is not", () => {
+  assert.deepEqual(suggest(":agetns"), { word: "agetns", matches: ["agents"] });
+  assert.deepEqual(suggest("/hlep"), { word: "hlep", matches: ["help"] }, "the old prefix too");
+  assert.equal(suggest(":안녕하세요"), null, "not ascii — a message");
+  assert.equal(suggest(":오늘 일정 알려줘"), null, "has spaces — a message");
+  assert.equal(suggest(":q"), null, "too short to guess from");
+  assert.equal(suggest(":unknownlongword"), null, "nothing close");
+  assert.equal(suggest(":copy"), null, "a real command needs no suggestion");
 });

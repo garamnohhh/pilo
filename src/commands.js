@@ -55,3 +55,47 @@ export function parseCommand(text) {
 }
 
 export const HELP = TUI_COMMANDS.map((x) => `:${x.name}${x.args ? " " + x.args : ""} ${x.summary}`).join("   ");
+
+// A mistyped command looks exactly like a message, and a message that reaches
+// the desk agent costs it a round trip to answer. So a near-miss is caught
+// before it is sent — but only a near-miss: anything that could be a sentence
+// goes through untouched.
+//
+// Candidate rules, deliberately narrow:
+//   · one word, no spaces — ":오늘 일정 알려줘" is a message
+//   · ASCII letters and dashes only — ":안녕하세요" is a message
+//   · 3 to 16 characters — ":a" is too short to guess from
+//   · within one edit for three letters, two for longer
+function distance(a, b) {
+  const rows = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 0; j <= b.length; j++) rows[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      rows[i][j] = Math.min(
+        rows[i - 1][j] + 1,
+        rows[i][j - 1] + 1,
+        rows[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+  }
+  return rows[a.length][b.length];
+}
+
+export function suggest(text) {
+  const raw = String(text || "");
+  if (!/^[/:]/.test(raw)) return null;
+  const word = raw.slice(1).trim();
+  if (!/^[a-zA-Z][a-zA-Z-]{2,15}$/.test(word)) return null;
+  if (parseCommand(raw)) return null;
+
+  const typed = word.toLowerCase();
+  const limit = typed.length <= 3 ? 1 : 2;
+  const names = TUI_COMMANDS.flatMap((x) => [x.name, ...(x.aliases || [])]);
+  const near = names
+    .map((name) => ({ name, gap: distance(typed, name) }))
+    .filter((x) => x.gap <= limit)
+    .sort((a, b) => a.gap - b.gap || a.name.localeCompare(b.name));
+  if (!near.length) return null;
+  const best = near.filter((x) => x.gap === near[0].gap).slice(0, 2);
+  return { word, matches: best.map((x) => x.name) };
+}
