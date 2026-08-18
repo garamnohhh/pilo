@@ -5,6 +5,8 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { socketPath, socketFile } from "./paths.js";
 import { spoolDir, ensureSpool } from "./spool.js";
+import { CLI_COMMANDS } from "./commands.js";
+import { cols } from "./width.js";
 
 function resolveSocket() {
   if (process.env.PILO_SOCKET) return process.env.PILO_SOCKET;
@@ -101,20 +103,15 @@ function flags(args) {
   return { rest, opts };
 }
 
-const USAGE = `pilo agent commands
-
-  pilo inbox                    미처리 요청 목록
-  pilo inbox <id>               요청 원문과 task/최종답변 상태
-  pilo agents                   등록된 agent 목록 (id, name, role)
-  pilo send <agentId> <inboxId> <요청>   PM에게 task 생성  [--title 제목]
-  pilo reply <inboxId> <본문>   final_reply 저장 (사용자 화면에 뜨는 유일한 값)
-  pilo task <id>                받은 작업 원문
-  pilo progress <taskId> <한 줄>  진행 상황 남기기 (최종 답변과 별개, 여러 번 가능)
-  pilo done <taskId> <보고>     작업 결과 보고  [--in 토큰 --out 토큰 --status done|failed]
-  pilo block <taskId> <질문>    사용자 결정 대기로 표시 (spinner 대신 '결정 대기')
-  pilo blocked                  결정 대기 중인 작업 목록
-  pilo answer <taskId> <답변>   결정 회신 — 그 작업이 다시 큐로 돌아감
-  pilo api <METHOD> <path> [json]        그 외 모든 엔드포인트`;
+// The catalogue in commands.js is the one list; this renders the CLI half of it.
+// Korean summaries mean the column has to be measured in display width.
+const signature = (x) => `pilo ${x.name}${x.args ? " " + x.args : ""}`;
+const column = Math.max(...CLI_COMMANDS.map((x) => cols(signature(x)))) + 2;
+const USAGE = [
+  "pilo agent commands",
+  "",
+  ...CLI_COMMANDS.map((x) => `  ${signature(x)}${" ".repeat(column - cols(signature(x)))}${x.summary}`)
+].join("\n");
 
 const commands = {
   async inbox([id]) {

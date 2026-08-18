@@ -222,7 +222,7 @@ function replyBlock(item, width) {
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
     body: wrap(alignTables(item.finalReply, box - 6), box - 6),
-    footer: "실행 로그 · 변경 파일 · 아티팩트는 /dash",
+    footer: "실행 로그 · 변경 파일 · 아티팩트는 :dash",
     surface: "reply"
   });
 }
@@ -243,7 +243,7 @@ function waitingBlock(item, width) {
           ? `${item.routed || "agent"} 결과 ${item.taskCount}건 도착 · 취합해서 저장해야 함`
           : `${item.routed || "agent"} 결과 도착 · 최종 답변 미저장`
       ],
-      footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 /dash`,
+      footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 :dash`,
       surface: "reply"
     });
   }
@@ -312,7 +312,7 @@ function setupScreen(setup, width) {
     rows.push(`  ${c.faint}${cut(ok ? desc : cmd || desc, width - 4)}${c.reset}`);
   }
   rows.push("");
-  rows.push(`${c.faint}/dash 로 대시보드를 열어 등록하세요.${c.reset}`);
+  rows.push(`${c.faint}:dash 로 대시보드를 열어 등록하세요.${c.reset}`);
   return rows;
 }
 
@@ -392,7 +392,7 @@ function railRows(tree, width, actions = []) {
   });
 
   if (!pms.length) {
-    rows.push(`${c.faint}Project agent 없음 — /dash 에서 등록${c.reset}`);
+    rows.push(`${c.faint}Project agent 없음 — :dash 에서 등록${c.reset}`);
     actions.push(null);
   }
   return rows;
@@ -575,7 +575,7 @@ function render() {
   const topLeft =
     `${c.bold}${c.strong}Pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
     `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
-  const topRight = `${c.faint}/help — commands${c.reset}`;
+  const topRight = `${c.faint}:help — commands${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
 
@@ -605,7 +605,7 @@ function render() {
       ? inbox.filter((i) => (i.project || "").split(", ").includes(state.filter))
       : inbox;
     if (state.filter) {
-      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 /project all 로 해제${c.reset}`);
+      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 :project all 로 해제${c.reset}`);
       actions.push({ type: "project", name: null });
       feed.push("");
       actions.push(null);
@@ -678,7 +678,7 @@ function render() {
   // one blank row stands between the feed and the prompt
   const filler = Math.max(0, height - HEAD_ROWS - visible - 1 - draft.length - 1);
   if (railWidth) {
-    const label = "register agent - /dash agents";
+    const label = "register agent - :dash agents";
     const inner = Math.max(cols(label) + 2, railWidth - 2);
     const room = inner - 2;
     const left = Math.max(0, Math.floor((room - cols(label)) / 2));
@@ -741,7 +741,7 @@ function render() {
     return row;
   };
 
-  // No hint bar: an empty prompt says what to do, and /help has the rest.
+  // No hint bar: an empty prompt says what to do, and :help has the rest.
   emit(pre + withRail(""));
 
   const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
@@ -796,7 +796,7 @@ async function command(parsed) {
   }
   if (word === "agents") {
     const tree = await api("/api/agents/tree", { pilo: null, pms: [] });
-    if (!tree.pilo) return note("등록된 agent가 없습니다. /dash agents 에서 등록하세요.");
+    if (!tree.pilo) return note("등록된 agent가 없습니다. :dash agents 에서 등록하세요.");
     const parts = [`${tree.pilo.name} ●`];
     for (const pm of tree.pms) parts.push(`${pm.name} ${pm.status} (${pm.children.map((w) => w.name).join(", ") || "worker 없음"})`);
     return note(parts.join(" │ "));
@@ -815,7 +815,7 @@ async function command(parsed) {
     const wanted = rest.join(" ").trim();
     const projects = [...new Set((state.data?.inbox || []).flatMap((i) => (i.project || "").split(", ").filter(Boolean)))];
     if (!wanted) {
-      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (/project <이름> · /project all)`);
+      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (:project <이름> · :project all)`);
     }
     if (wanted === "all" || wanted === "전체") {
       applyProject(null);
@@ -833,7 +833,7 @@ async function command(parsed) {
     return note(
       on
         ? "마우스 켜짐 — 휠 스크롤과 클릭 접기 사용. 드래그 선택은 iTerm2 Option, kitty/WezTerm Shift"
-        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 /mouse"
+        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 :mouse"
     );
   }
   if (word === "copy") {
@@ -857,7 +857,7 @@ async function command(parsed) {
       if (!answered) return note("복사할 답변이 아직 없다", { sticky: true });
       return copyOut(`in-${answered.id} 답변`, answered.finalReply);
     }
-    return note("사용법: /copy [last | in-65 | task-389 | draft]", { sticky: true });
+    return note("사용법: :copy [last | in-65 | task-389 | draft]", { sticky: true });
   }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
@@ -909,7 +909,7 @@ async function command(parsed) {
   if (word === "help") {
     return note(HELP);
   }
-  return note(`unknown command: /${word} — /help 참고`, { sticky: true });
+  return note(`unknown command: :${word} — :help 참고`, { sticky: true });
 }
 
 async function send(text) {

@@ -176,6 +176,7 @@
 
 <script type="module">
 import { tablesToHtml } from "/markdown.js";
+import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 const TABS = [
   ["overview", "Overview", "agent 상태 · 최근 task · 런타임"],
   ["agents", "Agents", "role 조직도와 agent 등록"],
@@ -183,6 +184,7 @@ const TABS = [
   ["events", "Events", "pm_result · final_reply · event 원문"],
   ["artifacts", "Artifacts", "agent가 만든 파일과 변경 내용"],
   ["projects", "Projects", "프로젝트 · 경로 · 담당 PM"],
+  ["commands", "Commands", "TUI와 CLI에서 쓰는 명령"],
   ["settings", "Settings", "알림 · 토큰 표기 · 보관 기간"],
   ["system", "System", "server · wake · dashboard 상태와 경로"]
 ];
@@ -865,6 +867,27 @@ views.projects = () => {
       <div class="field"><div class="name">note</div><input id="p-note" value="${esc(p.note)}" placeholder="PoC"></div>
       <button class="btn primary" data-act="${p.id ? "update-project" : "create-project"}">${p.id ? "save project" : "create project"}</button>
     </div>
+  </div>`;
+};
+
+// The catalogue lives in src/commands.js and is served to the browser as-is, so
+// adding a command there puts it on this page without a second edit.
+views.commands = () => {
+  const table = (title, note, list, prefix) => `<div class="table">
+    <div class="title">${esc(title)} <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${esc(note)}</span></div>
+    <div class="row head" style="grid-template-columns:210px 1fr 320px"><span>명령</span><span>설명</span><span>예</span></div>
+    ${list.map((cmd) => `<div class="row" style="grid-template-columns:210px 1fr 320px">
+      <span class="mono" style="color:var(--text)">${esc(prefix + cmd.name)}${cmd.args ? `<span style="color:#5f6b64"> ${esc(cmd.args)}</span>` : ""}</span>
+      <span>${esc(cmd.summary)}${(cmd.aliases || []).length ? `<span class="mono" style="color:#5f6b64"> · ${esc((cmd.aliases || []).map((a) => prefix + a).join(" "))}</span>` : ""}</span>
+      <span class="mono" style="font-size:11px;color:#8b968e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cmd.example)}</span>
+    </div>`).join("")}
+  </div>`;
+
+  return `<div style="display:flex;flex-direction:column;gap:16px">
+    ${table("TUI", "터미널 입력창에서 · 접두사는 :", TUI_COMMANDS, ":")}
+    ${table("CLI", "agent 세션에서 · unix socket, 막히면 파일 spool", CLI_COMMANDS, "pilo ")}
+    <div class="card"><span class="sub">슬래시(/)로 시작하는 옛 표기도 계속 받지만, 화면 표기는 전부 : 로 통일했습니다.
+      이 목록은 <span class="mono">src/commands.js</span> 한 곳에서 읽어옵니다 — 명령을 거기 추가하면 TUI 도움말, CLI usage, 이 화면이 함께 갱신됩니다.</span></div>
   </div>`;
 };
 
