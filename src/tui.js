@@ -16,19 +16,73 @@ const base = `http://127.0.0.1:${port}`;
 const dashboardUrl = `${base}/dashboard`;
 const launchCwd = process.env.PILO_LAUNCH_CWD || process.cwd();
 
+// Colour comes in three grades. Truecolor gets the palette as designed; a
+// 256-colour terminal gets the nearest cube entry; NO_COLOR (or a terminal that
+// says nothing at all) gets shape only — the layout never depends on colour.
+const NO_COLOR = process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "";
+const TRUECOLOR = /truecolor|24bit/i.test(process.env.COLORTERM || "");
+const TERM = process.env.TERM || "";
+const COLOR = NO_COLOR || TERM === "dumb" || !TERM ? "none" : TRUECOLOR ? "true" : "256";
+
+// The 6x6x6 cube plus the grey ramp, which is what 256-colour terminals have.
+function cube(r, g, b) {
+  const grey = Math.abs(r - g) < 12 && Math.abs(g - b) < 12;
+  if (grey) {
+    const level = Math.round(((r + g + b) / 3 - 8) / 10);
+    if (level <= 0) return 16;
+    if (level >= 23) return 231;
+    return 232 + level;
+  }
+  const step = (v) => (v < 48 ? 0 : v < 115 ? 1 : Math.round((v - 35) / 40));
+  return 16 + 36 * step(r) + 6 * step(g) + step(b);
+}
+
+const fg = (r, g, b) =>
+  COLOR === "none" ? "" : COLOR === "true" ? `\x1b[38;2;${r};${g};${b}m` : `\x1b[38;5;${cube(r, g, b)}m`;
+const bg = (r, g, b) =>
+  COLOR === "none" ? "" : COLOR === "true" ? `\x1b[48;2;${r};${g};${b}m` : `\x1b[48;5;${cube(r, g, b)}m`;
+
 const c = {
-  reset: "\x1b[0m",
-  bold: "\x1b[1m",
-  green: "\x1b[38;2;62;212;156m",
-  fg: "\x1b[38;2;217;222;217m",
-  strong: "\x1b[38;2;238;242;238m",
-  muted: "\x1b[38;2;111;122;115m",
-  faint: "\x1b[38;2;79;90;83m",
-  blue: "\x1b[38;2;150;178;214m",
-  amber: "\x1b[38;2;218;184;88m",
-  red: "\x1b[38;2;220;104;80m",
-  line: "\x1b[38;2;28;33;31m"
+  reset: COLOR === "none" ? "" : "\x1b[0m",
+  bold: COLOR === "none" ? "" : "\x1b[1m",
+  green: fg(62, 212, 156),
+  fg: fg(217, 222, 217),
+  strong: fg(238, 242, 238),
+  muted: fg(111, 122, 115),
+  faint: fg(79, 90, 83),
+  blue: fg(150, 178, 214),
+  amber: fg(218, 184, 88),
+  red: fg(220, 104, 80),
+  // panel frames and the tree's own hierarchy lines are two different greys
+  line: fg(30, 36, 34),
+  branch: fg(62, 71, 68)
 };
+
+// Role labels are filled blocks, not bracketed text. Without colour the brackets
+// come back, because a bare word in a rule of dashes reads as noise.
+// The 6x6x6 cube collapses these dark tints onto the same entry, so the
+// 256-colour badges pick their own indices rather than being derived.
+const pick = (code, x256) => (COLOR === "none" ? "" : COLOR === "true" ? code : x256);
+const BADGE = {
+  PILO: { bg: pick(bg(43, 74, 60), "\x1b[48;5;22m"), fg: pick(fg(214, 245, 230), "\x1b[38;5;194m") },
+  PM: { bg: pick(bg(38, 52, 61), "\x1b[48;5;24m"), fg: pick(fg(211, 230, 242), "\x1b[38;5;189m") },
+  WORKER: { bg: pick(bg(38, 45, 42), "\x1b[48;5;236m"), fg: pick(fg(185, 195, 188), "\x1b[38;5;250m") },
+  FINAL_REPLY: { bg: pick(bg(43, 74, 60), "\x1b[48;5;22m"), fg: pick(fg(214, 245, 230), "\x1b[38;5;194m") }
+};
+
+const badgeText = (tag) => (COLOR === "none" ? `[${tag}]` : ` ${tag} `);
+function badge(tag) {
+  const paint = BADGE[tag] || BADGE.WORKER;
+  return COLOR === "none" ? `[${tag}]` : `${paint.bg}${paint.fg}${badgeText(tag)}${c.reset}`;
+}
+
+// Card surfaces: a tint painted to the card's full width, and the accent bar that
+// stands in for a left border.
+const CARD = {
+  reply: { tint: bg(15, 19, 18), accent: fg(62, 212, 156) },
+  waiting: { tint: bg(12, 16, 14), accent: fg(47, 107, 82) }
+};
+const BAR = "▌";
 
 const state = {
   input: "",
@@ -113,20 +167,29 @@ function elapsed(from, to) {
 }
 
 // One card shape for both states, so a request that is still running looks like
-// the same thing it will become.
-function cardBlock({ box, title, titleColor, right, body, footer, glyphs }) {
-  const [tl, tr, bl, br, h, v] = glyphs;
-  const inner = box - 2;
-  // corners 2, the two rule glyphs beside them, and four spaces
-  const fill = Math.max(1, box - 8 - cols(title) - cols(right));
+// the same thing it will become. The card is a painted surface: an accent bar
+// down the left edge, a tint carried to the card's full width — padding included,
+// or the background would stop where the text does — and a blank tinted row above
+// and below for breathing room.
+function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
+  const paint = CARD[surface] || CARD.reply;
+  const inner = box - 1;              // the accent bar owns the first column
+  const text = inner - 2;             // one space of padding each side
+  // A reset inside the content — a badge ends with one — would drop the tint for
+  // the rest of the row, so every reset re-asserts it.
+  const keep = (t) => (paint.tint ? String(t).split(c.reset).join(c.reset + paint.tint) : String(t));
+  const line = (content, colour = c.fg) =>
+    `${paint.accent}${BAR}${c.reset}${paint.tint} ${colour}${keep(pad(cut(content, text), text))}${c.reset}${paint.tint} ${c.reset}`;
+
+  const gap = Math.max(1, text - cols(title) - cols(right));
   const rows = [
-    `${c.line}${tl}${h}${c.reset} ${titleColor}${title}${c.reset} ${c.line}${h.repeat(fill)}${c.reset} ` +
-      `${c.faint}${right}${c.reset} ${c.line}${h}${tr}${c.reset}`
+    `${paint.accent}${BAR}${c.reset}${paint.tint} ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
+      `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint} ${c.reset}`,
+    line("")
   ];
-  const put = (text, color) => rows.push(`${c.line}${v}${c.reset} ${color}${pad(text, inner - 2)}${c.reset} ${c.line}${v}${c.reset}`);
-  for (const part of body) put(part, c.fg);
-  if (footer) put(footer, c.faint);
-  rows.push(`${c.line}${bl}${h.repeat(inner)}${br}${c.reset}`);
+  for (const part of body) rows.push(line(part));
+  if (footer) rows.push(line(footer, c.faint));
+  rows.push(line(""));
   return rows;
 }
 
@@ -135,12 +198,12 @@ function replyBlock(item, width) {
   const took = elapsed(item.createdAt, item.repliedAt);
   return cardBlock({
     box,
-    title: item.routed || "pilo",
-    titleColor: c.green,
-    right: took ? `in-${item.id} │ ${took}` : `in-${item.id}`,
-    body: wrap(alignTables(item.finalReply, box - 4), box - 4),
+    title: `${badge("FINAL_REPLY")} ${c.green}${item.routed || "pilo"}${c.reset}`,
+    titleColor: "",
+    right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
+    body: wrap(alignTables(item.finalReply, box - 3), box - 3),
     footer: "실행 로그 · 변경 파일 · 아티팩트는 /dash",
-    glyphs: ["╭", "╮", "╰", "╯", "─", "│"]
+    surface: "reply"
   });
 }
 
@@ -161,7 +224,7 @@ function waitingBlock(item, width) {
           : `${item.routed || "agent"} 결과 도착 · 최종 답변 미저장`
       ],
       footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 /dash`,
-      glyphs: ["╭", "╮", "╰", "╯", "─", "│"]
+      surface: "reply"
     });
   }
   // The agent's own progress note when there is one; it is not the answer, so it
@@ -176,7 +239,7 @@ function waitingBlock(item, width) {
     right: item.progressBy && item.progressBy !== item.routed ? `${item.progressBy} · in-${item.id}` : `in-${item.id}`,
     body,
     footer: "",
-    glyphs: ["╭", "╮", "╰", "╯", "┈", "┊"]
+    surface: "waiting"
   });
 }
 
@@ -242,27 +305,27 @@ function railRows(tree, width, actions = []) {
   // Two lines per agent: the name with its branch, then role and status underneath,
   // with the branch bars carried down so the hierarchy stays visible.
   // name on the left, role badge flush right, a faint rule filling the gap
-  const put = (branch, spine, icon, name, tag, tagColor, meta, action, nameColor = c.fg) => {
-    const badge = `[${tag}]`;
-    const room = width - cols(branch) - 2 - badge.length - 2;
+  const put = (branch, spine, icon, name, tag, meta, action, nameColor = c.fg) => {
+    const tagWidth = cols(badgeText(tag));
+    const room = width - cols(branch) - 2 - tagWidth - 2;
     const label = cut(name, Math.max(6, room));
-    const fill = width - cols(branch) - 2 - cols(label) - badge.length - 2;
+    const fill = width - cols(branch) - 2 - cols(label) - tagWidth - 2;
     const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}${rule}${tagColor}${badge}${c.reset}`);
+    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}${rule}${badge(tag)}`);
     actions.push(action);
     rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
     actions.push(action);
   };
 
   const all = { type: "project", name: null };
-  put("", "  ", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", c.green,
+  put("", "  ", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO",
     tree.pilo.activity || "전체 보기", all);
 
-  const bar = `${c.faint}│${c.reset}`;
+  const bar = `${c.branch}│${c.reset}`;
   const pms = tree.pms;
   pms.forEach((pm, i) => {
     const last = i === pms.length - 1;
-    const elbow = `${c.faint}${last ? "└─" : "├─"}${c.reset} `;
+    const elbow = `${c.branch}${last ? "└─" : "├─"}${c.reset} `;
     const spine = `${last ? " " : bar}    `;
     const base =
       pm.status === "blocked"
@@ -284,11 +347,11 @@ function railRows(tree, width, actions = []) {
     actions.push(null);
     // A running session spins even when Pilo has nothing on it.
     const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
-    put(elbow, spine, pmIcon, pm.name, "PM", c.blue, `${project}${load}`, filter, picked);
+    put(elbow, spine, pmIcon, pm.name, "PM", `${project}${load}`, filter, picked);
 
     pm.children.forEach((w, k) => {
       const lastChild = k === pm.children.length - 1;
-      const childBranch = `${last ? " " : bar}   ${c.faint}${lastChild ? "└─" : "├─"}${c.reset} `;
+      const childBranch = `${last ? " " : bar}   ${c.branch}${lastChild ? "└─" : "├─"}${c.reset} `;
       const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
       const wBase =
         w.status === "blocked"
@@ -300,7 +363,7 @@ function railRows(tree, width, actions = []) {
               : w.specialty || w.status;
       const wSeen = sessionLine(w, wBase);
       const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
-      put(childBranch, childSpine, wIcon, w.name, "WORKER", c.muted, wSeen.text, filter, picked);
+      put(childBranch, childSpine, wIcon, w.name, "WORKER", wSeen.text, filter, picked);
     });
   });
 
