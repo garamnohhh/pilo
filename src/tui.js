@@ -102,8 +102,12 @@ const BAR = "▌";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
 const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
-// The waiting dot pulses between that state colour and a dimmer one.
+// Work in flight pulses between that colour and a dimmer one; a finished or
+// stuck request holds still, because a blink is a claim that something is
+// happening right now.
 const PULSE_DIM = fg(120, 100, 46);
+const pulseColour = (which) =>
+  which === "working" && !state.pulse ? PULSE_DIM : STATE_COLOUR[which] || STATE_COLOUR.done;
 
 const state = {
   input: "",
@@ -258,20 +262,20 @@ function waitingBlock(item, width) {
       state: "attention"
     });
   }
-  // Work in flight: one line — a pulsing dot, the agent's own words if it left
-  // any, and who is holding it, pushed to the right edge.
-  const paint = { ...CARD.waiting, accent: STATE_COLOUR.working };
+  // Work in flight: one line — what the agent last said about it, and who is
+  // holding it, pushed to the right edge. The bar itself does the pulsing now,
+  // so the line starts at the same column as any other card's text.
+  const paint = { ...CARD.waiting, accent: pulseColour("working") };
   const text = Math.max(8, box - 5);
-  const dot = `${state.pulse ? STATE_COLOUR.working : PULSE_DIM}●${c.reset}${paint.tint}`;
   const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
   const who = item.routed || "";
-  const room = text - cols(who) - 3;
+  const room = text - cols(who) - 1;
   const words = cut(said, Math.max(6, room));
-  const gap = Math.max(1, text - 2 - cols(words) - cols(who));
+  const gap = Math.max(1, text - cols(words) - cols(who));
   const blank = `${paint.accent}${BAR}${c.reset}${paint.tint}${" ".repeat(text + 4)}${c.reset}`;
   return [
     blank,
-    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${dot} ${c.fg}${words}${c.reset}${paint.tint}` +
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${c.fg}${words}${c.reset}${paint.tint}` +
       `${" ".repeat(gap)}${c.faint}${who}${c.reset}${paint.tint}  ${c.reset}`,
     blank
   ];
@@ -650,9 +654,9 @@ function render() {
       // once answered, amber while the work is out, red when it needs a person.
       // Colour alone would strand anyone without it, so the colourless build
       // swaps the glyph instead.
-      const state = item.finalReply ? "done" : item.needsReply ? "attention" : "working";
-      const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[state] : "❯";
-      const markColour = STATE_COLOUR[state];
+      const mood = item.finalReply ? "done" : item.needsReply ? "attention" : "working";
+      const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
+      const markColour = pulseColour(mood);
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
@@ -665,8 +669,10 @@ function render() {
       actions.push(...question.map(() => fold));
       feed.push("");
       actions.push(null);
+      // The mark pulses whether or not the card is open, so a folded request
+      // still keeps the clock running.
+      if (!item.finalReply && !item.needsReply) waiting += 1;
       if (!folded) {
-        if (!item.finalReply && !item.needsReply) waiting += 1;
         // The bar lines up with the question's badge, not with the ❯: the mark and
         // the space after it are the two columns the card is indented past.
         const block = (item.finalReply ? replyBlock(item, mainWidth - 6, tagged) : waitingBlock(item, mainWidth - 6)).map((r) => "    " + r);
