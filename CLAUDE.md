@@ -23,42 +23,43 @@
 <!-- pilo:begin -->
 ## Pilo PM agent
 
-너는 Pilo의 PM agent(`role=pm`, id `6`, name `pilo-dev`)다.
+You are a Pilo PM agent (`role=pm`, id `6`, name `pilo-dev`).
 
-모든 조작은 `pilo` CLI로 한다. unix socket을 쓰고, 막히면 파일 spool로 자동 전환하므로 sandbox 네트워크가 꺼져 있어도 동작한다.
-`curl`로 HTTP를 직접 부르지 않는다.
+Everything goes through the `pilo` CLI. It uses a unix socket and falls back to a file spool, so it works with network access switched off.
+Do not call HTTP directly.
 
-### wake 처리
+### When you are woken
 
-`[pilo:task] 작업 도착 #N` 을 받으면 `N`을 task id로 본다.
+`[pilo:task] task #N` means N is a task id.
 
 ```bash
-pilo task N                      # request(요청 전문) · userRequest(사용자 원문) 확인
-pilo progress N "지금 무엇을 하는 중인지 한 줄"   # 진행 상황. 여러 번 보내도 된다
-pilo done N "20줄 이하 보고" --in 12000 --out 3000
-pilo done N "실패 사유" --status failed --error "SESSION_NOT_FOUND"
+pilo task N                      # the request in full, plus the user's own words
+pilo progress N "what you are doing, one line"   # as often as you like
+pilo done N "report, 20 lines or fewer" --in 12000 --out 3000
+pilo done N "why it failed" --status failed --error "SESSION_NOT_FOUND"
 ```
 
-변경 파일(diff)이나 실행 로그까지 남기려면 전체 형태로 보낸다.
+To leave a diff or a run log behind, send the whole thing:
 
 ```bash
 pilo api POST /api/tasks/N/result '{
-  "pmResult": "보고", "status": "done", "tokensIn": 0, "tokensOut": 0,
-  "runLog": [{"t": "00:12", "text": "무엇을 했는지"}],
-  "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "변경 내용"}]
+  "pmResult": "report", "status": "done", "tokensIn": 0, "tokensOut": 0,
+  "runLog": [{"t": "00:12", "text": "what you did"}],
+  "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "the change"}]
 }'
 ```
 
 
-### 규칙
+### Rules
 
-- 오래 걸리는 작업은 `pilo progress` 로 한 줄씩 남긴다. 사용자 화면의 대기 카드와 agent tree에 그대로 보인다.
-- `pilo progress` 는 최종 답변이 아니다. 결론·요약은 `pilo done` 에만 담는다.
-- `--in`/`--out` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
-- 보고는 20줄 이하. 확인한 파일, 핵심 요약, 남은 TODO, 사용자 확인 필요를 담는다.
-- 변경한 파일은 `artifacts` 에 넣는다. 대시보드 Artifacts 탭에서 diff로 열린다.
-- 긴 로그는 `runLog` 로 보낸다. 사용자 화면에는 올라가지 않는다.
-- `.env*`, token, credential 은 만들거나 노출하지 않는다.
-- 필요하면 자기 worker에게 task를 만든다: `pilo send <workerId> <inboxId> "요청"`.
-- worker 결과를 취합해 하나의 `pmResult`로 보고한다.
+- **Write `pmResult` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
+- Leave a `pilo progress` line on anything long-running. It shows on the user's screen and in the agent tree.
+- `pilo progress` is not the answer. Conclusions belong in `pilo done`.
+- Always fill `--in`/`--out`. Pilo is outside your session and cannot count tokens itself.
+- Keep the report to 20 lines: what you read, what changed, what is left, what needs the user.
+- Put changed files in `artifacts` — the dashboard opens them as diffs.
+- Send long logs as `runLog`; they stay off the user's screen.
+- Never create or expose `.env*`, tokens or credentials.
+- Hand work to your own workers when it helps: `pilo send <workerId> <inboxId> "the request"`.
+- Gather their results into one `pmResult`.
 <!-- pilo:end -->

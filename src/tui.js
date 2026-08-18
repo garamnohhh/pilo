@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
+import { t } from "./text.js";
 import { parseCommand, suggest, HELP } from "./commands.js";
 import { alignTables } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
@@ -234,7 +235,7 @@ function replyBlock(item, width, tagged) {
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
     body: wrap(alignTables(item.finalReply, box - 5), box - 5),
-    footer: "실행 로그 · 변경 파일 · 아티팩트는 :dash",
+    footer: t("card.replyFooter"),
     surface: "reply",
     state: "done"
   });
@@ -248,15 +249,11 @@ function waitingBlock(item, width) {
     const many = Number(item.taskCount || 0) > 1;
     return cardBlock({
       box,
-      title: "답변 저장 필요",
+      title: t("card.needsReply"),
       titleColor: c.red,
       right: `in-${item.id}`,
-      body: [
-        many
-          ? `${item.routed || "agent"} 결과 ${item.taskCount}건 도착 · 취합해서 저장해야 함`
-          : `${item.routed || "agent"} 결과 도착 · 최종 답변 미저장`
-      ],
-      footer: `pilo inbox ${item.id} 로 결과 확인 · pilo reply ${item.id} "답변" · 자세히는 :dash`,
+      body: [many ? t("card.needsReplyMany", { count: item.taskCount }) : t("card.needsReplyOne")],
+      footer: `pilo inbox ${item.id} · pilo reply ${item.id} "…" · :dash`,
       surface: "reply",
       state: "attention"
     });
@@ -266,7 +263,7 @@ function waitingBlock(item, width) {
   // so the line starts at the same column as any other card's text.
   const paint = { ...CARD.waiting, accent: pulseColour("working") };
   const text = Math.max(8, box - 5);
-  const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
+  const said = item.progress || (item.routed ? t("card.waiting") : t("card.queued"));
   const who = item.routed || "";
   const room = text - cols(who) - 1;
   const words = cut(said, Math.max(6, room));
@@ -331,22 +328,22 @@ function rolePaint(name, tree) {
 
 function setupScreen(setup, width) {
   const rows = [];
-  rows.push(`${c.amber}●${c.reset} ${c.strong}setup required${c.reset}`);
+  rows.push(`${c.amber}●${c.reset} ${c.strong}${t("setup.title")}${c.reset}`);
   rows.push("");
-  rows.push(`${c.muted}기동에 필요한 항목입니다. 명령은 ${c.fg}pilo up${c.muted} 하나뿐이고, agent 등록은 대시보드에서 합니다.${c.reset}`);
+  rows.push(`${c.muted}${t("setup.lead")}${c.reset}`);
   rows.push("");
   if (setup.duplicatePilo) {
-    rows.push(`${c.red}●${c.reset} ${c.strong}role=pilo agent가 ${setup.piloAgents.length}개 감지됨${c.reset}`);
-    rows.push(`${c.faint}대표 agent는 정확히 하나여야 합니다. 대시보드에서 하나만 남기세요.${c.reset}`);
-    for (const a of setup.piloAgents) rows.push(`  ${c.fg}${a.name}${c.reset} ${c.faint}${pretty(a.cwd)} · ${a.runtime || "runtime 미감지"}${c.reset}`);
+    rows.push(`${c.red}●${c.reset} ${c.strong}${t("setup.duplicate", { count: setup.piloAgents.length })}${c.reset}`);
+    rows.push(`${c.faint}${t("setup.duplicateHint")}${c.reset}`);
+    for (const a of setup.piloAgents) rows.push(`  ${c.fg}${a.name}${c.reset} ${c.faint}${pretty(a.cwd)} · ${a.runtime || "runtime unknown"}${c.reset}`);
     rows.push("");
   }
   const steps = [
-    ["Docker runtime", setup.docker, "컨테이너 런타임 감지됨 (OrbStack 권장)", ""],
-    ["herdr 실행 중", setup.herdr, `agent 세션 ${setup.sessions}개 감지됨`, "herdr를 먼저 띄워야 agent를 붙일 수 있습니다"],
-    ["PostgreSQL 기동", setup.postgres, "pgvector 포함 · Docker Compose", "pilo up"],
-    ["대표 agent 등록 (role=pilo)", setup.piloAgents.length === 1, "사용자와 대화할 agent 1개", "dashboard → Agents → register agent"],
-    ["PM agent 등록 (선택)", setup.pmCount > 0, "PM이 없어도 Pilo agent와 대화는 가능합니다", "dashboard → Agents → register agent"]
+    [t("setup.docker"), setup.docker, t("setup.dockerOk"), ""],
+    [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t("setup.herdrHint")],
+    [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo up"],
+    [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.register")],
+    [t("setup.pm"), setup.pmCount > 0, t("setup.pmOk"), t("setup.register")]
   ];
   for (const [title, ok, desc, cmd] of steps) {
     const mark = ok ? `${c.green}✓${c.reset}` : `${c.faint}○${c.reset}`;
@@ -354,15 +351,15 @@ function setupScreen(setup, width) {
     rows.push(`  ${c.faint}${cut(ok ? desc : cmd || desc, width - 4)}${c.reset}`);
   }
   rows.push("");
-  rows.push(`${c.faint}:dash 로 대시보드를 열어 등록하세요.${c.reset}`);
+  rows.push(`${c.faint}${t("setup.open")}${c.reset}`);
   return rows;
 }
 
 function railRows(tree, width, actions = []) {
-  const rows = [`${c.faint}AGENT TREE${c.reset}`, ""];
+  const rows = [`${c.faint}${t("tree.title")}${c.reset}`, ""];
   actions.push(null, null);
   if (!tree.pilo) {
-    rows.push(`${c.faint}대표 agent 없음${c.reset}`);
+    rows.push(`${c.faint}${t("tree.noDesk")}${c.reset}`);
     actions.push(null);
     return rows;
   }
@@ -403,14 +400,14 @@ function railRows(tree, width, actions = []) {
   // The word on the right says what the agent is doing, in one token.
   const word = (agent, seen) =>
     agent.status === "blocked"
-      ? "blocked"
+      ? t("state.blocked")
       : agent.status === "failed"
-        ? "failed"
+        ? t("state.failed")
         : agent.status === "unbound"
-          ? "unbound"
+          ? t("state.unbound")
           : agent.status === "running" || seen.busy
-            ? "running"
-            : "idle";
+            ? t("state.running")
+            : t("state.idle");
 
   const all = { type: "project", name: null };
   const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
@@ -439,7 +436,7 @@ function railRows(tree, width, actions = []) {
   });
 
   if (!pms.length) {
-    rows.push(`${c.faint}Project agent 없음 — :dash 에서 등록${c.reset}`);
+    rows.push(`${c.faint}${t("tree.noPm")}${c.reset}`);
     actions.push(null);
   }
   return rows;
@@ -460,7 +457,7 @@ async function refresh() {
 function applyProject(name) {
   state.filter = name || null;
   state.scroll = 0;
-  note(name ? `필터: ${name}` : "필터 해제 — 전체 요청 표시");
+  note(name ? t("note.filterOn", { project: name }) : t("note.filterOff"));
   render();
 }
 
@@ -472,7 +469,7 @@ function handleClick({ x, y }) {
   if (!action) return;
   if (action.type === "dash") {
     spawn("open", [`${dashboardUrl}#${action.tab}`], { detached: true, stdio: "ignore" }).unref();
-    return note("대시보드 Agents 탭을 열었다");
+    return note(t("note.agentsTab"));
   }
   if (action.type === "project") return applyProject(action.name);
   if (action.type === "fold") {
@@ -519,8 +516,8 @@ let pasteSeq = 0;
 // The draft holds this token verbatim; send() swaps it back for the real text.
 function placeholderFor(text, lines) {
   pasteSeq += 1;
-  const size = text.length >= 1000 ? `${(text.length / 1000).toFixed(1)}k자` : `${text.length}자`;
-  const token = `⟦paste #${pasteSeq} · ${lines}줄 · ${size}⟧`;
+  const size = text.length >= 1000 ? `${(text.length / 1000).toFixed(1)}k chars` : `${text.length} chars`;
+  const token = `⟦paste #${pasteSeq} · ${lines} lines · ${size}⟧`;
   state.pastes.set(token, text);
   return token;
 }
@@ -540,20 +537,20 @@ function setMouse(on) {
 }
 
 async function copyOut(label, text) {
-  if (!text || !text.trim()) return note(`복사할 내용이 없다: ${label}`, { sticky: true });
+  if (!text || !text.trim()) return note(t("note.nothingToCopy") + `: ${label}`, { sticky: true });
   const done = await new Promise((resolve) => {
     const child = spawn("pbcopy");
     child.on("error", () => resolve(false));
     child.on("close", (code) => resolve(code === 0));
     child.stdin.end(text);
   });
-  if (done) return note(`${label} 복사됨 (${text.length}자)`);
+  if (done) return note(t("note.copied", { what: `${label} (${text.length} chars)` }));
   const file = join(homedir(), ".pilo", "last-copy.txt");
   try {
     writeFileSync(file, text);
-    return note(`클립보드 실패 — ${file} 에 저장했다`, { sticky: true });
+    return note(`clipboard unavailable — saved to ${file}`, { sticky: true });
   } catch (err) {
-    return note(`복사 실패: ${err.message}`, { sticky: true });
+    return note(`copy failed: ${err.message}`, { sticky: true });
   }
 }
 
@@ -587,10 +584,10 @@ function scrollBy(rows) {
 // session is just a busy session, whoever started it.
 function sessionLine(agent, base) {
   const seen = agent.sessionStatus || "";
-  if (agent.status === "unbound") return { text: "세션 미연결", busy: false };
+  if (agent.status === "unbound") return { text: t("tree.sessionOff"), busy: false };
   const busy = seen === "working";
-  const tail = busy ? "실행 중" : seen ? "대기" : "세션 끊김";
-  if (agent.status === "idle") return { text: busy ? "실행 중" : tail === "대기" ? "idle" : tail, busy };
+  const tail = busy ? t("tree.sessionBusy") : seen ? t("tree.sessionQuiet") : t("tree.sessionGone");
+  if (agent.status === "idle") return { text: busy ? t("tree.sessionBusy") : seen ? t("state.idle") : tail, busy };
   return { text: `${base} · ${tail}`, busy };
 }
 
@@ -617,12 +614,12 @@ function render() {
 
   const agentLabel = tree.pilo
     ? `${c.green}●${c.reset} ${c.bold}${c.fg}${tree.pilo.name} agent${c.reset}`
-    : `${c.faint}● 대표 agent 없음${c.reset}`;
+    : `${c.faint}● ${t("tree.noDesk")}${c.reset}`;
   const agentHome = pretty(tree.pilo?.cwd || launchCwd);
   const topLeft =
     `${c.bold}${c.strong}Pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
     `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
-  const topRight = `${c.faint}:help — commands${c.reset}`;
+  const topRight = `${c.faint}${t("header.help")}${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));
 
@@ -652,7 +649,7 @@ function render() {
       ? inbox.filter((i) => (i.project || "").split(", ").includes(state.filter))
       : inbox;
     if (state.filter) {
-      feed.push(`  ${c.faint}필터: ${c.fg}${state.filter}${c.faint} · PILO 클릭 또는 :project all 로 해제${c.reset}`);
+      feed.push(`  ${c.faint}${t("feed.filter", { project: state.filter })}${c.reset}`);
       actions.push({ type: "project", name: null });
       feed.push("");
       actions.push(null);
@@ -712,7 +709,7 @@ function render() {
       actions.push(...lines.map(() => null), null);
     }
     if (feed.length <= (state.filter ? 2 : 0)) {
-      feed.push(`  ${c.faint}${state.filter ? state.filter + " 프로젝트 요청 없음" : "아래 프롬프트에 지시를 입력하세요."} ${c.reset}`);
+      feed.push(`  ${c.faint}${state.filter ? t("feed.emptyFiltered", { project: state.filter }) : t("feed.empty")} ${c.reset}`);
       actions.push(null);
     }
     rows = feed;
@@ -731,7 +728,7 @@ function render() {
   // one blank row stands between the feed and the prompt
   const filler = Math.max(0, height - HEAD_ROWS - visible - 1 - draft.length - 1);
   if (railWidth) {
-    const label = "register agent - :dash agents";
+    const label = t("tree.register");
     const inner = Math.max(cols(label) + 2, railWidth - 2);
     const room = inner - 2;
     const left = Math.max(0, Math.floor((room - cols(label)) / 2));
@@ -764,9 +761,9 @@ function render() {
   const bottom = total - state.scroll;
   const shown = rows.slice(Math.max(0, bottom - visible), bottom);
   if (state.scroll > 0) {
-    shown[0] = `  ${c.amber}↑${c.reset} ${c.faint}위로 ${state.scroll}줄 · PgDn/⇧↓ 로 최근으로${c.reset}`;
+    shown[0] = `  ${c.faint}${t("feed.scrolled", { count: state.scroll })}${c.reset}`;
   } else if (state.maxScroll > 0) {
-    shown[0] = `  ${c.faint}↑ 이전 기록 ${state.maxScroll}줄 · PgUp/⇧↑${c.reset}`;
+    shown[0] = `  ${c.faint}${t("feed.older", { count: state.maxScroll })}${c.reset}`;
   }
   state.rowCount = rows.length;
   const first = Math.max(0, bottom - visible);
@@ -801,7 +798,7 @@ function render() {
   const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
   let cursorRow = screen.length + 1;
   let cursorCol = mainLeft + 3;
-  const PLACEHOLDER = "ask anything  ·  :dash for the dashboard";
+  const PLACEHOLDER = t("feed.placeholder");
   draft.forEach((row, i) => {
     const mark = i === 0 ? c.green + "❯" + c.reset : " ";
     const shown = i === 0 && !state.input ? `${c.faint}${PLACEHOLDER}${c.reset}` : row.text;
@@ -846,19 +843,19 @@ async function command(parsed) {
   if (word === "exit") return close();
   if (word === "dash") {
     spawn("open", [dashboardUrl + (rest[0] ? `#${rest[0]}` : "")], { detached: true, stdio: "ignore" }).unref();
-    return note("대시보드를 열었습니다.");
+    return note(t("note.dashOpened"));
   }
   if (word === "agents") {
     const tree = await api("/api/agents/tree", { pilo: null, pms: [] });
-    if (!tree.pilo) return note("등록된 agent가 없습니다. :dash agents 에서 등록하세요.");
+    if (!tree.pilo) return note(t("note.noAgents"));
     const parts = [`${tree.pilo.name} ●`];
-    for (const pm of tree.pms) parts.push(`${pm.name} ${pm.status} (${pm.children.map((w) => w.name).join(", ") || "worker 없음"})`);
+    for (const pm of tree.pms) parts.push(`${pm.name} ${pm.status} (${pm.children.map((w) => w.name).join(", ") || "no workers"})`);
     return note(parts.join(" │ "));
   }
   if (word === "inbox") {
     const inbox = await api("/api/inbox", []);
     const pending = inbox.filter((i) => i.status !== "replied");
-    return note(pending.length ? pending.map((i) => `in-${i.id} ${i.status}`).join(" · ") : "미처리 요청 없음");
+    return note(pending.length ? pending.map((i) => `in-${i.id} ${i.status}`).join(" · ") : "nothing pending");
   }
   if (word === "cost") {
     const o = await api("/api/overview", { stats: { tokens: { in: 0, out: 0, total: 0 } } });
@@ -869,14 +866,14 @@ async function command(parsed) {
     const wanted = rest.join(" ").trim();
     const projects = [...new Set((state.data?.inbox || []).flatMap((i) => (i.project || "").split(", ").filter(Boolean)))];
     if (!wanted) {
-      return note(`프로젝트: ${projects.join(" · ") || "없음"}   현재 필터: ${state.filter || "전체"}   (:project <이름> · :project all)`);
+      return note(t("note.projects", { list: projects.join(" · ") || t("note.none"), current: state.filter || t("note.all") }));
     }
     if (wanted === "all" || wanted === "전체") {
       applyProject(null);
       return;
     }
     const hit = projects.find((p) => p.toLowerCase() === wanted.toLowerCase());
-    if (!hit) return note(`그런 프로젝트가 없다: ${wanted} (${projects.join(", ") || "등록된 프로젝트 없음"})`, { sticky: true });
+    if (!hit) return note(`no such project: ${wanted} (${projects.join(", ") || "none registered"})`, { sticky: true });
     applyProject(hit);
     return;
   }
@@ -886,40 +883,40 @@ async function command(parsed) {
     setMouse(on);
     return note(
       on
-        ? "마우스 켜짐 — 휠 스크롤과 클릭 접기 사용. 드래그 선택은 iTerm2 Option, kitty/WezTerm Shift"
-        : "마우스 꺼짐 — 터미널 기본 드래그 선택으로 복사 가능. 스크롤은 PgUp/PgDn, 되돌리려면 :mouse"
+        ? t("note.mouseOn")
+        : t("note.mouseOff")
     );
   }
   if (word === "copy") {
     const what = rest.join(" ").trim() || "last";
-    if (what === "draft" || what === "입력") return copyOut("입력창", expandPastes(state.input));
+    if (what === "draft" || what === "입력") return copyOut("draft", expandPastes(state.input));
     const inboxMatch = what.match(/^(?:in-)?(\d+)$/);
     if (inboxMatch) {
       const detail = await api(`/api/inbox/${inboxMatch[1]}`, null);
-      if (!detail) return note(`in-${inboxMatch[1]} 을 찾을 수 없다`, { sticky: true });
+      if (!detail) return note(`in-${inboxMatch[1]} not found`, { sticky: true });
       const reply = detail.replies[detail.replies.length - 1];
-      return copyOut(`in-${detail.id}`, `요청: ${detail.userRequest}\n\n답변: ${reply?.body || "(아직 없음)"}`);
+      return copyOut(`in-${detail.id}`, `${detail.userRequest}\n\n${reply?.body || "(no reply yet)"}`);
     }
     const taskMatch = what.match(/^task-?(\d+)$/);
     if (taskMatch) {
       const task = await api(`/api/tasks/${taskMatch[1]}`, null);
-      if (!task) return note(`task #${taskMatch[1]} 을 찾을 수 없다`, { sticky: true });
+      if (!task) return note(`task #${taskMatch[1]} not found`, { sticky: true });
       return copyOut(`task #${task.id}`, task.pmResult || task.request);
     }
     if (what === "last" || what === "마지막") {
       const answered = (state.data?.inbox || []).find((i) => i.finalReply);
-      if (!answered) return note("복사할 답변이 아직 없다", { sticky: true });
-      return copyOut(`in-${answered.id} 답변`, answered.finalReply);
+      if (!answered) return note(t("note.nothingToCopy"), { sticky: true });
+      return copyOut(`in-${answered.id} reply`, answered.finalReply);
     }
-    return note("사용법: :copy [last | in-65 | task-389 | draft]", { sticky: true });
+    return note(t("note.copyUsage"), { sticky: true });
   }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
-    return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : "결정 대기 없음");
+    return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : t("note.noBlocked"));
   }
   if (word === "answer") {
     const [id, ...text] = rest;
-    if (!id || !text.length) return note("사용법: /answer <taskId> <답변>");
+    if (!id || !text.length) return note(t("note.answerUsage"));
     try {
       const res = await fetch(`${base}/api/tasks/${id}/answer`, {
         method: "POST",
@@ -927,9 +924,9 @@ async function command(parsed) {
         body: JSON.stringify({ body: text.join(" ") })
       });
       const data = await res.json();
-      return note(res.ok ? `#${id} 회신 저장 — agent 를 다시 깨웁니다` : `실패: ${data.error}`, { sticky: !res.ok });
+      return note(res.ok ? t("note.answered", { id }) : `failed: ${data.error}`, { sticky: !res.ok });
     } catch (err) {
-      return note(`실패: ${err.message}`, { sticky: true });
+      return note(`failed: ${err.message}`, { sticky: true });
     }
   }
   if (word === "fold" || word === "unfold") {
@@ -938,10 +935,10 @@ async function command(parsed) {
     if (target === "default") {
       state.folded.clear();
       state.unfolded.clear();
-      return note(`기본값 복귀 — 최신 ${OPEN_BY_DEFAULT}건만 펼침`);
+      return note(`back to the default — newest ${OPEN_BY_DEFAULT} open`);
     }
     if (target && target !== "all") {
-      if (!ids.includes(target)) return note(`in-${target} 를 찾을 수 없다`, { sticky: true });
+      if (!ids.includes(target)) return note(`in-${target} not found`, { sticky: true });
       if (word === "fold") {
         state.folded.add(target);
         state.unfolded.delete(target);
@@ -949,7 +946,7 @@ async function command(parsed) {
         state.unfolded.add(target);
         state.folded.delete(target);
       }
-      return note(`in-${target} ${word === "fold" ? "접음" : "폄"}`);
+      return note(`in-${target} ${word === "fold" ? "folded" : "open"}`);
     }
     if (word === "fold") {
       state.unfolded.clear();
@@ -958,12 +955,12 @@ async function command(parsed) {
       state.folded.clear();
       ids.forEach((id) => state.unfolded.add(id));
     }
-    return note(word === "fold" ? `전체 접음 (${ids.length}건)` : `전체 폄 (${ids.length}건)`);
+    return note(word === "fold" ? `folded all (${ids.length})` : `opened all (${ids.length})`);
   }
   if (word === "help") {
     return note(HELP);
   }
-  return note(`unknown command: :${word} — :help 참고`, { sticky: true });
+  return note(t("note.unknown", { word }), { sticky: true });
 }
 
 async function send(text) {
@@ -976,7 +973,7 @@ async function send(text) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    return note(`요청 저장 실패: ${err.error || res.status}`, { sticky: true });
+    return note(t("note.sendFailed", { reason: err.error || res.status }), { sticky: true });
   }
 }
 
@@ -1109,7 +1106,7 @@ keys.on("keypress", async (ch, key) => {
     // so the fix is one edit away, and the desk agent is spared a typo to answer.
     const near = suggest(text);
     if (near) {
-      note(`알 수 없는 명령입니다. 혹시 ${near.matches.map((x) => ":" + x).join(" 또는 ")}?`);
+      note(t("note.didYouMean", { names: near.matches.map((x) => ":" + x).join(" / ") }));
       return render();
     }
     state.input = "";

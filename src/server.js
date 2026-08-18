@@ -84,7 +84,7 @@ const routes = [
 
 // Two modules the dashboard imports directly; everything else under src stays put.
 // The dashboard reads these straight from src, so the two never disagree.
-const SHARED_MODULES = new Set(["/markdown.js", "/width.js", "/commands.js"]);
+const SHARED_MODULES = new Set(["/markdown.js", "/width.js", "/commands.js", "/text.js"]);
 
 async function serveStatic(res, pathname, headOnly = false) {
   if (SHARED_MODULES.has(pathname)) {

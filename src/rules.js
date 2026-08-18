@@ -11,32 +11,106 @@ function ruleFile(agent) {
   return agent.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md";
 }
 
-function piloRules(agent, base, agents) {
-  const roster = agents
-    .filter((a) => a.role !== "pilo")
-    .map((a) => `| ${a.id} | ${a.name} | ${a.role} | ${a.projectName || "—"} | ${a.aliases || "—"} | ${a.specialty || "—"} |`)
-    .join("\n");
-  return `## Pilo 대표 agent
+// Instruction blocks are written in English, with a Korean copy kept beside them
+// so a future agent can be given either. The one rule that must survive
+// translation: reports and replies go back in the language the user wrote in.
+const RULES = {
+  en: {
+    desk: (roster, base) => `## Pilo desk agent
+
+You are Pilo's desk agent (\`role=pilo\`). The user talks to you through the Pilo TUI, and the only thing that reaches their screen is the \`final_reply\` you save.
+
+Everything goes through the \`pilo\` CLI. It connects over a unix socket and falls back to a file spool when a sandbox blocks even that.
+Do not call HTTP (\`curl ${base}\`) from an agent session — the sandbox blocks it. That address is for the dashboard.
+
+### When you are woken
+
+| Message | What to do |
+| --- | --- |
+| \`[pilo:inbox] request #N\` | \`pilo inbox N\` to read it, then create a task for the PM who owns that project |
+| \`[pilo:result] results in for #N\` | \`pilo inbox N\` to read \`tasks[].pmResult\`, then \`pilo reply\` with the answer |
+
+\`\`\`bash
+pilo inbox                       # requests with no answer yet
+pilo inbox N                     # one request, its tasks and their state
+pilo agents                      # id · name · role · project
+pilo send <agentId> N "the request, in full"
+pilo reply N "what the user should read"
+\`\`\`
+
+### Registered agents
+
+| id | name | role | project | aliases | specialty |
+| --- | --- | --- | --- | --- | --- |
+${roster || "| — | no PMs yet | | | | |"}
+
+Run \`pilo agents\` if that list looks stale.
+
+### Rules
+
+- **Write \`final_reply\` in the language the user wrote in.** These instructions are in English; the answer is not, unless the user's request was.
+- Do not do project work yourself. Route it, then gather the results.
+- Answer directly only when no PM owns the request.
+- Do not save progress notes as answers. The one thing you save is \`final_reply\`.
+- If a PM reports a failure, say so plainly in the reply, with the reason.
+- Do not invent collaboration across the tree. If another project is needed, create a separate task for its PM.`,
+
+    worker: (agent, kind, roster, extra) => `## Pilo ${kind}
+
+You are a Pilo ${kind} (\`role=${agent.role}\`, id \`${agent.id}\`, name \`${agent.name}\`).
+
+Everything goes through the \`pilo\` CLI. It uses a unix socket and falls back to a file spool, so it works with network access switched off.
+Do not call HTTP directly.
+
+### When you are woken
+
+\`[pilo:task] task #N\` means N is a task id.
+
+\`\`\`bash
+pilo task N                      # the request in full, plus the user's own words
+pilo progress N "what you are doing, one line"   # as often as you like
+pilo done N "report, 20 lines or fewer" --in 12000 --out 3000
+pilo done N "why it failed" --status failed --error "SESSION_NOT_FOUND"
+\`\`\`
+
+To leave a diff or a run log behind, send the whole thing:
+
+\`\`\`bash
+pilo api POST /api/tasks/N/result '{
+  "pmResult": "report", "status": "done", "tokensIn": 0, "tokensOut": 0,
+  "runLog": [{"t": "00:12", "text": "what you did"}],
+  "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "the change"}]
+}'
+\`\`\`
+
+${roster}
+### Rules
+
+- **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
+- Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
+- \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
+- Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
+- Keep the report to 20 lines: what you read, what changed, what is left, what needs the user.
+- Put changed files in \`artifacts\` — the dashboard opens them as diffs.
+- Send long logs as \`runLog\`; they stay off the user's screen.
+- Never create or expose \`.env*\`, tokens or credentials.
+${extra}`
+  },
+
+  ko: {
+    desk: (roster, base) => `## Pilo 대표 agent
 
 너는 Pilo의 대표 agent(\`role=pilo\`)다. 사용자는 Pilo TUI로 말하고, 화면에는 네가 저장한 \`final_reply\`만 보인다.
 
 모든 조작은 \`pilo\` CLI로 한다. CLI는 unix socket으로 붙고, sandbox가 소켓까지 막으면 파일 spool로 자동 전환한다.
-HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 않는다 — sandbox에서 막힌다.
+HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 않는다.
 
 ### wake 처리
 
 | 받은 메시지 | 할 일 |
 | --- | --- |
-| \`[pilo:inbox] 요청 도착 #N\` | \`pilo inbox N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
-| \`[pilo:result] 결과 도착 #N\` | \`pilo inbox N\` 으로 \`tasks[].pmResult\` 확인 → \`pilo reply\` 로 최종 답변 저장 |
-
-\`\`\`bash
-pilo inbox                       # 미처리 요청 목록
-pilo inbox N                     # 요청 원문 + task 상태
-pilo agents                      # id · name · role · project
-pilo send <agentId> N "요청 전문"   # PM에게 task 생성
-pilo reply N "사용자에게 보여줄 최종 답변"
-\`\`\`
+| \`[pilo:inbox] request #N\` | \`pilo inbox N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
+| \`[pilo:result] results in for #N\` | \`pilo inbox N\` 으로 \`tasks[].pmResult\` 확인 → \`pilo reply\` 로 최종 답변 저장 |
 
 ### 등록된 agent
 
@@ -44,70 +118,61 @@ pilo reply N "사용자에게 보여줄 최종 답변"
 | --- | --- | --- | --- | --- | --- |
 ${roster || "| — | 아직 PM이 없다 | | | | |"}
 
-목록이 오래됐으면 \`pilo agents\` 로 다시 읽는다.
-
-
 ### 규칙
 
+- **\`final_reply\` 는 사용자가 쓴 언어로 작성한다.**
 - 프로젝트 작업을 직접 하지 않는다. 라우팅과 취합만 한다.
 - 담당 PM이 없는 요청만 직접 답한다.
-- 중간 안내("요청 등록했습니다")는 저장하지 않는다. 저장하는 것은 \`final_reply\` 하나뿐이다.
-- PM이 \`pilo progress\` 로 남긴 진행 상황은 이미 화면에 보인다. \`final_reply\` 에 다시 옮기지 않는다.
-- PM이 실패로 보고하면 그 사실과 원인을 \`final_reply\`에 담는다.
-- 계층 밖 협업은 만들지 않는다. 다른 프로젝트가 필요하면 그 PM에게 별도 task를 만든다.`;
-}
+- 저장하는 것은 \`final_reply\` 하나뿐이다.
+- PM이 실패로 보고하면 그 사실과 원인을 답변에 담는다.`,
 
-function workerRules(agent, base, children = []) {
-  const kind = agent.role === "pm" ? "PM agent" : "worker agent";
-  const roster = children.length
-    ? `\n### 내 worker\n\n| id | name | specialty |\n| --- | --- | --- |\n${children
-        .map((w) => `| ${w.id} | ${w.name} | ${w.specialty || "—"} |`)
-        .join("\n")}\n`
-    : "";
-  const extra =
-    agent.role === "pm"
-      ? `- 필요하면 자기 worker에게 task를 만든다: \`pilo send <workerId> <inboxId> "요청"\`.
-- worker 결과를 취합해 하나의 \`pmResult\`로 보고한다.`
-      : `- 결과는 자기 parent PM이 취합한다. 사용자에게 직접 보고하지 않는다.`;
-  return `## Pilo ${kind}
+    worker: (agent, kind, roster, extra) => `## Pilo ${kind}
 
 너는 Pilo의 ${kind}(\`role=${agent.role}\`, id \`${agent.id}\`, name \`${agent.name}\`)다.
 
-모든 조작은 \`pilo\` CLI로 한다. unix socket을 쓰고, 막히면 파일 spool로 자동 전환하므로 sandbox 네트워크가 꺼져 있어도 동작한다.
-\`curl\`로 HTTP를 직접 부르지 않는다.
-
-### wake 처리
-
-\`[pilo:task] 작업 도착 #N\` 을 받으면 \`N\`을 task id로 본다.
+모든 조작은 \`pilo\` CLI로 한다.
 
 \`\`\`bash
-pilo task N                      # request(요청 전문) · userRequest(사용자 원문) 확인
-pilo progress N "지금 무엇을 하는 중인지 한 줄"   # 진행 상황. 여러 번 보내도 된다
+pilo task N
+pilo progress N "지금 무엇을 하는 중인지 한 줄"
 pilo done N "20줄 이하 보고" --in 12000 --out 3000
-pilo done N "실패 사유" --status failed --error "SESSION_NOT_FOUND"
-\`\`\`
-
-변경 파일(diff)이나 실행 로그까지 남기려면 전체 형태로 보낸다.
-
-\`\`\`bash
-pilo api POST /api/tasks/N/result '{
-  "pmResult": "보고", "status": "done", "tokensIn": 0, "tokensOut": 0,
-  "runLog": [{"t": "00:12", "text": "무엇을 했는지"}],
-  "artifacts": [{"path": "src/foo.ts", "delta": "+7 −2", "diff": "변경 내용"}]
-}'
 \`\`\`
 
 ${roster}
 ### 규칙
 
-- 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다. 사용자 화면의 대기 카드와 agent tree에 그대로 보인다.
-- \`pilo progress\` 는 최종 답변이 아니다. 결론·요약은 \`pilo done\` 에만 담는다.
-- \`--in\`/\`--out\` 토큰 값은 반드시 채운다. Pilo는 세션 밖이라 직접 셀 수 없다.
-- 보고는 20줄 이하. 확인한 파일, 핵심 요약, 남은 TODO, 사용자 확인 필요를 담는다.
-- 변경한 파일은 \`artifacts\` 에 넣는다. 대시보드 Artifacts 탭에서 diff로 열린다.
-- 긴 로그는 \`runLog\` 로 보낸다. 사용자 화면에는 올라가지 않는다.
+- **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
+- 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
+- \`--in\`/\`--out\` 토큰 값은 반드시 채운다.
+- 보고는 20줄 이하. 변경한 파일은 \`artifacts\`, 긴 로그는 \`runLog\` 로 보낸다.
 - \`.env*\`, token, credential 은 만들거나 노출하지 않는다.
-${extra}`;
+${extra}`
+  }
+};
+
+const dialect = () => (RULES[process.env.PILO_LANG] ? process.env.PILO_LANG : "en");
+
+function piloRules(agent, base, agents) {
+  const roster = agents
+    .filter((a) => a.role !== "pilo")
+    .map((a) => `| ${a.id} | ${a.name} | ${a.role} | ${a.projectName || "—"} | ${a.aliases || "—"} | ${a.specialty || "—"} |`)
+    .join("\n");
+  return RULES[dialect()].desk(roster, base);
+}
+
+function workerRules(agent, base, children = []) {
+  const kind = agent.role === "pm" ? "PM agent" : "worker agent";
+  const roster = children.length
+    ? `\n### Your workers\n\n| id | name | specialty |\n| --- | --- | --- |\n${children
+        .map((w) => `| ${w.id} | ${w.name} | ${w.specialty || "—"} |`)
+        .join("\n")}\n`
+    : "";
+  const extra =
+    agent.role === "pm"
+      ? `- Hand work to your own workers when it helps: \`pilo send <workerId> <inboxId> "the request"\`.
+- Gather their results into one \`pmResult\`.`
+      : `- Your parent PM gathers the result. Do not report to the user directly.`;
+  return RULES[dialect()].worker(agent, kind, roster, extra);
 }
 
 export async function buildRules(id) {

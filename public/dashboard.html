@@ -177,17 +177,10 @@
 <script type="module">
 import { tablesToHtml } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
+import { t } from "/text.js";
 const TABS = [
-  ["overview", "Overview", "agent 상태 · 최근 task · 런타임"],
-  ["agents", "Agents", "role 조직도와 agent 등록"],
-  ["inbox", "Inbox", "사용자 입력과 처리 경로"],
-  ["events", "Events", "pm_result · final_reply · event 원문"],
-  ["artifacts", "Artifacts", "agent가 만든 파일과 변경 내용"],
-  ["projects", "Projects", "프로젝트 · 경로 · 담당 PM"],
-  ["commands", "Commands", "TUI와 CLI에서 쓰는 명령"],
-  ["settings", "Settings", "알림 · 토큰 표기 · 보관 기간"],
-  ["system", "System", "server · wake · dashboard 상태와 경로"]
-];
+  "overview", "agents", "inbox", "events", "artifacts", "projects", "commands", "settings", "system"
+].map((key) => [key, t(`dash.tab.${key}`), t(`dash.tab.${key}.desc`)]);
 
 const state = {
   tab: location.hash.slice(1) || "overview",

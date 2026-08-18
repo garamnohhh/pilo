@@ -7,6 +7,7 @@ import { socketPath, socketFile } from "./paths.js";
 import { spoolDir, ensureSpool } from "./spool.js";
 import { CLI_COMMANDS } from "./commands.js";
 import { cols } from "./width.js";
+import { t } from "./text.js";
 
 function resolveSocket() {
   if (process.env.PILO_SOCKET) return process.env.PILO_SOCKET;
@@ -32,7 +33,7 @@ function viaSpool(method, path, body, timeoutMs = 15000) {
         raw = readFileSync(resFile, "utf8");
       } catch {
         if (Date.now() > deadline) {
-          return reject(new Error(`Pilo 서버 응답 없음 (spool ${spoolDir}). 'pilo up' 으로 띄웠는지 확인하세요.`));
+          return reject(new Error(`no answer from the Pilo server (spool ${spoolDir}). is it up? try 'pilo up'.`));
         }
         return setTimeout(poll, 120);
       }
@@ -117,7 +118,7 @@ const commands = {
   async inbox([id]) {
     if (id) return out(await call("GET", `/api/inbox/${id}`));
     const rows = await call("GET", "/api/inbox");
-    if (!rows.length) return out("inbox 비어 있음");
+    if (!rows.length) return out(t("cli.inboxEmpty"));
     return out(
       rows
         .map((r) => `in-${r.id} [${r.status}] ${r.userRequest.replace(/\s+/g, " ").slice(0, 70)}${r.routed ? ` → ${r.routed}` : ""}`)
@@ -127,7 +128,7 @@ const commands = {
 
   async agents() {
     const rows = await call("GET", "/api/agents");
-    if (!rows.length) return out("등록된 agent 없음");
+    if (!rows.length) return out(t("cli.noAgents"));
     return out(
       rows
         .map((a) => `${a.id}\t${a.name}\t${a.role}\t${a.projectName || "—"}\t${a.aliases || ""}`)
@@ -138,20 +139,20 @@ const commands = {
   async send(args) {
     const { rest, opts } = flags(args);
     const [agentId, inboxId, ...text] = rest;
-    if (!agentId || !inboxId || !text.length) throw new Error("usage: pilo send <agentId> <inboxId> <요청>");
+    if (!agentId || !inboxId || !text.length) throw new Error("usage: pilo send <agentId> <inboxId> <request>");
     const res = await call("POST", `/api/inbox/${inboxId}/tasks`, {
       toAgentId: Number(agentId),
       title: opts.title || text.join(" ").slice(0, 40),
       request: text.join(" ")
     });
-    return out(`task #${res.id} → agent ${agentId}`);
+    return out(t("cli.taskSent", { id: res.id, agent: agentId }));
   },
 
   async reply(args) {
     const [inboxId, ...text] = args;
-    if (!inboxId || !text.length) throw new Error("usage: pilo reply <inboxId> <본문>");
+    if (!inboxId || !text.length) throw new Error("usage: pilo reply <inboxId> <text>");
     const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: text.join(" ") });
-    return out(`final_reply #${res.id} 저장됨 (in-${inboxId})`);
+    return out(t("cli.replySaved", { id: res.id, inbox: inboxId }));
   },
 
   async task([id]) {
@@ -161,15 +162,15 @@ const commands = {
 
   async progress(args) {
     const [taskId, ...text] = args;
-    if (!taskId || !text.length) throw new Error("usage: pilo progress <taskId> <한 줄>");
+    if (!taskId || !text.length) throw new Error("usage: pilo progress <taskId> <one line>");
     const res = await call("POST", `/api/tasks/${taskId}/progress`, { text: text.join(" ") });
-    return out(`task #${res.id} 진행: ${res.progress}`);
+    return out(t("cli.progressSaved", { id: res.id, text: res.progress }));
   },
 
   async done(args) {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
-    if (!taskId || !text.length) throw new Error("usage: pilo done <taskId> <보고>");
+    if (!taskId || !text.length) throw new Error("usage: pilo done <taskId> <report>");
     const res = await call("POST", `/api/tasks/${taskId}/result`, {
       pmResult: text.join(" "),
       status: opts.status || "done",
@@ -177,13 +178,13 @@ const commands = {
       tokensIn: Number(opts.in || 0),
       tokensOut: Number(opts.out || 0)
     });
-    return out(`task #${res.id} ${res.status}`);
+    return out(t("cli.result", { id: res.id, status: res.status }));
   },
 
   async block(args) {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
-    if (!taskId || !text.length) throw new Error("usage: pilo block <taskId> <질문>");
+    if (!taskId || !text.length) throw new Error("usage: pilo block <taskId> <question>");
     const res = await call("POST", `/api/tasks/${taskId}/result`, {
       pmResult: opts.note || text.join(" "),
       question: text.join(" "),
@@ -191,20 +192,20 @@ const commands = {
       tokensIn: Number(opts.in || 0),
       tokensOut: Number(opts.out || 0)
     });
-    return out(`task #${res.id} ${res.status} — 사용자 결정 대기`);
+    return out(t("cli.blocked", { id: res.id, status: res.status }));
   },
 
   async blocked() {
     const rows = await call("GET", "/api/blocked");
-    if (!rows.length) return out("결정 대기 중인 작업 없음");
+    if (!rows.length) return out(t("cli.noBlocked"));
     return out(rows.map((r) => `#${r.id} ${r.agent} · ${r.project || "—"}\n   ${r.question}`).join("\n"));
   },
 
   async answer(args) {
     const [taskId, ...text] = args;
-    if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <답변>");
+    if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <answer>");
     const res = await call("POST", `/api/tasks/${taskId}/answer`, { body: text.join(" ") });
-    return out(`task #${res.id} ${res.status} — agent 를 다시 깨웁니다`);
+    return out(t("cli.answered", { id: res.id, status: res.status }));
   },
 
   async api([method, path, body]) {
