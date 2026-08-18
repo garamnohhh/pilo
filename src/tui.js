@@ -80,7 +80,9 @@ const ASCII = process.argv.includes("--ascii");
 const SMALL = { A: "ᴀ", B: "ʙ", C: "ᴄ", D: "ᴅ", E: "ᴇ", F: "ꜰ", G: "ɢ", H: "ʜ", I: "ɪ", J: "ᴊ", K: "ᴋ",
   L: "ʟ", M: "ᴍ", N: "ɴ", O: "ᴏ", P: "ᴘ", Q: "ǫ", R: "ʀ", S: "s", T: "ᴛ", U: "ᴜ", V: "ᴠ", W: "ᴡ",
   X: "x", Y: "ʏ", Z: "ᴢ", _: " " };
-const smallCaps = (tag) => [...tag].map((ch) => SMALL[ch] || ch).join("");
+// Project names arrive lowercase and carry digits and hyphens; only the letters
+// have small-cap glyphs, and everything else is left exactly as it is.
+const smallCaps = (tag) => [...String(tag).toUpperCase()].map((ch) => SMALL[ch] || ch).join("");
 
 // No padding inside the badge: the fill hugs the letters, and the two spaces
 // before it do the separating.
@@ -276,7 +278,7 @@ function routedBadge(item, tree) {
       : parts.join(" · ")
     : "PILO";
   const paint = parts.length ? badgePaint(parts, tree) : BADGE.PILO;
-  const label = ASCII || COLOR === "none" ? `[${plain}]` : plain;
+  const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
   return { width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
 }
 
@@ -634,8 +636,15 @@ function render() {
       const textWidth = mainWidth - 6 - (tagged.width + 1);
       const lines = wrap(alignTables(item.userRequest, textWidth), textWidth);
       const shownLines = folded ? lines.slice(0, 2) : lines;
+      // The state of a request lives in its own mark rather than in a word: green
+      // once answered, amber while the work is out, red when it needs a person.
+      // Colour alone would strand anyone without it, so the colourless build
+      // swaps the glyph instead.
+      const state = item.finalReply ? "done" : item.needsReply ? "attention" : "working";
+      const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[state] : "❯";
+      const markColour = { done: c.green, working: c.amber, attention: c.red }[state];
       const question = shownLines.map((x, i) => {
-        const mark = i ? " " : c.green + "❯" + c.reset;
+        const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
         return `  ${mark} ${tag} ${c.fg}${x}${c.reset}`;
       });
@@ -644,11 +653,6 @@ function render() {
       }
       feed.push(...question);
       actions.push(...question.map(() => fold));
-      if (item.project) {
-        const short = item.finalReply ? "완료" : item.needsReply ? "답변 저장 필요" : "대기";
-        feed.push(`    ${c.faint}${item.project}${folded ? ` · ${short}` : ""}${c.reset}`);
-        actions.push(fold);
-      }
       feed.push("");
       actions.push(null);
       if (!folded) {
