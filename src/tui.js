@@ -188,28 +188,25 @@ function elapsed(from, to) {
 // and below for breathing room.
 function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
   const paint = CARD[surface] || CARD.reply;
-  // The accent bar owns the first column; a thin frame starts one column right of
-  // it, and the content sits two spaces inside that.
-  const inner = Math.max(10, box - 2);
-  const text = inner - 4;
+  // The accent bar owns the first column and the tint carries to the card's full
+  // width; two spaces of padding on each side keep the text off both edges.
+  const text = Math.max(8, box - 5);
   // A reset inside the content — a badge ends with one — would drop the tint for
   // the rest of the row, so every reset re-asserts it.
   const keep = (t) => (paint.tint ? String(t).split(c.reset).join(c.reset + paint.tint) : String(t));
-  const edge = (left, right2) => `${paint.accent}${BAR}${c.reset}${c.line}${left}${"─".repeat(inner)}${right2}${c.reset}`;
   const line = (content, colour = c.fg) =>
-    `${paint.accent}${BAR}${c.reset}${c.line}│${c.reset}${paint.tint}  ${colour}${keep(pad(cut(content, text), text))}` +
-    `${c.reset}${paint.tint}  ${c.reset}${c.line}│${c.reset}`;
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${colour}${keep(pad(cut(content, text), text))}${c.reset}${paint.tint}  ${c.reset}`;
 
   const gap = Math.max(1, text - cols(title) - cols(right));
   const header =
-    `${paint.accent}${BAR}${c.reset}${c.line}│${c.reset}${paint.tint}  ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
-    `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint}  ${c.reset}${c.line}│${c.reset}`;
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
+    `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint}  ${c.reset}`;
 
   // A blank tinted row top and bottom is the card's own margin.
-  const rows = [edge("╭", "╮"), line(""), header, line("")];
+  const rows = [line(""), header, line("")];
   for (const part of body) rows.push(line(part));
   if (footer) rows.push(line(footer, c.faint));
-  rows.push(line(""), edge("╰", "╯"));
+  rows.push(line(""));
   return rows;
 }
 
@@ -221,7 +218,7 @@ function replyBlock(item, width) {
     title: `${badge("FINAL_REPLY")} ${c.green}${item.routed || "pilo"}${c.reset}`,
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
-    body: wrap(alignTables(item.finalReply, box - 6), box - 6),
+    body: wrap(alignTables(item.finalReply, box - 5), box - 5),
     footer: "실행 로그 · 변경 파일 · 아티팩트는 :dash",
     surface: "reply"
   });
@@ -250,14 +247,14 @@ function waitingBlock(item, width) {
   // Work in flight: one line — a pulsing dot, the agent's own words if it left
   // any, and who is holding it, pushed to the right edge.
   const paint = CARD.waiting;
-  const text = Math.max(8, box - 6);
+  const text = Math.max(8, box - 5);
   const dot = `${state.pulse ? c.green : PULSE_DIM}●${c.reset}${paint.tint}`;
   const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
   const who = item.routed || "";
   const room = text - cols(who) - 3;
   const words = cut(said, Math.max(6, room));
   const gap = Math.max(1, text - 2 - cols(words) - cols(who));
-  const blank = `${paint.accent}${BAR}${c.reset}${paint.tint}${" ".repeat(box - 3)}${c.reset}`;
+  const blank = `${paint.accent}${BAR}${c.reset}${paint.tint}${" ".repeat(text + 4)}${c.reset}`;
   return [
     blank,
     `${paint.accent}${BAR}${c.reset}${paint.tint}  ${dot} ${c.fg}${words}${c.reset}${paint.tint}` +
@@ -271,20 +268,25 @@ function waitingBlock(item, width) {
 // the one the tree gives that role, so the two read as the same thing.
 function routedBadge(item, tree) {
   const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
-  if (!parts.length) return { text: "[PILO]", color: c.green };
-  const text = `[${parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ")}]`;
-  return { text, color: badgeColor(parts, tree) };
+  const plain = parts.length
+    ? parts.length > 2
+      ? `${parts[0]} +${parts.length - 1}`
+      : parts.join(" · ")
+    : "PILO";
+  const paint = parts.length ? badgePaint(parts, tree) : BADGE.PILO;
+  const label = ASCII || COLOR === "none" ? `[${plain}]` : ` ${plain} `;
+  return { width: cols(label), text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
 }
 
 // Match on the agent names a request was routed to, and on the project names
-// they answer for — the badge shows whichever the request carries.
-function badgeColor(parts, tree) {
+// they answer for — the badge takes the colour of whoever holds it.
+function badgePaint(parts, tree) {
   const pms = tree?.pms || [];
   const workers = pms.flatMap((pm) => pm.children || []);
   const owns = (agents) => agents.some((a) => parts.includes(a.name) || parts.includes(a.projectName));
-  if (owns(pms)) return c.blue;
-  if (owns(workers)) return c.muted;
-  return c.blue;
+  if (owns(pms)) return BADGE.PM;
+  if (owns(workers)) return BADGE.WORKER;
+  return BADGE.PM;
 }
 
 function setupScreen(setup, width) {
@@ -330,14 +332,15 @@ function railRows(tree, width, actions = []) {
   // The status word sits at the right edge, and workers do without one: their
   // dot already says it.
   const STATUS = { running: c.amberBright, failed: c.redSoft, blocked: c.blue };
-  const put = (prefix, icon, name, tag, status, action, nameColor = c.fg) => {
+  const put = (indent, icon, name, tag, status, action, nameColor = c.fg) => {
+    const prefix = indent ? `${" ".repeat(indent)}${c.branch}└${c.reset} ` : "";
     const tagWidth = cols(badgeText(tag));
     const stateWidth = status ? cols(status) + 1 : 0;
     // dot + space, then two spaces before the badge, then whatever the status
     // word needs on the right — the name gives up whatever is left.
-    const room = width - cols(prefix) - 4 - tagWidth - stateWidth;
+    const room = width - indent - (indent ? 2 : 0) - 4 - tagWidth - stateWidth;
     const label = cut(name, Math.max(4, room));
-    const used = cols(prefix) + 2 + cols(label) + 2 + tagWidth;
+    const used = indent + (indent ? 2 : 0) + 2 + cols(label) + 2 + tagWidth;
     const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
@@ -345,9 +348,13 @@ function railRows(tree, width, actions = []) {
         (status ? `${" ".repeat(gap)}${tone}${status}${c.reset}` : "")
     );
     actions.push(action);
+    // A blank line under every agent, so one row's badge never sits against the
+    // next one's.
+    rows.push("");
+    actions.push(action);
   };
 
-  // A hairline under each block, so the eye can tell one PM's rows from the next.
+  // A hairline closes each block: the desk agent, then each PM with its workers.
   const divider = () => {
     rows.push(`${c.hair}${"─".repeat(Math.max(4, width))}${c.reset}`);
     actions.push(null);
@@ -367,11 +374,11 @@ function railRows(tree, width, actions = []) {
 
   const all = { type: "project", name: null };
   const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
-  put("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all);
+  put(0, statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all);
 
   const pms = tree.pms;
   if (pms.length) divider();
-  pms.forEach((pm, i) => {
+  pms.forEach((pm) => {
     const seen = sessionLine(pm, pm.status);
     const filter = { type: "project", name: pm.projectName || pm.name };
     // The selection used to be a ◂ in front of the name. It is an East Asian
@@ -380,15 +387,15 @@ function railRows(tree, width, actions = []) {
     const picked = state.filter === filter.name ? c.green : c.fg;
     // A running session spins even when Pilo has nothing on it.
     const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
-    put("", pmIcon, pm.name, "PM", word(pm, seen), filter, picked);
+    put(2, pmIcon, pm.name, "PM", word(pm, seen), filter, picked);
 
     pm.children.forEach((w) => {
       const wSeen = sessionLine(w, w.status);
       const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
-      put(`  ${c.branch}└${c.reset} `, wIcon, w.name, "WORKER", "", filter, picked);
+      put(4, wIcon, w.name, "WORKER", "", filter, picked);
     });
 
-    if (i < pms.length - 1) divider();
+    divider();
   });
 
   if (!pms.length) {
@@ -621,13 +628,13 @@ function render() {
       // Once a request has been handed out, the question wears the name of
       // whoever holds it. The badge takes its columns from the text so nothing
       // spills past the rail.
-      const badge = routedBadge(item, tree);
-      const textWidth = mainWidth - 6 - (cols(badge.text) + 1);
+      const tagged = routedBadge(item, tree);
+      const textWidth = mainWidth - 6 - (tagged.width + 1);
       const lines = wrap(alignTables(item.userRequest, textWidth), textWidth);
       const shownLines = folded ? lines.slice(0, 2) : lines;
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : c.green + "❯" + c.reset;
-        const tag = i ? " ".repeat(cols(badge.text)) : `${badge.color}${badge.text}${c.reset}`;
+        const tag = i ? " ".repeat(tagged.width) : tagged.text;
         return `  ${mark} ${tag} ${c.fg}${x}${c.reset}`;
       });
       if (folded && lines.length > shownLines.length) {
@@ -741,8 +748,9 @@ function render() {
     return row;
   };
 
-  // No hint bar: an empty prompt says what to do, and :help has the rest.
-  emit(pre + withRail(""));
+  // No hint bar, but the prompt still needs to be set apart from the feed.
+  const ruleWidth = railWidth ? mainWidth : outWidth;
+  emit(pre + withRail(`${c.rule}${"─".repeat(Math.max(2, ruleWidth))}${c.reset}`));
 
   const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
   let cursorRow = screen.length + 1;
