@@ -53,9 +53,12 @@ const c = {
   blue: fg(150, 178, 214),
   amber: fg(218, 184, 88),
   red: fg(220, 104, 80),
+  amberBright: fg(224, 183, 85),
+  redSoft: fg(224, 122, 107),
   // panel frames and the tree's own hierarchy lines are two different greys
   line: fg(30, 36, 34),
-  branch: fg(62, 71, 68)
+  branch: fg(62, 71, 68),
+  rule: fg(23, 27, 25)
 };
 
 // Role labels are filled blocks, not bracketed text. Without colour the brackets
@@ -83,6 +86,8 @@ const CARD = {
   waiting: { tint: bg(12, 16, 14), accent: fg(47, 107, 82) }
 };
 const BAR = "▌";
+// The waiting dot pulses between the accent green and a dimmer one.
+const PULSE_DIM = fg(31, 107, 77);
 
 const state = {
   input: "",
@@ -94,6 +99,7 @@ const state = {
   pastes: new Map(),
   filter: null,
   spin: 0,
+  pulse: true,
   folded: new Set(),
   unfolded: new Set(),
   hits: new Map(),
@@ -173,20 +179,23 @@ function elapsed(from, to) {
 // and below for breathing room.
 function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
   const paint = CARD[surface] || CARD.reply;
-  const inner = box - 1;              // the accent bar owns the first column
-  const text = inner - 2;             // one space of padding each side
+  // The accent bar owns the first column, then two spaces of padding before any
+  // content — the header included, which used to sit against the bar with its
+  // badge looking clipped.
+  const text = Math.max(8, box - 5);
   // A reset inside the content — a badge ends with one — would drop the tint for
   // the rest of the row, so every reset re-asserts it.
   const keep = (t) => (paint.tint ? String(t).split(c.reset).join(c.reset + paint.tint) : String(t));
   const line = (content, colour = c.fg) =>
-    `${paint.accent}${BAR}${c.reset}${paint.tint} ${colour}${keep(pad(cut(content, text), text))}${c.reset}${paint.tint} ${c.reset}`;
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${colour}${keep(pad(cut(content, text), text))}${c.reset}${paint.tint}  ${c.reset}`;
 
   const gap = Math.max(1, text - cols(title) - cols(right));
-  const rows = [
-    `${paint.accent}${BAR}${c.reset}${paint.tint} ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
-      `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint} ${c.reset}`,
-    line("")
-  ];
+  const header =
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
+    `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint}  ${c.reset}`;
+
+  // A blank tinted row top and bottom is the card's own margin.
+  const rows = [line(""), header, line("")];
   for (const part of body) rows.push(line(part));
   if (footer) rows.push(line(footer, c.faint));
   rows.push(line(""));
@@ -201,7 +210,7 @@ function replyBlock(item, width) {
     title: `${badge("FINAL_REPLY")} ${c.green}${item.routed || "pilo"}${c.reset}`,
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
-    body: wrap(alignTables(item.finalReply, box - 3), box - 3),
+    body: wrap(alignTables(item.finalReply, box - 5), box - 5),
     footer: "실행 로그 · 변경 파일 · 아티팩트는 /dash",
     surface: "reply"
   });
@@ -227,20 +236,23 @@ function waitingBlock(item, width) {
       surface: "reply"
     });
   }
-  // The agent's own progress note when there is one; it is not the answer, so it
-  // stays in the waiting card and never reaches the reply slot.
-  const body = item.progress
-    ? wrap(`${SPINNER[state.spin % SPINNER.length]} ${item.progress}`, box - 4)
-    : [item.routed ? `${item.routed} 작업 중 · pm_result 대기` : "요청 접수 · Pilo agent 확인 중"];
-  return cardBlock({
-    box,
-    title: item.routed || "배분 대기",
-    titleColor: c.amber,
-    right: item.progressBy && item.progressBy !== item.routed ? `${item.progressBy} · in-${item.id}` : `in-${item.id}`,
-    body,
-    footer: "",
-    surface: "waiting"
-  });
+  // Work in flight: one line — a pulsing dot, the agent's own words if it left
+  // any, and who is holding it, pushed to the right edge.
+  const paint = CARD.waiting;
+  const text = Math.max(8, box - 5);
+  const dot = `${state.pulse ? c.green : PULSE_DIM}●${c.reset}${paint.tint}`;
+  const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
+  const who = item.routed || "";
+  const room = text - cols(who) - 3;
+  const words = cut(said, Math.max(6, room));
+  const gap = Math.max(1, text - 2 - cols(words) - cols(who));
+  const blank = `${paint.accent}${BAR}${c.reset}${paint.tint}${" ".repeat(box - 3)}${c.reset}`;
+  return [
+    blank,
+    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${dot} ${c.fg}${words}${c.reset}${paint.tint}` +
+      `${" ".repeat(gap)}${c.faint}${who}${c.reset}${paint.tint}  ${c.reset}`,
+    blank
+  ];
 }
 
 // The project a request landed in, or the agents holding it. A request that was
@@ -302,75 +314,62 @@ function railRows(tree, width, actions = []) {
     return rows;
   }
 
-  // Two lines per agent: the name with its branch, then role and status underneath,
-  // with the branch bars carried down so the hierarchy stays visible.
-  // name on the left, role badge flush right, a faint rule filling the gap
-  const put = (branch, spine, icon, name, tag, meta, action, nameColor = c.fg) => {
+  // One line per agent: status dot, name, its role badge right behind the name,
+  // and the状 word pushed to the right edge. No leader rules — the badge sitting
+  // against the name is what groups them.
+  const STATUS = { running: c.amberBright, failed: c.redSoft, blocked: c.blue };
+  const put = (prefix, icon, name, tag, status, action, nameColor = c.fg) => {
     const tagWidth = cols(badgeText(tag));
-    const room = width - cols(branch) - 2 - tagWidth - 2;
+    const stateWidth = cols(status);
+    const room = width - cols(prefix) - 2 - tagWidth - stateWidth - 4;
     const label = cut(name, Math.max(6, room));
-    const fill = width - cols(branch) - 2 - cols(label) - tagWidth - 2;
-    const rule = fill >= 2 ? ` ${c.line}${"─".repeat(fill - 1)}${c.reset} ` : " ";
-    rows.push(`${branch}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}${rule}${badge(tag)}`);
-    actions.push(action);
-    rows.push(`${spine}${c.faint}${cut(meta, width - cols(spine))}${c.reset}`);
+    const gap = Math.max(2, width - cols(prefix) - 2 - cols(label) - tagWidth - stateWidth - 2);
+    const tone = STATUS[status] || c.faint;
+    rows.push(
+      `${prefix}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}  ${badge(tag)}` +
+        `${" ".repeat(gap)}${tone}${status}${c.reset}`
+    );
     actions.push(action);
   };
 
-  const all = { type: "project", name: null };
-  put("", "  ", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO",
-    tree.pilo.activity || "전체 보기", all);
+  // The word on the right says what the agent is doing, in one token.
+  const word = (agent, seen) =>
+    agent.status === "blocked"
+      ? "blocked"
+      : agent.status === "failed"
+        ? "failed"
+        : agent.status === "unbound"
+          ? "unbound"
+          : agent.status === "running" || seen.busy
+            ? "running"
+            : "idle";
 
-  const bar = `${c.branch}│${c.reset}`;
+  const all = { type: "project", name: null };
+  const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
+  put("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all);
+
   const pms = tree.pms;
-  pms.forEach((pm, i) => {
-    const last = i === pms.length - 1;
-    const elbow = `${c.branch}${last ? "└─" : "├─"}${c.reset} `;
-    const spine = `${last ? " " : bar}    `;
-    const base =
-      pm.status === "blocked"
-        ? `결정 대기 · ${pm.blockedQuestion || "확인 필요"}`
-        : pm.status === "running"
-          ? pm.progress || `작업 ${pm.openTasks}건`
-          : pm.status === "failed"
-            ? "실패 · 확인 필요"
-            : pm.status;
-    const seen = sessionLine(pm, base);
-    const load = seen.text;
-    const project = pm.projectName && pm.projectName !== pm.name ? `${pm.projectName} · ` : "";
+  pms.forEach((pm) => {
+    const seen = sessionLine(pm, pm.status);
     const filter = { type: "project", name: pm.projectName || pm.name };
     // The selection used to be a ◂ in front of the name. It is an East Asian
     // Ambiguous glyph, so terminals that draw those double-width knocked that
     // one row out of line. Colour costs no columns.
     const picked = state.filter === filter.name ? c.green : c.fg;
-    rows.push(`${bar}`);
-    actions.push(null);
     // A running session spins even when Pilo has nothing on it.
     const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
-    put(elbow, spine, pmIcon, pm.name, "PM", `${project}${load}`, filter, picked);
+    put("", pmIcon, pm.name, "PM", word(pm, seen), filter, picked);
 
-    pm.children.forEach((w, k) => {
-      const lastChild = k === pm.children.length - 1;
-      const childBranch = `${last ? " " : bar}   ${c.branch}${lastChild ? "└─" : "├─"}${c.reset} `;
-      const childSpine = `${last ? " " : bar}   ${lastChild ? " " : bar}    `;
-      const wBase =
-        w.status === "blocked"
-          ? `결정 대기 · ${w.blockedQuestion || "확인 필요"}`
-          : w.status === "running"
-            ? w.progress || `작업 ${w.openTasks}건`
-            : w.status === "failed"
-              ? "실패 · 확인 필요"
-              : w.specialty || w.status;
-      const wSeen = sessionLine(w, wBase);
+    pm.children.forEach((w) => {
+      const wSeen = sessionLine(w, w.status);
       const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
-      put(childBranch, childSpine, wIcon, w.name, "WORKER", wSeen.text, filter, picked);
+      put(`${c.branch}  └ ${c.reset}`, wIcon, w.name, "WORKER", word(w, wSeen), filter, picked);
     });
   });
 
   if (!pms.length) {
-    rows.push(`${c.faint}└─ Project agent 없음${c.reset}`);
-    rows.push(`${c.faint}   /dash 에서 PM 등록${c.reset}`);
-    actions.push(null, null);
+    rows.push(`${c.faint}Project agent 없음 — /dash 에서 등록${c.reset}`);
+    actions.push(null);
   }
   return rows;
 }
@@ -568,9 +567,10 @@ function render() {
   emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
 
-  const visible = Math.max(8, height - 13);
+  const visible = Math.max(8, height - 12);
   let rows = [];
   let rowActions = [];
+  let waiting = 0;
 
   if (setup.needsSetup) {
     rows = setupScreen(setup, outWidth).map((r) => "  " + r);
@@ -619,6 +619,7 @@ function render() {
       feed.push("");
       actions.push(null);
       if (!folded) {
+        if (!item.finalReply && !item.needsReply) waiting += 1;
         const block = (item.finalReply ? replyBlock(item, mainWidth - 4) : waitingBlock(item, mainWidth - 4)).map((r) => "  " + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing
@@ -640,6 +641,7 @@ function render() {
     rows = feed;
     rowActions = actions;
   }
+  pulseWhile(waiting > 0);
 
   const railActions = [];
   const rail = railWidth ? railRows(tree, railWidth, railActions) : [];
@@ -649,7 +651,8 @@ function render() {
   const draft = layoutDraft(state.input, draftWidth());
   // header rows: blank, title, rule, status, rule
   const HEAD_ROWS = 5;
-  const filler = Math.max(0, height - HEAD_ROWS - visible - 3 - draft.length - 1);
+  // the hint bar is two rows now: one rule, one line of hints
+  const filler = Math.max(0, height - HEAD_ROWS - visible - 2 - draft.length - 1);
   if (railWidth) {
     const label = "register agent - /dash agents";
     const inner = Math.max(cols(label) + 2, railWidth - 2);
@@ -664,7 +667,7 @@ function render() {
     const open = { type: "dash", tab: "agents" };
     // The rail column keeps drawing to the bottom padding, so the box sits on the
     // last rows of the screen rather than inside the feed area.
-    const slots = visible + 3 + draft.length + filler;
+    const slots = visible + 2 + draft.length + filler;
     if (rail.length <= slots - box.length) {
       while (rail.length < slots - box.length) {
         rail.push("");
@@ -714,11 +717,11 @@ function render() {
     return row;
   };
 
-  const hint = "↵ send   ⇧↵ 줄바꿈   ←→ 커서   휠·클릭   /copy 복사   /mouse 선택모드   /help";
+  // The hints are a footnote, not a panel: one rule above them and nothing else.
+  const hint = ["↵ send", "⇧↵ 줄바꿈", "←→ 커서", "휠·클릭", "/copy 복사", "/mouse 선택모드", "/help"].join("   ");
   const boxWidth = railWidth ? mainWidth : outWidth;
-  emit(pre + withRail(`${c.line}╭${"─".repeat(Math.max(2, boxWidth - 2))}╮${c.reset}`));
-  emit(pre + withRail(`${c.line}│${c.reset} ${c.faint}${pad(cut(hint, boxWidth - 4), boxWidth - 4)}${c.reset} ${c.line}│${c.reset}`));
-  emit(pre + withRail(`${c.line}╰${"─".repeat(Math.max(2, boxWidth - 2))}╯${c.reset}`));
+  emit(pre + withRail(`${c.rule}${"─".repeat(Math.max(2, boxWidth))}${c.reset}`));
+  emit(pre + withRail(`${c.faint}${cut(hint, boxWidth)}${c.reset}`));
 
   const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
   let cursorRow = screen.length + 1;
@@ -900,7 +903,8 @@ async function send(text) {
 }
 
 function restoreTerminal() {
-  process.stdout.write(MOUSE_OFF + "\x1b[?2004l\x1b[<u\x1b[?1049l\x1b[23;0t");
+  // OSC 112 puts the cursor colour back to whatever the terminal had.
+  process.stdout.write(MOUSE_OFF + "\x1b[?2004l\x1b[<u" + (COLOR === "none" ? "" : "\x1b]112\x07") + "\x1b[?1049l\x1b[23;0t");
 }
 
 function close() {
@@ -959,7 +963,10 @@ process.stdin.setRawMode(true);
 // iTerm draws "title (job)", so a title of our own would read "Pilo (Pilo)".
 // Clear the title and let the process name alone name the tab.
 process.title = "Pilo";
-process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + MOUSE_ON);
+// The caret should read as part of the prompt, so it takes the accent green the
+// ❯ is drawn in; OSC 112 in restoreTerminal puts the old colour back.
+const cursorColour = COLOR === "none" ? "" : "\x1b]12;#3ed49c\x07";
+process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + cursorColour + MOUSE_ON);
 
 // The probe reads its own reply, so it runs before the key stream is wired up.
 await probeAmbiguous();
@@ -982,7 +989,7 @@ process.on("uncaughtException", (err) => {
 keys.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
 
-  const page = Math.max(3, (process.stdout.rows || 34) - 14);
+  const page = Math.max(3, (process.stdout.rows || 34) - 13);
   if (key.name === "pageup" || (key.shift && key.name === "up")) return scrollBy(page);
   if (key.name === "pagedown" || (key.shift && key.name === "down")) return scrollBy(-page);
 
@@ -1044,6 +1051,23 @@ setInterval(async () => {
   await refresh();
   render();
 }, 2500).unref();
+
+// The waiting dot pulses, but only while there is a card to pulse: the timer is
+// started by the render that draws one and cleared by the render that does not.
+let pulseTimer = null;
+function pulseWhile(alive) {
+  if (alive && !pulseTimer) {
+    pulseTimer = setInterval(() => {
+      state.pulse = !state.pulse;
+      render();
+    }, 550);
+    pulseTimer.unref?.();
+  } else if (!alive && pulseTimer) {
+    clearInterval(pulseTimer);
+    pulseTimer = null;
+    state.pulse = true;
+  }
+}
 
 // The spinner only ticks while something is actually running.
 setInterval(() => {
