@@ -58,7 +58,8 @@ const c = {
   // panel frames and the tree's own hierarchy lines are two different greys
   line: fg(30, 36, 34),
   branch: fg(62, 71, 68),
-  rule: fg(23, 27, 25)
+  rule: fg(23, 27, 25),
+  hair: fg(20, 24, 23)
 };
 
 // Role labels are filled blocks, not bracketed text. Without colour the brackets
@@ -73,10 +74,18 @@ const BADGE = {
   FINAL_REPLY: { bg: pick(bg(43, 74, 60), "\x1b[48;5;22m"), fg: pick(fg(214, 245, 230), "\x1b[38;5;194m") }
 };
 
-const badgeText = (tag) => (COLOR === "none" ? `[${tag}]` : ` ${tag} `);
+// Small caps make the badge read a size smaller without a second font. Terminals
+// without those glyphs fall back to capitals, and --ascii keeps the brackets.
+const ASCII = process.argv.includes("--ascii");
+const SMALL = { A: "ᴀ", B: "ʙ", C: "ᴄ", D: "ᴅ", E: "ᴇ", F: "ꜰ", G: "ɢ", H: "ʜ", I: "ɪ", J: "ᴊ", K: "ᴋ",
+  L: "ʟ", M: "ᴍ", N: "ɴ", O: "ᴏ", P: "ᴘ", Q: "ǫ", R: "ʀ", S: "s", T: "ᴛ", U: "ᴜ", V: "ᴠ", W: "ᴡ",
+  X: "x", Y: "ʏ", Z: "ᴢ", _: " " };
+const smallCaps = (tag) => [...tag].map((ch) => SMALL[ch] || ch).join("");
+
+const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : ` ${smallCaps(tag)} `);
 function badge(tag) {
   const paint = BADGE[tag] || BADGE.WORKER;
-  return COLOR === "none" ? `[${tag}]` : `${paint.bg}${paint.fg}${badgeText(tag)}${c.reset}`;
+  return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.bg}${paint.fg}${badgeText(tag)}${c.reset}`;
 }
 
 // Card surfaces: a tint painted to the card's full width, and the accent bar that
@@ -179,26 +188,28 @@ function elapsed(from, to) {
 // and below for breathing room.
 function cardBlock({ box, title, titleColor, right, body, footer, surface }) {
   const paint = CARD[surface] || CARD.reply;
-  // The accent bar owns the first column, then two spaces of padding before any
-  // content — the header included, which used to sit against the bar with its
-  // badge looking clipped.
-  const text = Math.max(8, box - 5);
+  // The accent bar owns the first column; a thin frame starts one column right of
+  // it, and the content sits two spaces inside that.
+  const inner = Math.max(10, box - 2);
+  const text = inner - 4;
   // A reset inside the content — a badge ends with one — would drop the tint for
   // the rest of the row, so every reset re-asserts it.
   const keep = (t) => (paint.tint ? String(t).split(c.reset).join(c.reset + paint.tint) : String(t));
+  const edge = (left, right2) => `${paint.accent}${BAR}${c.reset}${c.line}${left}${"─".repeat(inner)}${right2}${c.reset}`;
   const line = (content, colour = c.fg) =>
-    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${colour}${keep(pad(cut(content, text), text))}${c.reset}${paint.tint}  ${c.reset}`;
+    `${paint.accent}${BAR}${c.reset}${c.line}│${c.reset}${paint.tint}  ${colour}${keep(pad(cut(content, text), text))}` +
+    `${c.reset}${paint.tint}  ${c.reset}${c.line}│${c.reset}`;
 
   const gap = Math.max(1, text - cols(title) - cols(right));
   const header =
-    `${paint.accent}${BAR}${c.reset}${paint.tint}  ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
-    `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint}  ${c.reset}`;
+    `${paint.accent}${BAR}${c.reset}${c.line}│${c.reset}${paint.tint}  ${titleColor}${keep(title)}${c.reset}${paint.tint}` +
+    `${" ".repeat(gap)}${c.faint}${right}${c.reset}${paint.tint}  ${c.reset}${c.line}│${c.reset}`;
 
   // A blank tinted row top and bottom is the card's own margin.
-  const rows = [line(""), header, line("")];
+  const rows = [edge("╭", "╮"), line(""), header, line("")];
   for (const part of body) rows.push(line(part));
   if (footer) rows.push(line(footer, c.faint));
-  rows.push(line(""));
+  rows.push(line(""), edge("╰", "╯"));
   return rows;
 }
 
@@ -210,7 +221,7 @@ function replyBlock(item, width) {
     title: `${badge("FINAL_REPLY")} ${c.green}${item.routed || "pilo"}${c.reset}`,
     titleColor: "",
     right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
-    body: wrap(alignTables(item.finalReply, box - 5), box - 5),
+    body: wrap(alignTables(item.finalReply, box - 6), box - 6),
     footer: "실행 로그 · 변경 파일 · 아티팩트는 /dash",
     surface: "reply"
   });
@@ -239,7 +250,7 @@ function waitingBlock(item, width) {
   // Work in flight: one line — a pulsing dot, the agent's own words if it left
   // any, and who is holding it, pushed to the right edge.
   const paint = CARD.waiting;
-  const text = Math.max(8, box - 5);
+  const text = Math.max(8, box - 6);
   const dot = `${state.pulse ? c.green : PULSE_DIM}●${c.reset}${paint.tint}`;
   const said = item.progress || (item.routed ? "작업 중 · pm_result 대기" : "요청 접수 · Pilo agent 확인 중");
   const who = item.routed || "";
@@ -314,22 +325,32 @@ function railRows(tree, width, actions = []) {
     return rows;
   }
 
-  // One line per agent: status dot, name, its role badge right behind the name,
-  // and the状 word pushed to the right edge. No leader rules — the badge sitting
-  // against the name is what groups them.
+  // One line per agent: status dot, name, and the badge right behind the name —
+  // its position follows the name's length rather than lining up in a column.
+  // The status word sits at the right edge, and workers do without one: their
+  // dot already says it.
   const STATUS = { running: c.amberBright, failed: c.redSoft, blocked: c.blue };
   const put = (prefix, icon, name, tag, status, action, nameColor = c.fg) => {
     const tagWidth = cols(badgeText(tag));
-    const stateWidth = cols(status);
-    const room = width - cols(prefix) - 2 - tagWidth - stateWidth - 4;
-    const label = cut(name, Math.max(6, room));
-    const gap = Math.max(2, width - cols(prefix) - 2 - cols(label) - tagWidth - stateWidth - 2);
+    const stateWidth = status ? cols(status) + 1 : 0;
+    // dot + space, then two spaces before the badge, then whatever the status
+    // word needs on the right — the name gives up whatever is left.
+    const room = width - cols(prefix) - 4 - tagWidth - stateWidth;
+    const label = cut(name, Math.max(4, room));
+    const used = cols(prefix) + 2 + cols(label) + 2 + tagWidth;
+    const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
       `${prefix}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}  ${badge(tag)}` +
-        `${" ".repeat(gap)}${tone}${status}${c.reset}`
+        (status ? `${" ".repeat(gap)}${tone}${status}${c.reset}` : "")
     );
     actions.push(action);
+  };
+
+  // A hairline under each block, so the eye can tell one PM's rows from the next.
+  const divider = () => {
+    rows.push(`${c.hair}${"─".repeat(Math.max(4, width))}${c.reset}`);
+    actions.push(null);
   };
 
   // The word on the right says what the agent is doing, in one token.
@@ -349,7 +370,8 @@ function railRows(tree, width, actions = []) {
   put("", statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all);
 
   const pms = tree.pms;
-  pms.forEach((pm) => {
+  if (pms.length) divider();
+  pms.forEach((pm, i) => {
     const seen = sessionLine(pm, pm.status);
     const filter = { type: "project", name: pm.projectName || pm.name };
     // The selection used to be a ◂ in front of the name. It is an East Asian
@@ -363,8 +385,10 @@ function railRows(tree, width, actions = []) {
     pm.children.forEach((w) => {
       const wSeen = sessionLine(w, w.status);
       const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
-      put(`${c.branch}  └ ${c.reset}`, wIcon, w.name, "WORKER", word(w, wSeen), filter, picked);
+      put(`  ${c.branch}└${c.reset} `, wIcon, w.name, "WORKER", "", filter, picked);
     });
+
+    if (i < pms.length - 1) divider();
   });
 
   if (!pms.length) {
@@ -567,7 +591,7 @@ function render() {
   emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
 
-  const visible = Math.max(8, height - 12);
+  const visible = Math.max(8, height - 11);
   let rows = [];
   let rowActions = [];
   let waiting = 0;
@@ -651,8 +675,8 @@ function render() {
   const draft = layoutDraft(state.input, draftWidth());
   // header rows: blank, title, rule, status, rule
   const HEAD_ROWS = 5;
-  // the hint bar is two rows now: one rule, one line of hints
-  const filler = Math.max(0, height - HEAD_ROWS - visible - 2 - draft.length - 1);
+  // one blank row stands between the feed and the prompt
+  const filler = Math.max(0, height - HEAD_ROWS - visible - 1 - draft.length - 1);
   if (railWidth) {
     const label = "register agent - /dash agents";
     const inner = Math.max(cols(label) + 2, railWidth - 2);
@@ -667,7 +691,7 @@ function render() {
     const open = { type: "dash", tab: "agents" };
     // The rail column keeps drawing to the bottom padding, so the box sits on the
     // last rows of the screen rather than inside the feed area.
-    const slots = visible + 2 + draft.length + filler;
+    const slots = visible + 1 + draft.length + filler;
     if (rail.length <= slots - box.length) {
       while (rail.length < slots - box.length) {
         rail.push("");
@@ -717,17 +741,17 @@ function render() {
     return row;
   };
 
-  // The hints are a footnote, not a panel: one rule above them and nothing else.
-  const hint = ["↵ send", "⇧↵ 줄바꿈", "←→ 커서", "휠·클릭", "/copy 복사", "/mouse 선택모드", "/help"].join("   ");
-  const boxWidth = railWidth ? mainWidth : outWidth;
-  emit(pre + withRail(`${c.rule}${"─".repeat(Math.max(2, boxWidth))}${c.reset}`));
-  emit(pre + withRail(`${c.faint}${cut(hint, boxWidth)}${c.reset}`));
+  // No hint bar: an empty prompt says what to do, and /help has the rest.
+  emit(pre + withRail(""));
 
   const mainLeft = marginX + (railWidth ? railWidth + 3 : 0);
   let cursorRow = screen.length + 1;
   let cursorCol = mainLeft + 3;
+  const PLACEHOLDER = "ask anything  ·  :dash for the dashboard";
   draft.forEach((row, i) => {
-    emit(pre + withRail(`${i === 0 ? c.green + "❯" + c.reset : " "} ${row.text}`));
+    const mark = i === 0 ? c.green + "❯" + c.reset : " ";
+    const shown = i === 0 && !state.input ? `${c.faint}${PLACEHOLDER}${c.reset}` : row.text;
+    emit(pre + withRail(`${mark} ${shown}`));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
       cursorRow = screen.length;
@@ -989,7 +1013,7 @@ process.on("uncaughtException", (err) => {
 keys.on("keypress", async (ch, key) => {
   if (key.ctrl && key.name === "c") close();
 
-  const page = Math.max(3, (process.stdout.rows || 34) - 13);
+  const page = Math.max(3, (process.stdout.rows || 34) - 12);
   if (key.name === "pageup" || (key.shift && key.name === "up")) return scrollBy(page);
   if (key.name === "pagedown" || (key.shift && key.name === "down")) return scrollBy(-page);
 

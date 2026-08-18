@@ -34,5 +34,5 @@ test("the interactive TUI draws a frame", async () => {
   });
   assert.ok(stdout.length > 400, `frame looks empty (${stdout.length} bytes)`);
   assert.match(stdout, /pilo/);
-  assert.match(stdout, /send/, "the prompt hint line should be drawn");
+  assert.match(stdout, /ask anything/, "the empty prompt should show its placeholder");
 });
