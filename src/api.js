@@ -882,7 +882,7 @@ export async function settingsAll() {
 }
 
 export async function saveSetting(key, value) {
-  const allowed = ["notifications", "tokens", "retention"];
+  const allowed = ["notifications", "tokens", "retention", "icons"];
   if (!allowed.includes(key)) throw Object.assign(new Error("unknown setting"), { status: 400 });
   return setSetting(key, value);
 }
