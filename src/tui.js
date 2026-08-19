@@ -138,11 +138,12 @@ const RUNTIME = {
 // :icons decides, and what it decides is kept in the settings table so the next
 // run starts the same way. PILO_ICONS only seeds the first run: the setting a
 // user can see and change wins over an environment variable they cannot.
-const ICONS_BY_ENV = process.env.PILO_ICONS === "on";
+const ICONS_BY_ENV = process.env.PILO_ICONS !== "off";
 const iconsWanted = () => {
   // What :icons said this run, then what the last run saved, then the
-  // environment. The poll that refreshes the settings must not undo a toggle
-  // the user can see on screen, so the session's own answer comes first.
+  // environment — which now defaults to on, so PILO_ICONS=off is the way to
+  // start without them. The poll that refreshes the settings must not undo a
+  // toggle the user can see on screen, so the session's own answer comes first.
   const saved = state.data?.settings?.icons;
   const wanted =
     typeof state.icons === "boolean" ? state.icons
@@ -180,6 +181,10 @@ const CARD = {
   waiting: { tint: bg(12, 16, 14) }
 };
 const BAR = "▌";
+// The tree's name and badge are two different things, so a hairline stands
+// between them. --ascii and NO_COLOR keep a pipe: same width, same job, and the
+// bracketed badge beside it still reads without any colour to help.
+const SEPARATOR = ASCII || COLOR === "none" ? "|" : "\u2502";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
 const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
@@ -458,15 +463,19 @@ function railRows(tree, width, actions = []) {
     // its own. An agent with no bound session has no mark and no space either.
     const mark = runtimeMark(runtime);
     const markWidth = mark ? cols(mark) + 1 : 0;
-    // dot + space, then two spaces before the badge, then whatever the status
+    // A hairline between the name and the badge, dim enough to separate without
+    // being read: it is the branch tone, the quietest thing already on the row.
+    // It costs the two columns the plain gap did, plus its own.
+    const sepWidth = cols(SEPARATOR) + 2;
+    // dot + space, then the separator before the badge, then whatever the status
     // word needs on the right — the name gives up whatever is left.
-    const room = width - indent - (indent ? 2 : 0) - 4 - markWidth - tagWidth - stateWidth;
+    const room = width - indent - (indent ? 2 : 0) - 2 - sepWidth - markWidth - tagWidth - stateWidth;
     const label = cut(name, Math.max(4, room));
-    const used = indent + (indent ? 2 : 0) + 2 + markWidth + cols(label) + 2 + tagWidth;
+    const used = indent + (indent ? 2 : 0) + 2 + markWidth + cols(label) + sepWidth + tagWidth;
     const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
-      `${prefix}${icon.color}${icon.icon}${c.reset} ${mark ? `${mark} ` : ""}${nameColor}${label}${c.reset}  ${badge(tag)}` +
+      `${prefix}${icon.color}${icon.icon}${c.reset} ${mark ? `${mark} ` : ""}${nameColor}${label}${c.reset} ${c.branch}${SEPARATOR}${c.reset} ${badge(tag)}` +
         (status ? `${" ".repeat(gap)}${tone}${status}${c.reset}` : "")
     );
     actions.push(action);
