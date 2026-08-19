@@ -85,6 +85,59 @@ const SMALL = { A: "ᴀ", B: "ʙ", C: "ᴄ", D: "ᴅ", E: "ᴇ", F: "ꜰ", G: "�
 // have small-cap glyphs, and everything else is left exactly as it is.
 const smallCaps = (tag) => [...String(tag).toUpperCase()].map((ch) => SMALL[ch] || ch).join("");
 
+// What an agent runs, worn in front of its name. Three tiers, and only the last
+// one is guaranteed: a brand glyph where the icon font genuinely has one, a
+// three-letter small-caps label otherwise, and plain capitals under --ascii or
+// NO_COLOR. Icons are opt-in (PILO_ICONS=on) because nothing in a terminal can
+// tell us whether the font in use actually carries them — a missing glyph draws
+// a blank box, and a label is never wrong.
+//
+// Codepoints: codicon claude/openai/copilot came with Nerd Fonts 3.5.0
+// (Codicons 0.0.45); the Google and X marks are Material Design, present since 3.x.
+const RUNTIME = {
+  claude: { label: "CLD", icon: "\uec82" },
+  codex: { label: "CDX", icon: "\uec81" },
+  copilot: { label: "CPT", icon: "\uec1e" },
+  gemini: { label: "GEM", icon: "\u{f02ad}" },
+  grok: { label: "GRK", icon: "\u{f099}" },
+  // herdr knows these too, and none of them has a mark of its own to draw.
+  agy: { label: "AGY" },
+  amp: { label: "AMP" },
+  cline: { label: "CLN" },
+  cursor: { label: "CUR" },
+  devin: { label: "DVN" },
+  droid: { label: "DRD" },
+  hermes: { label: "HRM" },
+  kilo: { label: "KIL" },
+  kimi: { label: "KMI" },
+  kiro: { label: "KIR" },
+  maki: { label: "MAK" },
+  mastracode: { label: "MST" },
+  omp: { label: "OMP" },
+  opencode: { label: "OPC" },
+  pi: { label: "PI" },
+  qodercli: { label: "QOD" },
+  // Not in herdr's list, but common enough to name before it asks.
+  aider: { label: "AID" },
+  antigravity: { label: "AGY" },
+  goose: { label: "GOS" },
+  openai: { label: "CDX", icon: "\uec81" },
+  qwen: { label: "QWN" },
+  windsurf: { label: "WSF" }
+};
+const ICONS = process.env.PILO_ICONS === "on" && !ASCII && COLOR !== "none";
+
+// An unknown runtime keeps its own first three letters rather than a question
+// mark: the name is the most useful thing we have, and it is never a lie.
+function runtimeMark(runtime) {
+  const key = String(runtime || "").trim().toLowerCase();
+  if (!key) return "";
+  const known = RUNTIME[key];
+  if (ICONS && known?.icon) return known.icon;
+  const label = known?.label || key.slice(0, 3).toUpperCase();
+  return ASCII || COLOR === "none" ? label : smallCaps(label);
+}
+
 // No padding inside the badge: the fill hugs the letters, and the two spaces
 // before it do the separating.
 const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : smallCaps(tag));
@@ -369,19 +422,23 @@ function railRows(tree, width, actions = []) {
   // The status word sits at the right edge, and workers do without one: their
   // dot already says it.
   const STATUS = { running: c.amberBright, failed: c.redSoft, blocked: c.blue };
-  const put = (indent, icon, name, tag, status, action, nameColor = c.fg) => {
+  const put = (indent, icon, name, tag, status, action, nameColor = c.fg, runtime = "") => {
     const prefix = indent ? `${" ".repeat(indent)}${c.branch}└${c.reset} ` : "";
     const tagWidth = cols(badgeText(tag));
     const stateWidth = status ? cols(status) + 1 : 0;
+    // The runtime mark sits between the dot and the name, and costs a space of
+    // its own. An agent with no bound session has no mark and no space either.
+    const mark = runtimeMark(runtime);
+    const markWidth = mark ? cols(mark) + 1 : 0;
     // dot + space, then two spaces before the badge, then whatever the status
     // word needs on the right — the name gives up whatever is left.
-    const room = width - indent - (indent ? 2 : 0) - 4 - tagWidth - stateWidth;
+    const room = width - indent - (indent ? 2 : 0) - 4 - markWidth - tagWidth - stateWidth;
     const label = cut(name, Math.max(4, room));
-    const used = indent + (indent ? 2 : 0) + 2 + cols(label) + 2 + tagWidth;
+    const used = indent + (indent ? 2 : 0) + 2 + markWidth + cols(label) + 2 + tagWidth;
     const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
-      `${prefix}${icon.color}${icon.icon}${c.reset} ${nameColor}${label}${c.reset}  ${badge(tag)}` +
+      `${prefix}${icon.color}${icon.icon}${c.reset} ${mark ? `${c.faint}${mark}${c.reset} ` : ""}${nameColor}${label}${c.reset}  ${badge(tag)}` +
         (status ? `${" ".repeat(gap)}${tone}${status}${c.reset}` : "")
     );
     actions.push(action);
@@ -411,7 +468,7 @@ function railRows(tree, width, actions = []) {
 
   const all = { type: "project", name: null };
   const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
-  put(0, statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all);
+  put(0, statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all, c.fg, tree.pilo.runtime);
 
   const pms = tree.pms;
   if (pms.length) divider();
@@ -424,12 +481,12 @@ function railRows(tree, width, actions = []) {
     const picked = state.filter === filter.name ? c.green : c.fg;
     // A running session spins even when Pilo has nothing on it.
     const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
-    put(2, pmIcon, pm.name, "PM", word(pm, seen), filter, picked);
+    put(2, pmIcon, pm.name, "PM", word(pm, seen), filter, picked, pm.runtime);
 
     pm.children.forEach((w) => {
       const wSeen = sessionLine(w, w.status);
       const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
-      put(4, wIcon, w.name, "WORKER", "", filter, picked);
+      put(4, wIcon, w.name, "WORKER", "", filter, picked, w.runtime);
     });
 
     divider();
@@ -1004,7 +1061,7 @@ if (!process.stdin.isTTY) {
 function probeAmbiguous() {
   const forced = Number(process.env.PILO_AMBIGUOUS_WIDTH || 0);
   if (forced) {
-    setAmbiguousWidth(forced, forced);
+    setAmbiguousWidth(forced, forced, 1);
     return Promise.resolve();
   }
   return new Promise((resolve) => {
@@ -1012,19 +1069,21 @@ function probeAmbiguous() {
     const done = () => {
       clearTimeout(timer);
       process.stdin.off("data", onData);
-      // Two answers, in the order the glyphs were printed: the arrow stands for
-      // ambiguous text, the rule for the box drawing the layout is made of.
-      if (seen.length >= 2) setAmbiguousWidth(seen[0] - 1, seen[1] - seen[0]);
+      // Three answers, in the order the glyphs were printed: the arrow stands for
+      // ambiguous text, the rule for the box drawing the layout is made of, and
+      // the icon for the Private Use Area — one cell in a Nerd Font "Mono"
+      // build, two in a normal one, and the terminal is the only one who knows.
+      if (seen.length >= 2) setAmbiguousWidth(seen[0] - 1, seen[1] - seen[0], seen[2] ? seen[2] - seen[1] : 1);
       process.stdout.write("\x1b[H\x1b[2K");
       resolve();
     };
     const onData = (chunk) => {
       for (const hit of String(chunk).matchAll(/\x1b\[\d+;(\d+)R/g)) seen.push(Number(hit[1]));
-      if (seen.length >= 2) done();
+      if (seen.length >= 3) done();
     };
     const timer = setTimeout(done, 200);
     process.stdin.on("data", onData);
-    process.stdout.write("\x1b[H\x1b[2K→\x1b[6n─\x1b[6n");
+    process.stdout.write("\x1b[H\x1b[2K→\x1b[6n─\x1b[6n\uec82\x1b[6n");
   });
 }
 
