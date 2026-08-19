@@ -67,12 +67,16 @@ const c = {
 // come back, because a bare word in a rule of dashes reads as noise.
 // The 6x6x6 cube collapses these dark tints onto the same entry, so the
 // 256-colour badges pick their own indices rather than being derived.
-const pick = (code, x256) => (COLOR === "none" ? "" : COLOR === "true" ? code : x256);
+// The badge used to be a fill with pale letters on it. The fill is gone and the
+// colour it carried is now the letters' own — the same three hues, lifted until
+// each clears 5.5:1 on a dark terminal, because the tones that read on a filled
+// chip disappear on the background. Widths do not move: the fill hugged the
+// letters and never added padding of its own.
 const BADGE = {
-  PILO: { bg: pick(bg(43, 74, 60), "\x1b[48;5;22m"), fg: pick(fg(214, 245, 230), "\x1b[38;5;194m") },
-  PM: { bg: pick(bg(38, 52, 61), "\x1b[48;5;24m"), fg: pick(fg(211, 230, 242), "\x1b[38;5;189m") },
-  WORKER: { bg: pick(bg(38, 45, 42), "\x1b[48;5;236m"), fg: pick(fg(185, 195, 188), "\x1b[38;5;250m") },
-  FINAL_REPLY: { bg: pick(bg(43, 74, 60), "\x1b[48;5;22m"), fg: pick(fg(214, 245, 230), "\x1b[38;5;194m") }
+  PILO: { fg: fg(88, 152, 123) },
+  PM: { fg: fg(110, 144, 165) },
+  WORKER: { fg: fg(123, 144, 135) },
+  FINAL_REPLY: { fg: fg(88, 152, 123) }
 };
 
 // Small caps make the badge read a size smaller without a second font. Terminals
@@ -166,7 +170,7 @@ function runtimeMark(runtime) {
 const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : smallCaps(tag));
 function badge(tag) {
   const paint = BADGE[tag] || BADGE.WORKER;
-  return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.bg}${paint.fg}${badgeText(tag)}${c.reset}`;
+  return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.fg}${badgeText(tag)}${c.reset}`;
 }
 
 // Card surfaces: a tint painted to the card's full width, and the accent bar that
@@ -371,7 +375,7 @@ function routedBadge(item, tree) {
       shown: [],
       hidden: 0,
       width: cols(label),
-      text: ASCII || COLOR === "none" ? label : `${BADGE.PILO.bg}${BADGE.PILO.fg}${label}${c.reset}`
+      text: ASCII || COLOR === "none" ? label : `${BADGE.PILO.fg}${label}${c.reset}`
     };
   }
 
@@ -380,7 +384,7 @@ function routedBadge(item, tree) {
   const chip = (name, paint) => {
     const plain = cut(name, NAME_LIMIT);
     const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
-    return { label, text: ASCII || COLOR === "none" ? label : `${paint.bg}${paint.fg}${label}${c.reset}` };
+    return { label, text: ASCII || COLOR === "none" ? label : `${paint.fg}${label}${c.reset}` };
   };
   const chips = shown.map((name) => chip(name, rolePaint(name, tree)));
   if (hidden) chips.push(chip(`+${hidden}`, BADGE.WORKER));
