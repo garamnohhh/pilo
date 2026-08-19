@@ -51,6 +51,23 @@ export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
 Running `docker compose` by hand needs `PILO_DB_PASSWORD` set; without it
 Compose stops and says so.
 
+## Terminal
+
+The tree writes what each agent runs in front of its name. Three tiers, and only
+the last is guaranteed:
+
+| Tier | When | Looks like |
+| --- | --- | --- |
+| icon | `PILO_ICONS=on` and an icon font with Nerd Fonts 3.5.0 or newer | ` pilo` |
+| small caps | the default | `ᴄʟᴅ pilo` |
+| capitals | `--ascii` or `NO_COLOR` | `CLD pilo` |
+
+Icons stay opt-in because no terminal can be asked whether the font in use has
+the glyph — a missing one draws a blank box, and a label never does.
+
+An unrecognised runtime wears its own first three letters. `PILO_AMBIGUOUS_WIDTH`
+forces the East Asian ambiguous width when the startup probe cannot run.
+
 ## Design Contract
 
 The dashboard and TUI must match `design/Pilo.dc.html`.
