@@ -24,3 +24,21 @@ test("ambiguous characters follow whatever the terminal answered", () => {
     setAmbiguousWidth(1);
   }
 });
+
+test("private use area icons are one cell, and CJK compatibility stays two", () => {
+  // Nerd Font icons live here; the range that used to claim them as wide began
+  // at 豈 U+8C48 rather than U+F900 and swallowed the whole area.
+  assert.equal(charWidth("\uec82"), 1, "codicon claude");
+  assert.equal(charWidth("\u{f02ad}"), 1, "material design, plane 15");
+  assert.equal(charWidth("\uf900"), 2, "CJK compatibility ideograph");
+  try {
+    // An ambiguous-wide terminal must not drag the icons along with it.
+    setAmbiguousWidth(2, 1, 1);
+    assert.equal(charWidth("\uec82"), 1);
+    // A non-Mono Nerd Font draws them double, and the probe says so.
+    setAmbiguousWidth(1, 1, 2);
+    assert.equal(charWidth("\uec82"), 2);
+  } finally {
+    setAmbiguousWidth(1, 1, 1);
+  }
+});
