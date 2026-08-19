@@ -181,10 +181,15 @@ const CARD = {
   waiting: { tint: bg(12, 16, 14) }
 };
 const BAR = "▌";
-// The tree's name and badge are two different things, so a hairline stands
-// between them. --ascii and NO_COLOR keep a pipe: same width, same job, and the
-// bracketed badge beside it still reads without any colour to help.
-const SEPARATOR = ASCII || COLOR === "none" ? "|" : "\u2502";
+// The tree's name and badge are two different things, so a short stroke stands
+// between them. Measured in the terminal's own font at 32px, the box-drawing
+// rule inks 48.6px — taller than the cell, which is why rows looked joined —
+// while U+01C0 inks 23.3px and sits on the baseline, touching neither edge. The
+// half-rules (╵ ╷) are shorter still but attach to the cell edge, which is the
+// same problem again. Its advance is one cell and it is outside the East Asian
+// ambiguous set, so no terminal draws it double. --ascii and NO_COLOR keep a
+// pipe: same width, same job, and the bracketed badge reads without colour.
+const SEPARATOR = ASCII || COLOR === "none" ? "|" : "\u01c0";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
 const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
