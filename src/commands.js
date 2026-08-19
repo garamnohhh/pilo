@@ -12,6 +12,7 @@ export const CATALOGUE = [
   { scope: "tui", name: "blocked", args: "", summary: "사용자 결정을 기다리는 작업", example: ":blocked" },
   { scope: "tui", name: "answer", args: "<taskId> <답변>", summary: "결정 회신 — 그 작업이 다시 큐로", example: ':answer 481 "yes, ship it"' },
   { scope: "tui", name: "copy", args: "[last|in-N|task-N|draft]", summary: "답변이나 입력 중인 글을 클립보드로", example: ":copy in-42" },
+  { scope: "tui", name: "icons", args: "[on|off]", summary: "agent 이름 앞 runtime 아이콘 — 없으면 글자 라벨", example: ":icons on" },
   { scope: "tui", name: "mouse", args: "", summary: "마우스 끄기/켜기 — 끄면 터미널 드래그 선택", example: ":mouse" },
   { scope: "tui", name: "fold", args: "[id|all|default]", summary: "답변 접기", example: ":fold all" },
   { scope: "tui", name: "unfold", args: "", summary: "접은 것 모두 펼치기", example: ":unfold" },

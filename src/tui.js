@@ -94,12 +94,18 @@ const smallCaps = (tag) => [...String(tag).toUpperCase()].map((ch) => SMALL[ch] 
 //
 // Codepoints: codicon claude/openai/copilot came with Nerd Fonts 3.5.0
 // (Codicons 0.0.45); the Google and X marks are Material Design, present since 3.x.
+// Brand colours, taken from the makers' own pages rather than from memory:
+// #d97757 is Anthropic's on anthropic.com, #4285f4 a stop in Gemini's own
+// gradient on gemini.google.com, #f9f8f7 grok.com's light theme-color. OpenAI's
+// and GitHub's marks are monochrome — the codicons are drawn in currentColor —
+// so they get the light end of their own black-and-white palette. Every one of
+// them clears 5:1 against a dark terminal, so none needed brightening.
 const RUNTIME = {
-  claude: { label: "CLD", icon: "\uec82" },
-  codex: { label: "CDX", icon: "\uec81" },
-  copilot: { label: "CPT", icon: "\uec1e" },
-  gemini: { label: "GEM", icon: "\u{f02ad}" },
-  grok: { label: "GRK", icon: "\u{f099}" },
+  claude: { label: "CLD", icon: "\uec82", colour: fg(217, 119, 87) },
+  codex: { label: "CDX", icon: "\uec81", colour: fg(255, 255, 255) },
+  copilot: { label: "CPT", icon: "\uec1e", colour: fg(201, 209, 217) },
+  gemini: { label: "GEM", icon: "\u{f02ad}", colour: fg(66, 133, 244) },
+  grok: { label: "GRK", icon: "\u{f099}", colour: fg(249, 248, 247) },
   // herdr knows these too, and none of them has a mark of its own to draw.
   agy: { label: "AGY" },
   amp: { label: "AMP" },
@@ -121,21 +127,38 @@ const RUNTIME = {
   aider: { label: "AID" },
   antigravity: { label: "AGY" },
   goose: { label: "GOS" },
-  openai: { label: "CDX", icon: "\uec81" },
+  openai: { label: "CDX", icon: "\uec81", colour: fg(255, 255, 255) },
   qwen: { label: "QWN" },
   windsurf: { label: "WSF" }
 };
-const ICONS = process.env.PILO_ICONS === "on" && !ASCII && COLOR !== "none";
+// :icons decides, and what it decides is kept in the settings table so the next
+// run starts the same way. PILO_ICONS only seeds the first run: the setting a
+// user can see and change wins over an environment variable they cannot.
+const ICONS_BY_ENV = process.env.PILO_ICONS === "on";
+const iconsWanted = () => {
+  // What :icons said this run, then what the last run saved, then the
+  // environment. The poll that refreshes the settings must not undo a toggle
+  // the user can see on screen, so the session's own answer comes first.
+  const saved = state.data?.settings?.icons;
+  const wanted =
+    typeof state.icons === "boolean" ? state.icons
+      : typeof saved?.on === "boolean" ? saved.on
+        : ICONS_BY_ENV;
+  return wanted && !ASCII && COLOR !== "none";
+};
 
 // An unknown runtime keeps its own first three letters rather than a question
-// mark: the name is the most useful thing we have, and it is never a lie.
+// mark: the name is the most useful thing we have, and it is never a lie. Icon
+// and label wear the same colour, so turning icons off changes the shape of the
+// mark and nothing else about it.
 function runtimeMark(runtime) {
   const key = String(runtime || "").trim().toLowerCase();
   if (!key) return "";
   const known = RUNTIME[key];
-  if (ICONS && known?.icon) return known.icon;
+  const glyph = iconsWanted() && known?.icon ? known.icon : null;
   const label = known?.label || key.slice(0, 3).toUpperCase();
-  return ASCII || COLOR === "none" ? label : smallCaps(label);
+  if (ASCII || COLOR === "none") return label;
+  return `${known?.colour || c.faint}${glyph || smallCaps(label)}${c.reset}`;
 }
 
 // No padding inside the badge: the fill hugs the letters, and the two spaces
@@ -165,6 +188,7 @@ const pulseColour = (which) =>
 
 const state = {
   input: "",
+  icons: null,
   cursor: 0,
   notes: [],
   mouse: true,
@@ -438,7 +462,7 @@ function railRows(tree, width, actions = []) {
     const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
-      `${prefix}${icon.color}${icon.icon}${c.reset} ${mark ? `${c.faint}${mark}${c.reset} ` : ""}${nameColor}${label}${c.reset}  ${badge(tag)}` +
+      `${prefix}${icon.color}${icon.icon}${c.reset} ${mark ? `${mark} ` : ""}${nameColor}${label}${c.reset}  ${badge(tag)}` +
         (status ? `${" ".repeat(gap)}${tone}${status}${c.reset}` : "")
     );
     actions.push(action);
@@ -933,6 +957,19 @@ async function command(parsed) {
     if (!hit) return note(`no such project: ${wanted} (${projects.join(", ") || "none registered"})`, { sticky: true });
     applyProject(hit);
     return;
+  }
+  if (word === "icons") {
+    const wanted = rest.join("").toLowerCase();
+    const on = wanted ? ["on", "켜기", "true"].includes(wanted) : !iconsWanted();
+    // Write it through the API so the dashboard and the next run agree; the
+    // screen follows the session's own answer without waiting for the poll.
+    state.icons = on;
+    await fetch(`${base}/api/settings/icons`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ value: { on } })
+    }).catch(() => {});
+    return note(on ? t("note.iconsOn") : t("note.iconsOff"));
   }
   if (word === "mouse") {
     const wanted = rest.join("").toLowerCase();
