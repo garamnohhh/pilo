@@ -8,6 +8,7 @@ const EN = {
   // status words in the agent tree
   "state.idle": "idle",
   "state.running": "running",
+  "state.stalled": "stalled",
   "state.blocked": "blocked",
   "state.failed": "failed",
   "state.unbound": "unbound",
@@ -141,6 +142,7 @@ const EN = {
 const KO = {
   "state.idle": "대기",
   "state.running": "작업 중",
+  "state.stalled": "멈춘 듯",
   "state.blocked": "결정 대기",
   "state.failed": "실패",
   "state.unbound": "세션 없음",

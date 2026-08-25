@@ -53,6 +53,8 @@ const c = {
   faint: fg(79, 90, 83),
   blue: fg(150, 178, 214),
   amber: fg(218, 184, 88),
+  // work that has stopped moving: the same hue, without the light
+  amberDim: fg(150, 128, 66),
   red: fg(220, 104, 80),
   amberBright: fg(224, 183, 85),
   redSoft: fg(224, 122, 107),
@@ -498,7 +500,9 @@ function railRows(tree, width, actions = []) {
 
   // The word on the right says what the agent is doing, in one token.
   const word = (agent, seen) =>
-    agent.status === "blocked"
+    agent.status === "running" && stalled(agent)
+      ? t("state.stalled")
+      : agent.status === "blocked"
       ? t("state.blocked")
       : agent.status === "failed"
         ? t("state.failed")
@@ -522,12 +526,12 @@ function railRows(tree, width, actions = []) {
     // one row out of line. Colour costs no columns.
     const picked = state.filter === filter.name ? c.green : c.fg;
     // A running session spins even when Pilo has nothing on it.
-    const pmIcon = seen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(pm.status, state.spin);
+    const pmIcon = statusIcon(pm.status, state.spin, stalled(pm));
     put(2, pmIcon, pm.name, "PM", word(pm, seen), filter, picked, pm.runtime);
 
     pm.children.forEach((w) => {
       const wSeen = sessionLine(w, w.status);
-      const wIcon = wSeen.busy ? { icon: SPINNER[state.spin % SPINNER.length], color: c.amber } : statusIcon(w.status, state.spin);
+      const wIcon = statusIcon(w.status, state.spin, stalled(w));
       put(4, wIcon, w.name, "WORKER", "", filter, picked, w.runtime);
     });
 
@@ -681,16 +685,34 @@ function scrollBy(rows) {
 // The tree shows two things about an agent: the work Pilo gave it, and whether
 // its session is actually running right now. No inference beyond that — a busy
 // session is just a busy session, whoever started it.
+// herdr reads the pane and guesses; Pilo knows what it handed out. The guess is
+// only allowed to say "working" about work Pilo actually gave the agent —
+// otherwise a shell prompt that herdr mistakes for a running job leaves an idle
+// agent spinning in the tree for as long as the pane sits there.
+// Nothing here kills a task or changes a record: this only decides what the row
+// says. Ten minutes of silence from the work an agent holds, on a session that
+// is idle or finished, is the pair of signals that means it stopped without
+// reporting. Either one alone is normal — agents think for a long time between
+// progress lines, and a busy pane may be the user typing into it.
+const STALL_MS = 10 * 60 * 1000;
+function stalled(agent) {
+  if (agent.status !== "running" || !agent.lastSignal) return false;
+  if (agent.sessionStatus === "working") return false;
+  return Date.now() - new Date(agent.lastSignal).getTime() > STALL_MS;
+}
+
 function sessionLine(agent, base) {
   const seen = agent.sessionStatus || "";
   if (agent.status === "unbound") return { text: t("tree.sessionOff"), busy: false };
-  const busy = seen === "working";
+  const busy = seen === "working" && agent.status === "running";
   const tail = busy ? t("tree.sessionBusy") : seen ? t("tree.sessionQuiet") : t("tree.sessionGone");
   if (agent.status === "idle") return { text: busy ? t("tree.sessionBusy") : seen ? t("state.idle") : tail, busy };
   return { text: `${base} · ${tail}`, busy };
 }
 
-function statusIcon(status, spin) {
+function statusIcon(status, spin, stopped = false) {
+  // A stalled task keeps its place in the tree but stops pretending to move.
+  if (status === "running" && stopped) return { icon: "◍", color: c.amberDim };
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
   // waiting on a person, not on work: a spinner here would be a lie
   if (status === "blocked") return { icon: "◆", color: c.blue };
