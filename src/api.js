@@ -14,6 +14,11 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     ORDER BY t.updated_at DESC LIMIT 1) AS "blockedQuestion",
   (SELECT t.progress FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')
      AND t.progress <> '' ORDER BY t.progress_at DESC LIMIT 1) AS progress,
+  -- the last time the work this agent holds said anything: a progress line, a
+  -- status change, or the moment it was handed over. Silence is how a task that
+  -- died without reporting is told apart from one still being worked on.
+  (SELECT max(GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at))
+     FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "lastSignal",
   -- what herdr last said the bound session was doing, kept by the watcher
   s.status AS "sessionStatus", s.since AS "sessionSince",
   CASE
