@@ -516,6 +516,13 @@ function railRows(tree, width, actions = []) {
   const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
   put(0, statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all, c.fg, tree.pilo.runtime);
 
+  // The desk agent may hold workers of its own — odd jobs that belong to no
+  // project — and they sit under it exactly as a PM's workers sit under theirs.
+  (tree.pilo.children || []).concat(tree.orphanWorkers || []).forEach((w) => {
+    const wSeen = sessionLine(w, w.status);
+    put(2, statusIcon(w.status, state.spin, stalled(w)), w.name, "WORKER", word(w, wSeen), all, c.fg, w.runtime);
+  });
+
   const pms = tree.pms;
   if (pms.length) divider();
   pms.forEach((pm) => {
