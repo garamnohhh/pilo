@@ -171,7 +171,7 @@ function workerRules(agent, base, children = []) {
     agent.role === "pm"
       ? `- Hand work to your own workers when it helps: \`pilo send <workerId> <inboxId> "the request"\`.
 - Gather their results into one \`pmResult\`.`
-      : `- Your parent PM gathers the result. Do not report to the user directly.`;
+      : `- Whoever gave you the task gathers the result. Do not report to the user directly.`;
   return RULES[dialect()].worker(agent, kind, roster, extra);
 }
 
