@@ -717,7 +717,11 @@ export async function listTasks(limit = 100) {
        a.name AS agent, pa.name AS "parentAgent"
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
        LEFT JOIN agents pa ON pa.id = (SELECT to_agent_id FROM tasks p WHERE p.id = t.parent_task_id)
-     ORDER BY t.created_at DESC LIMIT $1`,
+     -- Work still waiting on someone comes first whatever its age. A blocked
+     -- question that predates the last hundred tasks was falling off the end of
+     -- this list while the tree still reported the agent as blocked, which left
+     -- no way to find the question from here.
+     ORDER BY (t.status IN ('blocked', 'queued', 'running')) DESC, t.created_at DESC LIMIT $1`,
     [limit]
   );
 }
