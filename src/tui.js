@@ -1051,6 +1051,15 @@ async function command(parsed) {
     }
     return note(t("note.copyUsage"), { sticky: true });
   }
+  if (word === "schedules") {
+    const rows = await api("/api/schedules", []);
+    if (!rows.length) return note(t("note.noSchedules"));
+    return note(
+      rows
+        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${s.cadence} → ${s.agent} · ${new Date(s.nextRunAt).toLocaleString()}`)
+        .join("  │  ")
+    );
+  }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
     return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : t("note.noBlocked"));
