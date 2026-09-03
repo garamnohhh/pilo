@@ -1010,14 +1010,19 @@ export async function runSchedule(schedule) {
     if (open) return advance("previous run still open");
   }
   const inbox = await createInbox(schedule.request, "");
-  const task = await createTask(inbox.id, { toAgentId: schedule.toAgentId, title: schedule.name, request: schedule.request });
+  // A job aimed at the desk arrives the way anything from the user arrives — as a
+  // request it routes or answers itself. Anyone else gets a task, as usual.
+  const desk = await one("SELECT role FROM agents WHERE id = $1", [schedule.toAgentId]);
+  const task = desk?.role === "pilo"
+    ? null
+    : await createTask(inbox.id, { toAgentId: schedule.toAgentId, title: schedule.name, request: schedule.request });
   await query(
     `UPDATE schedules SET last_task_id = $2, last_run_at = now(), next_run_at = $3, updated_at = now() WHERE id = $1`,
-    [schedule.id, task.id, nextRun(schedule.cadence, schedule.weekdaysOnly)]
+    [schedule.id, task?.id || null, nextRun(schedule.cadence, schedule.weekdaysOnly)]
   );
   await logEvent({ type: "schedule_fired", title: `${schedule.name} → ${schedule.agent}`,
-    agentId: schedule.toAgentId, inboxId: inbox.id, taskId: task.id, payload: { scheduleId: schedule.id } });
-  return `in-${inbox.id} task ${task.id}`;
+    agentId: schedule.toAgentId, inboxId: inbox.id, taskId: task?.id || null, payload: { scheduleId: schedule.id } });
+  return task ? `in-${inbox.id} task ${task.id}` : `in-${inbox.id}`;
 }
 
 export async function dueSchedules() {
