@@ -51,6 +51,25 @@ export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
 Running `docker compose` by hand needs `PILO_DB_PASSWORD` set; without it
 Compose stops and says so.
 
+## Schedules
+
+Work that should happen on its own clock. One row per standing job; each time one
+comes due it opens an ordinary inbox row (and a task, unless the desk itself is
+the target), so history and reporting are the ones that already exist.
+
+```bash
+pilo schedules                 # id · on/off · cadence · target · next run
+pilo schedule 3 off            # stop it now; on to resume, rm to delete
+pilo api POST /api/schedules '{"name":"아침 브리핑","toAgentId":"1",
+  "cadence":"09:00","weekdaysOnly":true,"onMiss":"run","request":"..."}'
+```
+
+`cadence` is `HH:MM` in the server’s own timezone, or `every:N` minutes.
+`onMiss` decides what happens to a slot the machine slept through: `run` takes it
+late, `skip` drops it. A schedule whose last task is still open passes its slot
+rather than stacking a second run, and three failures in a row switch it off.
+`:schedules` shows the same list inside the TUI.
+
 ## Terminal
 
 The tree writes what each agent runs in front of its name. Three tiers, and only
