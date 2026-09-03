@@ -179,7 +179,7 @@ import { tablesToHtml } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t } from "/text.js";
 const TABS = [
-  "overview", "agents", "inbox", "events", "artifacts", "projects", "commands", "settings", "system"
+  "overview", "agents", "inbox", "events", "artifacts", "projects", "schedules", "commands", "settings", "system"
 ].map((key) => [key, t(`dash.tab.${key}`), t(`dash.tab.${key}.desc`)]);
 
 const state = {
@@ -192,7 +192,8 @@ const state = {
   openTrace: null,
   selected: { event: null, artifact: null, inbox: null },
   inboxFilter: null,
-  project: { id: null, name: "", repo: "", path: "", note: "" }
+  project: { id: null, name: "", repo: "", path: "", note: "" },
+  schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" }
 };
 
 function emptyForm() {
@@ -229,12 +230,12 @@ async function call(method, path, body) {
 const get = (path) => call("GET", path);
 
 async function load() {
-  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents] = await Promise.all([
+  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules] = await Promise.all([
     get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox"),
     get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup"),
-    get("/api/sessions"), get("/api/agents")
+    get("/api/sessions"), get("/api/agents"), get("/api/schedules")
   ]);
-  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents };
+  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules };
   await loadDetail();
   $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
   render();
@@ -863,6 +864,53 @@ views.projects = () => {
   </div>`;
 };
 
+// Standing jobs. The request text is shown in full on the card on purpose: a
+// schedule nobody can read is a standing instruction nobody is checking.
+views.schedules = () => {
+  const list = state.data.schedules || [];
+  const f = state.schedule;
+  const targets = (state.data.agents || []).filter((a) => a.role !== "worker" || a.parentAgentId);
+  const when = (iso) => (iso ? new Date(iso).toLocaleString("ko-KR") : "—");
+  return `<div class="split">
+    <div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px">
+        ${list.length ? list.map((s) => `<div class="card">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span class="mono" style="font-size:15px;color:${s.enabled ? "var(--strong)" : "var(--faint)"}">${esc(s.name)}</span>
+            <span class="role ${s.enabled ? "pm" : ""}" style="color:${s.enabled ? "var(--green)" : "var(--faint)"}">${s.enabled ? "ON" : "OFF"}</span>
+            <span class="acts" style="margin-left:auto;display:flex;gap:6px">
+              <button class="btn small" data-act="toggle-schedule" data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}">${s.enabled ? "끄기" : "켜기"}</button>
+              <button class="btn small danger" data-act="delete-schedule" data-id="${s.id}">delete</button></span>
+          </div>
+          <div style="margin-top:13px;padding-top:12px;border-top:1px solid #171b19;font:11px/2 var(--mono);color:#67726b">
+            <div>주기     <span style="color:#b9c3bc">${esc(s.cadence)}</span> <span style="color:#3e4744">${s.weekdaysOnly ? "평일만" : "매일"} · 밀리면 ${s.onMiss === "skip" ? "건너뜀" : "실행"}</span></div>
+            <div>대상     <span style="color:#b9c3bc">${esc(s.agent)}</span></div>
+            <div>다음     <span style="color:${s.enabled ? "var(--green)" : "var(--faint)"}">${esc(when(s.nextRunAt))}</span></div>
+            <div>마지막   <span style="color:#b9c3bc">${esc(when(s.lastRunAt))}</span> ${s.lastTaskId ? `<span style="color:#3e4744">task ${s.lastTaskId}</span>` : ""} ${s.failCount ? `<span style="color:var(--red)">실패 ${s.failCount}</span>` : ""}</div>
+          </div>
+          <div style="margin-top:10px;padding:9px 11px;background:#0b0e0d;border:1px solid #171b19;border-radius:6px;
+                      font:11px/1.7 var(--mono);color:#8b968e;white-space:pre-wrap;max-height:150px;overflow:auto">${esc(s.request)}</div>
+        </div>`).join("") : `<div class="table"><div class="empty">예약이 없습니다.</div></div>`}
+      </div>
+    </div>
+    <div class="card">
+      <h2 style="margin:0">예약 등록</h2>
+      <p class="hint">시각은 <b>한국 시간(KST)</b> 기준입니다. 예약은 그 시각에 agent에게 지시를 보냅니다 — 요청문을 신중히 쓰세요.</p>
+      <div class="field"><div class="name">name<span class="req">required</span></div><input id="s-name" value="${esc(f.name)}" placeholder="아침 브리핑"></div>
+      <div class="field"><div class="name">대상 agent<span class="req">required</span></div>
+        <select id="s-agent">${targets.map((a) => `<option value="${a.id}" ${String(f.toAgentId) === String(a.id) ? "selected" : ""}>${esc(a.name)} (${esc(a.role)})</option>`).join("")}</select></div>
+      <div class="field"><div class="name">시각 <span class="hint">HH:MM (KST) 또는 every:N 분</span></div><input id="s-cadence" value="${esc(f.cadence)}" placeholder="09:00"></div>
+      <div class="field"><div class="name">요청문<span class="req">required</span></div>
+        <textarea id="s-request" rows="5" style="width:100%;font:12px/1.6 var(--mono)" placeholder="어제 한 일과 오늘 할 일을 정리해줘">${esc(f.request)}</textarea></div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#8b968e;margin:8px 0">
+        <input type="checkbox" id="s-weekdays" ${f.weekdaysOnly ? "checked" : ""}> 평일만 (주말에는 돌지 않음)</label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#8b968e;margin-bottom:12px">
+        <input type="checkbox" id="s-miss" ${f.onMiss === "skip" ? "checked" : ""}> 맥이 자느라 놓쳤으면 <b>건너뛰기</b> (끄면 깨어난 뒤 실행)</label>
+      <button class="btn primary" data-act="create-schedule">create schedule</button>
+    </div>
+  </div>`;
+};
+
 // The catalogue lives in src/commands.js and is served to the browser as-is, so
 // adding a command there puts it on this page without a second edit.
 views.commands = () => {
@@ -1204,6 +1252,33 @@ const actions = {
   async "cancel-project"() {
     state.project = { id: null, name: "", repo: "", path: "", note: "" };
     render();
+  },
+  async "create-schedule"() {
+    const form = {
+      name: $("s-name").value.trim(),
+      toAgentId: $("s-agent").value,
+      cadence: $("s-cadence").value.trim(),
+      request: $("s-request").value.trim(),
+      weekdaysOnly: $("s-weekdays").checked,
+      onMiss: $("s-miss").checked ? "skip" : "run"
+    };
+    if (!form.name || !form.request || !form.toAgentId) return toast("name · 대상 · 요청문은 필수입니다", true);
+    await call("POST", "/api/schedules", form);
+    state.schedule = { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" };
+    toast("예약 등록됨");
+    await load();
+  },
+  async "toggle-schedule"(el) {
+    const on = el.dataset.on === "1";
+    await call("POST", `/api/schedules/${el.dataset.id}`, { enabled: on });
+    toast(on ? "예약을 켰습니다" : "예약을 껐습니다 — 켜기 전까지 돌지 않습니다");
+    await load();
+  },
+  async "delete-schedule"(el) {
+    if (!confirm("이 예약을 삭제할까요? 지난 실행 기록은 그대로 남습니다.")) return;
+    await call("DELETE", `/api/schedules/${el.dataset.id}`);
+    toast("예약 삭제됨");
+    await load();
   },
   async "delete-project"(el) {
     if (!confirm("이 프로젝트를 삭제할까요?")) return;
