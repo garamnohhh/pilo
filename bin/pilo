@@ -123,10 +123,10 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     fi
     ;;
   logs) tail -f "$LOG" ;;
-  inbox|agents|send|reply|task|progress|done|block|blocked|answer|api)
+  inbox|agents|send|reply|task|progress|done|block|blocked|answer|schedules|schedule|api)
     # agent commands go over the unix socket, so they work with sandbox network off
     exec node "$ROOT/src/cli.js" "$@"
     ;;
   help|--help|-h) node "$ROOT/src/cli.js" ;;
-  *) echo "Usage: pilo [tui|up|dashboard|status|doctor|stop|logs]"; echo "       pilo [inbox|agents|send|reply|task|progress|done|api] — agent commands"; exit 1 ;;
+  *) echo "Usage: pilo [tui|up|dashboard|status|doctor|stop|logs]"; echo "       pilo [inbox|agents|send|reply|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
 esac
