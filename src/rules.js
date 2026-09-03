@@ -186,8 +186,14 @@ function workerRules(agent, base, children = [], parent = null) {
         .map((w) => `| ${w.id} | ${w.name} | ${w.specialty || "—"} |`)
         .join("\n")}\n`
     : "";
+  // A PM with nobody under it was still being told about "the workers listed
+  // above", which names an empty space. It gets the other half of the rule instead.
   const extra =
-    agent.role === "pm"
+    agent.role === "pm" && !children.length
+      ? `- You have no workers. Everything sent to you is yours to do and to report.
+- If this project grows past one thread — a codebase someone should hold between jobs — say so in a
+  report and the desk will register a worker under you.`
+      : agent.role === "pm"
       ? `- **The workers listed above take work from you and from nobody else.** The desk will not
   address them, so anything of theirs that needs doing is yours to hand down:
   \`pilo send <workerId> <inboxId> "the request"\`. The worker holds the codebase between jobs, you
