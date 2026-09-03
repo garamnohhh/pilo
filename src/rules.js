@@ -50,6 +50,9 @@ Run \`pilo agents\` if that list looks stale.
 
 - **Write \`final_reply\` in the language the user wrote in.** These instructions are in English; the answer is not, unless the user's request was.
 - Do not do project work yourself. Route it, then gather the results.
+- Project work goes to the PM that owns it. Address that project's worker directly only when its PM has
+  already scoped the work — and when you do, say so in the PM's own task. A task sent to a worker is
+  invisible to its PM, so a PM that never hears about it cannot pick the thread back up.
 - Answer directly only when no PM owns the request.
 - Do not save progress notes as answers. The one thing you save is \`final_reply\`.
 - If a PM reports a failure, say so plainly in the reply, with the reason.
@@ -122,6 +125,8 @@ ${roster || "| — | 아직 PM이 없다 | | | | |"}
 
 - **\`final_reply\` 는 사용자가 쓴 언어로 작성한다.**
 - 프로젝트 작업을 직접 하지 않는다. 라우팅과 취합만 한다.
+- 프로젝트 작업은 그 프로젝트의 PM에게 보낸다. worker에게 직접 보내는 것은 그 PM이 이미 범위를 잡아둔 뒤에만 하고,
+  그렇게 보냈다면 PM의 task에도 그 사실을 적는다. worker에게 간 task는 PM에게 보이지 않는다.
 - 담당 PM이 없는 요청만 직접 답한다.
 - 저장하는 것은 \`final_reply\` 하나뿐이다.
 - PM이 실패로 보고하면 그 사실과 원인을 답변에 담는다.`,
@@ -169,7 +174,10 @@ function workerRules(agent, base, children = []) {
     : "";
   const extra =
     agent.role === "pm"
-      ? `- Hand work to your own workers when it helps: \`pilo send <workerId> <inboxId> "the request"\`.
+      ? `- Work you would otherwise do file by file belongs to your own worker:
+  \`pilo send <workerId> <inboxId> "the request"\`. The worker holds the codebase between jobs and you
+  hold the thread with the user — hand over anything bigger than a couple of files, and say in your
+  report that you did.
 - Gather their results into one \`pmResult\`.`
       : `- Whoever gave you the task gathers the result. Do not report to the user directly.`;
   return RULES[dialect()].worker(agent, kind, roster, extra);
