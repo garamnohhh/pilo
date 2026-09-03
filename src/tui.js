@@ -1060,6 +1060,17 @@ async function command(parsed) {
         .join("  │  ")
     );
   }
+  if (word === "schedule") {
+    const [id, verb] = rest;
+    if (!id || !["on", "off", "rm"].includes(verb)) return note(t("note.scheduleUsage"));
+    const res = await fetch(`${base}/api/schedules/${id}`, {
+      method: verb === "rm" ? "DELETE" : "POST",
+      headers: { "content-type": "application/json" },
+      body: verb === "rm" ? undefined : JSON.stringify({ enabled: verb === "on" })
+    }).catch(() => null);
+    if (!res?.ok) return note(t("note.scheduleFailed", { id }), { sticky: true });
+    return note(t(verb === "rm" ? "note.scheduleRemoved" : verb === "on" ? "note.scheduleOn" : "note.scheduleOff", { id }));
+  }
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
     return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : t("note.noBlocked"));

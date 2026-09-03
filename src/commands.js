@@ -18,6 +18,7 @@ export const CATALOGUE = [
   { scope: "tui", name: "unfold", args: "", summary: "접은 것 모두 펼치기", example: ":unfold" },
   { scope: "tui", name: "cost", args: "", summary: "토큰 사용량", example: ":cost" },
   { scope: "tui", name: "schedules", aliases: ["sched"], args: "", summary: "예약된 정기 작업", example: ":schedules" },
+  { scope: "tui", name: "schedule", args: "<id> on|off|rm", summary: "예약 켜기/끄기/삭제", example: ":schedule 3 off" },
   { scope: "tui", name: "help", args: "", summary: "명령 목록", example: ":help" },
   { scope: "tui", name: "exit", aliases: ["q", "quit"], args: "", summary: "종료", example: ":exit" },
 
