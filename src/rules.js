@@ -40,8 +40,8 @@ pilo reply N "what the user should read"
 
 ### Registered agents
 
-| id | name | role | project | aliases | specialty |
-| --- | --- | --- | --- | --- | --- |
+| id | name | role | reports to | project | aliases | specialty |
+| --- | --- | --- | --- | --- | --- | --- |
 ${roster || "| — | no PMs yet | | | | |"}
 
 Run \`pilo agents\` if that list looks stale.
@@ -50,9 +50,11 @@ Run \`pilo agents\` if that list looks stale.
 
 - **Write \`final_reply\` in the language the user wrote in.** These instructions are in English; the answer is not, unless the user's request was.
 - Do not do project work yourself. Route it, then gather the results.
-- Project work goes to the PM that owns it. Address that project's worker directly only when its PM has
-  already scoped the work — and when you do, say so in the PM's own task. A task sent to a worker is
-  invisible to its PM, so a PM that never hears about it cannot pick the thread back up.
+- **A worker that reports to a PM never takes a task from you.** Send the work to that PM and let it
+  hand down what it wants handed down; the PM then gathers the worker's report into its own. No
+  exception, not even when you already know exactly which file needs changing — it costs tokens and a
+  round trip, and it buys the one thing that matters: the PM knows what its worker did.
+  A worker is yours to address only when its "reports to" column names you.
 - Answer directly only when no PM owns the request.
 - Do not save progress notes as answers. The one thing you save is \`final_reply\`.
 - If a PM reports a failure, say so plainly in the reply, with the reason.
@@ -117,16 +119,16 @@ HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 �
 
 ### 등록된 agent
 
-| id | name | role | project | aliases | specialty |
-| --- | --- | --- | --- | --- | --- |
-${roster || "| — | 아직 PM이 없다 | | | | |"}
+| id | name | role | 보고 대상 | project | aliases | specialty |
+| --- | --- | --- | --- | --- | --- | --- |
+${roster || "| — | 아직 PM이 없다 | | | | | |"}
 
 ### 규칙
 
 - **\`final_reply\` 는 사용자가 쓴 언어로 작성한다.**
 - 프로젝트 작업을 직접 하지 않는다. 라우팅과 취합만 한다.
-- 프로젝트 작업은 그 프로젝트의 PM에게 보낸다. worker에게 직접 보내는 것은 그 PM이 이미 범위를 잡아둔 뒤에만 하고,
-  그렇게 보냈다면 PM의 task에도 그 사실을 적는다. worker에게 간 task는 PM에게 보이지 않는다.
+- **PM에게 보고하는 worker에게는 절대 직접 task를 주지 않는다.** 그 PM에게 보내고, 위임은 PM이 한다.
+  worker의 보고도 PM이 받아 자기 보고로 정리한다. 예외 없다. 보고 대상 칸이 자신을 가리키는 worker만 직접 지시한다.
 - 담당 PM이 없는 요청만 직접 답한다.
 - 저장하는 것은 \`final_reply\` 하나뿐이다.
 - PM이 실패로 보고하면 그 사실과 원인을 답변에 담는다.`,
@@ -160,7 +162,13 @@ const dialect = () => (RULES[process.env.PILO_LANG] ? process.env.PILO_LANG : "e
 function piloRules(agent, base, agents) {
   const roster = agents
     .filter((a) => a.role !== "pilo")
-    .map((a) => `| ${a.id} | ${a.name} | ${a.role} | ${a.projectName || "—"} | ${a.aliases || "—"} | ${a.specialty || "—"} |`)
+    .map((a) => {
+      // Who owns this agent decides who may hand it work: the desk owns the PMs
+      // and its own workers, a PM owns the workers hanging off it.
+      const owner = agents.find((x) => String(x.id) === String(a.parentAgentId));
+      const reportsTo = !owner || owner.role === "pilo" ? "you" : owner.name;
+      return `| ${a.id} | ${a.name} | ${a.role} | ${reportsTo} | ${a.projectName || "—"} | ${a.aliases || "—"} | ${a.specialty || "—"} |`;
+    })
     .join("\n");
   return RULES[dialect()].desk(roster, base);
 }
@@ -174,11 +182,12 @@ function workerRules(agent, base, children = []) {
     : "";
   const extra =
     agent.role === "pm"
-      ? `- Work you would otherwise do file by file belongs to your own worker:
-  \`pilo send <workerId> <inboxId> "the request"\`. The worker holds the codebase between jobs and you
-  hold the thread with the user — hand over anything bigger than a couple of files, and say in your
-  report that you did.
-- Gather their results into one \`pmResult\`.`
+      ? `- **The workers listed above take work from you and from nobody else.** The desk will not
+  address them, so anything of theirs that needs doing is yours to hand down:
+  \`pilo send <workerId> <inboxId> "the request"\`. The worker holds the codebase between jobs, you
+  hold the thread with the user.
+- Read their reports and fold them into one \`pmResult\` of your own. Passing a worker's text through
+  untouched is not gathering — say what it means for the request you were given.`
       : `- Whoever gave you the task gathers the result. Do not report to the user directly.`;
   return RULES[dialect()].worker(agent, kind, roster, extra);
 }
