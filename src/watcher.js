@@ -1,7 +1,7 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
-import { recordWakeFailure } from "./api.js";
+import { recordWakeFailure, dueSchedules, runSchedule } from "./api.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -162,8 +162,24 @@ export async function pumpSessions() {
   }
 }
 
+// Standing jobs, checked on the same loop as everything else: a schedule that
+// came due while the machine slept simply finds itself due when it wakes.
+async function pumpSchedules() {
+  for (const schedule of await dueSchedules()) {
+    try {
+      await runSchedule(schedule);
+    } catch (err) {
+      await query("UPDATE schedules SET fail_count = fail_count + 1, enabled = fail_count + 1 < 3, updated_at = now() WHERE id = $1",
+        [schedule.id]);
+      await logEvent({ type: "schedule_failed", title: schedule.name, agentId: schedule.toAgentId,
+        payload: { id: schedule.id, error: err.message } });
+    }
+  }
+}
+
 async function tick() {
   try {
+    await pumpSchedules();
     await pumpInbox();
     await pumpTasks();
     await pumpResults();

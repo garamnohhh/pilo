@@ -126,6 +126,21 @@ const commands = {
     );
   },
 
+  async schedules() {
+    const rows = await call("GET", "/api/schedules");
+    if (!rows.length) return out("no schedules");
+    return out(rows.map((s) =>
+      `${s.id}\t${s.enabled ? "on " : "off"}\t${s.cadence}\t→ ${s.agent}\t${new Date(s.nextRunAt).toLocaleString()}\t${s.name}`
+    ).join("\n"));
+  },
+
+  async schedule(args) {
+    const [id, verb] = args;
+    if (!id || !["on", "off", "rm"].includes(verb)) throw new Error("usage: pilo schedule <id> on|off|rm");
+    if (verb === "rm") return out(await call("DELETE", `/api/schedules/${id}`));
+    return out(await call("POST", `/api/schedules/${id}`, { enabled: verb === "on" }));
+  },
+
   async agents() {
     const rows = await call("GET", "/api/agents");
     if (!rows.length) return out(t("cli.noAgents"));

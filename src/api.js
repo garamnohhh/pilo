@@ -918,3 +918,110 @@ export async function setupState() {
     pmCount: pms.n
   };
 }
+
+// ── schedules ────────────────────────────────────────────────────────────────
+// A standing job keeps one row here and nothing else: every run it fires becomes
+// an ordinary inbox row with an ordinary task, so history, waking and reporting
+// are the ones that already exist. Times are the server's own local time.
+
+// 'HH:MM' — the next time of day that has not passed yet; 'every:N' — N minutes
+// from now. Weekend slots roll to Monday when the schedule only wants weekdays.
+export function nextRun(cadence, weekdaysOnly, from = new Date()) {
+  const every = /^every:(\d+)$/.exec(String(cadence).trim());
+  if (every) return new Date(from.getTime() + Number(every[1]) * 60000);
+  const at = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(cadence).trim());
+  if (!at) throw Object.assign(new Error("cadence must be HH:MM or every:N"), { status: 400 });
+  const next = new Date(from);
+  next.setHours(Number(at[1]), Number(at[2]), 0, 0);
+  if (next <= from) next.setDate(next.getDate() + 1);
+  if (weekdaysOnly) while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+const SCHEDULE_COLUMNS = `s.id, s.name, s.request, s.cadence, s.enabled, s.on_miss AS "onMiss",
+  s.weekdays_only AS "weekdaysOnly", s.next_run_at AS "nextRunAt", s.last_run_at AS "lastRunAt",
+  s.last_task_id AS "lastTaskId", s.fail_count AS "failCount",
+  s.to_agent_id AS "toAgentId", a.name AS agent`;
+
+export async function listSchedules() {
+  return query(`SELECT ${SCHEDULE_COLUMNS} FROM schedules s JOIN agents a ON a.id = s.to_agent_id
+    ORDER BY s.enabled DESC, s.next_run_at`);
+}
+
+export async function createSchedule(input) {
+  const agent = await one("SELECT id, name FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
+  if (!agent) throw Object.assign(new Error("target agent not found"), { status: 400 });
+  if (!String(input.request || "").trim()) throw Object.assign(new Error("request is empty"), { status: 400 });
+  const weekdaysOnly = input.weekdaysOnly !== false;
+  const onMiss = input.onMiss === "skip" ? "skip" : "run";
+  const next = nextRun(input.cadence, weekdaysOnly);
+  const row = await one(
+    `INSERT INTO schedules (name, to_agent_id, request, cadence, weekdays_only, on_miss, next_run_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [input.name || input.request.slice(0, 40), agent.id, input.request, input.cadence, weekdaysOnly, onMiss, next]
+  );
+  await logEvent({ type: "schedule_created", title: `schedule → ${agent.name}`, agentId: agent.id,
+    payload: { id: row.id, cadence: input.cadence, nextRunAt: next } });
+  return { id: row.id, nextRunAt: next };
+}
+
+export async function setSchedule(id, input) {
+  const current = await one("SELECT * FROM schedules WHERE id = $1", [id]);
+  if (!current) throw Object.assign(new Error("schedule not found"), { status: 404 });
+  const enabled = typeof input.enabled === "boolean" ? input.enabled : current.enabled;
+  const cadence = input.cadence || current.cadence;
+  // Turning one back on re-reads the clock: an old next_run_at would fire at once.
+  const next = enabled && (!current.enabled || input.cadence)
+    ? nextRun(cadence, current.weekdays_only)
+    : current.next_run_at;
+  await query(
+    `UPDATE schedules SET enabled = $2, cadence = $3, next_run_at = $4,
+       fail_count = CASE WHEN $2 THEN 0 ELSE fail_count END, updated_at = now() WHERE id = $1`,
+    [id, enabled, cadence, next]
+  );
+  return { id: String(id), enabled, cadence, nextRunAt: next };
+}
+
+export async function deleteSchedule(id) {
+  const row = await one("DELETE FROM schedules WHERE id = $1 RETURNING id", [id]);
+  if (!row) throw Object.assign(new Error("schedule not found"), { status: 404 });
+  return { id: String(id), deleted: true };
+}
+
+// One slot, decided and then acted on. Never more than one run in flight per
+// schedule: while its last task is unfinished the slot is passed over, because a
+// job that fires twice costs tokens twice and can undo its own work.
+export async function runSchedule(schedule) {
+  const advance = async (extra = "") => {
+    await query("UPDATE schedules SET next_run_at = $2, updated_at = now() WHERE id = $1",
+      [schedule.id, nextRun(schedule.cadence, schedule.weekdaysOnly)]);
+    return extra;
+  };
+  const now = new Date();
+  const due = new Date(schedule.nextRunAt);
+  if (schedule.weekdaysOnly && (now.getDay() === 0 || now.getDay() === 6)) return advance("weekend");
+  // Slept through it: a report that only matters at the hour is dropped, one that
+  // matters whenever you next look is still worth running.
+  const lateMinutes = (now - due) / 60000;
+  if (schedule.onMiss === "skip" && lateMinutes > 60) return advance("missed");
+  if (schedule.lastTaskId) {
+    const open = await one("SELECT 1 AS hit FROM tasks WHERE id = $1 AND status IN ('queued','running','blocked')",
+      [schedule.lastTaskId]);
+    if (open) return advance("previous run still open");
+  }
+  const inbox = await createInbox(schedule.request, "");
+  const task = await createTask(inbox.id, { toAgentId: schedule.toAgentId, title: schedule.name, request: schedule.request });
+  await query(
+    `UPDATE schedules SET last_task_id = $2, last_run_at = now(), next_run_at = $3, updated_at = now() WHERE id = $1`,
+    [schedule.id, task.id, nextRun(schedule.cadence, schedule.weekdaysOnly)]
+  );
+  await logEvent({ type: "schedule_fired", title: `${schedule.name} → ${schedule.agent}`,
+    agentId: schedule.toAgentId, inboxId: inbox.id, taskId: task.id, payload: { scheduleId: schedule.id } });
+  return `in-${inbox.id} task ${task.id}`;
+}
+
+export async function dueSchedules() {
+  return query(`SELECT ${SCHEDULE_COLUMNS}, s.weekdays_only AS "weekdaysOnly" FROM schedules s
+    JOIN agents a ON a.id = s.to_agent_id
+    WHERE s.enabled AND s.next_run_at <= now() ORDER BY s.next_run_at LIMIT 5`);
+}

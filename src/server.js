@@ -78,6 +78,11 @@ const routes = [
   ["GET", /^\/api\/artifacts$/, () => api.listArtifacts()],
   ["GET", /^\/api\/artifacts\/(\d+)$/, (m) => api.artifactDetail(Number(m[1]))],
 
+  ["GET", /^\/api\/schedules$/, () => api.listSchedules()],
+  ["POST", /^\/api\/schedules$/, (_m, body) => api.createSchedule(body)],
+  ["POST", /^\/api\/schedules\/(\d+)$/, (m, body) => api.setSchedule(Number(m[1]), body)],
+  ["DELETE", /^\/api\/schedules\/(\d+)$/, (m) => api.deleteSchedule(Number(m[1]))],
+
   ["GET", /^\/api\/settings$/, () => api.settingsAll()],
   ["PUT", /^\/api\/settings\/([a-z]+)$/, (m, body) => api.saveSetting(m[1], body.value)]
 ];

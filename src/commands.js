@@ -17,6 +17,7 @@ export const CATALOGUE = [
   { scope: "tui", name: "fold", args: "[id|all|default]", summary: "답변 접기", example: ":fold all" },
   { scope: "tui", name: "unfold", args: "", summary: "접은 것 모두 펼치기", example: ":unfold" },
   { scope: "tui", name: "cost", args: "", summary: "토큰 사용량", example: ":cost" },
+  { scope: "tui", name: "schedules", aliases: ["sched"], args: "", summary: "예약된 정기 작업", example: ":schedules" },
   { scope: "tui", name: "help", args: "", summary: "명령 목록", example: ":help" },
   { scope: "tui", name: "exit", aliases: ["q", "quit"], args: "", summary: "종료", example: ":exit" },
 
@@ -30,6 +31,8 @@ export const CATALOGUE = [
   { scope: "cli", name: "block", args: "<taskId> <질문>", summary: "사용자 결정 대기로 표시", example: 'pilo block 301 "가격 페이지 오늘 공개할까요?"' },
   { scope: "cli", name: "blocked", args: "", summary: "결정 대기 중인 작업 목록", example: "pilo blocked" },
   { scope: "cli", name: "answer", args: "<taskId> <답변>", summary: "결정 회신 — 그 작업이 다시 큐로", example: 'pilo answer 301 "네"' },
+  { scope: "cli", name: "schedules", args: "", summary: "예약 목록 (id · 다음 실행 · 대상)", example: "pilo schedules" },
+  { scope: "cli", name: "schedule", args: "<id> on|off|rm", summary: "예약 켜기/끄기/삭제", example: "pilo schedule 3 off" },
   { scope: "cli", name: "api", args: "<METHOD> <path> [json]", summary: "그 외 모든 엔드포인트", example: "pilo api GET /api/overview" }
 ];
 
