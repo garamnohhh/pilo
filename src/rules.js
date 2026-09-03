@@ -173,7 +173,13 @@ function piloRules(agent, base, agents) {
   return RULES[dialect()].desk(roster, base);
 }
 
-function workerRules(agent, base, children = []) {
+// A worker takes work from the one agent above it: its PM, or the desk when the
+// desk owns it directly. Naming that agent in its own file is what lets the
+// worker notice a task that should never have reached it.
+const owner = (parent) => (!parent || parent.role === "pilo" ? "the desk agent" : `your PM, ${parent.name}`);
+const ownerShort = (parent) => (!parent || parent.role === "pilo" ? "The desk" : parent.name);
+
+function workerRules(agent, base, children = [], parent = null) {
   const kind = agent.role === "pm" ? "PM agent" : "worker agent";
   const roster = children.length
     ? `\n### Your workers\n\n| id | name | specialty |\n| --- | --- | --- |\n${children
@@ -188,13 +194,16 @@ function workerRules(agent, base, children = []) {
   hold the thread with the user.
 - Read their reports and fold them into one \`pmResult\` of your own. Passing a worker's text through
   untouched is not gathering — say what it means for the request you were given.`
-      : `- Whoever gave you the task gathers the result. Do not report to the user directly.`;
+      : `- **Work reaches you from ${owner(parent)}, and from nobody else.** A task from anywhere else is a
+  mistake upstream: say so in your report rather than doing the work. ${ownerShort(parent)} gathers
+  your result — you never report to the user directly.`;
   return RULES[dialect()].worker(agent, kind, roster, extra);
 }
 
 export async function buildRules(id) {
   const agent = await one(
-    `SELECT a.id, a.name, a.role, a.runtime, a.cwd, a.aliases, a.specialty, p.name AS "projectName"
+    `SELECT a.id, a.name, a.role, a.runtime, a.cwd, a.aliases, a.specialty,
+       a.parent_agent_id AS "parentAgentId", p.name AS "projectName"
      FROM agents a LEFT JOIN projects p ON p.id = a.project_id
      WHERE a.id = $1 AND a.archived_at IS NULL`,
     [id]
@@ -210,7 +219,8 @@ export async function buildRules(id) {
      WHERE a.archived_at IS NULL ORDER BY a.role, a.name`
   );
   const children = agents.filter((a) => a.role === "worker" && String(a.parentAgentId) === String(agent.id));
-  const body = agent.role === "pilo" ? piloRules(agent, base, agents) : workerRules(agent, base, children);
+  const parent = agents.find((a) => String(a.id) === String(agent.parentAgentId)) || null;
+  const body = agent.role === "pilo" ? piloRules(agent, base, agents) : workerRules(agent, base, children, parent);
   const file = join(agent.cwd, ruleFile(agent));
 
   let current = "";
