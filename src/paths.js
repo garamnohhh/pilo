@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { randomBytes } from "node:crypto";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -12,6 +11,10 @@ export const logDir = join(home, "logs");
 // there, and connecting to a unix socket needs write permission on the socket file.
 export const socketPath = process.env.PILO_SOCKET || join(tmpdir(), "pilo.sock");
 export const socketFile = join(home, "socket");
+// PGlite keeps a real Postgres data directory on disk. One instance owns it at a
+// time, and the lock beside it is what says which.
+export const dataDir = () => process.env.PILO_DATA || join(home, "data");
+export const lockFile = () => join(home, "db.lock");
 export const logFile = join(logDir, "pilo.log");
 
 // The database password is generated on the machine that runs Pilo and kept in
@@ -19,7 +22,6 @@ export const logFile = join(logDir, "pilo.log");
 // on the first run, so the two always match.
 const newConfig = () => `# Pilo config
 port = 48888
-database_url = "postgres://pilo:${randomBytes(18).toString("base64url")}@127.0.0.1:15432/pilo"
 `;
 
 export function ensureHome() {
@@ -36,26 +38,6 @@ function configValue(key) {
     return "";
   }
 }
-
-// Environment first, then the generated config. Nothing is hard-coded, so a
-// checkout with neither says so instead of guessing a password.
-export function databaseUrl() {
-  const url = process.env.PILO_DATABASE_URL || configValue("database_url");
-  if (url) return url;
-  throw new Error(
-    "database url not configured — run bin/pilo (writes ~/.pilo/config.toml) or set PILO_DATABASE_URL"
-  );
-}
-
-export function dbPassword() {
-  ensureHome();
-  const hit = /^postgres(?:ql)?:\/\/[^:]+:([^@]+)@/.exec(databaseUrl());
-  if (!hit) throw new Error("database url has no password — set PILO_DB_PASSWORD or fix ~/.pilo/config.toml");
-  return decodeURIComponent(hit[1]);
-}
-
-// Never print the password back at the user.
-export const maskUrl = (url) => String(url).replace(/(postgres(?:ql)?:\/\/[^:]+:)[^@]+@/, "$1•••@");
 
 export function writePort(port) {
   ensureHome();
@@ -83,18 +65,10 @@ export function readPort() {
   }
 }
 
-const safeUrl = () => {
-  try {
-    return databaseUrl();
-  } catch {
-    return "설정 안 됨 — bin/pilo 실행 또는 PILO_DATABASE_URL";
-  }
-};
-
 export function paths() {
   return [
     { label: "config", value: configFile, note: "toml" },
-    { label: "db", value: maskUrl(safeUrl()), note: "postgres + pgvector" },
+    { label: "db", value: dataDir() + "/", note: "PGlite (postgres + pgvector), 파일" },
     { label: "port", value: portFile, note: "실행 포트 기록" },
     { label: "socket", value: socketPath, note: "agent CLI 경로" },
     { label: "logs", value: logDir + "/", note: "dir" }

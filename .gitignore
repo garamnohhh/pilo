@@ -3,6 +3,7 @@ node_modules/
 # secrets and anything derived from the machine this runs on
 .env
 .env.*
+!.env.next.example
 .pilo.pid
 pilo.log
 *.log

@@ -23,18 +23,6 @@ need() {
   command -v "$1" >/dev/null 2>&1 || { echo "Pilo requires $1."; exit 1; }
 }
 
-# Compose needs the database password, and it is never kept in the repository:
-# it is generated on first run into ~/.pilo/config.toml. Any command that talks
-# to compose loads it from there first.
-load_db_password() {
-  [[ -n "${PILO_DB_PASSWORD:-}" ]] && return 0
-  PILO_DB_PASSWORD="$(node -e 'import("./src/paths.js").then((m) => process.stdout.write(m.dbPassword()))')" || {
-    echo "Pilo could not read the database password from $PILO_HOME_DIR/config.toml"
-    exit 1
-  }
-  export PILO_DB_PASSWORD
-}
-
 live_port() {
   if [[ -f "$PORT_FILE" ]]; then cat "$PORT_FILE"; else echo "$WANTED_PORT"; fi
 }
@@ -52,26 +40,14 @@ wait_http() {
 }
 
 ensure_server() {
-  need docker
   need node
   need curl
 
-  if ! docker info >/dev/null 2>&1; then
-    echo "Docker-compatible runtime is not running."
-    echo "Recommended: OrbStack. Also supported: Docker Desktop, Colima."
-    exit 1
-  fi
-
-  load_db_password
-  docker compose up -d postgres >/dev/null 2>&1
-  for _ in $(seq 1 20); do
-    docker compose exec -T postgres pg_isready -U pilo -d pilo >/dev/null 2>&1 && break
-    sleep 0.4
-  done
-
   health && return
 
-  # The server applies migrations, picks a free port and records it in ~/.pilo/port.
+  # The database is a file directory the server opens itself; there is nothing to
+  # start first. The server applies migrations, picks a free port and records it
+  # in ~/.pilo/port.
   PILO_PORT="$WANTED_PORT" nohup node "$ROOT/src/server.js" >> "$LOG" 2>&1 &
   echo $! > "$PIDFILE"
   wait_http || { echo "Pilo server failed. See $LOG"; exit 1; }
@@ -98,14 +74,13 @@ case "${1:-tui}" in
     ;;
   status)
     if health; then echo "server:    running (port $(live_port))"; else echo "server:    stopped"; fi
-    load_db_password
-    docker compose ps --format '{{.Service}}: {{.Status}}' 2>/dev/null || true
+    echo "database:  $PILO_HOME_DIR/data (PGlite)"
     ;;
   doctor)
     echo "root:      $ROOT"
     echo "home:      $PILO_HOME_DIR"
     echo "port file: $(live_port)"
-    command -v docker >/dev/null 2>&1 && echo "docker:    $(docker info --format '{{.ServerVersion}}' 2>/dev/null || echo 'not running')" || echo "docker:    missing"
+    echo "database:  $PILO_HOME_DIR/data $([[ -d "$PILO_HOME_DIR/data" ]] && echo present || echo "not created yet")"
     command -v /opt/homebrew/bin/herdr >/dev/null 2>&1 \
       && echo "herdr:     $(/opt/homebrew/bin/herdr agent list 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["result"]["agents"]), "sessions")' 2>/dev/null || echo 'installed, no sessions')" \
       || echo "herdr:     missing"
