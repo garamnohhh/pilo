@@ -9,7 +9,9 @@ services:
       # ~/.pilo/config.toml, which is generated on first run.
       POSTGRES_PASSWORD: ${PILO_DB_PASSWORD:?run bin/pilo, or export it yourself}
     ports:
-      - "15432:5432"
+      # Loopback only: without the address Docker publishes on every interface,
+      # which puts the database on the local network.
+      - "127.0.0.1:15432:5432"
     volumes:
       - pilo-postgres:/var/lib/postgresql/data
     healthcheck:

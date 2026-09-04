@@ -1,6 +1,20 @@
 # Pilo
 
-Local agent desk. You talk to the Pilo agent, it hands work to PM agents, and only the final reply comes back to the terminal.
+Local agent desk. You talk to one agent in a terminal; it hands the work to the
+project agents you registered and brings back a single answer. Everything runs on
+your own machine — Pilo opens no port to the outside and sends nothing anywhere.
+
+## What you need
+
+| | |
+| --- | --- |
+| Node.js 20 or newer | runs the server, the TUI and the CLI |
+| [herdr](https://herdr.dev) | the terminal workspace Pilo watches — `brew install herdr` (Apache-2.0) |
+| A Docker-compatible runtime | for PostgreSQL. OrbStack recommended; Docker Desktop and Colima work |
+| At least one coding agent | Claude Code or Codex, running in a herdr pane |
+
+Pilo does not start your agents. You open them yourself in herdr panes; Pilo
+finds them with `herdr agent list` and wakes them with `herdr agent prompt`.
 
 ## Run
 
@@ -12,14 +26,35 @@ Local agent desk. You talk to the Pilo agent, it hands work to PM agents, and on
 ./bin/pilo dashboard  # open the web dashboard
 ```
 
-Pilo expects a Docker-compatible runtime.
+The first run starts PostgreSQL with Docker Compose, enables `pgvector`, applies
+the migrations, and writes a generated database password to `~/.pilo/config.toml`
+(0600). Nothing secret lives in this repository.
 
-- Recommended: OrbStack
-- Supported: Docker Desktop, Colima
+Then register your agents once — in the dashboard's Agents tab — and Pilo writes
+the instruction block into each agent's `CLAUDE.md` or `AGENTS.md`.
 
-The first run starts PostgreSQL with Docker Compose, enables `pgvector` and applies the migrations.
+## State and the database
 
-Agent sessions live in [herdr](https://github.com/) — Pilo detects them with `herdr agent list` and wakes them with `herdr agent prompt`.
+State lives in `~/.pilo/`: `config.toml`, `port`, `logs/`. The database is a
+container listening on `127.0.0.1:15432` only.
+
+To supply your own password instead, export both before the very first run —
+PostgreSQL only applies the password when it initialises its volume:
+
+```bash
+export PILO_DB_PASSWORD='…'
+export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
+```
+
+Running `docker compose` by hand needs `PILO_DB_PASSWORD` set; without it
+Compose stops and says so.
+
+Every part of that layout can be moved, which is how a second instance runs
+beside the first: `PILO_HOME` (state directory), `PILO_PORT`, `PILO_SOCKET`,
+`PILO_SPOOL`, `PILO_DATABASE_URL`, and `PILO_WATCHER=off` to start without the
+loop that wakes agents. Move the socket and the spool together — the CLI falls
+back from one to the other, so changing only one leaves it talking to the
+instance you meant to leave alone.
 
 ## Layout
 
@@ -32,24 +67,6 @@ Agent sessions live in [herdr](https://github.com/) — Pilo detects them with `
 | `src/watcher.js` | inbox → wake → pm_result → final_reply loop |
 | `src/herdr.js` | herdr session detection and wake |
 | `migrations/` | SQL migrations, applied in order |
-
-State lives in `~/.pilo/` (`config.toml`, `port`, `logs/`).
-
-The database is a container bound to `127.0.0.1:15432`. Its password is
-generated on the first run and written to `~/.pilo/config.toml`; nothing
-secret lives in this repository. `bin/pilo` reads it from there and hands
-it to Docker Compose.
-
-To supply your own instead, export both before the very first run —
-PostgreSQL only applies the password when it initialises its volume:
-
-```bash
-export PILO_DB_PASSWORD='…'
-export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
-```
-
-Running `docker compose` by hand needs `PILO_DB_PASSWORD` set; without it
-Compose stops and says so.
 
 ## Schedules
 
@@ -72,20 +89,26 @@ rather than stacking a second run, and three failures in a row switch it off.
 
 ## Terminal
 
-The tree writes what each agent runs in front of its name. Three tiers, and only
-the last is guaranteed:
+The tree writes what each agent runs in front of its name — a brand glyph where
+the icon font has one, three letters where it does not:
 
 | Tier | When | Looks like |
 | --- | --- | --- |
-| icon | `PILO_ICONS=on` and an icon font with Nerd Fonts 3.5.0 or newer | ` pilo` |
-| small caps | the default | `ᴄʟᴅ pilo` |
-| capitals | `--ascii` or `NO_COLOR` | `CLD pilo` |
+| icon | the default, with an icon font of Nerd Fonts 3.5.0 or newer | the brand glyph, `U+EC82` for Claude |
+| letters | `:icons off` | `CLD pilo` |
 
-Icons stay opt-in because no terminal can be asked whether the font in use has
-the glyph — a missing one draws a blank box, and a label never does.
+`:icons` toggles, `:icons on` / `:icons off` say it outright, and the answer is
+kept in the settings table, so the next run starts the same way. Three sources,
+in order: what `:icons` said this run, what the last run saved, then the
+environment — `PILO_ICONS=off` switches them off for a whole shell.
 
-An unrecognised runtime wears its own first three letters. `PILO_AMBIGUOUS_WIDTH`
-forces the East Asian ambiguous width when the startup probe cannot run.
+No terminal can be asked whether the font in use carries a glyph, so a machine
+without an icon font shows a blank box until someone says `:icons off`. Every
+other mark in the tree — the branches, the rules, the status dots, the badges —
+uses characters a plain monospace font already has.
+
+`PILO_AMBIGUOUS_WIDTH` forces the East Asian ambiguous width when the startup
+probe cannot run.
 
 ## Design Contract
 
