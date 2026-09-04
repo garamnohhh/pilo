@@ -193,7 +193,8 @@ const state = {
   selected: { event: null, artifact: null, inbox: null },
   inboxFilter: null,
   project: { id: null, name: "", repo: "", path: "", note: "" },
-  schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" }
+  schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" },
+  runs: { open: null, rows: [] }
 };
 
 function emptyForm() {
@@ -864,6 +865,29 @@ views.projects = () => {
   </div>`;
 };
 
+// A schedule's runs, read back from the records each one already left: the event
+// that fired it, the request it opened, and whichever of the two bodies exists —
+// the agent's report, or the desk's reply when the desk was the target.
+function runsBlock() {
+  const rows = state.runs.rows;
+  if (!rows.length) return `<div style="margin-top:10px;font:11px var(--mono);color:#5f6b64">아직 실행된 적이 없습니다.</div>`;
+  return `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${rows.map((r) => {
+    const failed = r.taskStatus === "failed";
+    const body = r.taskResult || r.reply || "";
+    const extra = r.taskResult && r.reply ? r.reply : "";
+    return `<div style="border:1px solid ${failed ? "#3a201c" : "#171b19"};border-radius:6px;padding:9px 11px;background:#0b0e0d">
+      <div style="display:flex;gap:8px;align-items:center;font:11px var(--mono);color:#67726b">
+        <span style="color:#b9c3bc">${esc(new Date(r.firedAt).toLocaleString("ko-KR"))}</span>
+        <span style="color:${failed ? "var(--red)" : r.taskStatus || r.reply ? "var(--green)" : "var(--amber)"}">${esc(failed ? "실패" : r.taskStatus || (r.reply ? "답변됨" : "진행 중"))}</span>
+        <span style="color:#3e4744">in-${r.inboxId}${r.taskId ? ` · task ${r.taskId}` : ""}${r.agent ? ` · ${esc(r.agent)}` : ""}</span>
+      </div>
+      ${r.error ? `<div style="margin-top:6px;font:11px var(--mono);color:var(--red)">${esc(r.error)}</div>` : ""}
+      <div style="margin-top:7px;font:11px/1.75 var(--mono);color:#a9b4ac;white-space:pre-wrap;max-height:260px;overflow:auto">${body ? prose(body) : "<span style=\"color:#5f6b64\">결과 없음</span>"}</div>
+      ${extra ? `<div style="margin-top:7px;padding-top:7px;border-top:1px solid #171b19;font:11px/1.7 var(--mono);color:#7f8a83;white-space:pre-wrap;max-height:160px;overflow:auto"><span style="color:#5f6b64">최종 답변 </span>${prose(extra)}</div>` : ""}
+    </div>`;
+  }).join("")}</div>`;
+}
+
 // Standing jobs. The request text is shown in full on the card on purpose: a
 // schedule nobody can read is a standing instruction nobody is checking.
 views.schedules = () => {
@@ -890,6 +914,8 @@ views.schedules = () => {
           </div>
           <div style="margin-top:10px;padding:9px 11px;background:#0b0e0d;border:1px solid #171b19;border-radius:6px;
                       font:11px/1.7 var(--mono);color:#8b968e;white-space:pre-wrap;max-height:150px;overflow:auto">${esc(s.request)}</div>
+          <button class="btn small" style="margin-top:10px" data-act="show-runs" data-id="${s.id}">${String(state.runs.open) === String(s.id) ? "실행 이력 닫기" : "실행 이력"}</button>
+          ${String(state.runs.open) === String(s.id) ? runsBlock() : ""}
         </div>`).join("") : `<div class="table"><div class="empty">예약이 없습니다.</div></div>`}
       </div>
     </div>
@@ -1267,6 +1293,12 @@ const actions = {
     state.schedule = { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" };
     toast("예약 등록됨");
     await load();
+  },
+  async "show-runs"(el) {
+    const id = el.dataset.id;
+    if (String(state.runs.open) === String(id)) { state.runs = { open: null, rows: [] }; return render(); }
+    state.runs = { open: id, rows: await get(`/api/schedules/${id}/runs`) };
+    render();
   },
   async "toggle-schedule"(el) {
     const on = el.dataset.on === "1";

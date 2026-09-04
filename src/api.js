@@ -1025,6 +1025,24 @@ export async function runSchedule(schedule) {
   return task ? `in-${inbox.id} task ${task.id}` : `in-${inbox.id}`;
 }
 
+// What a schedule has actually done. Every run left an event naming it, an inbox
+// row and — unless the desk itself was the target — a task, so the history is
+// already written down; this only reads it back in one place.
+export async function scheduleRuns(id, limit = 5) {
+  return query(
+    `SELECT e.created_at AS "firedAt", e.inbox_id AS "inboxId", e.task_id AS "taskId",
+       t.status AS "taskStatus", t.pm_result AS "taskResult", t.error,
+       f.body AS "reply", f.created_at AS "repliedAt", a.name AS agent
+     FROM events e
+       LEFT JOIN tasks t ON t.id = e.task_id
+       LEFT JOIN final_replies f ON f.inbox_id = e.inbox_id
+       LEFT JOIN agents a ON a.id = e.agent_id
+     WHERE e.type = 'schedule_fired' AND e.payload->>'scheduleId' = $1::text
+     ORDER BY e.created_at DESC LIMIT $2`,
+    [String(id), limit]
+  );
+}
+
 export async function dueSchedules() {
   return query(`SELECT ${SCHEDULE_COLUMNS}, s.weekdays_only AS "weekdaysOnly" FROM schedules s
     JOIN agents a ON a.id = s.to_agent_id

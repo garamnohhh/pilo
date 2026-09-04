@@ -80,6 +80,7 @@ const routes = [
 
   ["GET", /^\/api\/schedules$/, () => api.listSchedules()],
   ["POST", /^\/api\/schedules$/, (_m, body) => api.createSchedule(body)],
+  ["GET", /^\/api\/schedules\/(\d+)\/runs$/, (m) => api.scheduleRuns(Number(m[1]))],
   ["POST", /^\/api\/schedules\/(\d+)$/, (m, body) => api.setSchedule(Number(m[1]), body)],
   ["DELETE", /^\/api\/schedules\/(\d+)$/, (m) => api.deleteSchedule(Number(m[1]))],
 
