@@ -180,6 +180,9 @@ const CARD = {
   waiting: { tint: bg(12, 16, 14) }
 };
 const BAR = "▌";
+// The card sits past the question mark and its space; the same four columns are
+// taken off the pane when working out how wide the card may be.
+const CARD_INDENT = "    ";
 // The tree's name and badge are two different things, so a short stroke stands
 // between them. Measured in the terminal's own font at 32px, the box-drawing
 // rule inks 48.6px — taller than the cell, which is why rows looked joined —
@@ -818,8 +821,12 @@ function render() {
       if (!item.finalReply && !item.needsReply) waiting += 1;
       if (!folded) {
         // The bar lines up with the question's badge, not with the ❯: the mark and
-        // the space after it are the two columns the card is indented past.
-        const block = (item.finalReply ? replyBlock(item, mainWidth - 6, tagged) : waitingBlock(item, mainWidth - 6)).map((r) => "    " + r);
+        // the space after it are the two columns the card is indented past. What
+        // is left of the pane after that indent is the card, to the column: the
+        // card used to stop four short of the pane edge, which read as a ragged
+        // right against the header above it.
+        const room = mainWidth - CARD_INDENT.length;
+        const block = (item.finalReply ? replyBlock(item, room + 2, tagged) : waitingBlock(item, room + 2)).map((r) => CARD_INDENT + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing
         actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
