@@ -81,15 +81,12 @@ const BADGE = {
   FINAL_REPLY: { fg: fg(88, 152, 123) }
 };
 
-// Small caps make the badge read a size smaller without a second font. Terminals
-// without those glyphs fall back to capitals, and --ascii keeps the brackets.
+// The badge used to be small caps. No terminal font we ship against has those
+// letters — JetBrains Mono Nerd Font carries none of them — so every one of them
+// was drawn by whatever fallback the terminal happened to pick, which is why the
+// same badge looked right in one terminal and wrong in the next. Plain capitals
+// are in every font; the colour already says which role it is.
 const ASCII = process.argv.includes("--ascii");
-const SMALL = { A: "ᴀ", B: "ʙ", C: "ᴄ", D: "ᴅ", E: "ᴇ", F: "ꜰ", G: "ɢ", H: "ʜ", I: "ɪ", J: "ᴊ", K: "ᴋ",
-  L: "ʟ", M: "ᴍ", N: "ɴ", O: "ᴏ", P: "ᴘ", Q: "ǫ", R: "ʀ", S: "s", T: "ᴛ", U: "ᴜ", V: "ᴠ", W: "ᴡ",
-  X: "x", Y: "ʏ", Z: "ᴢ", _: " " };
-// Project names arrive lowercase and carry digits and hyphens; only the letters
-// have small-cap glyphs, and everything else is left exactly as it is.
-const smallCaps = (tag) => [...String(tag).toUpperCase()].map((ch) => SMALL[ch] || ch).join("");
 
 // What an agent runs, worn in front of its name. Three tiers, and only the last
 // one is guaranteed: a brand glyph where the icon font genuinely has one, a
@@ -165,12 +162,12 @@ function runtimeMark(runtime) {
   const glyph = iconsWanted() && known?.icon ? known.icon : null;
   const label = known?.label || key.slice(0, 3).toUpperCase();
   if (ASCII || COLOR === "none") return label;
-  return `${known?.colour || c.faint}${glyph || smallCaps(label)}${c.reset}`;
+  return `${known?.colour || c.faint}${glyph || label}${c.reset}`;
 }
 
 // No padding inside the badge: the fill hugs the letters, and the two spaces
 // before it do the separating.
-const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : smallCaps(tag));
+const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : String(tag).toUpperCase());
 function badge(tag) {
   const paint = BADGE[tag] || BADGE.WORKER;
   return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.fg}${badgeText(tag)}${c.reset}`;
@@ -191,7 +188,7 @@ const BAR = "▌";
 // same problem again. Its advance is one cell and it is outside the East Asian
 // ambiguous set, so no terminal draws it double. --ascii and NO_COLOR keep a
 // pipe: same width, same job, and the bracketed badge reads without colour.
-const SEPARATOR = ASCII || COLOR === "none" ? "|" : "\u01c0";
+const SEPARATOR = "|";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
 const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
@@ -382,7 +379,7 @@ const NAME_LIMIT = 18;
 function routedBadge(item, tree) {
   const names = String(item.routed || "").split(", ").map((x) => x.trim()).filter(Boolean);
   if (!names.length) {
-    const label = ASCII || COLOR === "none" ? "[PILO]" : smallCaps("PILO");
+    const label = ASCII || COLOR === "none" ? "[PILO]" : "PILO";
     return {
       shown: [],
       hidden: 0,
@@ -395,7 +392,7 @@ function routedBadge(item, tree) {
   const hidden = names.length - shown.length;
   const chip = (name, paint) => {
     const plain = cut(name, NAME_LIMIT);
-    const label = ASCII || COLOR === "none" ? `[${plain}]` : smallCaps(plain);
+    const label = ASCII || COLOR === "none" ? `[${plain}]` : plain;
     return { label, text: ASCII || COLOR === "none" ? label : `${paint.fg}${label}${c.reset}` };
   };
   const chips = shown.map((name) => chip(name, rolePaint(name, tree)));
@@ -719,7 +716,7 @@ function sessionLine(agent, base) {
 
 function statusIcon(status, spin, stopped = false) {
   // A stalled task keeps its place in the tree but stops pretending to move.
-  if (status === "running" && stopped) return { icon: "◍", color: c.amberDim };
+  if (status === "running" && stopped) return { icon: "◌", color: c.amberDim };
   if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
   // waiting on a person, not on work: a spinner here would be a lie
   if (status === "blocked") return { icon: "◆", color: c.blue };
