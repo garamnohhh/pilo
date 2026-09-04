@@ -1,18 +1,47 @@
 import { readFile, readdir } from "node:fs/promises";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
-import pg from "pg";
-import { databaseUrl } from "./paths.js";
+import { PGlite } from "@electric-sql/pglite";
+import { vector } from "@electric-sql/pglite-pgvector";
+import { dataDir, lockFile } from "./paths.js";
 import { changed } from "./changes.js";
 
 export const root = normalize(join(fileURLToPath(import.meta.url), "../.."));
 
-const connectionString = databaseUrl();
+// PGlite is Postgres compiled to WebAssembly: same SQL, same extensions, no
+// server and no container. It also holds no lock of its own — two processes on
+// one directory will happily corrupt it — so the lock below is not optional.
+function claim() {
+  const file = lockFile();
+  if (existsSync(file)) {
+    const pid = Number(readFileSync(file, "utf8").trim());
+    if (pid && pid !== process.pid) {
+      let alive = true;
+      try { process.kill(pid, 0); } catch { alive = false; }
+      if (alive) {
+        throw new Error(
+          `another Pilo server is already using this database (pid ${pid}). ` +
+            `Stop it with 'pilo stop', or point this one somewhere else with PILO_HOME.`
+        );
+      }
+    }
+  }
+  mkdirSync(dataDir(), { recursive: true });
+  writeFileSync(file, String(process.pid));
+  const release = () => { try { if (readFileSync(file, "utf8").trim() === String(process.pid)) unlinkSync(file); } catch {} };
+  process.on("exit", release);
+  for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => { release(); process.exit(0); });
+}
 
-export const pool = new pg.Pool({ connectionString, max: 8 });
+// Opened on the first query, not on import: the CLI and the tests pull this
+// module in for other reasons, and neither should take the lock or touch disk.
+let opening = null;
+export const open = () => (opening ??= (claim(), PGlite.create({ dataDir: dataDir(), extensions: { vector } })));
 
 export async function query(text, params = []) {
-  const res = await pool.query(text, params);
+  const db = await open();
+  const res = await db.query(text, params);
   return res.rows;
 }
 
@@ -48,18 +77,14 @@ export async function migrate() {
   for (const file of files) {
     if (applied.has(file)) continue;
     const sql = await readFile(join(dir, file), "utf8");
-    const client = await pool.connect();
     try {
-      await client.query("BEGIN");
-      await client.query(sql);
-      await client.query("INSERT INTO schema_migrations (filename) VALUES ($1)", [file]);
-      await client.query("COMMIT");
+      // One file, one transaction: a half-applied migration is worse than none.
+      await (await open()).exec(`BEGIN;\n${sql}\nCOMMIT;`);
+      await query("INSERT INTO schema_migrations (filename) VALUES ($1)", [file]);
       ran.push(file);
     } catch (err) {
-      await client.query("ROLLBACK");
+      await (await open()).exec("ROLLBACK").catch(() => {});
       throw new Error(`migration ${file} failed: ${err.message}`);
-    } finally {
-      client.release();
     }
   }
 
@@ -67,6 +92,7 @@ export async function migrate() {
 }
 
 export async function getSetting(key, fallback = null) {
+
   const row = await one("SELECT value FROM settings WHERE key = $1", [key]);
   return row ? row.value : fallback;
 }

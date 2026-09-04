@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# The work copy's own entry point. Loads .env.next so no run can reach the
+# instance this checkout is meant to leave alone, then hands off to bin/pilo.
+set -euo pipefail
+ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+set -a; source "$ROOT/.env.next"; set +a
+exec "$ROOT/bin/pilo" "$@"

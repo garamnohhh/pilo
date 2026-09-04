@@ -10,7 +10,6 @@ your own machine — Pilo opens no port to the outside and sends nothing anywher
 | --- | --- |
 | Node.js 20 or newer | runs the server, the TUI and the CLI |
 | [herdr](https://herdr.dev) | the terminal workspace Pilo watches — `brew install herdr` (Apache-2.0) |
-| A Docker-compatible runtime | for PostgreSQL. OrbStack recommended; Docker Desktop and Colima work |
 | At least one coding agent | Claude Code or Codex, running in a herdr pane |
 
 Pilo does not start your agents. You open them yourself in herdr panes; Pilo
@@ -26,35 +25,31 @@ finds them with `herdr agent list` and wakes them with `herdr agent prompt`.
 ./bin/pilo dashboard  # open the web dashboard
 ```
 
-The first run starts PostgreSQL with Docker Compose, enables `pgvector`, applies
-the migrations, and writes a generated database password to `~/.pilo/config.toml`
-(0600). Nothing secret lives in this repository.
+The first run creates the database under `~/.pilo/data`, enables `pgvector` and
+applies the migrations. There is nothing to install first and no password to
+keep: the database is a directory only your account can read.
 
 Then register your agents once — in the dashboard's Agents tab — and Pilo writes
 the instruction block into each agent's `CLAUDE.md` or `AGENTS.md`.
 
 ## State and the database
 
-State lives in `~/.pilo/`: `config.toml`, `port`, `logs/`. The database is a
-container listening on `127.0.0.1:15432` only.
+Everything Pilo keeps lives under `~/.pilo/`: `config.toml`, `port`, `logs/`, and
+`data/` — the database itself. There is no container and no separate server: the
+database is [PGlite](https://pglite.dev), PostgreSQL 18 compiled to WebAssembly,
+opened by the Pilo server as a directory of files. `pgvector` is enabled in it,
+so nothing is given up by not running a real server.
 
-To supply your own password instead, export both before the very first run —
-PostgreSQL only applies the password when it initialises its volume:
-
-```bash
-export PILO_DB_PASSWORD='…'
-export PILO_DATABASE_URL='postgres://pilo:…@127.0.0.1:15432/pilo'
-```
-
-Running `docker compose` by hand needs `PILO_DB_PASSWORD` set; without it
-Compose stops and says so.
+One process owns that directory at a time. Pilo writes `~/.pilo/db.lock` when it
+opens the database and refuses to start if another server still holds it — PGlite
+has no lock of its own, and two writers would corrupt the files.
 
 Every part of that layout can be moved, which is how a second instance runs
-beside the first: `PILO_HOME` (state directory), `PILO_PORT`, `PILO_SOCKET`,
-`PILO_SPOOL`, `PILO_DATABASE_URL`, and `PILO_WATCHER=off` to start without the
-loop that wakes agents. Move the socket and the spool together — the CLI falls
-back from one to the other, so changing only one leaves it talking to the
-instance you meant to leave alone.
+beside the first: `PILO_HOME` (state directory), `PILO_DATA` (database
+directory), `PILO_PORT`, `PILO_SOCKET`, `PILO_SPOOL`, and `PILO_WATCHER=off` to
+start without the loop that wakes agents. Move the socket and the spool together
+— the CLI falls back from one to the other, so changing only one leaves it
+talking to the instance you meant to leave alone.
 
 ## Layout
 
