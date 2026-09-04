@@ -8,7 +8,7 @@ export const CATALOGUE = [
   { scope: "tui", name: "dash", aliases: ["dashboard"], args: "[탭]", summary: "대시보드 열기", example: ":dash agents" },
   { scope: "tui", name: "agents", args: "", summary: "agent tree 요약", example: ":agents" },
   { scope: "tui", name: "inbox", args: "", summary: "아직 답변이 없는 요청", example: ":inbox" },
-  { scope: "tui", name: "project", aliases: ["p"], args: "<이름>|all", summary: "프로젝트로 피드 거르기", example: ":project hoban" },
+  { scope: "tui", name: "project", aliases: ["p"], args: "<이름>|all", summary: "프로젝트로 피드 거르기", example: ":project web-app" },
   { scope: "tui", name: "blocked", args: "", summary: "사용자 결정을 기다리는 작업", example: ":blocked" },
   { scope: "tui", name: "answer", args: "<taskId> <답변>", summary: "결정 회신 — 그 작업이 다시 큐로", example: ':answer 481 "yes, ship it"' },
   { scope: "tui", name: "copy", args: "[last|in-N|task-N|draft]", summary: "답변이나 입력 중인 글을 클립보드로", example: ":copy in-42" },

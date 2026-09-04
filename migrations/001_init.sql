@@ -41,5 +41,5 @@ CREATE INDEX IF NOT EXISTS idx_tasks_to_status ON tasks(to_agent, status, create
 CREATE INDEX IF NOT EXISTS idx_events_agent_created ON events(agent, created_at DESC);
 
 INSERT INTO agents (name, role)
-VALUES ('main', 'main'), ('hoban', 'pm'), ('nh', 'pm'), ('markly', 'pm'), ('fitxel', 'pm')
+VALUES ('main', 'main')
 ON CONFLICT (name) DO NOTHING;
