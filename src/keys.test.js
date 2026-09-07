@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { isNewline, isSend, isPrintable } from "./keys.js";
+import { isNewline, isSend, isPrintable, isPasteImage } from "./keys.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
 // objects a terminal actually produces.
@@ -43,4 +43,12 @@ test("typed characters are printable, escape sequences are not", () => {
   assert.equal(isPrintable(ch, key), true);
   const [{ ch: ech, key: ekey }] = parse("\x1b[13;2u");
   assert.equal(isPrintable(ech, ekey), false);
+});
+
+test("Cmd+V arrives as CSI-u once the terminal is told to pass it through", () => {
+  assert.equal(isPasteImage({ sequence: "\x1b[118;9u" }), true);
+  assert.equal(isPasteImage({ sequence: "\x1b[118;9:1u" }), true);
+  assert.equal(isPasteImage({ ctrl: true, name: "v", sequence: "\x16" }), true);
+  assert.equal(isPasteImage({ sequence: "\x1b[118;3u" }), false); // alt+v
+  assert.equal(isPasteImage({ name: "v", sequence: "v" }), false);
 });

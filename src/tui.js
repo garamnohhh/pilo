@@ -6,6 +6,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
+import { isPasteImage } from "./keys.js";
+import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
 import { parseCommand, suggest, HELP } from "./commands.js";
@@ -211,6 +213,7 @@ const state = {
   pasting: false,
   pasteBuffer: "",
   pastes: new Map(),
+  images: new Map(),
   filter: null,
   spin: 0,
   pulse: true,
@@ -635,7 +638,52 @@ function placeholderFor(text, lines) {
 function expandPastes(text) {
   let out = text;
   for (const [token, value] of state.pastes) out = out.split(token).join(value);
+  // An image leaves the path behind, which is what the agent can actually open.
+  for (const [token, path] of state.images) out = out.split(token).join(path);
   return out;
+}
+
+// The image marker is the twin of the paste marker: same brackets, its own
+// count, and the shape of the thing rather than its length.
+let imageSeq = 0;
+
+function imageToken({ file, width, height, bytes, kind = "png" }) {
+  imageSeq += 1;
+  const size = bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  const shape = width && height ? `${width}×${height} · ` : "";
+  const token = `⟦image #${imageSeq} · ${shape}${kind} ${size}⟧`;
+  state.images.set(token, file);
+  return token;
+}
+
+function insertDraft(text) {
+  state.input = state.input.slice(0, state.cursor) + text + state.input.slice(state.cursor);
+  state.cursor += text.length;
+  state.scroll = 0;
+}
+
+async function attachClipboard() {
+  const found = await clipboardImage();
+  // Text on the clipboard is the terminal's own business: it has already pasted
+  // it by the time this runs, so saying anything would be noise.
+  if (found.miss) {
+    if (found.miss !== "text") note(t("note.noClipboardImage"));
+    return;
+  }
+  insertDraft(imageToken(found));
+  render();
+}
+
+// A dropped file arrives as its path in the prompt. Turning it into the same
+// marker means one kind of attachment downstream, whichever way it came in.
+async function attachFiles(paths) {
+  const { statSync } = await import("node:fs");
+  for (const file of paths) {
+    const { width, height } = await imageSize(file);
+    const bytes = statSync(file).size;
+    insertDraft(imageToken({ file, width, height, bytes, kind: file.split(".").pop().toLowerCase() }));
+  }
+  render();
 }
 
 // The prompt occupies the full width minus the marker and its space.
@@ -931,9 +979,15 @@ function render() {
   let cursorRow = screen.length + 1;
   let cursorCol = mainLeft + 3;
   const PLACEHOLDER = t("feed.placeholder");
+  // Both markers are drawn in a colour of their own so an image does not read as
+  // a blob of pasted text. A marker split across two rows keeps the plain text,
+  // which is only ever a cosmetic loss.
+  const MARKER = /⟦(image|paste)[^⟧]*⟧/g;
+  const paint = (text) =>
+    COLOR === "none" ? text : text.replace(MARKER, (mark, kind) => `${kind === "image" ? c.blue : c.muted}${mark}${c.reset}`);
   draft.forEach((row, i) => {
     const mark = i === 0 ? c.green + "❯" + c.reset : " ";
-    const shown = i === 0 && !state.input ? `${c.faint}${PLACEHOLDER}${c.reset}` : row.text;
+    const shown = i === 0 && !state.input ? `${c.faint}${PLACEHOLDER}${c.reset}` : paint(row.text);
     emit(pre + withRail(`${mark} ${shown}`));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
@@ -1243,9 +1297,11 @@ keys.on("keypress", async (ch, key) => {
     return;
   }
 
+  if (isPasteImage(key)) return attachClipboard();
+
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
     pasting: state.pasting,
-    atoms: [...state.pastes.keys()],
+    atoms: [...state.pastes.keys(), ...state.images.keys()],
     width: draftWidth()
   });
   if (next.action === "paste-start") {
@@ -1258,6 +1314,8 @@ keys.on("keypress", async (ch, key) => {
     state.pasting = false;
     const text = state.pasteBuffer;
     state.pasteBuffer = "";
+    const dropped = droppedPaths(text);
+    if (dropped.length) return attachFiles(dropped);
     const lines = text.split("\n").length;
     const inline = lines <= 2 && text.length <= 200;
     const insert = inline ? text : placeholderFor(text, lines);
@@ -1281,6 +1339,7 @@ keys.on("keypress", async (ch, key) => {
     state.scroll = 0;
     state.pad = 0;
     state.pastes.clear();
+    state.images.clear();
     if (text.trim()) {
       await send(text);
       await refresh();
