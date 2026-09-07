@@ -4,8 +4,13 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const bin = process.env.PILO_HERDR || "/opt/homebrew/bin/herdr";
 
+// A call that never returns is worse than one that fails: the watcher waits on
+// it, and nothing else in Pilo moves. Time it out and let the caller record a
+// failure, which backs off on its own.
+const TIMEOUT_MS = Number(process.env.PILO_HERDR_TIMEOUT_MS || 15000);
+
 async function herdr(args) {
-  const { stdout } = await run(bin, args, { maxBuffer: 8 * 1024 * 1024 });
+  const { stdout } = await run(bin, args, { maxBuffer: 8 * 1024 * 1024, timeout: TIMEOUT_MS });
   return stdout;
 }
 
