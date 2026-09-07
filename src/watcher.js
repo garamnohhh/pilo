@@ -177,7 +177,25 @@ async function pumpSchedules() {
   }
 }
 
-async function tick() {
+// One tick at a time. setInterval fires on the clock, not on the last run, so a
+// herdr call that hangs used to leave every later tick running beside it: they
+// all read the same "not woken yet" state and, when the hang cleared, sent one
+// wake each. Two hundred and sixty of them, in under half a second.
+export function serialize(job) {
+  let running = false;
+  return async (...args) => {
+    if (running) return false;
+    running = true;
+    try {
+      await job(...args);
+      return true;
+    } finally {
+      running = false;
+    }
+  };
+}
+
+const tick = serialize(async () => {
   try {
     await pumpSchedules();
     await pumpInbox();
@@ -187,7 +205,7 @@ async function tick() {
   } catch (err) {
     console.error("watcher:", err.message);
   }
-}
+});
 
 export function startWatcher() {
   if (process.env.PILO_WATCHER === "off") return null;
