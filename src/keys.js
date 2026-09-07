@@ -29,3 +29,18 @@ export function isPrintable(ch, key) {
   if (!ch || key?.ctrl || key?.meta) return false;
   return !String(key?.sequence || "").startsWith("\x1b");
 }
+
+// Cmd+V is the key everyone reaches for, but macOS terminals keep Cmd for
+// themselves. Ghostty will pass it through with one line of config
+// (`keybind = unconsumed:super+v=paste_from_clipboard`), and because the TUI
+// already asks for the kitty keyboard protocol it arrives as CSI-u rather than
+// as nothing at all. Ctrl+V is the fallback for terminals that cannot be told.
+const CSI_V = /^\x1b\[118;(\d+)(?::\d+)?u$/;
+
+export function isPasteImage(key) {
+  if (key?.ctrl && key.name === "v") return true;
+  const match = CSI_V.exec(key?.sequence || "");
+  if (!match) return false;
+  const mods = Number(match[1]) - 1;
+  return Boolean(mods & 8) || Boolean(mods & 4); // super, or ctrl reported as CSI-u
+}
