@@ -39,8 +39,42 @@ const CSI_V = /^\x1b\[118;(\d+)(?::\d+)?u$/;
 
 export function isPasteImage(key) {
   if (key?.ctrl && key.name === "v") return true;
-  const match = CSI_V.exec(key?.sequence || "");
+  return isPasteSequence(key?.sequence || "");
+}
+
+// v with any of cmd, ctrl or alt held. Alt is in the list because a clipboard
+// manager on Option+V is how the paste actually reaches this terminal here, and
+// because a bare Option+V is a "√", not a key anyone means to type.
+export function isPasteSequence(sequence) {
+  const match = CSI_V.exec(sequence);
   if (!match) return false;
   const mods = Number(match[1]) - 1;
-  return Boolean(mods & 8) || Boolean(mods & 4); // super, or ctrl reported as CSI-u
+  return Boolean(mods & 8) || Boolean(mods & 4) || Boolean(mods & 2);
+}
+
+// The kitty keyboard protocol writes every modified key as CSI <code>;<mods>u.
+// Pulling those out of the byte stream before readline sees them is the same
+// move the mouse reports needed: readline understands most of them, but a
+// sequence that arrives in the wrong shape gets shredded into loose characters
+// and lands in the prompt as text — "1;9u" in the middle of a sentence.
+const CSI_U_ANY = /\x1b\[(\d+);(\d+)(?::\d+)?u/g;
+
+// A sequence can also arrive cut in half between two reads, which is the other
+// way its tail ends up as text. An unfinished one is carried to the next chunk
+// rather than passed on; the cap keeps a stray ESC from swallowing real input.
+const PARTIAL = /\x1b\[[\d;:]*$/;
+const CARRY_MAX = 16;
+
+export function takePasteKeys(input, carried = "") {
+  let hits = 0;
+  const rest = String(carried + input).replace(CSI_U_ANY, (match) => {
+    if (!isPasteSequence(match)) return match; // shift+enter and friends carry on
+    hits += 1;
+    return "";
+  });
+  const partial = PARTIAL.exec(rest);
+  if (partial && partial[0].length <= CARRY_MAX) {
+    return { hits, rest: rest.slice(0, partial.index), carry: partial[0] };
+  }
+  return { hits, rest, carry: "" };
 }

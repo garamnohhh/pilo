@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
-import { isPasteImage } from "./keys.js";
+import { isPasteImage, takePasteKeys } from "./keys.js";
 import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
@@ -1280,11 +1280,18 @@ process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2
 
 // The probe reads its own reply, so it runs before the key stream is wired up.
 await probeAmbiguous();
+// Half a sequence waits here for the rest of itself.
+let pasteCarry = "";
 process.stdin.on("data", (chunk) => {
   const { wheel, clicks, rest } = parseMouse(chunk);
   if (wheel) scrollBy(wheel * 3);
   for (const click of clicks) handleClick(click);
-  if (rest.length) keys.write(rest);
+  // Take the paste keys out here rather than after readline: a stray tail of one
+  // of these was ending up in the prompt as text.
+  const taken = takePasteKeys(rest, pasteCarry);
+  pasteCarry = taken.carry;
+  for (let i = 0; i < taken.hits; i++) attachClipboard();
+  if (taken.rest.length) keys.write(taken.rest);
 });
 
 // A crash must not leave the user staring at an empty alternate screen.
