@@ -12,6 +12,7 @@ const EN = {
   "state.blocked": "blocked",
   "state.failed": "failed",
   "state.unbound": "unbound",
+  "state.gaveUp": "no answer",
 
   // the tree itself
   "tree.title": "AGENT TREE",
@@ -103,6 +104,8 @@ const EN = {
   // events
   "event.woken": "{agent} woken",
   "event.wakeFailed": "wake failed — {code}",
+  "event.opened": "{agent} opened #{id}",
+  "event.stalled": "#{id} has not moved",
   "event.gaveUp": "{agent} not answering — stopped retrying",
   "event.registered": "{agent} registered",
   "event.archived": "{agent} archived",
@@ -120,6 +123,7 @@ const EN = {
   "wake.inbox": "[pilo:inbox] request #{id} — for {agent}. read it with 'pilo inbox {id}'.",
   "wake.task": "[pilo:task] task #{id} — for {agent}. read it with 'pilo task {id}', report with 'pilo done {id}'.",
   "wake.answer": "[pilo:task] decision returned #{id} — for {agent}. read the answer in 'pilo task {id}' and carry on.",
+  "wake.nudge": "[pilo:nudge] #{id} is still open — you have not run 'pilo done {id}'. If it is finished, record it now.",
   "wake.result": "[pilo:result] results in for #{id} — gather them with 'pilo inbox {id}', then 'pilo reply {id}'.",
   "wake.rules": "[pilo:rules] your instructions changed. read the pilo:begin ~ pilo:end block in {file} and follow it from now on.",
   "wake.check": "[pilo] {agent}, please check in",
@@ -154,6 +158,7 @@ const KO = {
   "state.blocked": "결정 대기",
   "state.failed": "실패",
   "state.unbound": "세션 없음",
+  "state.gaveUp": "응답 없음",
 
   "tree.title": "AGENT TREE",
   "tree.noDesk": "대표 agent 없음",
@@ -238,6 +243,8 @@ const KO = {
 
   "event.woken": "{agent} 깨움",
   "event.wakeFailed": "wake 실패 — {code}",
+  "event.opened": "{agent} 가 #{id} 를 열어봄",
+  "event.stalled": "#{id} 가 안 움직임",
   "event.gaveUp": "{agent} 응답 없음 — 재알림 중단",
   "event.registered": "{agent} 등록",
   "event.archived": "{agent} 보관",
@@ -254,6 +261,7 @@ const KO = {
   "wake.inbox": "[pilo:inbox] 요청 도착 #{id} — {agent} 앞. 'pilo inbox {id}' 로 확인.",
   "wake.task": "[pilo:task] 작업 도착 #{id} — {agent} 앞. 'pilo task {id}' 로 읽고 'pilo done {id}' 로 보고.",
   "wake.answer": "[pilo:task] 결정 회신 #{id} — {agent} 앞. 'pilo task {id}' 의 answer 를 읽고 이어서 진행.",
+  "wake.nudge": "[pilo:nudge] #{id} 아직 열려 있음 — 'pilo done {id}' 안 돌렸음. 끝났으면 지금 기록할 것.",
   "wake.result": "[pilo:result] 결과 도착 #{id} — 'pilo inbox {id}' 로 취합 후 'pilo reply {id}'.",
   "wake.rules": "[pilo:rules] 지시문이 갱신됐다. {file} 의 pilo:begin ~ pilo:end 블록을 읽고 지금부터 그대로 동작해.",
   "wake.check": "[pilo] {agent} 확인 요청",
