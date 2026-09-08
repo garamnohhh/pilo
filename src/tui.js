@@ -662,14 +662,21 @@ function insertDraft(text) {
   state.scroll = 0;
 }
 
-async function attachClipboard() {
+// Cmd+V can reach the TUI twice: the terminal pastes (nothing, when the
+// clipboard holds only an image) and then sends the key itself. Two triggers,
+// one intent, so a second attach on the heels of the first is dropped.
+let lastAttach = 0;
+
+async function attachClipboard({ quiet = false } = {}) {
+  if (Date.now() - lastAttach < 1500) return;
   const found = await clipboardImage();
   // Text on the clipboard is the terminal's own business: it has already pasted
   // it by the time this runs, so saying anything would be noise.
   if (found.miss) {
-    if (found.miss !== "text") note(t("note.noClipboardImage"));
+    if (found.miss !== "text" && !quiet) note(t("note.noClipboardImage"));
     return;
   }
+  lastAttach = Date.now();
   insertDraft(imageToken(found));
   render();
 }
@@ -1314,6 +1321,9 @@ keys.on("keypress", async (ch, key) => {
     state.pasting = false;
     const text = state.pasteBuffer;
     state.pasteBuffer = "";
+    // An image on the clipboard gives the terminal nothing to paste, so an empty
+    // paste is the one hint that arrives without any terminal configuration.
+    if (!text) return attachClipboard({ quiet: true });
     const dropped = droppedPaths(text);
     if (dropped.length) return attachFiles(dropped);
     const lines = text.split("\n").length;
