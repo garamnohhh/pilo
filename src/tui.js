@@ -501,8 +501,11 @@ function railRows(tree, width, actions = []) {
   // The word on the right says what the agent is doing, in one token.
   // Giving up used to be a line in the events table and nothing on the screen:
   // the wake stopped and the tree still read "idle".
+  const limited = (agent) => agent.limitedUntil && new Date(agent.limitedUntil).getTime() > Date.now();
   const word = (agent, seen) =>
-    agent.gaveUp > 0 && agent.status !== "running"
+    limited(agent)
+      ? t("state.limited")
+      : agent.gaveUp > 0 && agent.status !== "running"
       ? t("state.gaveUp")
       : agent.status === "running" && stalled(agent)
       ? t("state.stalled")
