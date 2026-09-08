@@ -7,6 +7,8 @@ import { t } from "./text.js";
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
+  (SELECT count(*)::int FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_gave_up'
+     AND e.created_at > now() - interval '1 day') AS "gaveUp",
   a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
@@ -733,6 +735,22 @@ export async function listTasks(limit = 100) {
 }
 
 // What an agent reads when it is woken with a [pilo:task] message.
+// Reading the work is the only signal Pilo gets that a wake landed. Without it
+// "never received it" and "received it and never finished" look identical, and
+// the second one is the failure that keeps happening.
+async function noteOpened(task) {
+  if (!task || task.status !== "queued") return;
+  const seen = await one("SELECT 1 AS hit FROM events WHERE type = 'task_opened' AND task_id = $1 LIMIT 1", [task.id]);
+  if (seen) return;
+  await logEvent({
+    type: "task_opened",
+    title: t("event.opened", { agent: task.agent || "agent", id: task.id }),
+    taskId: task.id,
+    inboxId: task.inboxId,
+    payload: { agent: task.agent }
+  });
+}
+
 export async function taskDetail(id) {
   const row = await one(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
@@ -761,6 +779,7 @@ export async function taskDetail(id) {
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.parent_task_id = $1 ORDER BY t.created_at`,
     [id]
   );
+  await noteOpened(row);
   return { ...row, progress, children };
 }
 

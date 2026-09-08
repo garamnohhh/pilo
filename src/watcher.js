@@ -141,6 +141,48 @@ async function pumpResults() {
   }
 }
 
+// An agent can take the work and then simply not report it — the failure that
+// keeps happening. Nobody notices until a person asks. So: a task that has been
+// queued a while, on a session that is not busy, with nothing said about it,
+// gets one nudge in different words, and leaves a mark the screens can show.
+const STALL_MINUTES = Number(process.env.PILO_STALL_MIN || 10);
+const NUDGE_EVERY_MINUTES = Number(process.env.PILO_NUDGE_EVERY_MIN || 30);
+
+async function pumpStalled() {
+  const stuck = await query(
+    `SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.herdr_target, a.runtime,
+            EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'task_opened') AS opened
+     FROM tasks t
+       JOIN agents a ON a.id = t.to_agent_id
+       LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE t.status = 'queued' AND a.archived_at IS NULL AND a.herdr_target <> ''
+       AND coalesce(s.status, '') <> 'working'
+       AND t.progress_at IS NULL
+       AND t.created_at < now() - ($1 || ' minutes')::interval
+       AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled'
+                         AND e2.created_at > now() - ($2 || ' minutes')::interval)
+     ORDER BY t.created_at LIMIT 5`,
+    [String(STALL_MINUTES), String(NUDGE_EVERY_MINUTES)]
+  );
+  for (const task of stuck) {
+    const agent = { id: task.agent_id, name: task.name, herdr_target: task.herdr_target, runtime: task.runtime };
+    await logEvent({
+      type: "task_stalled",
+      title: t("event.stalled", { id: task.id }),
+      agentId: agent.id,
+      taskId: task.id,
+      inboxId: task.inbox_id,
+      payload: { minutes: STALL_MINUTES, opened: task.opened, agent: agent.name }
+    });
+    // Opened and still queued is the reporting slip; never opened is a wake that
+    // did not land, and the first words say which one it is.
+    const message = task.opened
+      ? t("wake.nudge", { id: task.id })
+      : t("wake.task", { id: task.id, agent: agent.name });
+    await wake(agent, message, { taskId: task.id, inboxId: task.inbox_id });
+  }
+}
+
 // What herdr says each bound session is doing, kept so the tree can show it
 // without every reader shelling out to herdr.
 export async function pumpSessions() {
@@ -201,6 +243,7 @@ const tick = serialize(async () => {
     await pumpInbox();
     await pumpTasks();
     await pumpResults();
+    await pumpStalled();
     await pumpSessions();
   } catch (err) {
     console.error("watcher:", err.message);
