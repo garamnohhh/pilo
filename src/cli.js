@@ -210,6 +210,27 @@ const commands = {
     return out(t("cli.blocked", { id: res.id, status: res.status }));
   },
 
+  async hold(args) {
+    const [taskId, ...text] = args;
+    if (!taskId) throw new Error("usage: pilo hold <taskId> <what you are waiting for>");
+    const res = await call("POST", `/api/tasks/${taskId}/hold`, { note: text.join(" ") });
+    return out(t("cli.holding", { id: res.id, note: res.note }));
+  },
+
+  async resume([taskId]) {
+    if (!taskId) throw new Error("usage: pilo resume <taskId>");
+    const res = await call("POST", `/api/tasks/${taskId}/resume`, {});
+    return out(t("cli.resumed", { id: res.id }));
+  },
+
+  async limited(args) {
+    const { rest, opts } = flags(args);
+    const agentId = rest[0] || opts.agent;
+    if (!agentId) throw new Error("usage: pilo limited <agentId> --until 2026-09-08T18:00:00Z  (omit --until to clear)");
+    const res = await call("POST", `/api/agents/${agentId}/limited`, { until: opts.until || null });
+    return out(res.limitedUntil ? t("cli.limited", { until: res.limitedUntil }) : t("cli.unlimited"));
+  },
+
   async blocked() {
     const rows = await call("GET", "/api/blocked");
     if (!rows.length) return out(t("cli.noBlocked"));
