@@ -9,6 +9,7 @@ import { t } from "./text.js";
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
   (SELECT count(*)::int FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_gave_up'
      AND e.created_at > now() - interval '1 day') AS "gaveUp",
+  a.limited_until AS "limitedUntil",
   a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
@@ -749,6 +750,46 @@ async function noteOpened(task) {
     inboxId: task.inboxId,
     payload: { agent: task.agent }
   });
+}
+
+// A task can be parked on purpose. The agent says what it is waiting for, and
+// the task leaves the queue without pretending to be finished — no wakes, no
+// stall sweep, and the screens read "holding" instead of "stuck".
+export async function holdTask(id, note) {
+  const task = await one("SELECT id, inbox_id, to_agent_id, status FROM tasks WHERE id = $1", [id]);
+  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!["queued", "running", "holding"].includes(task.status)) {
+    throw Object.assign(new Error(`task is ${task.status}`), { status: 400 });
+  }
+  await query("UPDATE tasks SET status = 'holding', hold_note = $2, updated_at = now() WHERE id = $1", [id, note || ""]);
+  await logEvent({ type: "task_holding", title: t("event.holding", { id }), agentId: task.to_agent_id,
+    taskId: id, inboxId: task.inbox_id, payload: { note } });
+  return { id, status: "holding", note: note || "" };
+}
+
+export async function resumeTask(id) {
+  const task = await one("SELECT id, inbox_id, to_agent_id, status FROM tasks WHERE id = $1", [id]);
+  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  await query("UPDATE tasks SET status = 'queued', hold_note = '', updated_at = now() WHERE id = $1", [id]);
+  await logEvent({ type: "task_resumed", title: t("event.resumed", { id }), agentId: task.to_agent_id,
+    taskId: id, inboxId: task.inbox_id, payload: {} });
+  return { id, status: "queued" };
+}
+
+// The agent knows it hit its provider's ceiling before Pilo can; it says so and
+// says when the window reopens. Waking stops until then and starts again by
+// itself — an empty or past time clears the park early.
+export async function setLimited(agentId, until) {
+  const agent = await one("SELECT id, name FROM agents WHERE id = $1 AND archived_at IS NULL", [agentId]);
+  if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
+  const when = until ? new Date(until) : null;
+  if (until && Number.isNaN(when?.getTime())) throw Object.assign(new Error("until must be a time"), { status: 400 });
+  const parked = when && when.getTime() > Date.now() ? when : null;
+  await query("UPDATE agents SET limited_until = $2, updated_at = now() WHERE id = $1", [agentId, parked]);
+  await logEvent({ type: parked ? "agent_limited" : "agent_resumed",
+    title: parked ? t("event.limited", { agent: agent.name }) : t("event.unlimited", { agent: agent.name }),
+    agentId, payload: { until: parked ? parked.toISOString() : null } });
+  return { id: agentId, limitedUntil: parked ? parked.toISOString() : null };
 }
 
 export async function taskDetail(id) {

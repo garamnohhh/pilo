@@ -73,6 +73,16 @@ async function overCap(agentId) {
 }
 
 async function wake(agent, message, { taskId = null, inboxId = null }) {
+  // An agent past its provider's ceiling is not idle and not broken; it is
+  // waiting. Nudging it burns a turn for nothing, so the park holds until the
+  // time it reported, and lifts without anyone doing anything.
+  const parked = await one(
+    "SELECT limited_until AS until FROM agents WHERE id = $1 AND limited_until > now()", [agent.id]);
+  if (parked) {
+    await logEvent({ type: "wake_parked", title: t("event.parked", { agent: agent.name }),
+      agentId: agent.id, taskId, inboxId, payload: { until: parked.until } });
+    return false;
+  }
   if (pending.has(agent.id)) {
     await logEvent({ type: "wake_coalesced", title: t("event.coalesced", { agent: agent.name }),
       agentId: agent.id, taskId, inboxId, payload: { message } });
@@ -192,6 +202,7 @@ async function pumpStalled() {
        LEFT JOIN agent_sessions s ON s.agent_id = a.id
      WHERE t.status = 'queued' AND a.archived_at IS NULL AND a.herdr_target <> ''
        AND coalesce(s.status, '') <> 'working'
+       AND (a.limited_until IS NULL OR a.limited_until < now())
        AND t.progress_at IS NULL
        AND t.created_at < now() - ($1 || ' minutes')::interval
        AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled'
