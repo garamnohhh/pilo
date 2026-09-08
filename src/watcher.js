@@ -48,7 +48,42 @@ async function gaveUp(column, id, agent, extra) {
   });
 }
 
+// Delivery and waking are two different things. The work is already in the
+// database and the agent will find it; a wake is the extra nudge that costs a
+// turn. So a wake can be held back — coalesced or capped — and nothing is lost:
+// the task stays queued and the next hour wakes it.
+//
+// One outstanding wake per agent per tick. On 2026-09-07 a stalled herdr call
+// let hundreds of ticks pile up and every one of them decided to wake the same
+// agent: 260 wakes in under half a second.
+let pending = new Set();
+
+// Thirty an hour per agent. The busiest legitimate hour in the last week was 21;
+// the two storms were 260 and 1370. The ceiling sits above the work and well
+// under the accidents.
+const WAKE_CAP_PER_HOUR = Number(process.env.PILO_WAKE_CAP || 30);
+
+async function overCap(agentId) {
+  const row = await one(
+    `SELECT count(*)::int AS n FROM events
+     WHERE type = 'wake_sent' AND agent_id = $1 AND created_at > now() - interval '1 hour'`,
+    [agentId]
+  );
+  return (row?.n || 0) >= WAKE_CAP_PER_HOUR;
+}
+
 async function wake(agent, message, { taskId = null, inboxId = null }) {
+  if (pending.has(agent.id)) {
+    await logEvent({ type: "wake_coalesced", title: t("event.coalesced", { agent: agent.name }),
+      agentId: agent.id, taskId, inboxId, payload: { message } });
+    return false;
+  }
+  if (await overCap(agent.id)) {
+    await logEvent({ type: "wake_suppressed", title: t("event.suppressed", { agent: agent.name, cap: WAKE_CAP_PER_HOUR }),
+      agentId: agent.id, taskId, inboxId, payload: { cap: WAKE_CAP_PER_HOUR, message } });
+    return false;
+  }
+  pending.add(agent.id);
   try {
     await herdr.prompt(agent.herdr_target, message);
     await logEvent({
@@ -237,7 +272,8 @@ export function serialize(job) {
   };
 }
 
-const tick = serialize(async () => {
+export const tick = serialize(async () => {
+  pending = new Set();
   try {
     await pumpSchedules();
     await pumpInbox();
