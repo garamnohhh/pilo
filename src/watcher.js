@@ -1,6 +1,7 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
+import { claudeAgeMin } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule } from "./api.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
@@ -229,6 +230,44 @@ async function pumpStalled() {
   }
 }
 
+// The five-hour figure on the status line only moves when some Claude session
+// asks for it, and /usage is a local command: no model, no tokens. So a pane
+// kept aside for the purpose is asked every few minutes, and the panel it opens
+// is closed again a tick later. Nobody's own session is typed into.
+const PROBE_NAME = process.env.PILO_USAGE_PROBE || "usage-probe";
+const QUOTA_STALE_MIN = Number(process.env.PILO_QUOTA_STALE_MIN || 6);
+let probe = { pane: "", askedAt: 0 };
+
+async function pumpQuota() {
+  // Close the panel we opened on an earlier tick before anything else.
+  if (probe.askedAt && Date.now() - probe.askedAt > 5000) {
+    const pane = probe.pane;
+    probe = { pane: "", askedAt: 0 };
+    try {
+      await herdr.sendKeys(pane, "esc");
+    } catch {
+      // the pane went away; the next round will find another
+    }
+    return;
+  }
+  if (probe.askedAt) return;
+  if (claudeAgeMin() < QUOTA_STALE_MIN) return;
+  let pane = "";
+  try {
+    const sessions = await herdr.sessions();
+    pane = sessions.find((s) => s.name === PROBE_NAME && s.runtime === "claude" && s.status === "idle")?.target || "";
+  } catch {
+    return;
+  }
+  if (!pane) return;
+  try {
+    await herdr.prompt(pane, "/usage");
+    probe = { pane, askedAt: Date.now() };
+  } catch {
+    // a failed refresh is not worth a word: the reading keeps its age on screen
+  }
+}
+
 // What herdr says each bound session is doing, kept so the tree can show it
 // without every reader shelling out to herdr.
 export async function pumpSessions() {
@@ -291,6 +330,7 @@ export const tick = serialize(async () => {
     await pumpTasks();
     await pumpResults();
     await pumpStalled();
+    await pumpQuota();
     await pumpSessions();
   } catch (err) {
     console.error("watcher:", err.message);

@@ -93,6 +93,18 @@ function codexQuota() {
   return null;
 }
 
+// The age of the Claude reading, straight from the file — the refresher needs a
+// number the one-minute cache would hide.
+export function claudeAgeMin() {
+  try {
+    const raw = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
+    const at = Number(raw?.cachedUsageUtilization?.fetchedAtMs || 0);
+    return at ? (Date.now() - at) / 60000 : Infinity;
+  } catch {
+    return Infinity;
+  }
+}
+
 // A missing file, a changed format, a machine with neither tool: all the same
 // answer — say nothing rather than put an error on the status line.
 export function readQuota(now = Date.now()) {
