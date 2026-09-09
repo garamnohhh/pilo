@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { isPasteImage, takePasteKeys } from "./keys.js";
+import { readQuota } from "./quota.js";
 import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
@@ -249,6 +250,33 @@ const line = (n) => c.line + "─".repeat(Math.max(1, n)) + c.reset;
 const cell = (s, n) => pad(cut(s, n), n);
 const pretty = (p) => String(p || "").replace(process.env.HOME || "", "~");
 const tokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0));
+
+// The five-hour window, per runtime, beside the token count. The weekly figure
+// is left out on purpose: it moves slowly, and the line is already full.
+// A reading nobody has refreshed in half an hour is drawn faint — the number
+// itself is still true, it is just older than the work.
+const STALE_MIN = 30;
+
+function quotaLine(compact = false) {
+  const quota = readQuota();
+  const parts = [];
+  for (const runtime of ["claude", "codex"]) {
+    const found = quota[runtime];
+    if (!found) continue;
+    const stale = found.ageMin >= STALE_MIN;
+    const level = found.percent >= 90 ? c.red : found.percent >= 70 ? c.amber : c.green;
+    const at = found.resetsAt ? new Date(found.resetsAt) : null;
+    const clock = at && !Number.isNaN(at.getTime())
+      ? `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`
+      : "";
+    const body = `${found.percent}%${clock && !compact ? ` ↻${clock}` : ""}`;
+    parts.push(stale
+      ? `${c.faint}${runtimeMark(runtime)} ${body}${c.reset}`
+      : `${runtimeMark(runtime)} ${level}${body}${c.reset}`);
+  }
+  if (!parts.length) return "";
+  return ` ${c.line}│${c.reset} ${parts.join(`${c.faint} · ${c.reset}`)}`;
+}
 
 async function api(path, fallback) {
   try {
@@ -817,10 +845,15 @@ function render() {
   const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
   const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}`;
   const showTokens = settings.tokens?.showInTui !== false;
-  const statusRight = showTokens
+  const tokenPart = showTokens
     ? ` ${c.line}│${c.reset} ${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset}`
     : "";
-  const right = `${statusMid}${statusRight}`;
+  // The reset clocks are the first thing to go on a narrow terminal: a truncated
+  // "↻21:…" is worse than no clock at all.
+  let right = `${statusMid}${tokenPart}${quotaLine()}`;
+  if (cols(statusLeft) + cols(right) + 2 > outWidth) right = `${statusMid}${tokenPart}${quotaLine(true)}`;
+  // Narrower still: drop it altogether rather than show half a number.
+  if (cols(statusLeft) + cols(right) + 2 > outWidth) right = `${statusMid}${tokenPart}`;
   const gap = Math.max(2, outWidth - cols(statusLeft) - cols(right));
   emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
