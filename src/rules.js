@@ -215,6 +215,10 @@ export async function buildRules(id) {
     [id]
   );
   if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
+  // A system agent is Pilo's own errand runner. It reads no instructions and
+  // takes no work, so writing into its folder would only leave a file nobody
+  // reads — and that folder is usually somebody else's project.
+  if (agent.role === "system") throw Object.assign(new Error("a system agent takes no instructions"), { status: 400 });
   if (!agent.cwd) throw Object.assign(new Error("agent has no cwd"), { status: 400 });
 
   const base = `http://127.0.0.1:${readPort()}`;
@@ -222,7 +226,7 @@ export async function buildRules(id) {
     `SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.parent_agent_id AS "parentAgentId",
        p.name AS "projectName"
      FROM agents a LEFT JOIN projects p ON p.id = a.project_id
-     WHERE a.archived_at IS NULL ORDER BY a.role, a.name`
+     WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role, a.name`
   );
   const children = agents.filter((a) => a.role === "worker" && String(a.parentAgentId) === String(agent.id));
   const parent = agents.find((a) => String(a.id) === String(agent.parentAgentId)) || null;

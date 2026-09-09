@@ -93,6 +93,8 @@ export async function agentTree() {
   const pilo = agents.find((a) => a.role === "pilo") || null;
   const pms = agents.filter((a) => a.role === "pm");
   const workers = agents.filter((a) => a.role === "worker");
+  // System agents are Pilo's own tools, not part of the org chart, so the tree
+  // never draws them.
   const deskWorkers = pilo ? workers.filter((w) => w.parentAgentId === pilo.id) : [];
   return {
     pilo: pilo ? { ...pilo, children: deskWorkers } : null,
@@ -129,6 +131,7 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
   // A worker usually belongs to a PM, but the desk agent keeps its own hands too:
   // odd jobs that belong to no project have nowhere else to hang.
   if (role === "worker" && parent.role === "worker") throw Object.assign(new Error("worker cannot hang off another worker"), { status: 400 });
+  if (role === "system" && parent.role !== "pilo") throw Object.assign(new Error("a system agent hangs off the pilo agent"), { status: 400 });
   return parent.id;
 }
 
@@ -222,7 +225,7 @@ export async function createAgent(input) {
   });
   // Registration is also when the agent's instruction file gets written, if asked for.
   let rules = null;
-  if (input.writeRules) {
+  if (input.writeRules && role !== "system") {
     try {
       rules = await applyRules(row.id);
     } catch (err) {
@@ -531,8 +534,10 @@ export async function createInbox(userRequest, cwd = "") {
 }
 
 export async function createTask(inboxId, input) {
-  const to = await one("SELECT id, name FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
+  const to = await one("SELECT id, name, role FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
   if (!to) throw Object.assign(new Error("target agent not found"), { status: 400 });
+  // A system agent runs Pilo's errands; work sent there would sit unread.
+  if (to.role === "system") throw Object.assign(new Error(`${to.name} is a system agent and takes no work`), { status: 400 });
   const row = await one(
     `INSERT INTO tasks (inbox_id, parent_task_id, from_agent_id, to_agent_id, title, request)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,

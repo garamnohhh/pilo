@@ -477,7 +477,9 @@ function sessionCard() {
       <span style="color:var(--strong);width:52px;flex:none">${esc(s.runtime)}</span>
       <span style="color:#67726b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.cwd)}">${esc(s.cwdShort)}</span>
       ${s.boundAgent
-        ? `<span style="color:var(--faint);white-space:nowrap">→ ${esc(s.boundAgent.name)}</span>`
+        ? s.boundAgent.role === "system"
+          ? `<span style="color:var(--blue);white-space:nowrap">SYSTEM · ${esc(s.boundAgent.name)}</span>`
+          : `<span style="color:var(--faint);white-space:nowrap">→ ${esc(s.boundAgent.name)}</span>`
         : `<button class="btn small" data-act="use-session" data-target="${esc(s.target)}">이 세션 추가</button>`}
     </div>`).join("") : `<div class="sub" style="margin-top:10px">herdr 세션이 없습니다. 세션을 띄운 뒤 새로고침하세요.</div>`}
     ${sessions.length && !free.length ? `<div class="note">모든 세션이 이미 등록되어 있습니다.</div>` : ""}
