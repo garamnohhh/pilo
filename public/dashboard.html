@@ -11,7 +11,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pilo">
 <link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0d0c'/><text x='16' y='23' font-family='monospace' font-size='20' font-weight='600' fill='%23eef2ee' text-anchor='middle'>P</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%233ED49C'/><text x='16' y='22' font-family='ui-monospace,monospace' font-size='15' font-weight='600' letter-spacing='-0.03em' fill='%2308090A' text-anchor='middle'>❯p</text></svg>">
+<link rel="stylesheet" href="/ds/styles.css">
+<link rel="stylesheet" href="/desk.css">
 <style>
   @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap }
   @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap }
@@ -21,11 +23,11 @@
   @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap }
 
   :root {
-    color-scheme: dark;
-    --bg: #08090a; --panel: #0c0f0e; --panel2: #0a0c0b; --line: #1a1e1c; --line2: #26302b;
-    --text: #d9ded9; --strong: #eef2ee; --muted: #7d887f; --faint: #4f5a53;
-    --green: #3ed49c; --amber: oklch(0.83 0.12 80); --red: oklch(0.70 0.15 25); --blue: oklch(0.78 0.08 235);
-    --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    /* Names the unported screens still use, pointed at the system's tokens. */
+    --panel: var(--surface); --panel2: var(--bg-2); --line2: var(--line);
+    --strong: var(--text); --muted: var(--text-2); --faint: var(--text-3);
+    --green: var(--accent); --amber: var(--warn); --red: var(--err); --blue: var(--info);
+    --mono: var(--font-mono);
   }
   * { box-sizing: border-box }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
@@ -146,19 +148,12 @@
 </style>
 </head>
 <body>
-<div class="topbar">
-  <div style="display:flex;align-items:center;gap:10px">
-    <span class="mark">Pilo</span>
-    <span class="tag">local agent desk</span>
-  </div>
-  <div class="state" id="topstate"></div>
+<div class="d-top">
+  <span class="d-mark"><b>❯</b>pilo</span>
+  <span style="margin-left:auto;display:flex;align-items:center;gap:16px" id="topstate"></span>
 </div>
-<div class="app">
-  <aside>
-    <div class="eyebrow">dashboard</div>
-    <nav id="tabs" style="flex:none"></nav>
-    <div class="side-card" id="sideCard"></div>
-  </aside>
+<div class="d-shell">
+  <div class="d-rail" id="rail"></div>
   <main>
     <header>
       <div>
@@ -178,6 +173,22 @@
 import { tablesToHtml } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t } from "/text.js";
+// The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
+// the codicon needs the patched JetBrains Mono that ships in fonts/, the plain
+// one is what a machine without it falls back to.
+const RAIL = [
+  ["overview", "\u276F", "\uEC0F", "work"],
+  ["agents", "\u2733", "\uEC67", "agents"],
+  ["inbox", "\u25A4", "\uEB09", "requests"],
+  ["schedules", "\u25F7", "\uEC75", "schedules"],
+  ["events", "\u007E", "\uEB31", "events"],
+  ["artifacts", "\u25C6", "\uEAE9", "artifacts"],
+  ["projects", "\u25AA", "\uEA83", "projects"],
+  ["commands", "\u003A", "\uEA85", "commands"],
+  ["settings", "\u2261", "\uEAF8", "settings"],
+  ["system", "\u25CF", "\uEBA2", "system"]
+];
+
 const TABS = [
   "overview", "agents", "inbox", "events", "artifacts", "projects", "schedules", "commands", "settings", "system"
 ].map((key) => [key, t(`dash.tab.${key}`), t(`dash.tab.${key}.desc`)]);
@@ -267,27 +278,29 @@ function renderTabs() {
     inbox: state.data.inbox?.filter((i) => i.status !== "replied").length || 0,
     system: state.data.system?.wakeFailures?.length || 0 // already filtered to unresolved
   };
-  $("tabs").innerHTML = TABS.map(([key, label]) => {
+  $("rail").innerHTML = RAIL.map(([key, plain, icon, label]) => {
     const badge = badges[key];
-    return `<button class="tab ${state.tab === key ? "active" : ""}" data-tab="${key}">
-      <span>${label}</span>
-      ${badge ? `<span class="badge" style="color:${key === "system" ? "var(--red)" : "var(--amber)"}">${badge}</span>` : ""}
+    return `<button class="d-railbtn" aria-current="${state.tab === key ? "page" : "false"}" data-tab="${key}" title="${label}">
+      <span class="d-railicon" data-nf="on">${icon}</span>
+      <span class="d-railtxt">${label}</span>
+      ${badge ? `<span class="d-m" style="font-size:9px;color:${key === "system" ? "var(--err)" : "var(--warn)"}">${badge}</span>` : ""}
     </button>`;
-  }).join("");
+  }).join("") + `<div style="margin-top:auto;padding:10px 8px;border-top:var(--bw) solid var(--line)">
+      <div class="d-m" style="font-size:9px;color:var(--line);text-align:center;line-height:1.5">⌘K</div>
+    </div>`;
   const s = state.data.setup || {};
   const st = state.data.overview?.stats || {};
   const server = state.data.system?.services?.find((x) => x.name === "server");
+  const waiting = st.inboxToday?.pending ?? 0;
   $("topstate").innerHTML = `
-    <span><span class="dot" style="background:${stateColor(server?.state)};margin-right:6px"></span>${esc(server?.state || "unknown")}</span>
-    <span style="color:var(--faint)">agents ${st.agents ?? 0}</span>
-    <span style="color:var(--faint)">inbox ${st.inboxToday?.pending ?? 0} 대기</span>
-    <span style="color:${st.failed?.total ? "var(--red)" : "var(--faint)"}">failed ${st.failed?.total ?? 0}</span>`;
-  $("sideCard").innerHTML = `
-    <div style="display:flex;align-items:center;gap:7px">
-      <span class="dot" style="background:${s.herdr ? "var(--green)" : "var(--red)"}"></span>
-      herdr ${s.herdr ? "connected" : "not detected"}
-    </div>
-    <div class="sub">${s.sessions || 0} sessions<br>${st.pilo || 0} pilo · ${st.pm || 0} pm · ${st.worker || 0} worker</div>`;
+    <span class="d-m" style="font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:7px">
+      <span class="d-dot${server?.state === "running" ? " d-live" : ""}" style="background:${stateColor(server?.state)}"></span>${esc(server?.state || "unknown")}</span>
+    <span class="d-m" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
+    ${waiting ? `<span class="d-m" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
+    ${st.failed?.total ? `<span class="d-m" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
+    <button class="d-plain d-m" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px">⌘K</button>`;
+  // The old sidebar's herdr card has no home in the rail; the same facts are on
+  // the System screen, and the topbar already says whether the server is up.
 }
 
 // Every refresh rebuilds #view, and a rebuilt element starts at scrollTop 0, so

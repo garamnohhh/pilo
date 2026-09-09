@@ -1,0 +1,12 @@
+/* z-index — one ladder. Never write a raw z-index in a component. */
+:root {
+  --z-base: 0; /* @kind other */
+  --z-raise: 10; /* @kind other */      /* sticky table header, focused row */
+  --z-sticky: 60; /* @kind other */     /* topbar, toolbar */
+  --z-chrome: 80; /* @kind other */     /* app shell chrome, deck chrome layer */
+  --z-drawer: 150; /* @kind other */    /* drawer / sheet */
+  --z-overlay: 200; /* @kind other */   /* dialog + its scrim */
+  --z-popover: 250; /* @kind other */   /* menu, popover, combobox list, command palette */
+  --z-toast: 300; /* @kind other */
+  --z-tooltip: 350; /* @kind other */
+}

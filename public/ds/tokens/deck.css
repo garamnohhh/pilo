@@ -1,0 +1,57 @@
+/* deck — slide-only aliases and FRAME COORDINATES, scoped to .deck-scope.
+   1920x1080. Every slide puts title, subtitle and body at the same y.
+   Chrome (the four corner items) is a separate layer, never body content. */
+:root, .deck-scope {
+  --canvas-w: 1920px;
+  --canvas-h: 1080px;
+
+  /* frame */
+  --deck-margin: 108px;      /* left / right / bottom safe area */
+  --deck-cols: 8; /* @kind other */
+  --deck-gutter: 40px;
+
+  /* chrome layer — z 5, mono uppercase, --text-3 */
+  --chrome-top: 56px;        /* corner items, top pair */
+  --chrome-bottom: 52px;     /* corner items, bottom pair */
+  --rule-top: 96px;          /* hairline separating chrome from body */
+  --rule-bottom: 96px;
+
+  /* body regions — identical on every slide */
+  --title-y: 132px;
+  --meta-y: 226px;           /* label + subtitle, one line, side by side */
+  --body-y: 282px;
+  --body-bottom: 132px;
+
+  /* aliases */
+  --paper: var(--surface);
+  --field: var(--accent);
+  --field-ink: var(--on-accent);
+  --invert: var(--text);
+  --invert-ink: var(--bg);
+
+  /* type — 24px is the floor on a 1920 canvas */
+  --fs-slide-display: 132px;
+  --fs-slide-title: 60px;
+  --fs-slide-h3: 44px;
+  --fs-slide-body: 32px;
+  --fs-slide-caption: 24px;
+  --fs-slide-label: 24px;        /* content labels — the 24px floor */
+  --fs-slide-micro: 20px;        /* secondary label INSIDE a box: footer strips,
+                                    sub-bands, stat captions. Content, but one
+                                    rank below the box's own label. */
+  --fs-slide-chrome: 20px;       /* frame furniture ONLY: corner items, table
+                                    headers, placeholders. Never body content. */
+
+  /* box padding inside a slide */
+  --slide-box-pad: 36px;
+  --slide-gap: 40px;
+
+  --colorfield-max: 0.2; /* @kind other */     /* colour-field slides: 1/5 of the deck at most */
+}
+
+/* Chrome exceptions: cover, section field, full bleed, closing invert keep
+   the page number ONLY — they have no body safe area to align to. */
+.deck-scope .slide-bare > .gn-chrome-tl,
+.deck-scope .slide-bare > .gn-chrome-tr,
+.deck-scope .slide-bare > .gn-chrome-bl,
+.deck-scope .slide-bare > .gn-rule { display: none; }

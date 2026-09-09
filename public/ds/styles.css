@@ -1,0 +1,19 @@
+/* garamnoh design system — entry point.
+   Consumers link ONLY this file. Order matters. */
+@import url("./tokens/fonts.css");
+@import url("./tokens/colors.css");
+@import url("./tokens/typography.css");
+@import url("./tokens/spacing.css");
+@import url("./tokens/radius.css");
+@import url("./tokens/elevation.css");
+@import url("./tokens/motion.css");
+@import url("./tokens/base.css");
+@import url("./tokens/deck.css");
+@import url("./components/layout.css");
+@import url("./components/components.css");
+@import url("./components/wordmark.css");
+/* extensions added in this project — same rules, tokens only */
+@import url("./tokens/zindex.css");
+@import url("./tokens/density.css");
+@import url("./components/extended.css");
+@import url("./tokens/print.css");

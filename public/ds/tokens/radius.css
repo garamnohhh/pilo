@@ -1,0 +1,7 @@
+/* radius — none. Square corners are the system; curvature carries no meaning.
+   Kept as tokens so a future exception has one place to live. */
+:root {
+  --r-none: 0px;
+  --r-sm: 0px; --r-md: 0px; --r-lg: 0px; --r-pill: 0px;
+  --r-control: 0px; --r-field: 0px; --r-card: 0px; --r-overlay: 0px;
+}

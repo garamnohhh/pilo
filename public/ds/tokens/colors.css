@@ -1,0 +1,30 @@
+/* colors — two themes, one set of names. Terminal DNA only.
+   Paper (warm cream / terracotta) was dropped 2026.09.02. Do not reintroduce. */
+:root, [data-theme="dark"] {
+  --bg: #08090A; --bg-2: #131917; --surface: #0B0E0D;
+  --text: #E6EBE6; --text-2: #8B968E; --text-3: #6B776F;
+  --line: #1E2422; --line-soft: #161B19;
+  --accent: #3ED49C; --accent-text: #3ED49C;
+  --accent-weak: #12281F; --accent-deep: #7CE7BD; --on-accent: #08090A;
+  --ok: #3ED49C; --warn: #E0B64A; --err: #E0685F; --info: #7FB8D9;
+  --ok-weak: #12281F; --warn-weak: #2C2413; --err-weak: #2C1917; --info-weak: #14232C;
+  --chart-1: #3ED49C; --chart-2: #2F6B52; --chart-3: #E0B64A; --chart-4: #7FB8D9; --chart-5: #E0685F;
+}
+[data-theme="light"] {
+  --bg: #F4F6F4; --bg-2: #E8EBE8; --surface: #FFFFFF;
+  --text: #101413; --text-2: #59635C; --text-3: #6E7A72;
+  --line: #D3DAD4; --line-soft: #E4E9E5;
+  --accent: #3ED49C;        /* 형광 그린 — 면 전용, 두 테마 공통 */
+  --accent-text: #0B6B4A;   /* 글자·1px 선만 눌러서 */
+  --accent-weak: #DCF2E8; --accent-deep: #2BC189; --on-accent: #08090A;
+  --ok: #0B6B4A; --warn: #8A6410; --err: #B03A30; --info: #2A5F7D;
+  --ok-weak: #DCF2E8; --warn-weak: #F5E9CC; --err-weak: #F6DCD8; --info-weak: #DDE9F0;
+  --chart-1: #12805A; --chart-2: #0B6B4A; --chart-3: #8A6410; --chart-4: #2A5F7D; --chart-5: #B03A30;
+}
+/* shape, weight and type no longer vary by theme */
+:root {
+  --bw: 1px;
+  --shadow: none; --shadow-sm: none;
+  --font: var(--font-sans); --font-mono: var(--font-code);
+  --w-strong: 600; /* @kind font */
+}

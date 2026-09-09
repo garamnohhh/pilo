@@ -1,0 +1,9 @@
+/* elevation — three levels. Paper uses hard shadows, terminal uses none. */
+:root {
+  --elev-0: none;
+  --elev-1: var(--shadow-sm);
+  --elev-2: var(--shadow);
+  --elev-inset: inset 0 0 0 var(--bw) var(--line-soft);
+  --focus-ring: 2px solid var(--accent);
+  --focus-offset: 2px;
+}

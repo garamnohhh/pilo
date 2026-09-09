@@ -1,0 +1,18 @@
+/* spacing — multiples of 4 only. */
+:root {
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-6: 24px; --sp-8: 32px; --sp-12: 48px; --sp-19: 76px;
+
+  --container: 1120px;
+  --gutter: 28px;
+  --section-gap: 76px;
+
+  --h-sm: 32px; --h-md: 38px; --h-lg: 44px;
+  --touch-min: 44px;
+
+  --sidebar-w: 268px;
+  --topbar-h: 54px;
+  --hairline: 1px;
+
+  --bp-sm: 480px; --bp-md: 768px; --bp-lg: 1120px;
+}
