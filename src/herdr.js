@@ -59,7 +59,8 @@ async function readSessions() {
     // herdr bumps this on every state change; it is the key that keeps one
     // working spell from being reported twice.
     seq: Number(a.state_change_seq || 0),
-    title: a.terminal_title_stripped || a.terminal_title || ""
+    title: a.terminal_title_stripped || a.terminal_title || "",
+    name: a.name || ""
   }));
 }
 
@@ -83,6 +84,14 @@ export async function detect(cwd, runtime = "") {
   const found = await candidates(cwd, runtime);
   if (found.length === 1) return { bound: found[0], candidates: found };
   return { bound: null, candidates: found };
+}
+
+// Keys, not text: the usage panel is closed with Escape, and there is no other
+// way to say that.
+export async function sendKeys(target, ...keys) {
+  if (!target) throw new Error("SESSION_NOT_BOUND");
+  await herdr(["agent", "send-keys", target, ...keys]);
+  return true;
 }
 
 export async function prompt(target, message) {

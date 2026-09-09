@@ -255,7 +255,11 @@ const tokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0))
 // is left out on purpose: it moves slowly, and the line is already full.
 // A reading nobody has refreshed in half an hour is drawn faint — the number
 // itself is still true, it is just older than the work.
+// Past this the reading is drawn faint and carries its own age, because a
+// percentage with no date on it is the one thing worse than no percentage:
+// Codex only writes a new figure while it works, so an old one is normal there.
 const STALE_MIN = 30;
+const age = (min) => (min >= 90 ? `${Math.round(min / 60)}h` : `${Math.round(min)}m`);
 
 function quotaLine(compact = false) {
   const quota = readQuota();
@@ -269,7 +273,8 @@ function quotaLine(compact = false) {
     const clock = at && !Number.isNaN(at.getTime())
       ? `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`
       : "";
-    const body = `${found.percent}%${clock && !compact ? ` ↻${clock}` : ""}`;
+    const stamp = stale ? ` ~${age(found.ageMin)}` : clock ? ` ↻${clock}` : "";
+    const body = `${found.percent}%${compact ? "" : stamp}`;
     parts.push(stale
       ? `${c.faint}${runtimeMark(runtime)} ${body}${c.reset}`
       : `${runtimeMark(runtime)} ${level}${body}${c.reset}`);
