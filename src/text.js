@@ -144,6 +144,8 @@ const EN = {
   "wake.check": "[pilo] {agent}, please check in",
 
   // dashboard chrome
+  "dash.tab.work": "Work",
+  "dash.tab.work.desc": "the tree, the conversation, and the line you type",
   "dash.tab.overview": "Overview",
   "dash.tab.overview.desc": "agent state · recent tasks · runtime",
   "dash.tab.agents": "Agents",
@@ -296,6 +298,8 @@ const KO = {
   "wake.rules": "[pilo:rules] 지시문이 갱신됐다. {file} 의 pilo:begin ~ pilo:end 블록을 읽고 지금부터 그대로 동작해.",
   "wake.check": "[pilo] {agent} 확인 요청",
 
+  "dash.tab.work": "Work",
+  "dash.tab.work.desc": "트리 · 대화 · 입력",
   "dash.tab.overview": "Overview",
   "dash.tab.overview.desc": "agent 상태 · 최근 task · 런타임",
   "dash.tab.agents": "Agents",

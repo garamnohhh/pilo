@@ -30,6 +30,13 @@
     --mono: var(--font-mono);
   }
   * { box-sizing: border-box }
+  [hidden] { display: none !important }
+  /* Work fills the main area: the feed scrolls, the composer stays put. */
+  main.d-main { padding: 0; overflow: hidden }
+  main.d-main > #view { flex: 1; min-height: 0; display: flex; flex-direction: column }
+  main.d-main > header { margin: 0; padding: 24px 28px 14px }
+  /* screens that have not been ported yet keep their own scrolling */
+  main.d-main > #view:not(:has(.d-composer)) { overflow-y: auto; padding: 0 28px 40px }
   body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
   button, input, select, textarea { font: inherit; color: inherit }
   .mono { font-family: var(--mono) }
@@ -152,12 +159,14 @@
   <span class="d-mark"><b>❯</b>pilo</span>
   <span style="margin-left:auto;display:flex;align-items:center;gap:16px" id="topstate"></span>
 </div>
-<div class="d-shell">
+<div class="d-shell" id="shell">
   <div class="d-rail" id="rail"></div>
-  <main>
-    <header>
+  <div class="d-strip" id="strip" hidden></div>
+  <div class="d-agents" id="tree" hidden></div>
+  <main class="d-main">
+    <header id="pagehead">
       <div>
-        <h1 id="tabTitle">Overview</h1>
+        <h1 id="tabTitle">Work</h1>
         <p id="tabDesc"></p>
       </div>
       <div style="margin-left:auto;display:flex;gap:8px">
@@ -177,7 +186,7 @@ import { t } from "/text.js";
 // the codicon needs the patched JetBrains Mono that ships in fonts/, the plain
 // one is what a machine without it falls back to.
 const RAIL = [
-  ["overview", "\u276F", "\uEC0F", "work"],
+  ["work", "\u276F", "\uEC0F", "work"],
   ["agents", "\u2733", "\uEC67", "agents"],
   ["inbox", "\u25A4", "\uEB09", "requests"],
   ["schedules", "\u25F7", "\uEC75", "schedules"],
@@ -189,12 +198,15 @@ const RAIL = [
   ["system", "\u25CF", "\uEBA2", "system"]
 ];
 
+// "overview" is out of the rail — the numbers it carried are in the work strip
+// and the runtime rows are on System. The view itself is left in place so it can
+// come back by putting the key back in RAIL.
 const TABS = [
-  "overview", "agents", "inbox", "events", "artifacts", "projects", "schedules", "commands", "settings", "system"
-].map((key) => [key, t(`dash.tab.${key}`), t(`dash.tab.${key}.desc`)]);
+  "work", "overview", "agents", "inbox", "events", "artifacts", "projects", "schedules", "commands", "settings", "system"
+].map((key) => [key, t(`dash.tab.${key}`) , t(`dash.tab.${key}.desc`)]);
 
 const state = {
-  tab: location.hash.slice(1) || "overview",
+  tab: location.hash.slice(1) || "work",
   data: {},
   form: emptyForm(),
   editing: null,
@@ -205,7 +217,9 @@ const state = {
   inboxFilter: null,
   project: { id: null, name: "", repo: "", path: "", note: "" },
   schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" },
-  runs: { open: null, rows: [] }
+  runs: { open: null, rows: [] },
+  draft: "",
+  sending: false
 };
 
 function emptyForm() {
@@ -327,14 +341,175 @@ function render() {
   $("tabTitle").textContent = meta[1];
   $("tabDesc").textContent = meta[2];
   renderTabs();
+  const isWork = state.tab === "work";
+  $("shell").dataset.work = isWork ? "on" : "off";
+  $("strip").hidden = !isWork;
+  $("tree").hidden = !isWork;
+  $("pagehead").hidden = isWork;
+  if (isWork) renderWorkPanes();
   $("view").innerHTML = views[state.tab]();
+  if (isWork) restoreDraft();
   wire();
   renderedTab = state.tab;
   if (tops.length) restoreScroll(tops);
 }
 
+// The composer posts to the same endpoint the TUI does, so a line typed here
+// and a line typed there arrive as the same kind of request.
+function restoreDraft() {
+  const box = $("draft");
+  if (!box) return;
+  box.value = state.draft || "";
+  box.style.height = "auto";
+  box.style.height = Math.min(160, box.scrollHeight) + "px";
+  box.oninput = () => {
+    state.draft = box.value;
+    box.style.height = "auto";
+    box.style.height = Math.min(160, box.scrollHeight) + "px";
+  };
+  box.onkeydown = async (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    const text = box.value.trim();
+    if (!text || state.sending) return;
+    state.sending = true;
+    try {
+      await call("POST", "/api/inbox", { userRequest: text });
+      state.draft = "";
+      box.value = "";
+      state.data.inboxDetail = null;
+      await load();
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      state.sending = false;
+    }
+  };
+}
+
 /* ---------- views ---------- */
 const views = {};
+
+// Colours and shapes are the handoff's own (Pilo Desk.dc.html); only the data
+// underneath is ours.
+const OK = "var(--ok)", WARN = "var(--warn)", ERR = "var(--err)", DIM = "var(--line)", ACCT = "var(--accent-text)", INFO = "var(--info)";
+const stCol = (st) => st === "running" ? WARN : st === "unbound" || st === "failed" ? ERR : st === "blocked" ? INFO : OK;
+const roleFg = (r) => r === "PILO" ? ACCT : r === "PM" ? INFO : "var(--text-2)";
+const roleBg = (r) => r === "PILO" ? "var(--accent-weak)" : r === "PM" ? "var(--info-weak)" : "var(--bg-2)";
+const runtimeMark = (rt) => rt === "claude"
+  ? `<img class="d-rt" src="/marks/claude.png" alt="claude">`
+  : rt === "codex"
+    ? `<img class="d-rt d-rt-d" src="/marks/codex.png" alt="codex"><img class="d-rt d-rt-l" src="/marks/codex-light.png" alt="codex">`
+    : "";
+
+// The tree is the same shape the TUI draws: the desk, then each PM, then the
+// workers under it.
+function treeRows() {
+  const tree = state.data.tree;
+  if (!tree?.pilo) return [];
+  const rows = [];
+  const push = (a, lvl) => rows.push({ a, lvl });
+  push(tree.pilo, 0);
+  (tree.pilo.children || []).forEach((w) => push(w, 1));
+  (tree.pms || []).forEach((pm) => {
+    push(pm, 1);
+    (pm.children || []).forEach((w) => push(w, 2));
+  });
+  (tree.orphanWorkers || []).forEach((w) => push(w, 1));
+  return rows;
+}
+
+function agentNote(a) {
+  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
+  if (a.status === "unbound") return "no session";
+  if (a.blockedQuestion) return "waiting on you";
+  if (a.progress) return a.progress;
+  if (a.openTasks) return `${a.openTasks} open`;
+  return "nothing on";
+}
+
+function renderWorkPanes() {
+  const st = state.data.overview?.stats || {};
+  const rows = treeRows();
+  const running = (state.data.tree?.pms || []).filter((p) => p.status === "running").length;
+  const lost = rows.filter((r) => r.a.status === "unbound").length;
+  const strip = [
+    ["requests today", String(st.inboxToday?.total ?? 0), `${st.inboxToday?.replied ?? 0} answered`, "var(--text)"],
+    ["in flight", String(running), running ? "working" : "nothing on", running ? WARN : "var(--text)"],
+    ["tokens", fmtTokens(st.tokens?.total ?? 0), "today", "var(--text)"],
+    ["needs you", String(lost || st.failed?.total || 0), lost ? "session lost" : st.failed?.total ? "failed" : "nothing", (lost || st.failed?.total) ? ERR : "var(--text)"]
+  ];
+  $("strip").innerHTML = strip.map(([k, v, sub, color]) => `<div>
+    <div class="d-lbl">${k}</div>
+    <div class="d-m" style="font-size:24px;margin-top:6px;color:${color}">${v}<span style="font-size:13px;color:var(--text-3)"> · ${sub}</span></div>
+  </div>`).join("");
+
+  $("tree").innerHTML = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
+      <span class="d-lbl">agents</span>
+      <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker</span>
+    </div>
+    <div class="d-scroll">${rows.map(({ a, lvl }) => {
+      const role = a.role.toUpperCase();
+      const colour = stCol(a.status);
+      const padL = 12 + lvl * 18;
+      return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid transparent;cursor:pointer" data-agent="${a.id}">
+        <span style="display:flex;align-items:center;gap:9px;padding:9px 12px 9px ${padL}px">
+          ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
+          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour}"></span>
+          ${runtimeMark(a.runtime)}
+          <span class="d-clip" style="font-size:14px;flex:1">${esc(a.name)}</span>
+          <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)}">${role}</span>
+        </span>
+        <span style="display:block;padding:0 12px 9px ${padL + 17}px">
+          <span class="d-m d-clip" style="display:block;font-size:11px;color:${colour}">${esc(agentNote(a))}</span>
+        </span>
+      </button>`;
+    }).join("")}</div>
+    <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">Add agent</button></div>`;
+}
+
+// One request reads as a conversation: what you asked, what the desk said, what
+// each agent is doing, and the answer.
+function workFeed() {
+  const detail = state.data.inboxDetail;
+  const list = state.data.inbox || [];
+  if (!list.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
+  const item = detail || list[0];
+  const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
+  for (const task of item.tasks || []) {
+    const agent = task.agent || "agent";
+    if (task.progress) msgs.push({ who: `${agent} · working`, kind: "working", text: task.progress });
+    if (task.pmResult) msgs.push({ who: `${agent} · ${hhmm(task.doneAt || item.createdAt)} · result`, kind: "result", text: task.pmResult });
+  }
+  for (const reply of item.replies || []) {
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
+  }
+  return msgs.map((m) => {
+    if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+      <span class="d-lbl">${esc(m.who)}</span>
+      <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;max-width:620px">
+        <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+    const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
+    const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
+    return `<div style="display:flex;flex-direction:column;gap:6px">
+      <span class="d-lbl">${esc(m.who)}</span>
+      <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;max-width:680px">
+        <div style="font-size:var(--fs-body);line-height:1.62;color:${fg};white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+  }).join("");
+}
+
+const hhmm = (iso) => {
+  const d = iso ? new Date(iso) : null;
+  return d && !Number.isNaN(d.getTime())
+    ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
+};
+
+views.work = () => `<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
+  <div class="d-composer"><div class="d-cin">
+    <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
+    <textarea class="d-ta" id="draft" rows="1" placeholder="Type what you want done"></textarea>
+    <span class="d-m" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">ENTER to send</span>
+  </div></div>`;
 
 views.overview = () => {
   const { stats, tasks, services, paths, wakeFailures } = state.data.overview;
