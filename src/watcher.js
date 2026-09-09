@@ -231,10 +231,9 @@ async function pumpStalled() {
 }
 
 // The five-hour figure on the status line only moves when some Claude session
-// asks for it, and /usage is a local command: no model, no tokens. So a pane
-// kept aside for the purpose is asked every few minutes, and the panel it opens
-// is closed again a tick later. Nobody's own session is typed into.
-const PROBE_NAME = process.env.PILO_USAGE_PROBE || "usage-probe";
+// asks for it, and /usage is a local command: no model, no tokens. So the system
+// agent — a pane Pilo keeps for its own errands — is asked every few minutes,
+// and the panel it opens is closed again a tick later. Nobody else is typed into.
 const QUOTA_STALE_MIN = Number(process.env.PILO_QUOTA_STALE_MIN || 6);
 let probe = { pane: "", askedAt: 0 };
 
@@ -252,13 +251,16 @@ async function pumpQuota() {
   }
   if (probe.askedAt) return;
   if (claudeAgeMin() < QUOTA_STALE_MIN) return;
-  let pane = "";
-  try {
-    const sessions = await herdr.sessions();
-    pane = sessions.find((s) => s.name === PROBE_NAME && s.runtime === "claude" && s.status === "idle")?.target || "";
-  } catch {
-    return;
-  }
+  // The pane is whichever system agent runs Claude — a registered fact, not a
+  // name matched in two files.
+  const probeAgent = await one(
+    `SELECT a.herdr_target AS target FROM agents a
+       LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.role = 'system' AND a.runtime = 'claude' AND a.archived_at IS NULL
+       AND a.herdr_target <> '' AND coalesce(s.status, 'idle') <> 'working'
+     ORDER BY a.id LIMIT 1`
+  );
+  const pane = probeAgent?.target || "";
   if (!pane) return;
   try {
     await herdr.prompt(pane, "/usage");
