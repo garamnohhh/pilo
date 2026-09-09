@@ -1,0 +1,363 @@
+/* components.css — gn-* class layer (P3: core + forms).
+   Built entirely on tokens; no literal colours, no radii, no shadows.
+   Load AFTER tokens: styles.css already imports both in order. */
+
+/* ---------------------------------------------------------------- BUTTON */
+.gn-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  height: var(--h-md); padding: 0 var(--sp-4);
+  border: var(--bw) solid var(--line); background: var(--surface); color: var(--text);
+  font-family: var(--font); font-size: var(--fs-small); font-weight: var(--w-strong);
+  line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: var(--transition-control);
+}
+.gn-btn:hover { border-color: var(--accent); color: var(--accent-text); }
+.gn-btn:active { transform: translateY(1px); }
+.gn-btn[disabled], .gn-btn[aria-disabled="true"] {
+  border-color: var(--line-soft); color: var(--text-3); cursor: not-allowed; transform: none;
+}
+.gn-btn-brand { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.gn-btn-brand:hover { background: var(--accent-deep); border-color: var(--accent-deep); color: var(--on-accent); }
+.gn-btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); font-weight: var(--w-regular); }
+.gn-btn-ghost:hover { background: transparent; border-color: transparent; color: var(--text); }
+.gn-btn-danger { background: transparent; border-color: var(--err); color: var(--err); }
+.gn-btn-danger:hover { background: var(--err); border-color: var(--err); color: var(--bg); }
+.gn-btn-sm { height: var(--h-sm); padding: 0 var(--sp-3); font-size: 12.5px; }
+.gn-btn-lg { height: var(--h-lg); padding: 0 var(--sp-6); font-size: var(--fs-body); }
+.gn-btn-block { width: 100%; }
+
+/* ------------------------------------------------------------ ICONBUTTON */
+.gn-iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--h-md); height: var(--h-md); flex: none;
+  border: var(--bw) solid var(--line); background: var(--surface); color: var(--text);
+  font-family: var(--font-mono); font-size: 15px; line-height: 1; cursor: pointer;
+  transition: var(--transition-control);
+}
+.gn-iconbtn:hover { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.gn-iconbtn-sm { width: var(--h-sm); height: var(--h-sm); font-size: 13px; }
+.gn-iconbtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+
+/* ------------------------------------------------------------------ ICON */
+.gn-icon { display: inline-block; width: 1em; height: 1em; font-family: var(--font-mono); font-style: normal; line-height: 1; }
+.gn-icon-accent { color: var(--accent-text); }
+
+/* ------------------------------------------------------------------ CARD */
+.gn-card { background: var(--surface); border: var(--bw) solid var(--line); }
+.gn-card-interactive { transition: border-color var(--dur-color) var(--ease); cursor: pointer; }
+.gn-card-interactive:hover { border-color: var(--accent); }
+.gn-card-accent { border-left: 3px solid var(--accent); }
+.gn-card-head { padding: var(--sp-4); border-bottom: var(--bw) solid var(--line-soft); }
+.gn-card-title { font-size: var(--fs-h2); font-weight: var(--w-strong); letter-spacing: var(--ls-h2); }
+.gn-card-desc { margin-top: var(--sp-1); font-size: var(--fs-small); color: var(--text-2); }
+.gn-card-body { padding: var(--sp-4); }
+.gn-card-foot { padding: var(--sp-3) var(--sp-4); border-top: var(--bw) solid var(--line-soft); display: flex; gap: var(--sp-2); justify-content: flex-end; }
+.gn-card-sep { height: var(--bw); margin: var(--sp-4) 0; background: var(--line-soft); }
+
+/* ----------------------------------------------------------------- BADGE */
+.gn-badge {
+  display: inline-flex; align-items: center; gap: var(--sp-1);
+  padding: 3px var(--sp-2);
+  border: var(--bw) solid var(--line-soft); background: transparent; color: var(--text-2);
+  font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: 0.06em; line-height: 1.4;
+}
+.gn-badge-brand   { background: var(--accent); border-color: var(--accent); color: var(--on-accent); text-transform: uppercase; }
+.gn-badge-success { background: var(--ok-weak);   border-color: var(--ok);   color: var(--ok); }
+.gn-badge-warning { background: var(--warn-weak); border-color: var(--warn); color: var(--warn); }
+.gn-badge-danger  { background: var(--err-weak);  border-color: var(--err);  color: var(--err); }
+.gn-badge-info    { background: var(--info-weak); border-color: var(--info); color: var(--info); }
+.gn-badge-dot::before { content: ""; width: 6px; height: 6px; background: currentColor; display: block; }
+
+/* ------------------------------------------------------------------- TAG */
+.gn-tag {
+  display: inline-flex; align-items: center; gap: var(--sp-2);
+  padding: 5px var(--sp-3);
+  border: var(--bw) solid var(--line-soft); background: transparent; color: var(--text-2);
+  font-size: 12.5px; cursor: pointer; transition: var(--transition-control);
+}
+.gn-tag:hover { border-color: var(--line); color: var(--text); }
+.gn-tag[aria-selected="true"] { border-color: var(--accent); color: var(--accent-text); }
+.gn-tag-x { color: var(--text-3); font-family: var(--font-mono); }
+.gn-tag-x:hover { color: var(--err); }
+
+/* ----------------------------------------------------------------- TABLE */
+.gn-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); }
+.gn-table th {
+  text-align: left; padding: var(--sp-2) var(--sp-3);
+  border-bottom: var(--bw) solid var(--line);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: var(--w-regular);
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3);
+}
+.gn-table td { padding: var(--sp-2) var(--sp-3); border-bottom: var(--hairline) solid var(--line-soft); }
+.gn-table tr:last-child td { border-bottom: 0; }
+.gn-table-num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.gn-table-empty { padding: var(--sp-8) var(--sp-4); text-align: center; color: var(--text-3); }
+
+/* --------------------------------------------------------------- DIVIDER */
+.gn-divider { height: var(--bw); margin: var(--sp-6) 0; background: var(--line); border: 0; }
+.gn-divider-tight { margin: var(--sp-3) 0; background: var(--line-soft); }
+.gn-divider-label { display: flex; align-items: center; gap: var(--sp-3); margin: var(--sp-6) 0; }
+.gn-divider-label::before, .gn-divider-label::after { content: ""; flex: 1; height: var(--hairline); background: var(--line-soft); }
+.gn-divider-label > span {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+}
+
+/* ---------------------------------------------------------------- FIGURE */
+.gn-figure { margin: 0; }
+.gn-figure img { display: block; width: 100%; border: var(--bw) solid var(--line); }
+.gn-figure-slot {
+  display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9;
+  background: var(--bg-2); border: var(--bw) solid var(--line);
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.gn-figure-cap { margin-top: var(--sp-2); font-size: 12.5px; color: var(--text-2); }
+
+/* ----------------------------------------------------------------- FIELD */
+.gn-field { display: block; }
+.gn-field-label {
+  display: block; font-family: var(--font-mono); font-size: var(--fs-label);
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3);
+}
+.gn-field-req { color: var(--accent-text); }
+.gn-field-hint { margin-top: var(--sp-2); font-size: 12.5px; color: var(--text-3); }
+.gn-field-error { margin-top: var(--sp-2); font-size: 12.5px; color: var(--err); }
+.gn-field-error::before { content: "\00d7  "; font-family: var(--font-mono); }
+
+/* --------------------------------------------------- INPUT / TEXTAREA / SELECT */
+.gn-input, .gn-textarea, .gn-select {
+  width: 100%; margin-top: 7px; padding: 0 var(--sp-3);
+  background: var(--bg); color: var(--text);
+  border: var(--bw) solid var(--line);
+  font-family: var(--font); font-size: var(--fs-small);
+  transition: var(--transition-control);
+}
+.gn-input, .gn-select { height: var(--h-md); }
+.gn-textarea { min-height: 88px; padding: 10px var(--sp-3); resize: vertical; line-height: var(--lh-body); }
+.gn-input::placeholder, .gn-textarea::placeholder { color: var(--text-3); }
+.gn-input:hover, .gn-textarea:hover, .gn-select:hover { border-color: var(--text-3); }
+.gn-input[aria-invalid="true"], .gn-textarea[aria-invalid="true"], .gn-select[aria-invalid="true"] {
+  border-color: var(--err); background: var(--err-weak);
+}
+.gn-input-mono { font-family: var(--font-mono); }
+.gn-input-sm { height: var(--h-sm); font-size: 12.5px; }
+
+/* ------------------------------------------------------ CHECKBOX / RADIO */
+.gn-check { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-small); cursor: pointer; }
+.gn-check-box, .gn-check-radio {
+  width: 18px; height: 18px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); border: var(--bw) solid var(--line);
+  font-family: var(--font-mono); font-size: 11px; color: transparent;
+  transition: var(--transition-control);
+}
+.gn-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.gn-check input:checked + .gn-check-box { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.gn-check input:checked + .gn-check-radio::after { content: ""; width: 8px; height: 8px; background: var(--accent); display: block; }
+.gn-check input:focus-visible + .gn-check-box,
+.gn-check input:focus-visible + .gn-check-radio { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+.gn-check-desc { margin-top: 2px; font-size: 12.5px; color: var(--text-3); }
+
+/* ---------------------------------------------------------------- SWITCH */
+.gn-switch { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-small); cursor: pointer; }
+.gn-switch-track {
+  width: 38px; height: 22px; flex: none; padding: 2px;
+  display: flex; align-items: center;
+  background: var(--bg-2); border: var(--bw) solid var(--line);
+  transition: var(--transition-control);
+}
+.gn-switch-knob { width: 14px; height: 14px; background: var(--text-3); transition: var(--transition-control); }
+.gn-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.gn-switch input:checked + .gn-switch-track { background: var(--accent); border-color: var(--accent); justify-content: flex-end; }
+.gn-switch input:checked + .gn-switch-track .gn-switch-knob { background: var(--on-accent); }
+
+/* ------------------------------------------------------ SEGMENTEDCONTROL */
+.gn-seg { display: inline-flex; border: var(--bw) solid var(--line); }
+.gn-seg-opt {
+  padding: var(--sp-2) var(--sp-4); border: 0; border-left: var(--bw) solid var(--line);
+  background: transparent; color: var(--text-2);
+  font-family: var(--font); font-size: var(--fs-small); cursor: pointer;
+  transition: var(--transition-control);
+}
+.gn-seg-opt:first-child { border-left: 0; }
+.gn-seg-opt:hover { color: var(--text); }
+.gn-seg-opt[aria-selected="true"] { background: var(--accent); color: var(--on-accent); }
+.gn-seg-block { display: flex; width: 100%; }
+.gn-seg-block .gn-seg-opt { flex: 1; }
+/* -sm: the header control size. Mono, uppercase, 10px — two of these sit
+   beside the nav without competing with it. */
+.gn-seg-sm .gn-seg-opt {
+  padding: 5px 9px; font-family: var(--font-code); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+/* -------------------------------------------------------------- WORDMARK */
+/* see components/wordmark.css */
+
+/* ============================================================ P4 LAYER */
+
+/* ---------------------------------------------------- DIALOG / OVERLAY */
+.gn-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center; padding: var(--sp-6);
+  background: color-mix(in oklab, var(--bg) 78%, transparent);
+  backdrop-filter: blur(3px);
+}
+.gn-dialog {
+  width: 100%; max-width: 460px;
+  background: var(--surface); border: var(--bw) solid var(--line);
+}
+.gn-dialog-head { padding: var(--sp-4); border-bottom: var(--bw) solid var(--line-soft); display: flex; align-items: flex-start; gap: var(--sp-3); }
+.gn-dialog-title { font-size: 17px; font-weight: var(--w-strong); letter-spacing: -0.01em; }
+.gn-dialog-desc { margin-top: var(--sp-2); font-size: var(--fs-small); color: var(--text-2); }
+.gn-dialog-body { padding: var(--sp-4); font-size: var(--fs-small); color: var(--text-2); }
+.gn-dialog-foot { padding: var(--sp-3) var(--sp-4); border-top: var(--bw) solid var(--line-soft); display: flex; gap: var(--sp-2); justify-content: flex-end; }
+.gn-dialog-danger .gn-dialog-title { color: var(--err); }
+
+/* ------------------------------------------------------------- TOASTER */
+.gn-toaster {
+  position: fixed; z-index: 300; right: var(--sp-6); bottom: var(--sp-6);
+  display: flex; flex-direction: column; gap: var(--sp-2); width: min(360px, calc(100vw - var(--sp-8)));
+}
+.gn-toast {
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface); border: var(--bw) solid var(--line);
+  border-left: 3px solid var(--text-3);
+  font-size: var(--fs-small);
+  animation: gn-toast-in var(--dur-enter) var(--ease);
+}
+@keyframes gn-toast-in { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: none } }
+.gn-toast-success { border-left-color: var(--ok); }
+.gn-toast-danger  { border-left-color: var(--err); }
+.gn-toast-info    { border-left-color: var(--info); }
+.gn-toast-icon { font-family: var(--font-mono); line-height: 1.5; }
+.gn-toast-title { font-weight: var(--w-strong); }
+.gn-toast-desc { margin-top: 2px; color: var(--text-2); font-size: 12.5px; }
+
+/* ------------------------------------------------------------- TOOLTIP */
+.gn-tip-wrap { position: relative; display: inline-flex; }
+.gn-tip {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%);
+  padding: 5px var(--sp-2);
+  background: var(--text); color: var(--bg);
+  font-family: var(--font-mono); font-size: 11.5px; white-space: nowrap;
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--dur-color) var(--ease) 400ms;
+}
+.gn-tip-wrap:hover .gn-tip, .gn-tip-wrap:focus-within .gn-tip { opacity: 1; }
+.gn-tip-below { bottom: auto; top: calc(100% + 8px); }
+
+/* -------------------------------------------------------------- TOPBAR */
+/* the mark and the page path are ONE line of text, so they share a line box
+   and therefore a baseline. Centring their single box then centres both. */
+/* the path starts on the body's content line; the mark is pinned to the bar's
+   own left edge, so it keeps its place while the path moves to the line. */
+.gn-topbar-brand { display: contents; }
+/* same size as the mark and the nav, so all three boxes centre to one baseline */
+.gn-topbar .gn-crumbs { font-size: var(--fs-small); white-space: nowrap; }
+/* a fixed slot for the mark, so the path's minimum position is known in CSS
+   rather than depending on how wide the name happens to render. */
+/* the mark's own minimum width (wordmark.css) — the two must not drift apart */
+.gn-topbar { --brand-slot: 88px; }
+
+/* The path starts on the body's content line. It stays in the flow and is
+   nudged there by a margin, clamped at 0 so it can never move left of the
+   mark — self-correcting at every width, with no breakpoint and no jump.
+   The 50% resolves against the bar's content box, so it excludes the gutters
+   and the scrollbar alike. */
+.gn-topbar .gn-crumbs {
+  margin-left: max(0px, calc(50% + var(--gutter) - var(--container) / 2
+                             - var(--brand-slot) - var(--sp-6)));
+}
+.gn-topbar-brand > * { vertical-align: baseline; }
+.gn-topbar-brand > * + * { margin-left: var(--sp-3); }
+/* The mark is a text run with the same box as any other text run here, so
+   centring boxes centres the text with it. */
+.gn-topbar {
+  display: flex; align-items: center; gap: var(--sp-6);
+  height: var(--topbar-h); line-height: 1;
+  /* the rule spans the viewport; the contents sit on the body's measure, so the
+     first header item starts on the same line as the first content item */
+  position: relative; padding-inline: var(--gutter);
+  background: var(--bg); border-bottom: var(--bw) solid var(--line);
+}
+.gn-topbar-brand, .gn-topbar-nav, .gn-topbar-nav a, .gn-crumbs { line-height: 1; }
+.gn-topbar-sticky { position: sticky; top: 0; z-index: 60; }
+/* one mark size for the bar. The 0.5em clear space is a standalone-placement
+   rule; in a row it only inflates the box. */
+.gn-topbar .gn-wordmark { font-size: 13px; padding: 0; width: var(--brand-slot); min-width: var(--brand-slot); flex: none; }
+
+.gn-topbar-nav { display: flex; gap: var(--sp-4); margin-left: auto; font-size: var(--fs-small); }
+.gn-topbar-nav a { color: var(--text-2); padding: 4px 0 2px; border-bottom: 2px solid transparent; }
+.gn-topbar-nav a:hover { color: var(--text); }
+.gn-topbar-nav a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+.gn-topbar-actions { margin-left: auto; display: flex; gap: var(--sp-2); }
+
+/* ------------------------------------------------------------- SIDENAV */
+.gn-sidenav {
+  width: var(--sidebar-w); flex: none; padding: var(--sp-4) 0;
+  background: var(--bg-2); border-right: var(--bw) solid var(--line);
+  font-size: var(--fs-small);
+}
+.gn-sidenav-group {
+  padding: var(--sp-4) var(--sp-4) var(--sp-2);
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.gn-sidenav-group:first-child { padding-top: 0; }
+.gn-sidenav-item {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-left: 3px solid transparent; color: var(--text-2); cursor: pointer;
+  transition: var(--transition-control);
+}
+.gn-sidenav-item:hover { color: var(--text); }
+.gn-sidenav-item[aria-current="page"] { background: var(--surface); border-left-color: var(--accent); color: var(--text); }
+.gn-sidenav-meta { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+
+/* ---------------------------------------------------------------- TABS */
+.gn-tabs { display: flex; border-bottom: var(--bw) solid var(--line-soft); font-size: var(--fs-small); }
+.gn-tab {
+  padding: var(--sp-2) var(--sp-4); margin-bottom: calc(var(--bw) * -1);
+  border: 0; border-bottom: 2px solid transparent; background: transparent;
+  color: var(--text-2); font-family: var(--font); font-size: var(--fs-small); cursor: pointer;
+  transition: var(--transition-control);
+}
+.gn-tab:hover { color: var(--text); }
+.gn-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+
+/* --------------------------------------------------------- BREADCRUMB */
+/* a text run like the wordmark: a flex box would take its baseline from a
+   flex item and sit off the line of whatever text it stands beside. */
+/* 11px standalone; the topbar overrides to 13px so its three text runs share
+   one box height and therefore one baseline (see .gn-topbar .gn-crumbs). */
+.gn-crumbs { display: inline; font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
+.gn-crumbs > * { vertical-align: baseline; }
+.gn-crumbs > * + * { margin-left: var(--sp-2); }
+.gn-crumbs > :last-child { color: var(--text); }
+
+/* STATUS CHIP — moved to components/layout.css (one chip family, 5 steps).
+   .gn-chip-running / -failed / -queued live there as semantic variants. */
+
+/* -------------------------------------------------------- SLIDE FRAME */
+.deck-scope .gn-slide {
+  position: relative; width: 100%; aspect-ratio: 16 / 9;
+  padding: 4.4%; background: var(--surface); border: var(--bw) solid var(--line);
+  container-type: inline-size;
+}
+.deck-scope .gn-slide-field { background: var(--accent); color: var(--on-accent); }
+.deck-scope .gn-slide-invert { background: var(--text); color: var(--bg); }
+.deck-scope .gn-slide-title { font-size: clamp(22px, 4cqw, 76px); line-height: 1.06; font-weight: var(--w-strong); letter-spacing: -0.04em; }
+.deck-scope .gn-slide-body { font-size: clamp(13px, 1.7cqw, 32px); line-height: 1.5; color: var(--text-2); }
+.deck-scope .gn-slide-label {
+  font-family: var(--font-mono); font-size: clamp(11px, 1.25cqw, 24px); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--text-3);
+}
+.deck-scope .gn-slide-field .gn-slide-label,
+.deck-scope .gn-slide-field .gn-slide-body { color: inherit; opacity: 0.72; }
+.deck-scope .gn-slide-num {
+  position: absolute; right: 4.4%; bottom: 4.4%;
+  font-family: var(--font-mono); font-size: clamp(11px, 1.25cqw, 24px); color: var(--text-3);
+}
