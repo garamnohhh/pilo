@@ -38,6 +38,15 @@
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden; position: relative }
+  /* The bar down the left of a line, and its pulse. The TUI flips this colour
+     to a dimmer one every 550 ms — a step, not a fade, and never to nothing —
+     so a full cycle is 1.1s and the dim is 55% of the bright. The bar is its
+     own element so only it moves; the words hold still. */
+  .d-bar { width: 2px; flex: none; align-self: stretch }
+  @keyframes d-barpulse { 0%, 49.99% { opacity: 1 } 50%, 100% { opacity: 0.55 } }
+  .d-bar-live { animation: d-barpulse 1.1s steps(1, end) infinite }
+  @media (prefers-reduced-motion: reduce) { .d-bar-live { animation: none } }
+
   /* Rendered markdown. Code blocks and tables wear the design system's own
      .gn-code and .gn-table; everything here is spacing and the inline marks. */
   .md > *:first-child { margin-top: 0 }
@@ -866,10 +875,16 @@ function bubble(m) {
   // accent for the answer, and the plain rule for a result that is only history.
   const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR }[m.kind] || "var(--line)";
   const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
+  // Only a line about work that is moving pulses. The TUI holds the red one
+  // still on purpose — it is waiting on you, and nothing is happening — and a
+  // finished line has nothing to claim.
+  const live = m.kind === "working" || m.kind === "waiting";
   return `<div style="display:flex;flex-direction:column;gap:6px">
     <span class="d-lbl">${esc(m.who)}</span>
-    <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;width:100%">
-      <div class="md" style="font-size:var(--fs-body);line-height:1.62;color:${fg}">${prose(m.text)}</div></div></div>`;
+    <div style="display:flex;width:100%">
+      <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
+      <div class="md" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62;color:${fg}">${prose(m.text)}</div>
+    </div></div>`;
 }
 
 // Who took it. The desk agent answers some requests itself, and those carry no
