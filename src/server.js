@@ -59,7 +59,8 @@ const routes = [
   ["PATCH", /^\/api\/projects\/(\d+)$/, (m, body) => api.updateProject(Number(m[1]), body)],
   ["DELETE", /^\/api\/projects\/(\d+)$/, (m) => api.archiveProject(Number(m[1]))],
 
-  ["GET", /^\/api\/inbox$/, () => api.listInbox()],
+  ["GET", /^\/api\/inbox$/, (_m, _b, q) => api.listInbox(q.get("limit") || 50, q.get("before"), q.get("agent") || "")],
+  ["GET", /^\/api\/inbox\/count$/, (_m, _b, q) => api.countInbox(q.get("agent") || "")],
   ["POST", /^\/api\/inbox$/, (_m, body) => api.createInbox(body.userRequest || body.text || "", body.cwd || "")],
   ["GET", /^\/api\/inbox\/(\d+)$/, (m) => api.inboxDetail(Number(m[1]))],
   ["POST", /^\/api\/inbox\/(\d+)\/tasks$/, (m, body) => api.createTask(Number(m[1]), body)],
@@ -118,12 +119,17 @@ async function serveStatic(res, pathname, headOnly = false) {
 
 // One place that maps method+path+body to a result, shared by HTTP, the unix
 // socket and the file spool.
-export async function dispatch(method, pathname, body = {}) {
+export async function dispatch(method, pathname, body = {}, query = new URLSearchParams()) {
+  // The socket and the file spool hand over a whole path, query string and all;
+  // the HTTP server has already split it. Take either.
+  const cut = String(pathname).indexOf("?");
+  const path = cut === -1 ? String(pathname) : String(pathname).slice(0, cut);
+  const params = cut === -1 ? query : new URLSearchParams(String(pathname).slice(cut + 1));
   for (const [routeMethod, pattern, run] of routes) {
     if (routeMethod !== method) continue;
-    const match = pattern.exec(pathname);
+    const match = pattern.exec(path);
     if (!match) continue;
-    const payload = (await run(match, body)) ?? { ok: true };
+    const payload = (await run(match, body, params)) ?? { ok: true };
     return { status: method === "POST" ? 201 : 200, payload };
   }
   return null;
@@ -135,7 +141,7 @@ async function handle(req, res) {
   const known = routes.some(([m, pattern]) => m === method && pattern.test(url.pathname));
   if (known) {
     const body = method === "GET" || method === "DELETE" ? {} : await readBody(req);
-    const result = await dispatch(method, url.pathname, body);
+    const result = await dispatch(method, url.pathname, body, url.searchParams);
     json(res, result.status, result.payload);
     return;
   }
