@@ -835,18 +835,15 @@ function render() {
   const screen = [""];
   const emit = (text) => screen.push(text);
 
-  const agentLabel = tree.pilo
-    ? `${c.green}●${c.reset} ${c.bold}${c.fg}${tree.pilo.name} agent${c.reset}`
-    : `${c.faint}● ${t("tree.noDesk")}${c.reset}`;
   const agentHome = pretty(tree.pilo?.cwd || launchCwd);
   // The wordmark, as the handoff draws it: an accent caret against the word in
-  // the mono face at 600. A terminal has no letter-spacing and no fraction of a
-  // cell, so the design's -0.03em and its 0.34em gap are the two things this
-  // cannot carry; bold stands in for 600 and the caret sits flush to the word.
-  const wordmark = `${c.green}❯${c.reset}${c.bold}${c.strong}pilo${c.reset}`;
-  const topLeft =
-    `${wordmark} ${c.line}│${c.reset} ${agentLabel} ` +
-    `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
+  // the mono face at 600. A terminal has no letter-spacing, so the design's
+  // -0.03em cannot be carried and bold stands in for 600; the 0.34em between
+  // the caret and the word rounds up to the one thing a terminal has, a cell.
+  const wordmark = `${c.green}❯${c.reset} ${c.bold}${c.strong}pilo${c.reset}`;
+  // The desk agent's name was here too, and said nothing the tree below does
+  // not say better. The path is what this line is for.
+  const topLeft = `${wordmark} ${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
   const topRight = `${c.faint}${t("header.help")}${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
   emit(pre + line(outWidth));

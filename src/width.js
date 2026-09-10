@@ -1,7 +1,12 @@
 // Display width, shared by the terminal layout and the markdown formatter.
 // Hangul, CJK and emoji occupy two columns; ANSI colour codes occupy none.
+// The dingbats range is here for the emoji in it, but it also holds the
+// ornamental brackets U+276C-U+2771 — ❯ among them, the one the prompt and the
+// wordmark are drawn with. Those are East Asian Neutral: every terminal draws
+// them in one column, and counting two put the header's right-hand text a
+// column short of the rule beneath it.
 export const wide =
-  /[ᄀ-ᅟ⺀-꓏가-힣\uf900-\ufaff︰-﹯＀-｠￠-￦\u{1f300}-\u{1f64f}\u{1f680}-\u{1f6ff}\u{1f900}-\u{1f9ff}\u{1fa70}-\u{1faff}\u{2702}-\u{27b0}]/u;
+  /[ᄀ-ᅟ⺀-꓏가-힣\uf900-\ufaff︰-﹯＀-｠￠-￦\u{1f300}-\u{1f64f}\u{1f680}-\u{1f6ff}\u{1f900}-\u{1f9ff}\u{1fa70}-\u{1faff}\u{2702}-\u{276b}\u{2772}-\u{27b0}]/u;
 
 // Zero-width: combining marks, the emoji variation selector, the joiner.
 const zero = /[̀-ͯ​-‍︀-️]/;
