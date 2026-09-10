@@ -459,7 +459,11 @@ export async function archiveProject(id) {
   return { id };
 }
 
-export async function listInbox(limit = 50) {
+// The conversation list, newest first. `before` walks backwards through it a
+// page at a time; `agent` narrows it to the requests one agent took part in —
+// either it was handed a task, or it wrote the answer, which is how the desk
+// agent's own replies stay findable.
+export async function listInbox(limit = 50, before = null, agent = "") {
   return query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.created_at AS "createdAt",
        (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = i.id) AS routed,
@@ -481,9 +485,31 @@ export async function listInbox(limit = 50) {
        (EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
         AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply"
-     FROM inbox i ORDER BY i.created_at DESC LIMIT $1`,
-    [limit]
+     FROM inbox i
+     WHERE ($2::bigint IS NULL OR i.id < $2)
+       AND ($3::text = '' OR EXISTS (
+             SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+             WHERE t.inbox_id = i.id AND a.name = $3)
+           OR EXISTS (
+             SELECT 1 FROM final_replies f JOIN agents a ON a.id = f.agent_id
+             WHERE f.inbox_id = i.id AND a.name = $3))
+     ORDER BY i.id DESC LIMIT $1`,
+    [Math.min(Number(limit) || 50, 100), before ? String(before) : null, agent || ""]
   );
+}
+
+export async function countInbox(agent = "") {
+  const row = await one(
+    `SELECT count(*)::int AS n FROM inbox i
+     WHERE ($1::text = '' OR EXISTS (
+             SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+             WHERE t.inbox_id = i.id AND a.name = $1)
+           OR EXISTS (
+             SELECT 1 FROM final_replies f JOIN agents a ON a.id = f.agent_id
+             WHERE f.inbox_id = i.id AND a.name = $1))`,
+    [agent || ""]
+  );
+  return { total: row.n };
 }
 
 export async function inboxDetail(id) {
