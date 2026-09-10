@@ -38,6 +38,14 @@
   main.d-main { padding: 0; overflow: hidden; position: relative }
   /* Only shown while the conversation has moved on without you. */
   #newlines { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 30 }
+  /* The handoff has no count on the rail at all, so this is new: the values are
+     .gn-badge's own (mono, --fs-label, the warn and err hues), sat on the
+     icon's corner where it still reads when the rail is only icons. */
+  .d-railmark { position: relative; display: block; width: 22px; height: 22px }
+  .d-railbadge { position: absolute; top: -5px; right: -9px; min-width: 16px; height: 15px; padding: 0 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 9px; line-height: 1; letter-spacing: 0;
+    color: var(--on-accent); border: var(--bw) solid var(--bg) }
   main.d-main > #view { flex: 1; min-height: 0; display: flex; flex-direction: column }
   main.d-main > header { margin: 0; padding: 24px 28px 14px }
   /* screens that have not been ported yet keep their own scrolling */
@@ -447,10 +455,12 @@ function railHtml() {
   return RAIL.map(([key, plain, icon]) => {
     const badge = badges[key];
     const label = T(`desk.rail.${key}`);
-    return `<button class="d-railbtn" aria-current="${state.tab === key ? "page" : "false"}" data-tab="${key}" title="${label}">
-      <span class="d-railicon" data-nf="on">${icon}</span>
+    return `<button class="d-railbtn" aria-current="${state.tab === key ? "page" : "false"}" data-tab="${key}" title="${label}${badge ? ` · ${badge}` : ""}">
+      <span class="d-railmark">
+        <span class="d-railicon" data-nf="on">${icon}</span>
+        ${badge ? `<span class="d-railbadge" style="background:${key === "system" ? "var(--err)" : "var(--warn)"}">${badge > 99 ? "99+" : badge}</span>` : ""}
+      </span>
       <span class="d-railtxt">${label}</span>
-      ${badge ? `<span class="d-m" style="font-size:9px;color:${key === "system" ? "var(--err)" : "var(--warn)"}">${badge}</span>` : ""}
     </button>`;
   }).join("") + `<div style="margin-top:auto;padding:10px 8px;border-top:var(--bw) solid var(--line)">
       <button class="d-plain d-m" style="width:100%;font-size:9px;color:var(--line);text-align:center;line-height:1.5" data-act="open-palette">⌘K</button>
@@ -672,13 +682,27 @@ function treeRows() {
   return rows;
 }
 
+// One word, from the list text.js already keeps: idle · running · stalled ·
+// blocked · failed · unbound · no answer · limited. The same ladder the TUI
+// walks, so the two screens cannot disagree. What an agent is actually saying
+// belongs in the conversation, not in a column that has to cut it off.
+const STALL_MS = 10 * 60 * 1000;
+
+function stalled(a) {
+  if (a.status !== "running" || !a.lastSignal) return false;
+  if (a.sessionStatus === "working") return false;
+  return Date.now() - new Date(a.lastSignal).getTime() > STALL_MS;
+}
+
 function agentNote(a) {
-  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
-  if (a.status === "unbound") return "no session";
-  if (a.blockedQuestion) return "waiting on you";
-  if (a.progress) return a.progress;
-  if (a.openTasks) return `${a.openTasks} open`;
-  return "nothing on";
+  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return T("state.limited");
+  if (a.gaveUp > 0 && a.status !== "running") return T("state.gaveUp");
+  if (a.status === "running" && stalled(a)) return T("state.stalled");
+  if (a.status === "blocked") return T("state.blocked");
+  if (a.status === "failed") return T("state.failed");
+  if (a.status === "unbound") return T("state.unbound");
+  if (a.status === "running" || a.sessionStatus === "working") return T("state.running");
+  return T("state.idle");
 }
 
 function renderWorkPanes() {
@@ -739,10 +763,16 @@ function feedMessages(item, detail) {
   const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
-    if (task.progress) msgs.push({ who: `${agent} · working`, kind: "working", text: task.progress });
+    // A note is news only while its task is still open; once the task reports,
+    // the result stands in its place rather than sitting above it.
+    if (task.progress && !["done", "failed", "canceled"].includes(task.status)) {
+      msgs.push({ who: `${agent} · working${task.progressAt ? ` · ${hhmm(task.progressAt)}` : ""}`, kind: "working", text: task.progress });
+    }
     if (task.pmResult) msgs.push({ who: `${agent} · ${hhmm(task.doneAt || item.createdAt)} · result`, kind: "result", text: task.pmResult });
   }
-  if (!detail && item.progress) msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
+  if (!detail && item.progress && !item.finalReply) {
+    msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
+  }
   for (const reply of full.replies || []) {
     msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
   }
