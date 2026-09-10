@@ -656,7 +656,6 @@ const page = (inner) => `<div class="d-scroll d-pad">${inner}</div>`;
 // Colours and shapes are the handoff's own (Pilo Desk.dc.html); only the data
 // underneath is ours.
 const OK = "var(--ok)", WARN = "var(--warn)", ERR = "var(--err)", DIM = "var(--line)", ACCT = "var(--accent-text)", INFO = "var(--info)";
-const stCol = (st) => st === "running" ? WARN : st === "unbound" || st === "failed" ? ERR : st === "blocked" ? INFO : OK;
 const roleFg = (r) => r === "PILO" ? ACCT : r === "PM" ? INFO : "var(--text-2)";
 const roleBg = (r) => r === "PILO" ? "var(--accent-weak)" : r === "PM" ? "var(--info-weak)" : "var(--bg-2)";
 const runtimeMark = (rt) => rt === "claude"
@@ -694,6 +693,18 @@ function stalled(a) {
   return Date.now() - new Date(a.lastSignal).getTime() > STALL_MS;
 }
 
+// The word and the colour come out of the same ladder, so a dot and the word
+// beside it can never say different things about the same agent.
+function agentTone(a) {
+  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return WARN;
+  if (a.gaveUp > 0 && a.status !== "running") return ERR;
+  if (a.status === "running" && stalled(a)) return WARN;
+  if (a.status === "blocked") return INFO;
+  if (a.status === "failed" || a.status === "unbound") return ERR;
+  if (a.status === "running" || a.sessionStatus === "working") return WARN;
+  return OK;
+}
+
 function agentNote(a) {
   if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return T("state.limited");
   if (a.gaveUp > 0 && a.status !== "running") return T("state.gaveUp");
@@ -727,7 +738,7 @@ function renderWorkPanes() {
     </div>
     <div class="d-scroll">${rows.map(({ a, lvl }) => {
       const role = a.role.toUpperCase();
-      const colour = stCol(a.status);
+      const colour = agentTone(a);
       const padL = 12 + lvl * 18;
       const picked = state.feed.agent === a.name;
       return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid ${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};cursor:pointer" data-act="pick-agent" data-name="${esc(a.name)}">
@@ -973,7 +984,7 @@ views.agents = () => {
       `${btn(T("desk.act.resendRules"), "resend-rules", "", "gn-btn-ghost")}${btn(T("desk.act.addAgent"), "add-agent")}`) +
     `<div class="gn-ladder gn-ladder-bar">${rows.map(({ a, lvl }) => {
       const role = a.role.toUpperCase();
-      const colour = stCol(a.status);
+      const colour = agentTone(a);
       return `<div class="gn-ladder-row">
         <span class="gn-ladder-indent" data-level="${lvl}"></span>
         <span class="gn-ladder-block" data-role="${role.toLowerCase()}">
@@ -1027,7 +1038,12 @@ const firstLine = (text) => {
 // speaks for it.
 const inFlight = (t) => t.progress && !["done", "failed"].includes(t.status);
 const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", final_reply: "answer" };
-const reqState = (i) => (i.needsReply ? "needs an answer" : { queued: "waiting", dispatched: "working", replied: "done", failed: "failed" }[i.status] || i.status);
+// A request's own state, which is not an agent's. The two used to share the
+// word "working" — a request open because one abandoned task never closed read
+// as though its agent were busy, while the agent column beside it said stalled.
+// Nothing here can be mistaken for one of agentNote()'s words.
+const reqState = (i) => (i.needsReply ? "needs an answer"
+  : { queued: "not handed on", dispatched: "open", replied: "answered", failed: "failed" }[i.status] || i.status);
 const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.status === "replied" ? OK : WARN);
 const isOpen = (i) => i.status !== "replied";
 
@@ -1049,7 +1065,7 @@ views.inbox = () => {
       return `<button class="d-plain d-tr d-rowbtn d-pick" aria-selected="${state.reqAgent === a.name}" style="grid-template-columns:minmax(0,1fr) 32px;min-height:34px;padding-left:${12 + lvl * 18}px" data-act="req-agent" data-name="${esc(a.name)}">
         <span style="display:flex;align-items:center;gap:8px;min-width:0">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
-          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${stCol(a.status)}"></span>
+          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${agentTone(a)}"></span>
           <span class="d-clip" style="font-size:var(--fs-body)">${esc(a.name)}</span>
           <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)};flex:none">${role}</span>
         </span>
@@ -1226,7 +1242,7 @@ views.projects = () => {
                 <span class="gn-ladder-block" data-role="${role.toLowerCase()}">
                   <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
                   <span class="gn-ladder-name">${esc(a.name)}</span>
-                  <span class="gn-ladder-note" style="color:${stCol(a.status)}">${esc(agentNote(a))}</span>
+                  <span class="gn-ladder-note" style="color:${agentTone(a)}">${esc(agentNote(a))}</span>
                 </span></span>`;
             }).join("")}
             ${p.pm ? "" : `<span class="d-ghostrow">nobody looks after this</span>`}

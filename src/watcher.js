@@ -201,14 +201,17 @@ async function pumpStalled() {
      FROM tasks t
        JOIN agents a ON a.id = t.to_agent_id
        LEFT JOIN agent_sessions s ON s.agent_id = a.id
-     WHERE t.status = 'queued' AND a.archived_at IS NULL AND a.herdr_target <> ''
+     WHERE t.status IN ('queued', 'running') AND a.archived_at IS NULL AND a.herdr_target <> ''
        AND coalesce(s.status, '') <> 'working'
        AND (a.limited_until IS NULL OR a.limited_until < now())
-       AND t.progress_at IS NULL
-       AND t.created_at < now() - ($1 || ' minutes')::interval
+       -- Silence is the test, not "never picked up". A task that was opened,
+       -- left one note and then went quiet used to be invisible here: the old
+       -- query asked for status = 'queued' AND progress_at IS NULL, so the
+       -- moment an agent said anything the task could sit running forever.
+       AND GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) < now() - ($1 || ' minutes')::interval
        AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled'
                          AND e2.created_at > now() - ($2 || ' minutes')::interval)
-     ORDER BY t.created_at LIMIT 5`,
+     ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5`,
     [String(STALL_MINUTES), String(NUDGE_EVERY_MINUTES)]
   );
   for (const task of stuck) {
