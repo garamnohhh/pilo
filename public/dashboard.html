@@ -35,7 +35,9 @@
   body { container-type: inline-size }
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
-  main.d-main { padding: 0; overflow: hidden }
+  main.d-main { padding: 0; overflow: hidden; position: relative }
+  /* Only shown while the conversation has moved on without you. */
+  #newlines { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 30 }
   main.d-main > #view { flex: 1; min-height: 0; display: flex; flex-direction: column }
   main.d-main > header { margin: 0; padding: 24px 28px 14px }
   /* screens that have not been ported yet keep their own scrolling */
@@ -169,6 +171,7 @@
   <div class="d-agents" id="tree" hidden></div>
   <main class="d-main">
     <section id="view"></section>
+    <button class="gn-btn gn-btn-sm" id="newlines" data-act="to-end" hidden></button>
   </main>
 </div>
 <div id="dlg"></div>
@@ -318,12 +321,12 @@ async function recentRuns() {
   return lists.flat().sort((a, b) => new Date(b.firedAt) - new Date(a.firedAt)).slice(0, 12);
 }
 
-function renderTabs() {
+function railHtml() {
   const badges = {
     inbox: state.data.inbox?.filter((i) => i.status !== "replied").length || 0,
     system: state.data.system?.wakeFailures?.length || 0 // already filtered to unresolved
   };
-  $("rail").innerHTML = RAIL.map(([key, plain, icon]) => {
+  return RAIL.map(([key, plain, icon]) => {
     const badge = badges[key];
     const label = T(`desk.rail.${key}`);
     return `<button class="d-railbtn" aria-current="${state.tab === key ? "page" : "false"}" data-tab="${key}" title="${label}">
@@ -334,11 +337,13 @@ function renderTabs() {
   }).join("") + `<div style="margin-top:auto;padding:10px 8px;border-top:var(--bw) solid var(--line)">
       <button class="d-plain d-m" style="width:100%;font-size:9px;color:var(--line);text-align:center;line-height:1.5" data-act="open-palette">⌘K</button>
     </div>`;
-  const s = state.data.setup || {};
+}
+
+function topstateHtml() {
   const st = state.data.overview?.stats || {};
   const server = state.data.system?.services?.find((x) => x.name === "server");
   const waiting = st.inboxToday?.pending ?? 0;
-  $("topstate").innerHTML = `
+  return `
     <span class="d-m" style="font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:7px">
       <span class="d-dot${server?.state === "running" ? " d-live" : ""}" style="background:${stateColor(server?.state)}"></span>${esc(server?.state || "unknown")}</span>
     <span class="d-m" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
@@ -349,38 +354,114 @@ function renderTabs() {
   // the System screen, and the topbar already says whether the server is up.
 }
 
-// Every refresh rebuilds #view, and a rebuilt element starts at scrollTop 0, so
-// the inbox panes and code blocks jumped back to the top every 5 seconds.
-// Remember where each scroller was and put it back. On a tab change the old
-// positions belong to a different view, so they are not carried over.
-const SCROLLERS = "main, .inbox > *, #view .code, #view .table";
+// A refresh used to rebuild #view whether or not anything in it had changed,
+// and a rebuilt element starts at scrollTop 0 — so every five seconds the page
+// you were reading jumped back to the top. The fix is not to repaint at all
+// unless the html actually differs; the scroll memory below is only for the
+// times it really does.
+const painted = {};
 
-function scrollState() {
-  return [...document.querySelectorAll(SCROLLERS)].map((n) => n.scrollTop);
+function paint(id, html) {
+  if (painted[id] === html) return false;
+  painted[id] = html;
+  $(id).innerHTML = html;
+  return true;
 }
 
-function restoreScroll(tops) {
-  [...document.querySelectorAll(SCROLLERS)].forEach((n, i) => {
-    if (tops[i]) n.scrollTop = tops[i];
-  });
+const SCROLLERS = [["tree", "#tree .d-scroll"], ["view", "#view .d-scroll"], ["dlg", "#dlg .d-dlgbody"]];
+
+function scrollState() {
+  const saved = {};
+  for (const [key, sel] of SCROLLERS) {
+    const node = document.querySelector(sel);
+    if (node) saved[key] = node.scrollTop;
+  }
+  return saved;
+}
+
+function restoreScroll(saved) {
+  for (const [key, sel] of SCROLLERS) {
+    const node = document.querySelector(sel);
+    if (node && saved[key]) node.scrollTop = saved[key];
+  }
+}
+
+// Work is a conversation, so it follows its newest line the way a chat window
+// does — but only while you are already at the end of it. Scrolled up to read
+// something, it stays where you left it and says how many lines came in.
+const END_SLACK = 48;
+const atEnd = (node) => node.scrollHeight - node.scrollTop - node.clientHeight <= END_SLACK;
+const feedNode = () => (state.tab === "work" ? $("view").querySelector(".d-scroll") : null);
+
+let pinned = true;
+let unseen = 0;
+let feedCount = -1;
+
+function toEnd(node) {
+  node.scrollTop = node.scrollHeight;
+  // A face or an image can still be arriving; measure once more on the next frame.
+  requestAnimationFrame(() => { node.scrollTop = node.scrollHeight; });
+}
+
+function watchFeed() {
+  const node = feedNode();
+  if (!node) return;
+  node.onscroll = () => {
+    pinned = atEnd(node);
+    if (pinned && unseen) {
+      unseen = 0;
+      showUnseen();
+    }
+  };
+}
+
+function showUnseen() {
+  const pill = $("newlines");
+  pill.hidden = !(state.tab === "work" && unseen > 0);
+  if (!pill.hidden) pill.textContent = `${unseen} new ${unseen === 1 ? "line" : "lines"} ↓`;
 }
 
 let renderedTab = null;
 
 function render() {
-  const tops = renderedTab === state.tab ? scrollState() : [];
-  renderTabs();
+  const tabChanged = renderedTab !== state.tab;
+  const saved = tabChanged ? {} : scrollState();
+  const wasPinned = tabChanged ? true : pinned;
   const isWork = state.tab === "work";
+
+  let touched = paint("rail", railHtml()) | paint("topstate", topstateHtml());
   $("shell").dataset.work = isWork ? "on" : "off";
   $("strip").hidden = !isWork;
   $("tree").hidden = !isWork;
-  if (isWork) renderWorkPanes();
-  $("view").innerHTML = views[state.tab]();
-  $("dlg").innerHTML = dialogHtml() + paletteHtml();
-  if (isWork) restoreDraft();
-  wire();
+  if (isWork) touched |= renderWorkPanes();
+  const viewChanged = paint("view", views[state.tab]());
+  touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
+
+  if (viewChanged && !tabChanged) restoreScroll(saved);
+  if (touched) {
+    if (isWork) restoreDraft();
+    wire();
+    watchFeed();
+  }
   renderedTab = state.tab;
-  if (tops.length) restoreScroll(tops);
+
+  const feed = feedNode();
+  if (feed) {
+    const count = feedMessages().length;
+    if (tabChanged) {
+      pinned = true;
+      unseen = 0;
+      toEnd(feed);
+    } else if (viewChanged && wasPinned) {
+      toEnd(feed);
+    } else if (viewChanged && feedCount >= 0 && count > feedCount) {
+      unseen += count - feedCount;
+    }
+    feedCount = count;
+  } else {
+    feedCount = -1;
+  }
+  showUnseen();
 }
 
 // The composer posts to the same endpoint the TUI does, so a line typed here
@@ -388,7 +469,7 @@ function render() {
 function restoreDraft() {
   const box = $("draft");
   if (!box) return;
-  box.value = state.draft || "";
+  if (box.value !== (state.draft || "")) box.value = state.draft || "";
   box.style.height = "auto";
   box.style.height = Math.min(160, box.scrollHeight) + "px";
   box.oninput = () => {
@@ -485,12 +566,12 @@ function renderWorkPanes() {
     ["tokens", fmtTokens(st.tokens?.total ?? 0), "today", "var(--text)"],
     ["needs you", String(lost || st.failed?.total || 0), lost ? "session lost" : st.failed?.total ? "failed" : "nothing", (lost || st.failed?.total) ? ERR : "var(--text)"]
   ];
-  $("strip").innerHTML = strip.map(([k, v, sub, color]) => `<div>
+  const stripHtml = strip.map(([k, v, sub, color]) => `<div>
     <div class="d-lbl">${k}</div>
     <div class="d-m" style="font-size:24px;margin-top:6px;color:${color}">${v}<span style="font-size:13px;color:var(--text-3)"> · ${sub}</span></div>
   </div>`).join("");
 
-  $("tree").innerHTML = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
+  const treeHtml = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
       <span class="d-lbl">${T("desk.rail.agents")}</span>
       <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker</span>
     </div>
@@ -512,14 +593,16 @@ function renderWorkPanes() {
       </button>`;
     }).join("")}</div>
     <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
+
+  return paint("strip", stripHtml) | paint("tree", treeHtml);
 }
 
 // One request reads as a conversation: what you asked, what the desk said, what
 // each agent is doing, and the answer.
-function workFeed() {
+function feedMessages() {
   const detail = state.data.inboxDetail;
   const list = state.data.inbox || [];
-  if (!list.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
+  if (!list.length) return [];
   const item = detail || list[0];
   const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
   for (const task of item.tasks || []) {
@@ -530,6 +613,12 @@ function workFeed() {
   for (const reply of item.replies || []) {
     msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
   }
+  return msgs;
+}
+
+function workFeed() {
+  const msgs = feedMessages();
+  if (!msgs.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
   return msgs.map((m) => {
     if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
       <span class="d-lbl">${esc(m.who)}</span>
@@ -1544,6 +1633,13 @@ const actions = {
     state.selected.inbox = el.dataset.id;
     state.draft = state.draft || "";
     render();
+  },
+  async "to-end"() {
+    const feed = feedNode();
+    if (feed) toEnd(feed);
+    pinned = true;
+    unseen = 0;
+    showUnseen();
   },
   async "set-theme"(el) { setTheme(el.dataset.value); render(); },
   async "set-lang"(el) { setLang(el.dataset.value); render(); },
