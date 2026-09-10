@@ -214,6 +214,9 @@ const state = {
   project: { id: null, name: "", repo: "", path: "", note: "" },
   schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" },
   runs: { open: null, rows: [] },
+  // The conversation list behind Work: a page at a time, newest first, with the
+  // ones the reader has opened or shut on top of the newest-two rule.
+  feed: { agent: "", rows: [], done: false, loading: false, prepended: false, open: new Set(), shut: new Set(), detail: {} },
   dlg: null,
   reqFilter: "Open",
   reqAgent: "",
@@ -288,6 +291,7 @@ async function load() {
     get("/api/sessions"), get("/api/agents"), get("/api/schedules")
   ]);
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules };
+  refreshFeed();
   await loadDetail();
   $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
   render();
@@ -304,10 +308,124 @@ async function loadDetail() {
     state.selected.inbox = id ?? null;
     state.data.inboxDetail = id ? await get(`/api/inbox/${id}`) : null;
   }
+  if (state.tab === "work") {
+    if (state.feed.agent && !state.feed.rows.length) state.feed.rows = await feedPage(null);
+    else if (state.feed.agent) {
+      const fresh = await feedPage(null);
+      const known = new Set(state.feed.rows.map((row) => String(row.id)));
+      state.feed.rows = [...fresh.filter((row) => !known.has(String(row.id))),
+        ...state.feed.rows.map((row) => fresh.find((x) => String(x.id) === String(row.id)) || row)];
+    }
+    await loadOpenDetails();
+  }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
   if (state.dlg?.kind === "schedule") state.runs = { open: state.dlg.id, rows: await get(`/api/schedules/${state.dlg.id}/runs`) };
+}
+
+// Ten conversations at a time. 787 of them are on this machine and a page of
+// ten costs about 45 KB, so the whole list would be some 3.5 MB — the newest
+// ten, and ten more each time you reach the top, is what the reader can use.
+const PAGE = 10;
+const OPEN_BY_DEFAULT = 2;
+
+// Rows for the unfiltered feed come out of the list load() already made, so the
+// first fifty conversations cost no request at all; past that, and whenever an
+// agent is picked, the server is asked for the next page.
+// Whether this request is one the agent took part in. The server answers this
+// properly — it can see who wrote the answer as well as who was handed the work
+// — and this is the same question asked of what is already in hand.
+function feedMatches(row, agent) {
+  if (!agent) return true;
+  const names = routedNames(row);
+  if (names.includes(agent)) return true;
+  return !names.length && agent === (state.data.tree?.pilo?.name || "pilo");
+}
+
+async function feedPage(before) {
+  const f = state.feed;
+  const q = new URLSearchParams({ limit: String(PAGE) });
+  if (before) q.set("before", String(before));
+  if (f.agent) q.set("agent", f.agent);
+  let rows = await get(`/api/inbox?${q}`);
+  // A server still running the code it started with does not know these three
+  // words and hands back its own fifty. Cut them down here so the feed behaves
+  // either way; a restart is what makes the paging exact.
+  if (rows.length > PAGE || (f.agent && rows.some((row) => !feedMatches(row, f.agent)))) {
+    rows = rows
+      .filter((row) => (!before || Number(row.id) < Number(before)) && feedMatches(row, f.agent))
+      .slice(0, PAGE);
+  }
+  if (rows.length < PAGE) f.done = true;
+  return rows;
+}
+
+// Whatever load() just fetched is the freshest copy of the newest fifty, so the
+// rows already on screen take their live fields from it rather than asking again.
+function refreshFeed() {
+  const f = state.feed;
+  if (f.agent) return;
+  const all = state.data.inbox || [];
+  if (!f.rows.length) { f.rows = all.slice(0, PAGE); return; }
+  const fresh = new Map(all.map((row) => [String(row.id), row]));
+  f.rows = f.rows.map((row) => fresh.get(String(row.id)) || row);
+  // Only what is newer than the top of the list has actually arrived; the rest
+  // of load()'s fifty is older, and belongs to the pages not asked for yet.
+  const newest = Number(f.rows[0]?.id ?? 0);
+  const arrived = all.filter((row) => Number(row.id) > newest);
+  if (arrived.length) f.rows = [...arrived, ...f.rows];
+}
+
+// One page per arrival at the top. The flag is held until the scroll position
+// has been corrected, or the events that fire while it is being corrected would
+// each ask for another page and the whole list would come in at once.
+async function loadOlder() {
+  const f = state.feed;
+  if (f.loading || f.done) return;
+  f.loading = true;
+  const pool = f.agent ? [] : (state.data.inbox || []);
+  const oldest = f.rows[f.rows.length - 1];
+  const at = oldest ? pool.findIndex((row) => String(row.id) === String(oldest.id)) : -1;
+  try {
+    if (at >= 0 && at + 1 < pool.length) {
+      // Still inside the fifty rows load() holds — take the next ten from there.
+      f.rows = [...f.rows, ...pool.slice(at + 1, at + 1 + PAGE)];
+    } else {
+      render();
+      const rows = await feedPage(oldest?.id);
+      const known = new Set(f.rows.map((row) => String(row.id)));
+      f.rows = [...f.rows, ...rows.filter((row) => !known.has(String(row.id)))];
+    }
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    f.prepended = true;
+    render();
+    await loadOpenDetails();
+    f.loading = false;
+  }
+}
+
+// A conversation the reader opened needs its tasks and its answer; one that is
+// finished never changes again, so it is fetched once and kept.
+async function loadOpenDetails() {
+  const f = state.feed;
+  const wanted = f.rows.filter((row, i) => !folded(row.id, i));
+  for (const row of wanted) {
+    const held = f.detail[row.id];
+    if (held && row.status === "replied") continue;
+    try {
+      f.detail[row.id] = await get(`/api/inbox/${row.id}`);
+    } catch (err) { /* it may have gone; the summary still reads */ }
+  }
+}
+
+function folded(id, fromNewest) {
+  const key = String(id);
+  if (state.feed.open.has(key)) return false;
+  if (state.feed.shut.has(key)) return true;
+  return fromNewest >= OPEN_BY_DEFAULT;
 }
 
 // There is no endpoint for "every run"; the runs of each schedule are read and
@@ -408,6 +526,7 @@ function watchFeed() {
   if (!node) return;
   node.onscroll = () => {
     pinned = atEnd(node);
+    if (node.scrollTop < 240) loadOlder();
     if (pinned && unseen) {
       unseen = 0;
       showUnseen();
@@ -426,6 +545,8 @@ let renderedTab = null;
 function render() {
   const tabChanged = renderedTab !== state.tab;
   const saved = tabChanged ? {} : scrollState();
+  const before = feedNode();
+  const gap = before ? before.scrollHeight - before.scrollTop : 0;
   const wasPinned = tabChanged ? true : pinned;
   const isWork = state.tab === "work";
 
@@ -447,8 +568,13 @@ function render() {
 
   const feed = feedNode();
   if (feed) {
-    const count = feedMessages().length;
-    if (tabChanged) {
+    const count = feedSize();
+    if (state.feed.prepended) {
+      // Older conversations went in above; hold the same distance from the end
+      // so the line being read does not move.
+      feed.scrollTop = feed.scrollHeight - gap;
+      state.feed.prepended = false;
+    } else if (tabChanged) {
       pinned = true;
       unseen = 0;
       toEnd(feed);
@@ -579,7 +705,8 @@ function renderWorkPanes() {
       const role = a.role.toUpperCase();
       const colour = stCol(a.status);
       const padL = 12 + lvl * 18;
-      return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid transparent;cursor:pointer" data-agent="${a.id}">
+      const picked = state.feed.agent === a.name;
+      return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid ${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};cursor:pointer" data-act="pick-agent" data-name="${esc(a.name)}">
         <span style="display:flex;align-items:center;gap:9px;padding:9px 12px 9px ${padL}px">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
           <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour}"></span>
@@ -599,45 +726,105 @@ function renderWorkPanes() {
 
 // One request reads as a conversation: what you asked, what the desk said, what
 // each agent is doing, and the answer.
-function feedMessages() {
-  const detail = state.data.inboxDetail;
-  const list = state.data.inbox || [];
-  if (!list.length) return [];
-  const item = detail || list[0];
-  const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
-  for (const task of item.tasks || []) {
-    const agent = task.agent || "agent";
-    if (task.progress) msgs.push({ who: `${agent} · working`, kind: "working", text: task.progress });
-    if (task.pmResult) msgs.push({ who: `${agent} · ${hhmm(task.doneAt || item.createdAt)} · result`, kind: "result", text: task.pmResult });
-  }
-  for (const reply of item.replies || []) {
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
-  }
-  return msgs;
-}
-
-function workFeed() {
-  const msgs = feedMessages();
-  if (!msgs.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
-  return msgs.map((m) => {
-    if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-      <span class="d-lbl">${esc(m.who)}</span>
-      <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;max-width:620px">
-        <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
-    const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
-    const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
-    return `<div style="display:flex;flex-direction:column;gap:6px">
-      <span class="d-lbl">${esc(m.who)}</span>
-      <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;max-width:680px">
-        <div style="font-size:var(--fs-body);line-height:1.62;color:${fg};white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
-  }).join("");
-}
-
 const hhmm = (iso) => {
   const d = iso ? new Date(iso) : null;
   return d && !Number.isNaN(d.getTime())
     ? `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}` : "";
 };
+
+// One conversation's lines, in the order they happened: what you asked, what
+// each agent said while working, its result, and the answer.
+function feedMessages(item, detail) {
+  const full = detail || item;
+  const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
+  for (const task of full.tasks || []) {
+    const agent = task.agent || "agent";
+    if (task.progress) msgs.push({ who: `${agent} · working`, kind: "working", text: task.progress });
+    if (task.pmResult) msgs.push({ who: `${agent} · ${hhmm(task.doneAt || item.createdAt)} · result`, kind: "result", text: task.pmResult });
+  }
+  if (!detail && item.progress) msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
+  for (const reply of full.replies || []) {
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
+  }
+  if (!detail && item.finalReply) {
+    msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply });
+  }
+  return msgs;
+}
+
+function bubble(m) {
+  if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
+    <span class="d-lbl">${esc(m.who)}</span>
+    <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;max-width:620px">
+      <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+  const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
+  const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
+  return `<div style="display:flex;flex-direction:column;gap:6px">
+    <span class="d-lbl">${esc(m.who)}</span>
+    <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;max-width:680px">
+      <div style="font-size:var(--fs-body);line-height:1.62;color:${fg};white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+}
+
+// Who took it. The desk agent answers some requests itself, and those carry no
+// agent name — the TUI calls that PILO, so this does too.
+const routedNames = (item) => String(item.routed || "").split(", ").filter(Boolean);
+
+function routedChips(item) {
+  const names = routedNames(item);
+  if (!names.length) return `<span class="d-chip" style="color:${ACCT};background:var(--accent-weak);flex:none">PILO</span>`;
+  const shown = names.slice(0, 3);
+  return shown.map((name) => `<span class="d-chip" style="color:var(--text-2);background:var(--bg-2);flex:none">${esc(name)}</span>`).join("")
+    + (names.length > shown.length ? `<span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">+${names.length - shown.length}</span>` : "");
+}
+
+const convMood = (item) => (item.finalReply ? OK : item.needsReply || item.status === "failed" ? ERR : WARN);
+
+// The folded row. The TUI clips the question to two lines and shows the state
+// mark and who took it; the time is added here because a page of ten covers
+// more than one day and the reader asked to see when.
+function convHead(item, isFolded) {
+  const line = String(item.userRequest || "").split("\n").map((x) => x.trim()).filter(Boolean).join(" · ");
+  return `<button class="d-plain" style="display:flex;align-items:baseline;gap:10px;width:100%;padding:6px 0;cursor:pointer" data-act="toggle-conv" data-id="${item.id}">
+    <span class="d-m" style="color:${convMood(item)};flex:none">${isFolded ? "›" : "⌄"}</span>
+    <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">${hhmm(item.createdAt)}</span>
+    ${routedChips(item)}
+    <span class="d-clip" style="font-size:var(--fs-body);color:var(--text-2);text-align:left;min-width:0;flex:1">${isFolded ? esc(line) : ""}</span>
+    <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">in-${item.id}</span>
+  </button>`;
+}
+
+function convBlock(item, fromNewest) {
+  const shut = folded(item.id, fromNewest);
+  const head = convHead(item, shut);
+  if (shut) return `<div style="display:flex;flex-direction:column">${head}</div>`;
+  const detail = state.feed.detail[item.id];
+  const msgs = feedMessages(item, detail);
+  return `<div style="display:flex;flex-direction:column;gap:22px;padding-bottom:8px">
+    ${head}${msgs.map(bubble).join("")}</div>`;
+}
+
+function workFeed() {
+  const f = state.feed;
+  if (!f.rows.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
+  const top = f.done
+    ? `<div class="d-lbl" style="padding:8px 0;text-align:center">that is the whole of it — ${f.rows.length} shown</div>`
+    : `<div class="d-lbl" style="padding:8px 0;text-align:center">${f.loading ? "loading older…" : "scroll up for older"}</div>`;
+  const banner = f.agent
+    ? `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
+        <span class="d-lbl">only ${esc(f.agent)}</span>
+        ${btn("Every agent", "clear-feed-filter", "", "gn-btn-ghost")}</div>`
+    : "";
+  // Newest at the bottom, the way the TUI stacks them.
+  const blocks = f.rows.map((item, i) => convBlock(item, i)).reverse().join("");
+  return banner + top + blocks;
+}
+
+// A number that grows whenever there is something new to read, so the feed
+// knows whether to follow.
+function feedSize() {
+  return state.feed.rows.reduce((n, item, i) =>
+    n + 1 + (folded(item.id, i) ? 0 : feedMessages(item, state.feed.detail[item.id]).length), 0);
+}
 
 views.work = () => `<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
   <div class="d-composer"><div class="d-cin">
@@ -1632,6 +1819,40 @@ const actions = {
     location.hash = "work";
     state.selected.inbox = el.dataset.id;
     state.draft = state.draft || "";
+    render();
+  },
+  async "toggle-conv"(el) {
+    const key = String(el.dataset.id);
+    const f = state.feed;
+    const at = f.rows.findIndex((row) => String(row.id) === key);
+    if (folded(key, at)) { f.open.add(key); f.shut.delete(key); }
+    else { f.shut.add(key); f.open.delete(key); }
+    render();
+    await loadOpenDetails();
+    render();
+  },
+  async "pick-agent"(el) {
+    const f = state.feed;
+    const name = el.dataset.name || "";
+    f.agent = f.agent === name ? "" : name;
+    f.rows = [];
+    f.done = false;
+    f.detail = {};
+    state.tab = "work";
+    location.hash = "work";
+    if (!f.agent) refreshFeed();
+    render();
+    await loadDetail();
+    render();
+  },
+  async "clear-feed-filter"() {
+    const f = state.feed;
+    f.agent = "";
+    f.rows = [];
+    f.done = false;
+    refreshFeed();
+    render();
+    await loadDetail();
     render();
   },
   async "to-end"() {
