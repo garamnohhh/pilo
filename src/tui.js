@@ -839,8 +839,13 @@ function render() {
     ? `${c.green}●${c.reset} ${c.bold}${c.fg}${tree.pilo.name} agent${c.reset}`
     : `${c.faint}● ${t("tree.noDesk")}${c.reset}`;
   const agentHome = pretty(tree.pilo?.cwd || launchCwd);
+  // The wordmark, as the handoff draws it: an accent caret against the word in
+  // the mono face at 600. A terminal has no letter-spacing and no fraction of a
+  // cell, so the design's -0.03em and its 0.34em gap are the two things this
+  // cannot carry; bold stands in for 600 and the caret sits flush to the word.
+  const wordmark = `${c.green}❯${c.reset}${c.bold}${c.strong}pilo${c.reset}`;
   const topLeft =
-    `${c.bold}${c.strong}Pilo${c.reset} ${c.line}│${c.reset} ${agentLabel} ` +
+    `${wordmark} ${c.line}│${c.reset} ${agentLabel} ` +
     `${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
   const topRight = `${c.faint}${t("header.help")}${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);

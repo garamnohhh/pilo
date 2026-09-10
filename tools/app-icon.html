@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8">
+<!-- Where public/icons/app-*.png come from. Not served: open this file with the
+     repo's public/ as the web root, screenshot #full and #mask at 512, then
+     sips -z each smaller size out of the 512. Nothing here was drawn by hand —
+     every value is copied from Pilo Wordmark.dc.html in the design handoff. -->
+<style>
+  /* The app icon exactly as Pilo Wordmark.dc.html draws it: an accent square,
+     ❯p in the mono face at 600, letter-spacing -0.03em, baseline aligned with
+     0.1em between the two, and the designer's own size ratios —
+     64px box / 26px type / 19px padding-top, i.e. 0.40625 and 0.296875. */
+  @font-face { font-family: "JetBrains Mono"; src: url("../public/fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype"); font-weight: 400 600; font-display: block }
+  * { box-sizing: border-box }
+  html, body { margin: 0; background: transparent }
+  .icon {
+    display: flex; align-items: baseline; justify-content: center; gap: 0.1em;
+    background: #3ED49C; color: #08090A;
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 600; letter-spacing: -0.03em;
+  }
+  #full { width: 512px; height: 512px; padding-top: 152px; font-size: 208px }
+  /* maskable: the same mark, its box 80.47% of the canvas, on a ground that
+     still fills the whole square so any crop the platform applies has paint. */
+  #mask { width: 512px; height: 512px; position: relative; background: #3ED49C }
+  #mask > span { position: absolute; inset: 9.765%; display: flex; align-items: baseline; justify-content: center; gap: 0.1em;
+    color: #08090A; font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 600; letter-spacing: -0.03em;
+    padding-top: 122px; font-size: 167px }
+</style>
+<div id="full" class="icon">❯p</div>
+<div id="mask"><span>❯p</span></div>
