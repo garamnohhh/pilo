@@ -20,12 +20,9 @@
 <link rel="stylesheet" href="/ds/styles.css">
 <link rel="stylesheet" href="/desk.css">
 <style>
-  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap }
-  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap }
-  @font-face { font-family: "IBM Plex Sans"; src: url("./fonts/IBMPlexSans-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap }
-  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap }
-  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-Medium.woff2") format("woff2"); font-weight: 500; font-display: swap }
-  @font-face { font-family: "IBM Plex Mono"; src: url("./fonts/IBMPlexMono-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap }
+  /* The faces are declared in ds/tokens/fonts.css, all of them served from
+     here. IBM Plex is gone: its files carry Latin only, so every Korean word on
+     this screen was drawn by whatever the machine happened to have. */
 
   :root {
     /* Names the unported screens still use, pointed at the system's tokens. */
@@ -63,7 +60,12 @@
   .md .md-table { min-width: 100%; width: max-content }
   .md .md-table th, .md .md-table td { white-space: nowrap }
   .md a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px }
-  .md strong { font-weight: 600; color: var(--text) }
+  /* In a result the body is --text-2 and this is --text, so bold is told apart
+     by colour as much as weight. An answer is already at --text and there is
+     nothing brighter to move to, which is why bold read flat there: weight was
+     the only cue. 700 makes that cue carry — 35.7% more ink than 400 against
+     600's 25.1%, measured on Korean at 15px. */
+  .md strong { font-weight: 700; color: var(--text) }
   /* Only shown while the conversation has moved on without you. */
   #newlines { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 30 }
   /* The handoff has no count on the rail at all, so this is new: the values are
@@ -78,7 +80,7 @@
   main.d-main > header { margin: 0; padding: 24px 28px 14px }
   /* screens that have not been ported yet keep their own scrolling */
   main.d-main > #view:not(:has(.d-composer)) { overflow-y: auto; padding: 0 28px 40px }
-  body { margin: 0; background: var(--bg); color: var(--text); font-family: "IBM Plex Sans", ui-sans-serif, -apple-system, "Apple SD Gothic Neo", sans-serif; -webkit-font-smoothing: antialiased }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font-sans); -webkit-font-smoothing: antialiased }
   button, input, select, textarea { font: inherit; color: inherit }
   .mono { font-family: var(--mono) }
   html, body { height: 100%; overflow: hidden }
@@ -254,7 +256,9 @@ const state = {
   // ones the reader has opened or shut on top of the newest-two rule.
   feed: { agent: "", rows: [], done: false, loading: false, prepended: false, open: new Set(), shut: new Set(), detail: {} },
   dlg: null,
-  reqFilter: "Open",
+  // Every request, not only the open ones: the screen is where finished work
+  // is read back, and the newest ten are on Work either way.
+  reqFilter: "All",
   reqAgent: "",
   eventFilter: "all",
   theme: "dark",
@@ -804,12 +808,13 @@ function feedMessages(item, detail) {
   const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
-    // A note is news only while its task is still open; once the task reports,
-    // the result stands in its place rather than sitting above it.
+    // A note is news only while its task is still open. What the task finally
+    // reported is not shown here at all: Work is the conversation — the
+    // question, what is happening, and the answer — and each PM's and worker's
+    // result is on the Requests screen beside the rest of the trace.
     if (task.progress && !["done", "failed", "canceled"].includes(task.status)) {
       msgs.push({ who: `${agent} · working${task.progressAt ? ` · ${hhmm(task.progressAt)}` : ""}`, kind: "working", text: task.progress });
     }
-    if (task.pmResult) msgs.push({ who: `${agent} · ${hhmm(task.doneAt || item.createdAt)} · result`, kind: "result", text: task.pmResult });
   }
   if (!detail && item.progress && !item.finalReply) {
     msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
