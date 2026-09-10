@@ -41,6 +41,29 @@
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden; position: relative }
+  /* Rendered markdown. Code blocks and tables wear the design system's own
+     .gn-code and .gn-table; everything here is spacing and the inline marks. */
+  .md > *:first-child { margin-top: 0 }
+  .md > *:last-child { margin-bottom: 0 }
+  .md .md-p { margin: 0 0 10px }
+  .md .md-block { margin: 0 0 12px }
+  .md .md-h { margin: 16px 0 8px; font-weight: 600; letter-spacing: -0.01em; color: var(--text) }
+  .md .md-h1 { font-size: 17px } .md .md-h2 { font-size: 15.5px } .md .md-h3 { font-size: 14.5px }
+  .md .md-h4, .md .md-h5, .md .md-h6 { font-size: 13.5px; color: var(--text-2) }
+  .md .md-list { margin: 0; padding-left: 20px }
+  .md .md-list .md-list { margin: 4px 0 }
+  .md .md-list li { margin: 3px 0 }
+  .md .md-quote { margin: 0 0 12px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); color: var(--text-3) }
+  .md .md-rule { margin: 14px 0; border-top: var(--bw) solid var(--line) }
+  .md .md-code { font-family: var(--font-mono); font-size: 0.92em; padding: 1px 5px; background: var(--bg-2); color: var(--text) }
+  .md .md-pre { margin: 0; padding: 10px 14px; white-space: pre; overflow-x: auto; font-size: 12.5px; line-height: 1.75 }
+  .md .gn-code { margin: 0 0 12px }
+  /* A wide table or a long line scrolls inside its own block, never the page. */
+  .md .md-scroll { overflow-x: auto }
+  .md .md-table { min-width: 100%; width: max-content }
+  .md .md-table th, .md .md-table td { white-space: nowrap }
+  .md a { color: var(--accent-text); text-decoration: underline; text-underline-offset: 2px }
+  .md strong { font-weight: 600; color: var(--text) }
   /* Only shown while the conversation has moved on without you. */
   #newlines { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 30 }
   /* The handoff has no count on the rail at all, so this is new: the values are
@@ -191,7 +214,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { tablesToHtml } from "/markdown.js";
+import { renderMarkdown } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t, LANGS } from "/text.js";
 // The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
@@ -270,7 +293,9 @@ const T = (key, vars = {}) => {
   return String(line).replace(/\{(\w+)\}/g, (_, name) => (vars[name] === undefined ? `{${name}}` : String(vars[name])));
 };
 // Agent prose often carries markdown tables; show them as tables.
-const prose = (text) => tablesToHtml(text, esc) ?? esc(text);
+// Agents write markdown. src/markdown.js escapes first and only then writes
+// tags, so nothing in an agent's words can become one.
+const prose = (text) => renderMarkdown(text, esc);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const time = (v) => (v ? new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—");
 const stamp = (v) => (v ? new Date(v).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
@@ -806,13 +831,13 @@ function bubble(m) {
   if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
     <span class="d-lbl">${esc(m.who)}</span>
     <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;width:100%">
-      <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+      <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div></div></div>`;
   const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
   const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
   return `<div style="display:flex;flex-direction:column;gap:6px">
     <span class="d-lbl">${esc(m.who)}</span>
     <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;width:100%">
-      <div style="font-size:var(--fs-body);line-height:1.62;color:${fg};white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
+      <div class="md" style="font-size:var(--fs-body);line-height:1.62;color:${fg}">${prose(m.text)}</div></div></div>`;
 }
 
 // Who took it. The desk agent answers some requests itself, and those carry no
@@ -1096,18 +1121,18 @@ views.inbox = () => {
         <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span>
           <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">in-${esc(detail.id)} · ${detail.tasks.length} tasks</span></div>
         <div style="padding:16px 4px 0">
-          <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${prose(detail.userRequest)}</div>
+          <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(detail.userRequest)}</div>
           <div class="d-m" style="margin-top:8px;font-size:12px;color:var(--text-3)">${stamp(detail.createdAt)} · ${esc(detail.status)}</div>
         </div>
         <div class="d-list" style="margin-top:24px">${(detail.trace || []).filter((t) => t.stage !== "inbox").map((t) => `
           <div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${t.stage === "final_reply" ? ACCT : t.stage === "pm_result" ? INFO : "var(--text-3)"}">${esc(STAGE[t.stage] || t.stage)} · ${esc(t.who)}</span>
-            <span style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2);white-space:pre-wrap">${prose(t.text)}</span>
+            <span class="md" style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2)">${prose(t.text)}</span>
           </div>`).join("") || `<div class="d-tr"><span class="d-lbl">not handed on yet</span></div>`}</div>
         ${detail.tasks.some(inFlight) ? `<div style="margin-top:24px">${rule("in flight")}
           <div class="d-list">${detail.tasks.filter(inFlight).map((t) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${WARN}">${esc(t.agent || "agent")} · ${ago(t.progressAt)}</span>
-            <span style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2);white-space:pre-wrap">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
+            <span class="md" style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2)">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
         ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written — <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
         <div style="display:flex;gap:8px;margin-top:24px">
           ${btn("Ask a follow-up", "follow-request", `data-id="${detail.id}"`)}
