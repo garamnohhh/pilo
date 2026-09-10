@@ -752,16 +752,20 @@ function feedMessages(item, detail) {
   return msgs;
 }
 
+// The handoff caps these at 620px for your own lines and 680px for an agent's,
+// which reads well beside a narrow column of prose. Here the conversation is
+// the whole screen, and the reader asked for the width back: the cap is gone
+// and only .d-pad's 28px keeps the text off the edge.
 function bubble(m) {
   if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
     <span class="d-lbl">${esc(m.who)}</span>
-    <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;max-width:620px">
+    <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;width:100%">
       <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
   const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
   const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
   return `<div style="display:flex;flex-direction:column;gap:6px">
     <span class="d-lbl">${esc(m.who)}</span>
-    <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;max-width:680px">
+    <div style="border-left:2px solid ${bar};padding:8px 0 8px 14px;width:100%">
       <div style="font-size:var(--fs-body);line-height:1.62;color:${fg};white-space:pre-wrap">${esc(m.text)}</div></div></div>`;
 }
 
