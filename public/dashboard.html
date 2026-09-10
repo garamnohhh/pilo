@@ -30,6 +30,9 @@
     --mono: var(--font-mono);
   }
   * { box-sizing: border-box }
+  /* desk.css asks the container queries about .d-host; here the whole window is
+     that container, which is what the handoff's artboard measured. */
+  body { container-type: inline-size }
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden }
@@ -158,30 +161,23 @@
 <div class="d-top">
   <span class="d-mark"><b>❯</b>pilo</span>
   <span style="margin-left:auto;display:flex;align-items:center;gap:16px" id="topstate"></span>
+  <span class="d-m" id="sync" style="font-size:11px;color:var(--text-3);flex:none">loading…</span>
 </div>
 <div class="d-shell" id="shell">
   <div class="d-rail" id="rail"></div>
   <div class="d-strip" id="strip" hidden></div>
   <div class="d-agents" id="tree" hidden></div>
   <main class="d-main">
-    <header id="pagehead">
-      <div>
-        <h1 id="tabTitle">Work</h1>
-        <p id="tabDesc"></p>
-      </div>
-      <div style="margin-left:auto;display:flex;gap:8px">
-        <span class="pill" id="sync">loading…</span>
-      </div>
-    </header>
     <section id="view"></section>
   </main>
 </div>
+<div id="dlg"></div>
 <div class="toast" id="toast"></div>
 
 <script type="module">
 import { tablesToHtml } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
-import { t } from "/text.js";
+import { t, LANGS } from "/text.js";
 // The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
 // the codicon needs the patched JetBrains Mono that ships in fonts/, the plain
 // one is what a machine without it falls back to.
@@ -201,9 +197,6 @@ const RAIL = [
 // "overview" is out of the rail — the numbers it carried are in the work strip
 // and the runtime rows are on System. The view itself is left in place so it can
 // come back by putting the key back in RAIL.
-const TABS = [
-  "work", "overview", "agents", "inbox", "events", "artifacts", "projects", "schedules", "commands", "settings", "system"
-].map((key) => [key, t(`dash.tab.${key}`) , t(`dash.tab.${key}.desc`)]);
 
 const state = {
   tab: location.hash.slice(1) || "work",
@@ -218,6 +211,14 @@ const state = {
   project: { id: null, name: "", repo: "", path: "", note: "" },
   schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" },
   runs: { open: null, rows: [] },
+  dlg: null,
+  reqFilter: "Open",
+  reqAgent: "",
+  eventFilter: "all",
+  theme: "dark",
+  lang: "en",
+  palette: false,
+  palQuery: "",
   draft: "",
   sending: false
 };
@@ -227,6 +228,28 @@ function emptyForm() {
 }
 
 const $ = (id) => document.getElementById(id);
+
+// The design's own two switches. The theme is a data attribute the token file
+// already answers to; the language picks which of text.js's two tables t()
+// reads, so every string that has a key follows it. Labels drawn verbatim from
+// the handoff stay English in both, exactly as the handoff shows them.
+function setTheme(mode) {
+  state.theme = mode === "light" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", state.theme);
+  try { localStorage.setItem("pilo-theme", state.theme); } catch (err) { /* private window */ }
+}
+
+function setLang(code) {
+  state.lang = LANGS[code] ? code : "en";
+  document.documentElement.lang = state.lang;
+  try { localStorage.setItem("pilo-lang", state.lang); } catch (err) { /* private window */ }
+}
+
+const T = (key, vars = {}) => {
+  const table = LANGS[state.lang] || LANGS.en;
+  const line = table[key] ?? LANGS.en[key] ?? key;
+  return String(line).replace(/\{(\w+)\}/g, (_, name) => (vars[name] === undefined ? `{${name}}` : String(vars[name])));
+};
 // Agent prose often carries markdown tables; show them as tables.
 const prose = (text) => tablesToHtml(text, esc) ?? esc(text);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -267,24 +290,32 @@ async function load() {
   render();
 }
 
-// The detail panes keep their own selection, so refresh them alongside the lists.
+// The request pane keeps its own selection, so refresh it alongside the list.
+// The dialogs fetch their own detail when they open, and again while they stay
+// open so a running task's numbers move.
 async function loadDetail() {
-  const pick = (list, chosen) => (list.some((x) => String(x.id) === String(chosen)) ? chosen : list[0]?.id);
-  if (state.tab === "inbox") {
-    const id = pick(state.data.inbox, state.selected.inbox);
+  const list = state.data.inbox || [];
+  // Work reads the same detail: the conversation is the newest request in full.
+  if (state.tab === "inbox" || state.tab === "work") {
+    const id = list.some((x) => String(x.id) === String(state.selected.inbox)) ? state.selected.inbox : list[0]?.id;
     state.selected.inbox = id ?? null;
     state.data.inboxDetail = id ? await get(`/api/inbox/${id}`) : null;
   }
-  if (state.tab === "events") {
-    const id = pick(state.data.events, state.selected.event);
-    state.selected.event = id ?? null;
-    state.data.eventDetail = id ? await get(`/api/events/${id}`) : null;
-  }
-  if (state.tab === "artifacts") {
-    const id = pick(state.data.artifacts, state.selected.artifact);
-    state.selected.artifact = id ?? null;
-    state.data.artifactDetail = id ? await get(`/api/artifacts/${id}`) : null;
-  }
+  if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
+  if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
+  if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
+  if (state.dlg?.kind === "schedule") state.runs = { open: state.dlg.id, rows: await get(`/api/schedules/${state.dlg.id}/runs`) };
+}
+
+// There is no endpoint for "every run"; the runs of each schedule are read and
+// merged, newest first.
+async function recentRuns() {
+  const schedules = state.data.schedules || [];
+  const lists = await Promise.all(schedules.slice(0, 8).map(async (s) => {
+    const rows = await get(`/api/schedules/${s.id}/runs`).catch(() => []);
+    return rows.map((r) => ({ ...r, schedule: s.name }));
+  }));
+  return lists.flat().sort((a, b) => new Date(b.firedAt) - new Date(a.firedAt)).slice(0, 12);
 }
 
 function renderTabs() {
@@ -292,15 +323,16 @@ function renderTabs() {
     inbox: state.data.inbox?.filter((i) => i.status !== "replied").length || 0,
     system: state.data.system?.wakeFailures?.length || 0 // already filtered to unresolved
   };
-  $("rail").innerHTML = RAIL.map(([key, plain, icon, label]) => {
+  $("rail").innerHTML = RAIL.map(([key, plain, icon]) => {
     const badge = badges[key];
+    const label = T(`desk.rail.${key}`);
     return `<button class="d-railbtn" aria-current="${state.tab === key ? "page" : "false"}" data-tab="${key}" title="${label}">
       <span class="d-railicon" data-nf="on">${icon}</span>
       <span class="d-railtxt">${label}</span>
       ${badge ? `<span class="d-m" style="font-size:9px;color:${key === "system" ? "var(--err)" : "var(--warn)"}">${badge}</span>` : ""}
     </button>`;
   }).join("") + `<div style="margin-top:auto;padding:10px 8px;border-top:var(--bw) solid var(--line)">
-      <div class="d-m" style="font-size:9px;color:var(--line);text-align:center;line-height:1.5">⌘K</div>
+      <button class="d-plain d-m" style="width:100%;font-size:9px;color:var(--line);text-align:center;line-height:1.5" data-act="open-palette">⌘K</button>
     </div>`;
   const s = state.data.setup || {};
   const st = state.data.overview?.stats || {};
@@ -312,7 +344,7 @@ function renderTabs() {
     <span class="d-m" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
     ${waiting ? `<span class="d-m" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
     ${st.failed?.total ? `<span class="d-m" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
-    <button class="d-plain d-m" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px">⌘K</button>`;
+    <button class="d-plain d-m" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
   // The old sidebar's herdr card has no home in the rail; the same facts are on
   // the System screen, and the topbar already says whether the server is up.
 }
@@ -336,18 +368,15 @@ function restoreScroll(tops) {
 let renderedTab = null;
 
 function render() {
-  const meta = TABS.find((t) => t[0] === state.tab) || TABS[0];
   const tops = renderedTab === state.tab ? scrollState() : [];
-  $("tabTitle").textContent = meta[1];
-  $("tabDesc").textContent = meta[2];
   renderTabs();
   const isWork = state.tab === "work";
   $("shell").dataset.work = isWork ? "on" : "off";
   $("strip").hidden = !isWork;
   $("tree").hidden = !isWork;
-  $("pagehead").hidden = isWork;
   if (isWork) renderWorkPanes();
   $("view").innerHTML = views[state.tab]();
+  $("dlg").innerHTML = dialogHtml() + paletteHtml();
   if (isWork) restoreDraft();
   wire();
   renderedTab = state.tab;
@@ -387,8 +416,25 @@ function restoreDraft() {
   };
 }
 
+
 /* ---------- views ---------- */
 const views = {};
+
+// Page furniture, in the handoff's classes: a head with a count and actions, a
+// labelled rule over each block, and rows inside a bordered list.
+const pageHead = (title, count, actions = "") =>
+  `<div class="d-head"><h1 class="d-h2">${title}</h1>
+    ${count ? `<span class="d-m" style="font-size:13px;color:var(--text-3)">${count}</span>` : ""}
+    ${actions ? `<span style="margin-left:auto;display:flex;gap:8px">${actions}</span>` : ""}</div>`;
+const rule = (label, right = "") =>
+  `<div class="d-lblrule"><span class="d-lbl">${label}</span>
+    ${right ? `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${right}</span>` : ""}</div>`;
+const seg = (options, current, act) => `<span class="d-seg">${options.map(([value, label]) =>
+  `<button class="d-segopt" aria-selected="${value === current}" data-act="${act}" data-value="${value}">${label}</button>`).join("")}</span>`;
+const btn = (label, act, extra = "", kind = "") =>
+  `<button class="gn-btn gn-btn-sm ${kind}" data-act="${act}" ${extra}>${label}</button>`;
+const page = (inner) => `<div class="d-scroll d-pad">${inner}</div>`;
+
 
 // Colours and shapes are the handoff's own (Pilo Desk.dc.html); only the data
 // underneath is ours.
@@ -445,7 +491,7 @@ function renderWorkPanes() {
   </div>`).join("");
 
   $("tree").innerHTML = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
-      <span class="d-lbl">agents</span>
+      <span class="d-lbl">${T("desk.rail.agents")}</span>
       <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker</span>
     </div>
     <div class="d-scroll">${rows.map(({ a, lvl }) => {
@@ -465,7 +511,7 @@ function renderWorkPanes() {
         </span>
       </button>`;
     }).join("")}</div>
-    <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">Add agent</button></div>`;
+    <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
 }
 
 // One request reads as a conversation: what you asked, what the desk said, what
@@ -507,8 +553,8 @@ const hhmm = (iso) => {
 views.work = () => `<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
   <div class="d-composer"><div class="d-cin">
     <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
-    <textarea class="d-ta" id="draft" rows="1" placeholder="Type what you want done"></textarea>
-    <span class="d-m" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">ENTER to send</span>
+    <textarea class="d-ta" id="draft" rows="1" placeholder="${T("desk.composer")}"></textarea>
+    <span class="d-m" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">${T("desk.composer.hint")}</span>
   </div></div>`;
 
 views.overview = () => {
@@ -609,638 +655,757 @@ function failureCard(failures) {
 }
 
 views.agents = () => {
-  const { pilo, pms, orphanWorkers } = state.data.tree;
-  const projects = state.data.projects;
-  const tree = !pilo
-    ? `<div class="empty">대표 agent(role=pilo)가 없습니다. 오른쪽 폼에서 등록하세요.</div>`
-    : `<div class="node root">
-        <span class="dot" style="background:var(--green)"></span>
-        <span class="name">${esc(pilo.name)}</span><span class="role pilo">PILO</span>
-        <span class="meta">${esc(pilo.runtime || "runtime 미감지")} · ${esc(pilo.cwd || "cwd 없음")}</span>
-        <span class="acts">
-          <button class="btn small" data-act="rules" data-id="${pilo.id}">rules</button>
-          <button class="btn small" data-act="edit-agent" data-id="${pilo.id}">edit</button>
-          <button class="btn small" disabled title="대표 agent는 삭제할 수 없습니다">delete</button>
-        </span></div>
-      <div class="branch">
-        ${pms.length ? pms.map(pmNode).join("") : `<div class="sub" style="padding:14px 0">PM agent 없음 — 오른쪽에서 등록</div>`}
-        ${orphanWorkers.map((w) => workerNode(w)).join("")}
-      </div>`;
-  return `<div class="split">
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
-        <h2 style="margin:0">조직도</h2><span class="mono" style="font-size:11px;color:#5f6b64">parent_agent_id tree</span>
-        <span style="margin-left:auto;display:flex;gap:6px"><span class="role pilo">PILO</span><span class="role pm">PM</span><span class="role worker">WORKER</span></span>
-      </div>${tree}</div>
-    <div>${rulesCard()}${sessionCard()}${agentForm(projects, pilo, pms)}</div>
-  </div>`;
+  const rows = treeRows();
+  const st = state.data.overview?.stats || {};
+  const bound = (state.data.sessions || []).filter((x) => !x.boundAgent).length;
+  return page(
+    pageHead(T("desk.title.agents"), `${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker`,
+      `${btn(T("desk.act.resendRules"), "resend-rules", "", "gn-btn-ghost")}${btn(T("desk.act.addAgent"), "add-agent")}`) +
+    `<div class="gn-ladder gn-ladder-bar">${rows.map(({ a, lvl }) => {
+      const role = a.role.toUpperCase();
+      const colour = stCol(a.status);
+      return `<div class="gn-ladder-row">
+        <span class="gn-ladder-indent" data-level="${lvl}"></span>
+        <span class="gn-ladder-block" data-role="${role.toLowerCase()}">
+          <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
+          <span class="gn-ladder-name">${esc(a.name)}</span>
+          ${runtimeMark(a.runtime)}
+          <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
+          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
+          <span class="gn-ladder-note" style="color:${colour}">${esc(agentNote(a))}</span>
+          <button class="gn-btn gn-btn-sm gn-btn-ghost" style="margin-right:8px;flex:none" data-act="open-agent" data-id="${a.id}">open</button>
+        </span></div>`;
+    }).join("")}</div>` +
+    `<div class="d-hint">A child row starts where its parent's plate ends. open holds everything about one agent — rules, binding, waking, removal.
+      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet — Add agent picks one up.` : ""}</div>`
+  );
 };
 
-function rulesCard() {
-  const r = state.rules;
-  if (!r) return "";
-  return `<div class="card" style="margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">지시문 — ${esc(r.agent.name)}</h2>
-      <button class="btn small" data-act="close-rules" style="margin-left:auto">닫기</button></div>
-    <p class="hint">아래 내용을 <span class="mono" style="color:#b9c3bc">${esc(r.file)}</span> 의
-      <span class="mono">pilo:begin ~ pilo:end</span> 블록에 씁니다.
-      ${r.exists ? (r.hasBlock ? "기존 블록만 교체되고" : "파일 끝에 덧붙고") : "파일이 새로 만들어지고"} 나머지 내용은 그대로 둡니다.</p>
-    <div class="code" style="max-height:260px;border:1px solid #171b19;border-radius:8px;background:var(--panel2)">
-      ${esc(r.preview).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="white-space:pre-wrap">${l}</span></div>`).join("")}
-    </div>
-    <button class="btn primary" style="margin-top:12px" data-act="write-rules" data-id="${r.agent.id}">
-      ${r.exists && r.hasBlock ? "지시문 갱신하고 세션에 반영" : "지시문 쓰고 세션에 반영"}</button>
-    <div class="note">파일을 쓴 뒤 해당 세션에 <span class="mono" style="color:#b9c3bc">[pilo:rules]</span> 프롬프트를 보내 바로 읽게 합니다. 세션 재시작은 필요 없습니다.</div>
-  </div>`;
-}
-
-function sessionCard() {
-  const sessions = state.data.sessions || [];
-  const free = sessions.filter((s) => !s.boundAgent);
-  return `<div class="card" style="margin-bottom:14px">
-    <h2>herdr 세션</h2>
-    <p class="hint">떠 있는 세션을 그대로 agent로 등록합니다. runtime·cwd·target은 herdr에서 읽어옵니다.</p>
-    ${sessions.length ? sessions.map((s) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-      <span class="dot" style="background:${s.boundAgent ? "var(--faint)" : s.status === "working" ? "var(--amber)" : "var(--green)"}"></span>
-      <span style="color:var(--strong);width:52px;flex:none">${esc(s.runtime)}</span>
-      <span style="color:#67726b;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(s.cwd)}">${esc(s.cwdShort)}</span>
-      ${s.boundAgent
-        ? s.boundAgent.role === "system"
-          ? `<span style="color:var(--blue);white-space:nowrap">SYSTEM · ${esc(s.boundAgent.name)}</span>`
-          : `<span style="color:var(--faint);white-space:nowrap">→ ${esc(s.boundAgent.name)}</span>`
-        : `<button class="btn small" data-act="use-session" data-target="${esc(s.target)}">이 세션 추가</button>`}
-    </div>`).join("") : `<div class="sub" style="margin-top:10px">herdr 세션이 없습니다. 세션을 띄운 뒤 새로고침하세요.</div>`}
-    ${sessions.length && !free.length ? `<div class="note">모든 세션이 이미 등록되어 있습니다.</div>` : ""}
-  </div>`;
-}
-
-// Whether the pane is actually running something, whoever started it.
-function sessionBadge(a) {
-  if (!a.herdrTarget) return "";
-  const seen = a.sessionStatus || "";
-  const busy = seen === "working";
-  const label = busy ? "세션 실행 중" : seen ? "세션 대기" : "세션 끊김";
-  return `<span class="meta" style="color:${busy ? "var(--amber)" : "var(--faint)"}">${esc(label)}</span>`;
-}
-
-function pmNode(pm) {
-  return `<div style="padding-top:16px">
-    <div class="node">
-      <span class="dot" style="background:${stateColor(pm.status)}"></span>
-      <span class="name">${esc(pm.name)}</span><span class="role pm">PM</span>
-      <span class="meta">${esc(pm.projectName || "project 미지정")} · ${esc(pm.status === "blocked" ? "결정 대기" : pm.runtime || "미감지")}</span>
-      ${sessionBadge(pm)}
-      <span class="meta">${esc(pm.aliases || "")}</span>
-      <span class="acts">
-        <button class="btn small" data-act="rules" data-id="${pm.id}">rules</button>
-        <button class="btn small" data-act="edit-agent" data-id="${pm.id}">edit</button>
-        <button class="btn small danger" data-act="delete-agent" data-id="${pm.id}">delete</button>
-      </span></div>
-    <div class="branch">${pm.children.map(workerNode).join("") || `<div class="sub" style="padding:10px 0">worker 없음</div>`}</div>
-  </div>`;
-}
-
-function workerNode(w) {
-  return `<div class="node" style="margin-top:10px;padding:10px 14px;border-color:#171b19;background:var(--panel2)">
-    <span class="dot" style="background:${stateColor(w.status)}"></span>
-    <span class="name" style="font-size:12px;color:#b9c3bc">${esc(w.name)}</span><span class="role worker">WORKER</span>
-    ${sessionBadge(w)}
-    <span class="meta">${esc(w.specialty || w.note || "")}</span>
-    <span class="acts">
-      <button class="btn small" data-act="rules" data-id="${w.id}">rules</button>
-      <button class="btn small" data-act="edit-agent" data-id="${w.id}">edit</button>
-      <button class="btn small danger" data-act="delete-agent" data-id="${w.id}">delete</button>
-    </span></div>`;
-}
-
-function agentForm(projects, pilo, pms) {
-  const f = state.form;
-  const piloTaken = Boolean(pilo) && state.editing !== (pilo && pilo.id);
-  const roles = [["pilo", "PILO"], ["pm", "PM"], ["worker", "WORKER"]];
-  const parents = f.role === "pm" ? (pilo ? [pilo] : []) : f.role === "worker" ? pms : [];
-  return `<div class="card">
-    <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">${state.editing ? "agent 수정" : "agent 등록"}</h2>
-      ${state.editing ? `<button class="btn small" data-act="cancel-edit" style="margin-left:auto">취소</button>` : ""}</div>
-    <p class="hint">target(세션 핸들)은 herdr에서 자동 감지되므로 입력하지 않습니다.</p>
-    <div class="field"><div class="name">name <span class="hint">고유 식별자</span><span class="req">required</span></div>
-      <input id="f-name" value="${esc(f.name)}" placeholder="pm-4"></div>
-    <div class="field"><div class="name">role <span class="hint">pilo는 정확히 1개</span><span class="req">required</span></div>
-      <div class="choices">${roles.map(([v, l]) => {
-        const off = v === "pilo" && piloTaken;
-        return `<button class="choice ${f.role === v ? "on" : ""}" data-act="role" data-role="${v}" ${off ? "disabled" : ""}>
-          ${l}${off ? "<small>이미 등록됨</small>" : ""}</button>`;
-      }).join("")}</div></div>
-    ${f.role === "pilo" ? "" : `<div class="field"><div class="name">parent <span class="hint">parent_agent_id</span><span class="req">required</span></div>
-      <select id="f-parent">${parents.length ? parents.map((p) => `<option value="${p.id}" ${String(f.parentAgentId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("") : `<option value="">${f.role === "pm" ? "pilo agent를 먼저 등록" : "PM agent를 먼저 등록"}</option>`}</select></div>`}
-    ${f.role === "pilo" ? "" : `<div class="field"><div class="name">project <span class="hint">이 agent가 담당할 프로젝트</span></div>
-      <select id="f-project"><option value="">— 미지정 —</option>
-        ${projects.map((p) => `<option value="${p.id}" ${String(f.projectId) === String(p.id) ? "selected" : ""}>${esc(p.name)}</option>`).join("")}
-        ${f.projectName && !f.projectId ? `<option value="__auto" selected>+ ${esc(f.projectName)} (등록 시 생성)</option>` : ""}
-        <option value="__new">+ Projects 탭에서 직접 만들기…</option></select></div>`}
-    <div class="field"><div class="name">cwd <span class="hint">herdr 세션 매칭 기준</span><span class="req">required</span></div>
-      <input id="f-cwd" value="${esc(f.cwd)}" placeholder="~/work/project-d"></div>
-    <div class="field"><div class="name">runtime <span class="hint">herdr가 감지한 값</span></div>
-      <input value="${esc(f.runtime || "등록 시 cwd로 자동 감지")}" disabled style="color:${f.runtime ? "var(--green)" : "var(--faint)"}"></div>
-    <div class="field"><div class="name">model <span class="hint">선택 — sonnet, opus 같은 메모</span></div>
-      <input id="f-model" value="${esc(f.model)}" placeholder="비워둬도 됩니다"></div>
-    <div class="field"><div class="name">specialty <span class="hint">전문 영역</span></div>
-      <input id="f-specialty" value="${esc(f.specialty)}" placeholder="backend, migration"></div>
-    <div class="field"><div class="name">aliases <span class="hint">쉼표로 구분</span></div>
-      <input id="f-aliases" value="${esc(f.aliases)}" placeholder="@d, dd"></div>
-    <div class="field"><div class="name">note <span class="hint">메모</span></div>
-      <input id="f-note" value="${esc(f.note)}" placeholder="PoC 담당"></div>
-    <div class="note" style="display:flex;gap:10px;align-items:center">
-      <span>target</span><span style="color:#b9c3bc">${state.editing ? esc(currentTarget()) : "등록 시 cwd로 자동 감지"}</span>
-      ${state.editing ? `<button class="btn small" data-act="rebind" data-id="${state.editing}" style="margin-left:auto">rebind</button>` : `<span style="margin-left:auto;color:#3e4744">auto</span>`}
-    </div>
-    ${state.candidates.length > 1 ? `<div class="note">
-      <div style="color:#b9c3bc;margin-bottom:6px">후보 ${state.candidates.length}개 — 하나를 고르세요</div>
-      ${state.candidates.map((c) => `<div style="display:flex;gap:8px;align-items:center;padding:4px 0">
-        <span>${esc(c.runtime)} · ${esc(c.target)} · ${esc(c.title || "")}</span>
-        <button class="btn small" data-act="pick-target" data-target="${esc(c.target)}" style="margin-left:auto">bind</button></div>`).join("")}</div>` : ""}
-    ${state.editing ? "" : `<label style="display:flex;align-items:center;gap:9px;margin:14px 0 0;font:11px var(--mono);color:#9aa59d;cursor:pointer">
-      <input type="checkbox" id="f-write-rules" ${f.writeRules ? "checked" : ""} style="width:auto;margin:0">
-      등록과 함께 ${f.runtime === "claude" ? "CLAUDE.md" : "AGENTS.md"} 쓰고 세션에 반영</label>`}
-    <button class="btn primary" data-act="${state.editing ? "update-agent" : "create-agent"}">${state.editing ? "save agent" : "register agent"}</button>
-  </div>`;
-}
-
-function currentTarget() {
-  const all = [state.data.tree.pilo, ...state.data.tree.pms, ...state.data.tree.pms.flatMap((p) => p.children), ...state.data.tree.orphanWorkers].filter(Boolean);
-  const found = all.find((a) => String(a.id) === String(state.editing));
-  return found?.herdrTarget || "미바인딩";
-}
-
-// Who a request went to, once it has gone anywhere. Project first — that is the
-// name the user thinks in — and the agents only when there is no project.
-function routedBadge(item) {
-  const parts = String(item.project || item.routed || "").split(", ").filter(Boolean);
-  // Nobody was handed it, so the desk agent answered it itself.
-  if (!parts.length) return { text: "PILO", color: "var(--green)" };
-  const text = parts.length > 2 ? `${parts[0]} +${parts.length - 1}` : parts.join(" · ");
-  const pms = (state.data.tree?.pms) || [];
-  const workers = pms.flatMap((pm) => pm.children || []);
-  const owns = (agents) => agents.some((a) => parts.includes(a.name) || parts.includes(a.projectName));
-  return { text, color: owns(pms) || !owns(workers) ? "var(--blue)" : "var(--muted)" };
-}
-
-// Same rule the TUI filters by: a request belongs to every project it was
-// handed to, and one that has been handed nowhere is 미배분.
+// A request belongs to every project it was handed to; one handed nowhere is
+// the desk's own.
 const inboxProjects = (item) => String(item.project || "").split(", ").filter(Boolean);
-
-function matchesFilter(item) {
-  if (!state.inboxFilter) return true;
-  const names = inboxProjects(item);
-  return state.inboxFilter === "__none" ? !names.length : names.includes(state.inboxFilter);
-}
-
-views.inbox = () => {
-  const all = state.data.inbox;
-  if (!all.length) return `<div class="table"><div class="empty">inbox가 비어 있습니다. TUI에서 지시를 입력하면 여기에 쌓입니다.</div></div>`;
-  const names = [...new Set(all.flatMap(inboxProjects))].sort();
-  const list = all.filter(matchesFilter);
-  const chip = (name, text) => `<button class="chip ${state.inboxFilter === name ? "on" : ""}" data-act="filter-inbox" data-name="${esc(name || "")}">${esc(text)}</button>`;
-  const chips = `<div class="chips">${chip(null, "전체")}${names.map((n) => chip(n, n)).join("")}${
-    all.some((i) => !inboxProjects(i).length) ? chip("__none", "PILO") : ""}</div>`;
-
-  // Keep the open request selected while it survives the filter.
-  const current = list.some((i) => String(i.id) === String(state.selected.inbox))
-    ? state.selected.inbox
-    : list[0]?.id;
-  const detail = state.data.inboxDetail;
-  const label = { queued: "대기", dispatched: "처리 중", replied: "완료", failed: "실패" };
-  const stateOf = (i) => (i.needsReply ? "답변 저장 필요" : label[i.status] || i.status);
-
-  let day = "";
-  const rows = list.map((i) => {
-    const group = dayLabel(i.createdAt);
-    const header = group === day ? "" : `<div class="daygroup">${esc(group)}</div>`;
-    day = group;
-    const done = i.status === "replied";
-    return `${header}<button class="list-item ${String(i.id) === String(current) ? "on" : ""}" data-act="open-inbox" data-id="${i.id}">
-      <span style="display:flex;align-items:center;gap:8px">
-        <span class="dot" style="background:${done ? "var(--green)" : i.status === "failed" || i.needsReply ? "var(--red)" : "var(--amber)"}"></span>
-        <span style="flex:none;font:10px var(--mono);color:${routedBadge(i).color}">[${esc(routedBadge(i).text)}]</span>
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text);font-size:12.5px">${esc(firstLine(i.userRequest))}</span>
-      </span>
-      <span style="display:flex;gap:8px;margin-top:6px;font:10px var(--mono);color:var(--faint)">
-        <span>${ago(i.createdAt)}</span><span>·</span><span style="${i.needsReply ? "color:var(--red)" : ""}">${esc(stateOf(i))}</span>
-        ${i.project ? `<span style="margin-left:auto;color:#67726b">${esc(i.project)}</span>` : ""}
-      </span>
-    </button>`;
-  }).join("");
-
-  return `<div class="inbox">
-    <div class="table">
-      <div class="title">요청 <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length}건${
-        state.inboxFilter ? ` / ${all.length}` : ""}</span></div>
-      ${chips}
-      ${rows || `<div class="empty">이 필터에 맞는 요청이 없습니다.</div>`}
-    </div>
-    ${detail && String(detail.id) === String(current) ? inboxDetail(detail) : `<div class="table"><div class="empty">요청을 선택하세요</div></div>`}
-  </div>`;
-};
+const inboxAgents = (item) => String(item.routed || "").split(", ").filter(Boolean);
 
 function dayLabel(at) {
-  if (!at) return "이전";
+  if (!at) return "older";
   const d = new Date(at);
   const today = new Date();
   const same = (a, b) => a.toDateString() === b.toDateString();
-  if (same(d, today)) return "오늘";
-  const yesterday = new Date(today.getTime() - 86400000);
-  if (same(d, yesterday)) return "어제";
+  if (same(d, today)) return "today";
+  if (same(d, new Date(today.getTime() - 86400000))) return "yesterday";
   return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
 }
 
-// pm_result is markdown written for a human reader; for a one-line preview the
-// syntax is just noise.
-function summarize(text, limit = 150) {
-  const flat = String(text || "")
-    .replace(/```[\s\S]*?```/g, " [코드] ")
-    .replace(/^#{1,6}\s*/gm, "")
-    .replace(/[*_`>]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  return flat.length > limit ? flat.slice(0, limit) + "…" : flat || "(내용 없음)";
+function ago(at) {
+  if (!at) return "—";
+  const diff = (Date.now() - new Date(at)) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
 }
 
 const firstLine = (text) => {
   const lines = String(text || "").split("\n").map((l) => l.trim()).filter(Boolean);
   const names = (state.data?.agents || []).map((a) => a.name);
   const start = lines.length > 1 && (lines[0].length <= 12 || names.includes(lines[0])) ? 1 : 0;
-  const line = lines[start] || lines[0] || "(빈 요청)";
-  return line.length > 60 ? line.slice(0, 60) + "…" : line;
+  const line = lines[start] || lines[0] || "(empty request)";
+  return line.length > 90 ? line.slice(0, 90) + "…" : line;
 };
 
-function ago(at) {
-  if (!at) return "—";
-  const diff = (Date.now() - new Date(at)) / 1000;
-  if (diff < 60) return "방금";
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  return `${Math.floor(diff / 86400)}일 전`;
-}
-
-const STAGE = {
-  inbox: { label: "요청", color: "var(--muted)" },
-  dispatch: { label: "배분", color: "var(--blue)" },
-  pm_result: { label: "PM 결과", color: "var(--blue)" },
-  final_reply: { label: "최종 답변", color: "var(--green)" }
-};
-
-// A note is only news while its task is still open; once the task is done the
-// result speaks for it, and the note stays in Events as history.
+// A note is only news while its task is still open; once it is done the result
+// speaks for it.
 const inFlight = (t) => t.progress && !["done", "failed"].includes(t.status);
+const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", final_reply: "answer" };
+const reqState = (i) => (i.needsReply ? "needs an answer" : { queued: "waiting", dispatched: "working", replied: "done", failed: "failed" }[i.status] || i.status);
+const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.status === "replied" ? OK : WARN);
+const isOpen = (i) => i.status !== "replied";
 
-// Every task finished and no answer was written. The dashboard does not write
-// it either — it shows what the answer would be made of and leaves the wording
-// to the desk agent.
-function needsReplyCard(detail) {
-  const finished = detail.tasks.filter((t) => ["done", "failed"].includes(t.status));
-  const waiting = detail.tasks.length && finished.length === detail.tasks.length;
-  if (!waiting) {
-    return `<div class="card"><span class="sub">아직 최종 답변이 없습니다 — ${
-      esc(detail.tasks.map((t) => t.agent).filter(Boolean).join(", ") || "배분 대기")}</span></div>`;
-  }
-  const one = finished.length === 1 ? finished[0] : null;
-  return `<div class="card" style="border-color:#3a2422">
-    <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
-      <span class="role" style="color:var(--red);border-color:#3a2422">답변 저장 필요</span>
-      <span class="mono" style="font-size:10px;color:var(--faint)">task ${finished.length}건 완료 · final_reply 없음</span>
-      ${one ? `<button class="btn small" data-act="copy-pm-result" data-id="${one.id}" style="margin-left:auto">PM 결과 복사</button>` : ""}
-    </div>
-    ${one
-      ? `<div class="sub" style="margin-bottom:8px">${esc(one.agent || "agent")}의 결과를 그대로 쓰거나 다듬어 저장하세요 — <code>pilo reply ${esc(detail.id)} "…"</code></div>
-         <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(one.pmResult || "(결과 본문 없음)")}</div>`
-      : `<div class="sub">${esc(finished.map((t) => t.agent).filter(Boolean).join(", "))} 결과 ${finished.length}건을 취합해 하나의 답변으로 저장해야 합니다 — <code>pilo reply ${esc(detail.id)} "…"</code></div>`}
-  </div>`;
-}
+// ---------- REQUESTS ----------
+// The filter list is the tree itself, so picking an agent and seeing who it
+// reports to are the same act.
+views.inbox = () => {
+  const all = state.data.inbox || [];
+  const byState = all.filter((i) => (state.reqFilter === "All" ? true : state.reqFilter === "Closed" ? !isOpen(i) : isOpen(i)));
+  const rows = byState.filter((i) => !state.reqAgent || inboxAgents(i).includes(state.reqAgent) || inboxProjects(i).includes(state.reqAgent));
+  const detail = state.data.inboxDetail;
+  const countFor = (name) => byState.filter((i) => inboxAgents(i).includes(name) || inboxProjects(i).includes(name)).length;
 
-function inboxDetail(detail) {
-  const reply = detail.replies[detail.replies.length - 1];
-  const steps = detail.trace.filter((t) => t.stage !== "inbox");
-  return `<div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
-        <span class="label">요청 in-${esc(detail.id)}</span>
-        <span class="mono" style="font-size:10px;color:var(--faint)">${stamp(detail.createdAt)}</span>
-        <span class="mono" style="margin-left:auto;font-size:10px;color:var(--faint)">task ${detail.tasks.length}건</span>
-      </div>
-      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(detail.userRequest)}</div>
-    </div>
+  const agentOpts = [`<button class="d-plain d-tr d-rowbtn d-pick" aria-selected="${!state.reqAgent}" style="grid-template-columns:minmax(0,1fr) 32px;min-height:34px;padding-left:12px" data-act="req-agent" data-name="">
+      <span style="display:flex;align-items:center;gap:8px;min-width:0"><span class="d-clip" style="font-size:var(--fs-body)">${T("desk.lbl.everyAgent")}</span></span>
+      <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${byState.length}</span></button>`]
+    .concat(treeRows().map(({ a, lvl }) => {
+      const role = a.role.toUpperCase();
+      return `<button class="d-plain d-tr d-rowbtn d-pick" aria-selected="${state.reqAgent === a.name}" style="grid-template-columns:minmax(0,1fr) 32px;min-height:34px;padding-left:${12 + lvl * 18}px" data-act="req-agent" data-name="${esc(a.name)}">
+        <span style="display:flex;align-items:center;gap:8px;min-width:0">
+          ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
+          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${stCol(a.status)}"></span>
+          <span class="d-clip" style="font-size:var(--fs-body)">${esc(a.name)}</span>
+          <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)};flex:none">${role}</span>
+        </span>
+        <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${countFor(a.name)}</span></button>`;
+    })).join("");
 
-    ${reply ? `<div class="card" style="border-color:#24312c;background:linear-gradient(180deg,#101413,#0b0e0d)">
-      <div style="display:flex;align-items:center;gap:9px;margin-bottom:10px">
-        <span class="role pilo">최종 답변</span>
-        <span class="mono" style="font-size:10px;color:var(--faint)">${esc(reply.agent || "pilo")} · ${ago(reply.createdAt)}</span>
-      </div>
-      <div style="white-space:pre-wrap;font-size:13px;line-height:1.7;color:var(--text)">${prose(reply.body)}</div>
-    </div>` : needsReplyCard(detail)}
+  let day = "";
+  const reqRows = rows.map((i) => {
+    const group = dayLabel(i.createdAt);
+    const header = group === day ? "" : `<div class="d-tr" style="grid-template-columns:minmax(0,1fr);min-height:30px"><span class="d-lbl">${esc(group)}</span></div>`;
+    day = group;
+    return `${header}<button class="d-plain d-tr d-rowbtn d-pick" aria-selected="${String(i.id) === String(state.selected.inbox)}" style="grid-template-columns:minmax(0,1fr);min-height:auto;padding:10px 4px 10px 12px" data-act="open-inbox" data-id="${i.id}">
+      <span style="display:flex;align-items:center;gap:10px;min-width:0">
+        <span class="d-m" style="font-size:12px;color:var(--text-3);flex:none">${hhmm(i.createdAt)}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2);flex:none">${esc(inboxAgents(i)[0] || "pilo")}</span>
+        <span class="d-m" style="margin-left:auto;font-size:11px;color:${reqColor(i)};flex:none">${esc(reqState(i))}</span>
+      </span>
+      <span class="d-clip" style="display:block;margin-top:4px;font-size:var(--fs-body)">${esc(firstLine(i.userRequest))}</span></button>`;
+  }).join("");
 
-    ${detail.tasks.some(inFlight) ? `<div class="card">
-      <div class="label" style="margin-bottom:8px">진행 상황</div>
-      ${detail.tasks.filter(inFlight).map((t) => `<div class="step">
-        <span style="flex:none;width:62px;font:10px var(--mono);color:var(--amber)">진행</span>
-        <div style="flex:1;min-width:0">
-          <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.agent || "agent")} · task #${esc(t.id)} · ${ago(t.progressAt)}</div>
-          <div class="body" style="margin-top:5px">${prose(t.progress)}</div>
+  const handling = detail && String(detail.id) === String(state.selected.inbox)
+    ? `<div style="min-width:0">
+        <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span>
+          <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">in-${esc(detail.id)} · ${detail.tasks.length} tasks</span></div>
+        <div style="padding:16px 4px 0">
+          <div style="font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${prose(detail.userRequest)}</div>
+          <div class="d-m" style="margin-top:8px;font-size:12px;color:var(--text-3)">${stamp(detail.createdAt)} · ${esc(detail.status)}</div>
         </div>
-      </div>`).join("")}
-    </div>` : ""}
+        <div class="d-list" style="margin-top:24px">${(detail.trace || []).filter((t) => t.stage !== "inbox").map((t) => `
+          <div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
+            <span class="d-m" style="font-size:12px;color:${t.stage === "final_reply" ? ACCT : t.stage === "pm_result" ? INFO : "var(--text-3)"}">${esc(STAGE[t.stage] || t.stage)} · ${esc(t.who)}</span>
+            <span style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2);white-space:pre-wrap">${prose(t.text)}</span>
+          </div>`).join("") || `<div class="d-tr"><span class="d-lbl">not handed on yet</span></div>`}</div>
+        ${detail.tasks.some(inFlight) ? `<div style="margin-top:24px">${rule("in flight")}
+          <div class="d-list">${detail.tasks.filter(inFlight).map((t) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
+            <span class="d-m" style="font-size:12px;color:${WARN}">${esc(t.agent || "agent")} · ${ago(t.progressAt)}</span>
+            <span style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2);white-space:pre-wrap">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
+        ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written — <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
+        <div style="display:flex;gap:8px;margin-top:24px">
+          ${btn("Ask a follow-up", "follow-request", `data-id="${detail.id}"`)}
+          ${btn("See the events", "go-events", "", "gn-btn-ghost")}
+        </div></div>`
+    : `<div style="min-width:0"><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span></div>
+        <div style="padding:48px 4px;font-size:var(--fs-body);color:var(--text-3)">Pick a request on the left.</div></div>`;
 
-    <div class="card">
-      <div class="label" style="margin-bottom:4px">처리 경로</div>
-      ${steps.length ? steps.map((t, i) => {
-        const meta = STAGE[t.stage] || { label: t.stage, color: "var(--muted)" };
-        const key = `${detail.id}-${i}`;
-        const open = state.openTrace === key;
-        const long = String(t.text || "").length > 160;
-        return `<div class="step">
-          <span style="flex:none;width:62px;font:10px var(--mono);color:${meta.color}">${esc(meta.label)}</span>
-          <div style="flex:1;min-width:0">
-            <div class="mono" style="font-size:10px;color:var(--faint)">${esc(t.who)} · ${ago(t.at)}</div>
-            <div class="body ${long && !open ? "short" : ""}" style="margin-top:5px">${open || !long ? prose(t.text) : esc(summarize(t.text, 220))}</div>
-            ${long ? `<button class="btn small" style="margin-top:8px" data-act="toggle-trace" data-key="${key}">${open ? "접기" : "전체 보기"}</button>` : ""}
-          </div>
-        </div>`;
-      }).join("") : `<div class="sub" style="padding-top:10px">아직 배분되지 않았습니다.</div>`}
+  return page(
+    pageHead(T("desk.title.inbox"), `${all.length} in all`,
+      seg([["Open", "Open"], ["Closed", "Closed"], ["All", "All"]], state.reqFilter, "req-filter")) +
+    `<div class="d-split"><div style="min-width:0">
+      <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.byAgent")}</span>
+        <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${rows.length} / ${byState.length}</span></div>
+      <div class="d-list">${agentOpts}</div>
+      <div style="margin-top:48px">
+        <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.requests")}</span>
+          <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${esc(state.reqAgent || "every agent")}</span></div>
+        <div class="d-list">${reqRows}</div>
+        ${rows.length ? "" : `<div style="padding:48px 4px;text-align:center"><div class="d-lbl">${T("desk.lbl.nothingHere")}</div>
+          <div style="margin-top:16px">${btn(T("desk.lbl.clearFilter"), "clear-req-filter")}</div></div>`}
+      </div></div>${handling}</div>`
+  );
+};
+
+// ---------- SCHEDULES ----------
+views.schedules = () => {
+  const list = state.data.schedules || [];
+  // 09.10 09:00 — the columns are narrow and a locale string wraps in them.
+  const when = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    return `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${hhmm(iso)}`;
+  };
+  const runs = state.data.recentRuns || [];
+  return page(
+    pageHead(T("desk.title.schedules"), `${list.filter((s) => s.enabled).length} of ${list.length} on`, btn(T("desk.act.newSchedule"), "new-schedule")) +
+    `<div class="d-list">
+      <div class="d-th" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px 116px 52px">
+        <span class="d-lbl">name</span><span class="d-lbl">to</span><span class="d-lbl">when</span><span class="d-lbl">next run</span><span class="d-lbl">last run</span><span class="d-lbl d-num">on</span>
+      </div>
+      ${list.length ? list.map((s) => `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px 116px 52px" data-act="open-schedule" data-id="${s.id}">
+        <span class="d-clip" style="font-size:var(--fs-body);color:${s.enabled ? "var(--text)" : "var(--text-3)"}">${esc(s.name)}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.agent)}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.cadence)}${s.weekdaysOnly ? " · weekdays" : ""}${s.onMiss === "skip" ? " · skip if missed" : ""}</span>
+        <span class="d-m" style="font-size:12px;color:${s.enabled ? ACCT : "var(--text-3)"}">${esc(s.enabled ? when(s.nextRunAt) : "off")}</span>
+        <span class="d-m" style="font-size:12px;color:${s.failCount ? ERR : "var(--text-3)"}">${esc(when(s.lastRunAt))}</span>
+        <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
+      </button>`).join("") : `<div class="d-tr"><span class="d-lbl">nothing standing yet</span></div>`}
     </div>
-  </div>`;
-}
+    <div style="margin-top:48px">
+      <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.recentRuns")}</span>
+        <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${runs.length}</span></div>
+      <div class="d-list">${runs.length ? runs.map((r) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr) minmax(0,200px) 88px">
+        <span class="d-m" style="font-size:12px;color:var(--text-3)">${when(r.firedAt)}</span>
+        <span class="d-clip" style="font-size:var(--fs-small)">${esc(r.schedule)}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:${r.taskStatus === "failed" ? ERR : r.taskStatus === "done" ? OK : WARN}">${esc(r.error || r.taskStatus || (r.reply ? "answered" : "in flight"))}</span>
+        <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${r.taskId ? `task ${r.taskId}` : `in-${r.inboxId}`}</span>
+      </div>`).join("") : `<div class="d-tr"><span class="d-lbl">nothing has run yet</span></div>`}</div>
+    </div>`
+  );
+};
+
+// ---------- EVENTS ----------
+const EVENT_FILTERS = [["all", "all"], ["wake", "wake"], ["task", "task"], ["report", "report"], ["answer", "answer"], ["failure", "failure"]];
+const evGroup = (type) => (/wake/.test(type) ? "wake" : /fail/.test(type) ? "failure" : type === "final_reply" ? "answer" : type === "pm_result" ? "report" : /task|progress|blocked|answered|stall/.test(type) ? "task" : "");
+const evCol = (type) => (/fail/.test(type) ? ERR : type === "final_reply" ? ACCT : type === "pm_result" ? INFO : /progress|stall/.test(type) ? WARN : "var(--text-3)");
 
 views.events = () => {
-  const list = state.data.events;
-  if (!list.length) return `<div class="table"><div class="empty">기록된 event가 없습니다.</div></div>`;
-  const current = state.selected.event || list[0].id;
-  const d = state.data.eventDetail;
-  const typeColor = (t) => ({ pm_result: "var(--blue)", final_reply: "var(--green)", wake_failed: "var(--red)", task_progress: "var(--amber)" }[t] || "var(--faint)");
-  return `<div class="split" style="grid-template-columns:300px 1fr">
-    <div class="table">${list.map((e) => `<button class="list-item ${String(e.id) === String(current) ? "on" : ""}" data-act="open-event" data-id="${e.id}">
-      <span style="display:flex;gap:8px;font:11px var(--mono)"><span style="color:${typeColor(e.type)}">${esc(e.type)}</span>
-      <span style="margin-left:auto;color:var(--faint)">${time(e.createdAt)}</span></span>
-      <span style="display:block;margin-top:6px;font:12px var(--mono);color:var(--text)">${esc(e.agent)}</span>
-      <span style="display:block;margin-top:3px;font-size:11px;color:#5f6b64;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.title)}</span>
+  const all = state.data.events || [];
+  const rows = all.filter((e) => state.eventFilter === "all" || evGroup(e.type) === state.eventFilter);
+  return page(
+    pageHead(T("desk.title.events"), `${all.length} kept`, seg(EVENT_FILTERS, state.eventFilter, "ev-filter")) +
+    `<div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.eventLog")}</span>
+      <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${rows.length} / ${all.length}</span></div>
+    <div class="d-list">${rows.map((e) => `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:72px 110px minmax(0,1fr) minmax(0,140px)" data-act="open-event" data-id="${e.id}">
+      <span class="d-m" style="font-size:12px;color:var(--text-3)">${hhmm(e.createdAt)}</span>
+      <span class="d-m d-clip" style="font-size:12px;color:${evCol(e.type)}">${esc(e.type)}</span>
+      <span class="d-clip" style="font-size:var(--fs-body)">${esc(e.title)}</span>
+      <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)">${esc(e.agent)}</span>
     </button>`).join("")}</div>
-    <div class="table">${d && String(d.id) === String(current) ? `
-      <div class="title">${esc(d.type)} · ${esc(d.agent)}
-        <span class="mono" style="margin-left:12px;font-size:11px;color:#5f6b64">원문 payload</span>
-        <button class="btn small" data-act="copy-json" style="margin-left:auto">copy json</button></div>
-      <div class="code">${JSON.stringify(d.payload, null, 2).split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t">${esc(l)}</span></div>`).join("")}</div>
-      <div style="padding:14px 16px;border-top:1px solid #171b19;background:#0b0e0d">
-        <div class="label">run log</div>
-        ${(d.runLog || []).length ? d.runLog.map((l) => `<div style="display:flex;gap:12px;font:12px/1.9 var(--mono);color:#939e96">
-          <span style="color:#3e4744;width:52px;flex:none">${esc(l.t || "")}</span><span>${esc(l.text || "")}</span></div>`).join("") : `<div class="sub" style="margin-top:8px">기록된 로그 없음</div>`}
-        ${(d.files || []).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;padding-top:12px;border-top:1px dashed #1e2422">
-          ${d.files.map((f) => `<span class="mono" style="font-size:11px;padding:4px 9px;border-radius:5px;background:#131817;border:1px solid #212725;color:#9aa59d">${esc(f.path)} ${esc(f.delta)}</span>`).join("")}</div>` : ""}
-      </div>` : `<div class="empty">event를 선택하세요</div>`}</div>
-  </div>`;
+    ${rows.length ? "" : `<div style="padding:48px 4px;text-align:center"><div class="d-lbl">${T("desk.lbl.nothingHere")}</div>
+      <div style="margin-top:16px">${btn(T("desk.lbl.clearFilter"), "ev-filter", 'data-value="all"')}</div></div>`}
+    <div class="d-hint">A click opens the event with its full payload.</div>`
+  );
+};
+
+// ---------- ARTIFACTS ----------
+const splitDelta = (delta) => {
+  const m = String(delta || "").match(/\+(\d+)/), n = String(delta || "").match(/[−-](\d+)/);
+  return [m ? `+${m[1]}` : "", n ? `−${n[1]}` : ""];
 };
 
 views.artifacts = () => {
-  const list = state.data.artifacts;
-  if (!list.length) return `<div class="table"><div class="empty">저장된 산출물이 없습니다. PM이 결과를 보고할 때 파일이 쌓입니다.</div></div>`;
-  const current = state.selected.artifact || list[0].id;
-  const d = state.data.artifactDetail;
-  const lineColor = (l) => (l.startsWith("+") ? "var(--green)" : l.startsWith("-") ? "var(--red)" : "#939e96");
-  return `<div class="split" style="grid-template-columns:340px 1fr">
-    <div class="table">
-      <div class="title">files <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${list.length} changed</span></div>
-      ${list.map((a) => `<button class="list-item ${String(a.id) === String(current) ? "on" : ""}" data-act="open-artifact" data-id="${a.id}">
-        <span style="display:flex;gap:8px;align-items:center">
-          <span class="mono" style="font-size:12px;color:#e6ebe6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.path.split("/").pop())}</span>
-          <span class="mono" style="margin-left:auto;font-size:10px;color:var(--muted)">${esc(a.delta)}</span></span>
-        <span style="display:block;margin-top:5px;font:10px var(--mono);color:#5f6b64">${esc(a.agent)} · ${time(a.createdAt)}</span>
-      </button>`).join("")}
-    </div>
-    <div class="table">${d && String(d.id) === String(current) ? `
-      <div class="title"><span class="mono" style="font-size:12px">${esc(d.path)}</span>
-        <span class="mono" style="margin-left:12px;font-size:11px;color:#5f6b64">${esc(d.agent)} · ${esc(d.delta)}</span>
-        <button class="btn small" data-act="copy-diff" style="margin-left:auto">copy</button></div>
-      <div class="code">${(d.diff || "(diff 없음)").split("\n").map((l, i) => `<div class="ln"><span class="n">${i + 1}</span><span class="t" style="color:${lineColor(l)}">${esc(l)}</span></div>`).join("")}</div>`
-      : `<div class="empty">파일을 선택하세요</div>`}</div>
-  </div>`;
+  const list = state.data.artifacts || [];
+  return page(
+    pageHead(T("desk.title.artifacts"), `${list.length} files changed`,
+      `<label class="gn-switch" style="opacity:.5" title="pilo does not record who owns a file">
+        <input type="checkbox" disabled><span class="gn-switch-track"><span class="gn-switch-knob"></span></span><span>Only mine</span></label>`) +
+    `<div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.files")}</span></div>
+    <div class="d-list">${list.length ? list.map((f) => {
+      const [add, del] = splitDelta(f.delta);
+      return `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:minmax(0,1fr) 64px 56px 120px 72px" data-act="open-artifact" data-id="${f.id}">
+        <span class="d-m d-clip" style="font-size:var(--fs-body)">${esc(f.path)}</span>
+        <span class="d-m d-num" style="font-size:12px;color:var(--ok)">${esc(add)}</span>
+        <span class="d-m d-num" style="font-size:12px;color:var(--err)">${esc(del)}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(f.agent)}</span>
+        <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${hhmm(f.createdAt)}</span>
+      </button>`;
+    }).join("") : `<div class="d-tr"><span class="d-lbl">no files yet — they arrive with an agent's report</span></div>`}</div>
+    <div class="d-hint">A click opens the diff in a wide dialog. "Only mine" is switched off: nothing in pilo records who owns a file.</div>`
+  );
 };
 
+// ---------- PROJECTS ----------
 views.projects = () => {
-  const list = state.data.projects;
-  const p = state.project;
-  return `<div class="split">
-    <div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px">
-        ${list.length ? list.map((pr) => `<div class="card">
-          <div style="display:flex;align-items:center;gap:9px">
-            <span class="mono" style="font-size:15px;color:var(--strong)">${esc(pr.name)}</span>
-            <span class="acts" style="margin-left:auto;display:flex;gap:6px">
-              <button class="btn small" data-act="edit-project" data-id="${pr.id}">edit</button>
-              <button class="btn small danger" data-act="delete-project" data-id="${pr.id}">delete</button></span>
-          </div>
-          <div style="margin-top:13px;padding-top:12px;border-top:1px solid #171b19;font:11px/2 var(--mono);color:#67726b">
-            <div>repo   <span style="color:#b9c3bc">${esc(pr.repo || "—")}</span></div>
-            <div>path   <span style="color:#b9c3bc">${esc(pr.path || "—")}</span></div>
-            <div>pm     <span style="color:${pr.pm ? "var(--green)" : "var(--faint)"}">${esc(pr.pm || "미배정")}</span> <span style="color:#3e4744">${pr.workers} worker</span></div>
-            <div>recent <span style="color:#b9c3bc">${esc(pr.recentTask || "없음")}</span> <span style="color:${stateColor(pr.recentStatus)}">${esc(pr.recentStatus || "")}</span></div>
-          </div></div>`).join("") : `<div class="table"><div class="empty">등록된 프로젝트가 없습니다.</div></div>`}
-      </div>
-    </div>
-    <div class="card">
-      <div style="display:flex;align-items:center;gap:8px"><h2 style="margin:0">${p.id ? "프로젝트 수정" : "프로젝트 등록"}</h2>
-        ${p.id ? `<button class="btn small" data-act="cancel-project" style="margin-left:auto">취소</button>` : ""}</div>
-      <p class="hint">Agents 등록 폼의 project 목록이 여기를 참조합니다.</p>
-      <div class="field"><div class="name">name<span class="req">required</span></div><input id="p-name" value="${esc(p.name)}" placeholder="project-d"></div>
-      <div class="field"><div class="name">repo <span class="hint">선택</span></div><input id="p-repo" value="${esc(p.repo)}" placeholder="local/project-d"></div>
-      <div class="field"><div class="name">path <span class="hint">작업 디렉터리</span></div><input id="p-path" value="${esc(p.path)}" placeholder="~/work/project-d"></div>
-      <div class="field"><div class="name">note</div><input id="p-note" value="${esc(p.note)}" placeholder="PoC"></div>
-      <button class="btn primary" data-act="${p.id ? "update-project" : "create-project"}">${p.id ? "save project" : "create project"}</button>
-    </div>
-  </div>`;
+  const list = state.data.projects || [];
+  const rows = treeRows();
+  return page(
+    pageHead(T("desk.title.projects"), `${list.length}`, btn(T("desk.act.newProject"), "new-project")) +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px">
+      ${list.length ? list.map((p) => {
+        const here = rows.filter(({ a }) => String(a.projectId) === String(p.id));
+        // The card's ladder starts at its own top, not at the whole tree's.
+        const base = Math.min(...here.map((r) => r.lvl), 0);
+        const shown = here.slice(0, 3);
+        return `<button class="d-plain" style="display:flex;flex-direction:column;gap:16px;border:var(--bw) solid var(--line);padding:20px;cursor:pointer;min-height:208px" data-act="open-project" data-id="${p.id}">
+          <span style="display:flex;align-items:baseline;gap:12px;width:100%">
+            <span class="d-clip" style="font-size:var(--fs-h2);letter-spacing:-0.02em;flex:1">${esc(p.name)}</span>
+            <span class="d-m" style="font-size:11px;letter-spacing:0.08em;color:var(--accent-text);flex:none">open</span></span>
+          <span class="d-m d-clip" style="display:block;width:100%;font-size:var(--fs-small);color:var(--text-3)">${esc(p.path || p.repo || "no folder")}</span>
+          <span style="display:block;width:100%" class="gn-ladder gn-ladder-compact gn-ladder-bar">
+            ${shown.map(({ a, lvl }) => {
+              const role = a.role.toUpperCase();
+              return `<span class="gn-ladder-row" style="display:flex">
+                <span class="gn-ladder-indent" data-level="${Math.min(lvl - base, 2)}"></span>
+                <span class="gn-ladder-block" data-role="${role.toLowerCase()}">
+                  <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
+                  <span class="gn-ladder-name">${esc(a.name)}</span>
+                  <span class="gn-ladder-note" style="color:${stCol(a.status)}">${esc(agentNote(a))}</span>
+                </span></span>`;
+            }).join("")}
+            ${p.pm ? "" : `<span class="d-ghostrow">nobody looks after this</span>`}
+            ${here.length > 3 ? `<span class="d-m" style="display:block;padding:4px 0 0 32px;font-size:11px;color:var(--text-3)">+${here.length - 3} more</span>` : ""}
+          </span>
+          <span style="margin-top:auto;display:flex;align-items:baseline;gap:8px">
+            <span class="d-m" style="font-size:22px">${here.length}</span>
+            <span class="d-m" style="font-size:12px;color:var(--text-3)">agents · ${esc(p.recentTask ? `last: ${p.recentTask}` : "nothing yet")}</span></span>
+        </button>`;
+      }).join("") : `<div class="d-tr"><span class="d-lbl">no projects yet</span></div>`}
+    </div>`
+  );
 };
 
-// A schedule's runs, read back from the records each one already left: the event
-// that fired it, the request it opened, and whichever of the two bodies exists —
-// the agent's report, or the desk's reply when the desk was the target.
-function runsBlock() {
-  const rows = state.runs.rows;
-  if (!rows.length) return `<div style="margin-top:10px;font:11px var(--mono);color:#5f6b64">아직 실행된 적이 없습니다.</div>`;
-  return `<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${rows.map((r) => {
-    const failed = r.taskStatus === "failed";
-    const body = r.taskResult || r.reply || "";
-    const extra = r.taskResult && r.reply ? r.reply : "";
-    return `<div style="border:1px solid ${failed ? "#3a201c" : "#171b19"};border-radius:6px;padding:9px 11px;background:#0b0e0d">
-      <div style="display:flex;gap:8px;align-items:center;font:11px var(--mono);color:#67726b">
-        <span style="color:#b9c3bc">${esc(new Date(r.firedAt).toLocaleString("ko-KR"))}</span>
-        <span style="color:${failed ? "var(--red)" : r.taskStatus || r.reply ? "var(--green)" : "var(--amber)"}">${esc(failed ? "실패" : r.taskStatus || (r.reply ? "답변됨" : "진행 중"))}</span>
-        <span style="color:#3e4744">in-${r.inboxId}${r.taskId ? ` · task ${r.taskId}` : ""}${r.agent ? ` · ${esc(r.agent)}` : ""}</span>
+// ---------- COMMANDS ----------
+// The catalogue lives in src/commands.js and is served as-is, so adding a
+// command there puts it on this page without a second edit.
+views.commands = () => {
+  const group = (label, list, prefix) => `<div style="min-width:0">
+    <div class="d-lblrule"><span class="d-lbl">${esc(label)}</span></div>
+    <div class="d-list">${list.map((c) => `<div class="d-tr" style="grid-template-columns:minmax(0,168px) minmax(0,1fr);min-height:36px">
+      <span class="d-m d-clip" style="font-size:var(--fs-small)">${esc(prefix + c.name)}${c.args ? `<span style="color:var(--text-3)"> ${esc(c.args)}</span>` : ""}</span>
+      <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-2)">${esc(c.summary)}</span>
+    </div>`).join("")}</div></div>`;
+  return page(
+    pageHead(T("desk.title.commands"), "") +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px">
+      ${group("in the terminal", TUI_COMMANDS, ":")}
+      ${group("in an agent session", CLI_COMMANDS, "pilo ")}
+    </div>
+    <div class="d-hint">Both lists come from src/commands.js — the TUI help, the CLI usage and this page read the same file.</div>`
+  );
+};
+
+// ---------- SETTINGS ----------
+const switchRow = (title, note, on, act, extra = "") => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 44px;align-items:center;min-height:56px">
+  <div style="min-width:0"><div style="font-size:var(--fs-body)">${esc(title)}</div>
+    <div style="margin-top:2px;font-size:var(--fs-small);color:var(--text-3)">${esc(note)}</div></div>
+  <label class="gn-switch" style="justify-self:end"><input type="checkbox" ${on ? "checked" : ""} data-act="${act}" ${extra}>
+    <span class="gn-switch-track"><span class="gn-switch-knob"></span></span></label></div>`;
+
+views.settings = () => {
+  const s = state.data.settings || {};
+  const tokens = s.tokens || {};
+  const retention = s.retention || {};
+  const paths = state.data.system?.paths || [];
+  return page(
+    pageHead(T("desk.title.settings"), "") +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:48px;align-items:start">
+      <div class="d-stack" style="min-width:0">
+        <div><div class="d-lblrule"><span class="d-lbl">what the token count is for</span></div>
+          <div class="d-list">
+            ${switchRow("Show tokens in the terminal", "the status bar line", tokens.showInTui !== false, "toggle-token", 'data-key="showInTui"')}
+            ${switchRow("Show tokens on Overview", "today's total", tokens.showInDashboard !== false, "toggle-token", 'data-key="showInDashboard"')}
+          </div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">what gets told to you</span></div>
+          <div class="d-list">${(s.notifications || []).map((r, i) =>
+            switchRow(r.when, `→ ${r.channel}`, r.on, "toggle-rule", `data-key="${i}"`)).join("")}</div>
+          <div class="d-hint">Only failures and decisions interrupt. Everything else waits for you to look.</div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">how long the logs are kept</span>
+            <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">not swept yet</span></div>
+          <div class="d-list">${[["event payload", "eventPayloadDays"], ["run log", "runLogDays"], ["server log", "serverLogDays"]].map(([label, key]) => `
+            <div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto;align-items:center;min-height:56px">
+              <div style="min-width:0"><div style="font-size:var(--fs-body)">${label}</div>
+                <div style="margin-top:2px;font-size:var(--fs-small);color:var(--text-3)">${esc(retention[key])} days</div></div>
+              <span class="d-seg">${[7, 14, 30, 90].map((d) =>
+                `<button class="d-segopt" aria-selected="${Number(retention[key]) === d}" data-act="retention" data-key="${key}" data-days="${d}">${d}d</button>`).join("")}</span>
+            </div>`).join("")}</div>
+          <div class="d-hint">Requests, answers and files are never deleted — ${esc(retention.failureEventDays)} days is only how long a failure event stays.</div></div>
       </div>
-      ${r.error ? `<div style="margin-top:6px;font:11px var(--mono);color:var(--red)">${esc(r.error)}</div>` : ""}
-      <div style="margin-top:7px;font:11px/1.75 var(--mono);color:#a9b4ac;white-space:pre-wrap;max-height:260px;overflow:auto">${body ? prose(body) : "<span style=\"color:#5f6b64\">결과 없음</span>"}</div>
-      ${extra ? `<div style="margin-top:7px;padding-top:7px;border-top:1px solid #171b19;font:11px/1.7 var(--mono);color:#7f8a83;white-space:pre-wrap;max-height:160px;overflow:auto"><span style="color:#5f6b64">최종 답변 </span>${prose(extra)}</div>` : ""}
+      <div class="d-stack" style="min-width:0">
+        <div><div class="d-lblrule"><span class="d-lbl">rules sent to every agent</span></div>
+          <div class="d-list">${allAgents().map((a) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto">
+            <span style="font-size:var(--fs-body);color:var(--text-2)">${esc(a.name)}<span class="d-m" style="color:var(--text-3)"> · ${esc(a.runtime === "codex" ? "AGENTS.md" : "CLAUDE.md")}</span></span>
+            ${btn("Read", "rules", `data-id="${a.id}"`, "gn-btn-ghost")}</div>`).join("")}</div>
+          <div class="d-hint">Each agent carries its own file next to its own work; there is no one shared list yet.</div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.paths")}</span></div>
+          <div class="d-list">${paths.map((p) => `<div class="d-tr" style="grid-template-columns:96px minmax(0,1fr);min-height:36px">
+            <span class="d-m" style="font-size:12px;color:var(--text-3)">${esc(p.label)}</span>
+            <span class="d-m d-clip" style="font-size:var(--fs-small)" title="${esc(p.value)}">${esc(p.value)}</span></div>`).join("")}</div></div>
+      </div>
+    </div>`
+  );
+};
+
+// ---------- SYSTEM ----------
+views.system = () => {
+  const sys = state.data.system || {};
+  const st = state.data.overview?.stats || {};
+  const tokens = st.tokens || {};
+  return page(
+    pageHead(T("desk.title.system"), "") +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+      <div class="d-stack" style="min-width:0">
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.appearance")}</span></div>
+          <div class="d-list">
+            <div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto"><span style="font-size:var(--fs-body)">${T("desk.lbl.language")}</span>
+              ${seg([["en", "EN"], ["ko", "KO"]], state.lang, "set-lang")}</div>
+            <div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto"><span style="font-size:var(--fs-body)">${T("desk.lbl.theme")}</span>
+              ${seg([["dark", "DARK"], ["light", "LIGHT"]], state.theme, "set-theme")}</div>
+          </div>
+          <div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">English and dark are what a fresh install starts on.</div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.services")}</span>
+            <span class="d-m" style="margin-left:auto;font-size:11px;color:${(sys.services || []).every((v) => ["running", "healthy"].includes(v.state)) ? OK : WARN}">${(sys.services || []).every((v) => ["running", "healthy"].includes(v.state)) ? "healthy" : "check it"}</span></div>
+          <div class="d-list">${(sys.services || []).map((v) => `<div class="d-tr" style="grid-template-columns:max-content minmax(0,1fr);row-gap:2px;padding-top:8px;padding-bottom:8px">
+            <span class="d-m" style="font-size:12px;color:var(--text-3)">${esc(v.name)}</span>
+            <span class="d-m" style="font-size:12px;color:${stateColor(v.state)};text-align:right">${esc(v.state)}</span>
+            <span class="d-m" style="grid-column:1 / -1;font-size:var(--fs-small);color:var(--text-2);word-break:break-word">${esc(v.detail)}</span>
+          </div>`).join("")}</div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.sessions")}</span>
+            <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${(sys.sessions || []).length}</span></div>
+          <div class="d-list">${(sys.sessions || []).map((x) => `<div class="d-tr" style="grid-template-columns:20px 64px minmax(0,1fr) 88px;min-height:34px">
+            <span class="d-dot${x.status === "working" ? " d-live" : ""}" style="background:${x.status === "working" ? WARN : OK}"></span>
+            <span class="d-m" style="font-size:12px;color:var(--text-2)">${esc(x.runtime)}</span>
+            <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)" title="${esc(x.cwd)}">${esc(x.cwd)}</span>
+            <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${esc(x.target)}</span>
+          </div>`).join("") || `<div class="d-tr"><span class="d-lbl">herdr shows no session</span></div>`}</div></div>
+      </div>
+      <div class="d-stack" style="min-width:0">
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.tokensToday")}</span></div>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border-bottom:var(--bw) solid var(--line)">
+            ${[["total", tokens.total], ["in", tokens.in], ["out", tokens.out]].map(([k, v]) => `<div style="background:var(--bg);padding:16px;min-width:0">
+              <div class="d-m" style="font-size:22px">${fmtTokens(v ?? 0)}</div><div class="d-lbl" style="margin-top:4px">${k}</div></div>`).join("")}
+          </div></div>
+        ${(sys.wakeFailures || []).length ? `<div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.wakeFailures")}</span>
+            <span class="d-m" style="margin-left:auto;font-size:11px;color:${ERR}">${sys.wakeFailures.length}</span></div>
+          <div class="d-list">${sys.wakeFailures.map((f) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto;align-items:start;min-height:auto;padding:12px 4px">
+            <div style="min-width:0">
+              <div class="d-m" style="font-size:12px;color:${ERR}">${esc(f.agent)} · ${esc(f.payload.code || "")}</div>
+              <div style="margin-top:4px;font-size:var(--fs-small);color:var(--text-2)">${esc(f.payload.hint || "")}</div>
+              <div class="d-m" style="margin-top:4px;font-size:11px;color:var(--text-3)">${stamp(f.at)} · ${esc(f.totalFailures || 1)} times</div>
+            </div>
+            <span style="display:flex;gap:6px;flex:none">
+              ${f.agentId ? btn("Wake", "wake", `data-id="${f.agentId}"`, "gn-btn-ghost") + btn("Bind", "rebind", `data-id="${f.agentId}"`, "gn-btn-ghost") + btn("Seen", "dismiss-wake", `data-id="${f.agentId}"`, "gn-btn-ghost") : ""}
+              ${btn("Log", "open-event", `data-id="${f.id}"`, "gn-btn-ghost")}
+            </span></div>`).join("")}</div></div>`
+          : `<div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.wakeFailures")}</span></div>
+             <div class="d-list"><div class="d-tr"><span class="d-lbl">none — every agent is reachable</span></div></div></div>`}
+        <div><div class="d-lblrule"><span class="d-lbl">commands</span></div>
+          <div class="d-list">${(sys.commands || []).map((c) => `<div class="d-tr" style="grid-template-columns:120px minmax(0,1fr);min-height:34px">
+            <span class="d-m" style="font-size:12px">${esc(c.cmd)}</span>
+            <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-2)">${esc(c.desc)}</span></div>`).join("")}</div></div>
+        <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.log")}</span>
+            <span class="d-m d-clip" style="margin-left:auto;font-size:11px;color:var(--text-3)">~/.pilo/logs/pilo.log</span></div>
+          <div style="display:flex;gap:8px;margin-top:12px">${btn("Open the log", "open-log", "", "gn-btn-ghost")}</div>
+          <div class="d-hint">Nothing serves the log to the browser yet, so the button says where it is instead of showing made-up lines.
+            Restarting the server is deliberately not a button here — it would cut off whatever is running.</div></div>
+      </div>
+    </div>`
+  );
+};
+
+/* ---------- dialog ---------- */
+// The design replaced every list+detail pane with one dialog: a head, a body
+// built out of five blocks (banner · fields · prose · trace · code) and a foot
+// of actions. Everything the old right-hand column could do lives in here.
+const DIALOGS = {};
+
+// ⌘K. The rows are the screens and the CLI catalogue; what you type is not
+// sent from here — it lands in the composer, where you can still read it.
+function paletteHtml() {
+  if (!state.palette) return "";
+  const q = (state.palQuery || "").trim().toLowerCase();
+  const rows = [
+    ...RAIL.map(([key]) => [`:${key}`, T(`desk.rail.${key}`), () => `go-screen" data-value="${key}`]),
+    ...CLI_COMMANDS.map((c) => [`pilo ${c.name}`, c.summary, null])
+  ].filter(([c, d]) => !q || `${c} ${d}`.toLowerCase().includes(q)).slice(0, 8);
+  return `<div class="d-scrim" data-act="close-palette">
+    <div class="d-dlg" data-keep="1">
+      <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:var(--bw) solid var(--line)">
+        <span class="d-m" style="color:var(--accent-text)">❯</span>
+        <input class="gn-input" id="palq" style="border:none;background:transparent;padding:0" placeholder="Type a command or a request" value="${esc(state.palQuery || "")}">
+        <span class="gn-kbd" style="flex:none">esc</span>
+      </div>
+      <div class="d-dlgbody" style="padding:8px 0">
+        ${rows.map(([c, d, go]) => `<button class="d-plain d-rowbtn" style="display:flex;align-items:center;gap:16px;width:100%;min-height:40px;padding:0 20px"
+          ${go ? `data-act="${go()}"` : `data-act="pal-copy" data-value="${esc(c)}"`}>
+          <span class="d-m" style="font-size:var(--fs-small);color:var(--accent-text);width:120px;flex:none">${esc(c)}</span>
+          <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-2);flex:1">${esc(d)}</span>
+        </button>`).join("")}
+        ${q ? `<button class="d-plain d-rowbtn" style="display:flex;align-items:center;gap:16px;width:100%;min-height:40px;padding:0 20px" data-act="pal-send">
+          <span class="d-m" style="font-size:var(--fs-small);color:var(--accent-text);width:120px;flex:none">ask</span>
+          <span class="d-clip" style="font-size:var(--fs-small);flex:1">${esc(state.palQuery)}</span></button>` : ""}
+      </div></div></div>`;
+}
+
+function dialogHtml() {
+  const d = state.dlg;
+  if (!d) return "";
+  const make = DIALOGS[d.kind];
+  const dlg = make ? make(d) : { title: d.kind, sub: "" };
+  const fields = (dlg.fields || []).filter(Boolean);
+  return `<div class="d-scrim" data-act="close-dialog">
+    <div class="d-dlg${dlg.wide ? " d-dlg-wide" : ""}" data-keep="1">
+      <div class="d-dlghead">
+        <div style="min-width:0">
+          <div class="d-clip" style="font-size:var(--fs-h2);letter-spacing:-0.02em">${dlg.title}</div>
+          <div class="d-m d-clip" style="margin-top:6px;font-size:12px;color:var(--text-3)">${dlg.sub || ""}</div>
+        </div>
+        <button class="d-plain d-m" style="margin-left:auto;font-size:15px;color:var(--text-3);flex:none" data-act="close-dialog" title="close">×</button>
+      </div>
+      <div class="d-dlgbody">
+        ${dlg.banner ? bannerHtml(dlg.banner) : ""}
+        ${fields.length ? `<div style="display:flex;flex-direction:column">${fields.map(fieldHtml).join("")}</div>` : ""}
+        ${dlg.prose ? `<div style="max-width:var(--measure);font-size:var(--fs-body);line-height:1.62;white-space:pre-wrap">${dlg.prose}</div>` : ""}
+        ${dlg.trace ? traceHtml(dlg.traceLabel || "", dlg.trace) : ""}
+        ${dlg.code ? codeHtml(dlg.code) : ""}
+      </div>
+      ${dlg.actions ? `<div class="d-dlgfoot">${dlg.actions.filter(Boolean).join("")}</div>` : ""}
+    </div></div>`;
+}
+
+const bannerHtml = (b) => `<div style="display:flex;align-items:flex-start;gap:12px;padding:16px;margin-bottom:24px;background:var(--bg-2);border-left:3px solid ${b.color}">
+  <span class="d-m" style="font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:${b.color};flex:none">${esc(b.label)}</span>
+  <span style="font-size:var(--fs-small);line-height:1.6;color:var(--text-2);flex:1">${esc(b.text)}</span>
+  ${b.action || ""}</div>`;
+
+function fieldHtml(f) {
+  const body = f.kind === "textarea"
+    ? `<textarea class="gn-input" id="${f.id}" rows="3" style="height:auto;resize:vertical">${esc(f.value || "")}</textarea>`
+    : f.kind === "select"
+      ? `<select class="gn-select gn-input-sm" id="${f.id}" style="justify-self:start;min-width:180px">${(f.options || []).map(([v, label]) =>
+          `<option value="${esc(v)}" ${String(f.value) === String(v) ? "selected" : ""}>${esc(label)}</option>`).join("")}</select>`
+      : f.kind === "seg"
+        ? `<span class="d-seg" style="justify-self:start">${(f.options || []).map(([v, label, lock]) =>
+            `<button class="d-segopt" aria-selected="${String(f.value) === String(v)}" aria-disabled="${Boolean(lock)}" data-act="${f.act}" data-value="${esc(v)}">${esc(label)}</button>`).join("")}</span>`
+        : f.kind === "read"
+          ? `<span style="display:flex;align-items:center;gap:9px;min-width:0">${f.mark || ""}<span class="d-m d-clip" style="font-size:var(--fs-small)">${esc(f.value || "")}</span></span>`
+          : f.kind === "note"
+            ? `<span class="d-m" style="justify-self:start;align-self:center;font-size:13px;color:var(--accent-text)">${esc(f.value || "")}</span>`
+            : f.kind === "switch"
+              ? `<label class="gn-switch" style="justify-self:start"><input type="checkbox" id="${f.id}" ${f.value ? "checked" : ""}><span class="gn-switch-track"><span class="gn-switch-knob"></span></span></label>`
+              : `<input class="gn-input gn-input-sm gn-input-mono" id="${f.id}" value="${esc(f.value || "")}" placeholder="${esc(f.place || "")}">`;
+  return `<div style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:center;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
+    <span class="d-lbl">${esc(f.label)}</span>${body}
+    ${f.hint ? `<span style="grid-column:2;font-size:var(--fs-small);line-height:1.5;color:var(--text-3)">${esc(f.hint)}</span>` : ""}</div>`;
+}
+
+const traceHtml = (label, rows) => `<div style="margin-top:24px">
+  <div class="d-lbl">${esc(label)}</div>
+  <div style="margin-top:12px">${rows.length ? rows.map(([k, v, color]) => `<div style="display:flex;gap:16px;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
+    <span class="d-m" style="font-size:12px;color:${color || DIM};width:96px;flex:none">${esc(k)}</span>
+    <span style="font-size:var(--fs-small);line-height:1.6;color:var(--text-2);min-width:0;white-space:pre-wrap">${esc(v)}</span>
+  </div>`).join("") : `<div class="d-lbl" style="padding:12px 0">nothing yet</div>`}</div></div>`;
+
+// A diff keeps its gutter and its tint; a payload is the same block with the
+// marks left blank.
+function codeHtml(text) {
+  const lines = String(text || "").split("\n");
+  return `<div style="border:var(--bw) solid var(--line);background:var(--bg);padding:12px 0;overflow-x:auto">${lines.map((line) => {
+    const c = line[0];
+    const add = c === "+", del = c === "-", hunk = line.startsWith("@@");
+    const bar = add ? OK : del ? ERR : "transparent";
+    return `<div style="display:flex;gap:12px;padding:0 16px;background:${add ? "var(--ok-weak)" : del ? "var(--err-weak)" : "transparent"};border-left:3px solid ${bar}">
+      <span class="d-m" style="font-size:12px;color:${add ? OK : del ? ERR : DIM};width:10px;flex:none">${add ? "+" : del ? "−" : ""}</span>
+      <span class="d-m" style="font-size:12px;line-height:1.9;white-space:pre;color:${hunk ? DIM : add ? "var(--text)" : "var(--text-2)"}">${esc(add || del ? line.slice(1) : line)}</span>
     </div>`;
   }).join("")}</div>`;
 }
 
-// Standing jobs. The request text is shown in full on the card on purpose: a
-// schedule nobody can read is a standing instruction nobody is checking.
-views.schedules = () => {
-  const list = state.data.schedules || [];
+const allAgents = () => treeRows().map((r) => r.a);
+const findAgent = (id) => allAgents().find((a) => String(a.id) === String(id));
+const right = (label, act, extra = "", kind = "") => btn(label, act, `${extra} style="margin-left:auto"`, kind);
+
+DIALOGS.agent = (d) => {
+  const a = findAgent(d.id);
+  if (!a) return { title: "agent", sub: "", prose: "This agent is gone." };
+  const role = a.role.toUpperCase();
+  const projects = state.data.projects || [];
+  const pms = state.data.tree?.pms || [];
+  const parent = a.role === "pilo" ? "—" : a.role === "pm" || a.role === "system" ? "pilo"
+    : (pms.find((p) => String(p.id) === String(a.parentAgentId)) || { name: "pilo" }).name;
+  return {
+    title: esc(a.name),
+    sub: `agent ${a.id} · ${esc(a.runtime || "runtime unknown")}`,
+    banner: a.herdrTarget ? null : {
+      color: ERR, label: "session lost",
+      text: "The herdr pane is gone. Bind it again before work can reach it.",
+      action: btn("Bind again", "rebind", `data-id="${a.id}"`)
+    },
+    fields: [
+      { id: "d-name", label: "name", value: a.name },
+      { id: "d-session", label: "session", kind: "read", value: a.herdrTarget || "not bound",
+        hint: "herdr picks this up from the pane's cwd — Bind again re-reads it" },
+      { label: "role", kind: "seg", act: "dlg-role", value: d.role || a.role,
+        options: [["pilo", "PILO", a.role !== "pilo"], ["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
+        hint: a.role === "system" ? "a system agent is never handed work — it only reads the machine" : "one PILO overall" },
+      { label: "runtime", kind: "read", value: a.runtime || "—", mark: runtimeMark(a.runtime), hint: "read from herdr" },
+      a.role === "pilo" || a.role === "system" ? null
+        : { id: "d-project", label: "project", kind: "select", value: a.projectId || "",
+            options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
+      { label: "reports to", kind: "note", value: parent },
+      { id: "d-cwd", label: "cwd", value: a.cwd, place: "~/work/notes" },
+      { id: "d-specialty", label: "what it looks after", kind: "textarea", value: a.specialty },
+      { id: "d-aliases", label: "aliases", value: a.aliases, place: "@d, dd" },
+      { id: "d-note", label: "note", value: a.note }
+    ],
+    actions: [
+      btn("Send rules", "rules", `data-id="${a.id}"`, "gn-btn-ghost"),
+      a.role === "system" ? "" : btn(T("desk.act.wake"), "wake", `data-id="${a.id}"`, "gn-btn-ghost"),
+      btn(T("desk.act.bind"), "rebind", `data-id="${a.id}"`, "gn-btn-ghost"),
+      a.role === "pilo" ? "" : btn(T("desk.act.remove"), "delete-agent", `data-id="${a.id}"`, "gn-btn-danger"),
+      right(T("desk.act.save"), "save-agent", `data-id="${a.id}"`, "gn-btn-brand")
+    ]
+  };
+};
+
+// The design derives the role from the project: a project without a PM gets a
+// PM, one that has a PM gets a worker. Our register call still wants the role
+// and the parent, so both are derived here and shown before they are used.
+DIALOGS["add-agent"] = () => {
+  const sessions = state.data.sessions || [];
+  const free = sessions.filter((x) => !x.boundAgent);
+  const f = state.form;
+  const projects = state.data.projects || [];
+  const projectId = f.projectId || projects[0]?.id || "";
+  const pms = state.data.tree?.pms || [];
+  const pmHere = pms.find((p) => String(p.projectId) === String(projectId));
+  const role = f.role || (pmHere ? "worker" : "pm");
+  const chosen = free.find((x) => x.target === f.target) || free[0];
+  return {
+    title: "Add agent",
+    sub: free.length ? "pick a pane herdr already has open" : "no free herdr session — open one and refresh",
+    fields: [
+      { id: "f-project", label: "project", kind: "select", value: projectId,
+        options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
+      { label: "role", kind: "seg", act: "form-role", value: role,
+        options: [["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
+        hint: pmHere ? `this project's PM is ${pmHere.name} — a new agent here is a worker` : "no PM on this project yet" },
+      { id: "f-target", label: "session", kind: "select", value: chosen?.target || "",
+        options: free.length ? free.map((x) => [x.target, `${x.target} · ${x.runtime} · ${x.cwdShort}`]) : [["", "none free"]] },
+      { id: "f-name", label: "name", value: f.name || chosen?.suggestedName || "" },
+      { id: "f-cwd", label: "cwd", value: f.cwd || chosen?.cwd || "", hint: "the session's own folder, unless you say otherwise" },
+      { id: "f-specialty", label: "what it looks after", kind: "textarea", value: f.specialty || "" },
+      { id: "f-write-rules", label: "write rules", kind: "switch", value: f.writeRules !== false,
+        hint: "writes the pilo block into CLAUDE.md / AGENTS.md and tells the session" }
+    ],
+    actions: [
+      btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"),
+      right(`Add ${role}`, "create-agent", "", "gn-btn-brand")
+    ]
+  };
+};
+
+DIALOGS.rules = () => {
+  const r = state.rules;
+  const agents = allAgents();
+  if (!r) return {
+    title: "Rules",
+    sub: "each agent carries its own file",
+    prose: "Pilo has no one list of rules yet: each agent's instructions live in the CLAUDE.md or AGENTS.md next to its own work. Open one below to read and re-send it.",
+    trace: agents.map((a) => [a.name, `${a.role} · ${a.cwd || "no cwd"}`, roleFg(a.role.toUpperCase())]),
+    traceLabel: "agents",
+    actions: agents.slice(0, 6).map((a) => btn(a.name, "rules", `data-id="${a.id}"`, "gn-btn-ghost"))
+  };
+  return {
+    wide: true,
+    title: `Rules — ${esc(r.agent.name)}`,
+    sub: `${esc(r.file)} · ${r.exists ? (r.hasBlock ? "replaces the pilo block" : "appends to the file") : "creates the file"}`,
+    code: r.preview,
+    actions: [
+      btn("Pick another", "resend-rules", "", "gn-btn-ghost"),
+      right(r.exists && r.hasBlock ? "Update and tell the session" : "Write and tell the session", "write-rules", `data-id="${r.agent.id}"`, "gn-btn-brand")
+    ]
+  };
+};
+
+DIALOGS.schedule = (d) => {
+  const s = (state.data.schedules || []).find((x) => String(x.id) === String(d.id));
+  if (!s) return { title: "schedule", sub: "", prose: "This schedule is gone." };
+  const targets = (state.data.agents || []).filter((a) => a.role !== "system");
+  const runs = String(state.runs.open) === String(s.id) ? state.runs.rows : [];
+  return {
+    title: esc(s.name),
+    sub: `${esc(s.cadence)} · to ${esc(s.agent)} · ${s.enabled ? "on" : "off"}`,
+    fields: [
+      { id: "s-name", label: "name", value: s.name },
+      { id: "s-agent", label: "to", kind: "select", value: s.toAgentId, options: targets.map((a) => [a.id, `${a.name} (${a.role})`]) },
+      { id: "s-cadence", label: "when", value: s.cadence, hint: "HH:MM in KST, or every:N minutes" },
+      { id: "s-request", label: "what to send", kind: "textarea", value: s.request },
+      { id: "s-weekdays", label: "weekdays only", kind: "switch", value: s.weekdaysOnly },
+      { label: "if missed", kind: "seg", act: "sched-miss", value: state.schedule.onMiss ?? s.onMiss,
+        options: [["run", "RUN"], ["skip", "SKIP"]], hint: "what to do when the machine was asleep at that hour" }
+    ],
+    traceLabel: "runs",
+    trace: runs.map((r) => [new Date(r.firedAt).toLocaleString("ko-KR"),
+      `${r.taskStatus || (r.reply ? "answered" : "in flight")}${r.taskId ? ` · task ${r.taskId}` : ""}${r.error ? ` · ${r.error}` : ""}`,
+      r.taskStatus === "failed" ? ERR : r.taskStatus === "done" ? OK : WARN]),
+    actions: [
+      btn("Run now", "run-schedule", `data-id="${s.id}"`, "gn-btn-ghost"),
+      btn(s.enabled ? "Turn off" : "Turn on", "toggle-schedule", `data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}"`, "gn-btn-ghost"),
+      btn(T("desk.act.remove"), "delete-schedule", `data-id="${s.id}"`, "gn-btn-danger"),
+      right(T("desk.act.save"), "save-schedule", `data-id="${s.id}"`, "gn-btn-brand")
+    ]
+  };
+};
+
+DIALOGS["new-schedule"] = () => {
+  const targets = (state.data.agents || []).filter((a) => a.role !== "system");
   const f = state.schedule;
-  const targets = (state.data.agents || []).filter((a) => a.role !== "worker" || a.parentAgentId);
-  const when = (iso) => (iso ? new Date(iso).toLocaleString("ko-KR") : "—");
-  return `<div class="split">
-    <div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px">
-        ${list.length ? list.map((s) => `<div class="card">
-          <div style="display:flex;align-items:center;gap:9px">
-            <span class="mono" style="font-size:15px;color:${s.enabled ? "var(--strong)" : "var(--faint)"}">${esc(s.name)}</span>
-            <span class="role ${s.enabled ? "pm" : ""}" style="color:${s.enabled ? "var(--green)" : "var(--faint)"}">${s.enabled ? "ON" : "OFF"}</span>
-            <span class="acts" style="margin-left:auto;display:flex;gap:6px">
-              <button class="btn small" data-act="toggle-schedule" data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}">${s.enabled ? "끄기" : "켜기"}</button>
-              <button class="btn small danger" data-act="delete-schedule" data-id="${s.id}">delete</button></span>
-          </div>
-          <div style="margin-top:13px;padding-top:12px;border-top:1px solid #171b19;font:11px/2 var(--mono);color:#67726b">
-            <div>주기     <span style="color:#b9c3bc">${esc(s.cadence)}</span> <span style="color:#3e4744">${s.weekdaysOnly ? "평일만" : "매일"} · 밀리면 ${s.onMiss === "skip" ? "건너뜀" : "실행"}</span></div>
-            <div>대상     <span style="color:#b9c3bc">${esc(s.agent)}</span></div>
-            <div>다음     <span style="color:${s.enabled ? "var(--green)" : "var(--faint)"}">${esc(when(s.nextRunAt))}</span></div>
-            <div>마지막   <span style="color:#b9c3bc">${esc(when(s.lastRunAt))}</span> ${s.lastTaskId ? `<span style="color:#3e4744">task ${s.lastTaskId}</span>` : ""} ${s.failCount ? `<span style="color:var(--red)">실패 ${s.failCount}</span>` : ""}</div>
-          </div>
-          <div style="margin-top:10px;padding:9px 11px;background:#0b0e0d;border:1px solid #171b19;border-radius:6px;
-                      font:11px/1.7 var(--mono);color:#8b968e;white-space:pre-wrap;max-height:150px;overflow:auto">${esc(s.request)}</div>
-          <button class="btn small" style="margin-top:10px" data-act="show-runs" data-id="${s.id}">${String(state.runs.open) === String(s.id) ? "실행 이력 닫기" : "실행 이력"}</button>
-          ${String(state.runs.open) === String(s.id) ? runsBlock() : ""}
-        </div>`).join("") : `<div class="table"><div class="empty">예약이 없습니다.</div></div>`}
-      </div>
-    </div>
-    <div class="card">
-      <h2 style="margin:0">예약 등록</h2>
-      <p class="hint">시각은 <b>한국 시간(KST)</b> 기준입니다. 예약은 그 시각에 agent에게 지시를 보냅니다 — 요청문을 신중히 쓰세요.</p>
-      <div class="field"><div class="name">name<span class="req">required</span></div><input id="s-name" value="${esc(f.name)}" placeholder="아침 브리핑"></div>
-      <div class="field"><div class="name">대상 agent<span class="req">required</span></div>
-        <select id="s-agent">${targets.map((a) => `<option value="${a.id}" ${String(f.toAgentId) === String(a.id) ? "selected" : ""}>${esc(a.name)} (${esc(a.role)})</option>`).join("")}</select></div>
-      <div class="field"><div class="name">시각 <span class="hint">HH:MM (KST) 또는 every:N 분</span></div><input id="s-cadence" value="${esc(f.cadence)}" placeholder="09:00"></div>
-      <div class="field"><div class="name">요청문<span class="req">required</span></div>
-        <textarea id="s-request" rows="5" style="width:100%;font:12px/1.6 var(--mono)" placeholder="어제 한 일과 오늘 할 일을 정리해줘">${esc(f.request)}</textarea></div>
-      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#8b968e;margin:8px 0">
-        <input type="checkbox" id="s-weekdays" ${f.weekdaysOnly ? "checked" : ""}> 평일만 (주말에는 돌지 않음)</label>
-      <label style="display:flex;gap:8px;align-items:center;font-size:12px;color:#8b968e;margin-bottom:12px">
-        <input type="checkbox" id="s-miss" ${f.onMiss === "skip" ? "checked" : ""}> 맥이 자느라 놓쳤으면 <b>건너뛰기</b> (끄면 깨어난 뒤 실행)</label>
-      <button class="btn primary" data-act="create-schedule">create schedule</button>
-    </div>
-  </div>`;
+  return {
+    title: "New schedule",
+    sub: "what you write is sent verbatim at that hour",
+    fields: [
+      { id: "s-name", label: "name", value: f.name, place: "morning check" },
+      { id: "s-agent", label: "to", kind: "select", value: f.toAgentId, options: targets.map((a) => [a.id, `${a.name} (${a.role})`]) },
+      { id: "s-cadence", label: "when", value: f.cadence, hint: "HH:MM in KST, or every:N minutes" },
+      { id: "s-request", label: "what to send", kind: "textarea", value: f.request },
+      { id: "s-weekdays", label: "weekdays only", kind: "switch", value: f.weekdaysOnly },
+      { label: "if missed", kind: "seg", act: "sched-miss", value: f.onMiss, options: [["run", "RUN"], ["skip", "SKIP"]] }
+    ],
+    actions: [btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"), right("Create", "create-schedule", "", "gn-btn-brand")]
+  };
 };
 
-// The catalogue lives in src/commands.js and is served to the browser as-is, so
-// adding a command there puts it on this page without a second edit.
-views.commands = () => {
-  const table = (title, note, list, prefix) => `<div class="table">
-    <div class="title">${esc(title)} <span class="mono" style="margin-left:auto;font-size:11px;color:#5f6b64">${esc(note)}</span></div>
-    <div class="row head" style="grid-template-columns:210px 1fr 320px"><span>명령</span><span>설명</span><span>예</span></div>
-    ${list.map((cmd) => `<div class="row" style="grid-template-columns:210px 1fr 320px">
-      <span class="mono" style="color:var(--text)">${esc(prefix + cmd.name)}${cmd.args ? `<span style="color:#5f6b64"> ${esc(cmd.args)}</span>` : ""}</span>
-      <span>${esc(cmd.summary)}${(cmd.aliases || []).length ? `<span class="mono" style="color:#5f6b64"> · ${esc((cmd.aliases || []).map((a) => prefix + a).join(" "))}</span>` : ""}</span>
-      <span class="mono" style="font-size:11px;color:#8b968e;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cmd.example)}</span>
-    </div>`).join("")}
-  </div>`;
-
-  return `<div style="display:flex;flex-direction:column;gap:16px">
-    ${table("TUI", "터미널 입력창에서 · 접두사는 :", TUI_COMMANDS, ":")}
-    ${table("CLI", "agent 세션에서 · unix socket, 막히면 파일 spool", CLI_COMMANDS, "pilo ")}
-    <div class="card"><span class="sub">슬래시(/)로 시작하는 옛 표기도 계속 받지만, 화면 표기는 전부 : 로 통일했습니다.
-      이 목록은 <span class="mono">src/commands.js</span> 한 곳에서 읽어옵니다 — 명령을 거기 추가하면 TUI 도움말, CLI usage, 이 화면이 함께 갱신됩니다.</span></div>
-  </div>`;
+DIALOGS.event = (d) => {
+  const e = state.data.eventDetail;
+  if (!e || String(e.id) !== String(d.id)) return { title: `event ${d.id}`, sub: "", prose: "loading…" };
+  return {
+    wide: true,
+    title: esc(e.title || e.type),
+    sub: `${stamp(e.createdAt)} · ${esc(e.type)} · ${esc(e.agent || "")}`,
+    code: JSON.stringify(e.payload ?? {}, null, 2),
+    traceLabel: "run log",
+    trace: (e.runLog || []).map((l) => [l.t || "", l.text || "", DIM]),
+    actions: [btn(T("desk.act.copy"), "copy-json", "", "gn-btn-ghost"), right(T("desk.act.close"), "close-dialog")]
+  };
 };
 
-views.settings = () => {
-  const s = state.data.settings;
-  const rules = s.notifications || [];
-  const tokens = s.tokens || {};
-  const retention = s.retention || {};
-  const toggle = (on, act, key) => `<button class="toggle" data-act="${act}" data-key="${key}" style="background:${on ? "oklch(0.45 0.09 165)" : "#232b28"}"><span style="left:${on ? "15px" : "2px"}"></span></button>`;
-  const rows = [
-    ["event payload", "eventPayloadDays", retention.eventPayloadDays],
-    ["run log", "runLogDays", retention.runLogDays],
-    ["server log", "serverLogDays", retention.serverLogDays]
-  ];
-  return `<div class="half">
-    <div>
-      <div class="card"><h2>토큰 집계 표시</h2><p class="hint">TUI 상태바와 대시보드에 어떤 수치를 띄울지 고릅니다. 집계 기준은 오늘(today)입니다.</p>
-        ${[["showInTui", "TUI 상태바에 tokens 표시"], ["showInDashboard", "대시보드 Overview에 tokens 표시"]].map(([k, label]) =>
-          `<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-            <span style="color:#b9c3bc;flex:1">${label}</span>${toggle(tokens[k] !== false, "toggle-token", k)}</div>`).join("")}
-      </div>
-      <div class="card" style="margin-top:12px"><h2>데이터 보관 기간</h2>
-        <p class="hint">작업 기록(지시·답변·산출물)은 삭제하지 않습니다. 시스템 로그만 기간이 지나면 정리합니다.</p>
-        ${rows.map(([label, key, value]) => `<div style="padding:12px 0;border-top:1px solid #171b19">
-          <div style="display:flex;align-items:baseline;gap:10px;font:11px var(--mono)">
-            <span style="color:#b9c3bc">${label}</span>
-            <span style="font-size:9px;letter-spacing:.06em;padding:2px 6px;border-radius:3px;color:#67726b;border:1px solid #232b28">2차 적용</span>
-            <span style="margin-left:auto;color:var(--strong)">${esc(value)}일</span></div>
-          <div style="display:flex;gap:5px;margin-top:8px">
-            ${[7, 14, 30, 90].map((d) => `<button class="choice ${Number(value) === d ? "on" : ""}" style="font-size:10px;padding:6px 4px" data-act="retention" data-key="${key}" data-days="${d}">${d}d</button>`).join("")}
-          </div></div>`).join("")}
-        <div class="note">
-          <div>wake 실패 등 실패 이벤트는 <span style="color:#b9c3bc">${esc(retention.failureEventDays)}일</span> 보관</div>
-          <div>inbox · task · pm_result · final_reply · artifact는 <span style="color:#b9c3bc">삭제하지 않음</span></div>
-        </div>
-      </div>
-    </div>
-    <div>
-      <div class="card"><h2>알림 규칙</h2><p class="hint">조용한 관제실 원칙 — 실패와 승인 요청만 즉시 알립니다. 전달은 herdr notification.</p>
-        ${rules.map((r, i) => `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-          <span style="color:#b9c3bc;flex:1">${esc(r.when)}</span><span style="color:var(--faint)">→</span>
-          <span style="color:#9aa59d;width:86px">${esc(r.channel)}</span>${toggle(r.on, "toggle-rule", i)}</div>`).join("")}
-      </div>
-      <div class="card" style="margin-top:12px"><h2>runtime</h2>
-        <p class="hint">Pilo는 herdr에 떠 있는 세션에 프롬프트만 전달합니다. 모델은 세션이 정하므로 model 필드는 표시용 메모입니다.</p>
-        ${state.data.system.sessions.length ? state.data.system.sessions.map((s) => `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-          <span style="color:var(--strong);width:66px">${esc(s.runtime)}</span>
-          <span style="color:#67726b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.cwd)}</span>
-          <span style="color:var(--faint)">${esc(s.target)}</span></div>`).join("") : `<div class="sub">herdr 세션이 감지되지 않았습니다.</div>`}
-      </div>
-    </div>
-  </div>`;
+DIALOGS.artifact = (d) => {
+  const f = state.data.artifactDetail;
+  if (!f || String(f.id) !== String(d.id)) return { title: `file ${d.id}`, sub: "", prose: "loading…" };
+  const list = state.data.artifacts || [];
+  const next = list[(list.findIndex((x) => String(x.id) === String(f.id)) + 1) % Math.max(list.length, 1)];
+  return {
+    wide: true,
+    title: esc(f.path),
+    sub: `${esc(f.agent || "")} · ${stamp(f.createdAt)} · ${esc(f.delta || "")}`,
+    code: f.diff || "(no diff was sent with this file)",
+    actions: [
+      btn(T("desk.act.copy"), "copy-diff", "", "gn-btn-ghost"),
+      next && String(next.id) !== String(f.id) ? right("Next file", "open-artifact", `data-id="${next.id}"`) : ""
+    ]
+  };
 };
 
-views.system = () => {
-  const sys = state.data.system;
-  return `<div class="half">
-    <div>
-      ${serviceCard(sys.services)}
-      <div class="card" style="margin-top:12px"><h2>명령</h2>
-        <div style="font:11px/2 var(--mono);color:#8b968e;margin-top:10px">
-          ${sys.commands.map((c) => `<div>${esc(c.cmd).padEnd(12, " ").replace(/ /g, "&nbsp;")}<span style="color:var(--faint)">${esc(c.desc)}</span></div>`).join("")}
-        </div></div>
-      <div class="card" style="margin-top:12px"><h2>설정 경로</h2>
-        ${sys.paths.map((p) => `<div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-          <span style="color:#5f6b64;width:64px;flex:none">${esc(p.label)}</span>
-          <span style="color:#b9c3bc;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.value)}</span>
-          <span style="color:#3e4744">${esc(p.note)}</span></div>`).join("")}</div>
-    </div>
-    <div>
-      ${sys.wakeFailures.length ? `<div class="fail">
-        <div style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:var(--red)"></span>
-          <span style="font-size:13px;color:var(--strong);font-weight:500">wake 실패 목록</span></div>
-        <p class="hint" style="margin:8px 0 0">herdr 세션을 깨우지 못한 기록입니다. 재시도하거나 세션을 다시 바인딩하세요.</p>
-        ${sys.wakeFailures.map((f) => `<div class="item">
-          <div style="display:flex;gap:9px;font:11px var(--mono)"><span style="color:oklch(0.75 0.14 25)">${esc(f.agent)}</span>
-            <span style="color:var(--faint)">${esc(f.payload.code || "")}</span><span style="margin-left:auto;color:#3e4744">${stamp(f.at)}</span></div>
-          <div style="margin-top:7px;font:11px/1.6 var(--mono);color:#8b968e">${esc(f.payload.hint || "")}</div>
-          <div style="margin-top:7px;font:11px var(--mono);color:#5f6b64">누적 ${esc(f.totalFailures || 1)}회 · runtime ${esc(f.payload.runtime || "—")}</div>
-          <div style="display:flex;gap:7px;margin-top:11px">
-            ${f.agentId ? `<button class="btn small" data-act="wake" data-id="${f.agentId}">wake again</button>
-            <button class="btn small" data-act="rebind" data-id="${f.agentId}">rebind session</button>
-            <button class="btn small" data-act="dismiss-wake" data-id="${f.agentId}">확인함</button>` : ""}
-            <button class="btn small" data-act="open-event" data-id="${f.id}">open log</button></div>
-        </div>`).join("")}</div>`
-      : `<div class="card"><h2>wake 실패 없음</h2><p class="hint" style="margin:0">모든 agent가 세션에 연결돼 있습니다. 지난 기록은 Events 탭에 남습니다.</p></div>`}
-      <div class="card" style="margin-top:12px"><h2>herdr 세션</h2><p class="hint">cwd가 같은 세션이 agent에 자동으로 바인딩됩니다.</p>
-        ${sys.sessions.length ? sys.sessions.map((s) => `<div style="display:flex;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
-          <span class="dot" style="background:${s.status === "working" ? "var(--amber)" : "var(--green)"};margin-top:5px"></span>
-          <span style="color:var(--strong);width:56px">${esc(s.runtime)}</span>
-          <span style="color:#67726b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(s.cwd)}</span>
-          <span style="color:var(--faint)">${esc(s.target)}</span></div>`).join("") : `<div class="sub">herdr 세션 없음</div>`}
-      </div>
-    </div>
-  </div>`;
+DIALOGS.project = (d) => {
+  const p = (state.data.projects || []).find((x) => String(x.id) === String(d.id));
+  if (!p) return { title: "project", sub: "", prose: "This project is gone." };
+  const here = allAgents().filter((a) => String(a.projectId) === String(p.id));
+  return {
+    title: esc(p.name),
+    sub: `${esc(p.path || "no folder")} · ${here.length} agents`,
+    fields: [
+      { id: "p-name", label: "name", value: p.name },
+      { id: "p-path", label: "folder", value: p.path, place: "~/work/notes" },
+      { id: "p-repo", label: "repo", value: p.repo, place: "github.com/…" },
+      { id: "p-note", label: "note", value: p.note },
+      { label: "pm", kind: "read", value: p.pm || "nobody yet" }
+    ],
+    traceLabel: "agents here",
+    trace: here.map((a) => [a.role, `${a.name} · ${agentNote(a)}`, roleFg(a.role.toUpperCase())]),
+    actions: [
+      btn("Ask here", "ask-project", `data-id="${p.id}"`, "gn-btn-ghost"),
+      btn(T("desk.act.remove"), "delete-project", `data-id="${p.id}"`, "gn-btn-danger"),
+      right(T("desk.act.save"), "save-project", `data-id="${p.id}"`, "gn-btn-brand")
+    ]
+  };
 };
+
+DIALOGS["new-project"] = () => ({
+  title: "New project",
+  sub: "a folder work happens in",
+  fields: [
+    { id: "p-name", label: "name", value: state.project.name, place: "notes" },
+    { id: "p-path", label: "folder", value: state.project.path, place: "~/work/notes" },
+    { id: "p-repo", label: "repo", value: state.project.repo },
+    { id: "p-note", label: "note", value: state.project.note }
+  ],
+  actions: [btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"), right("Create", "create-project", "", "gn-btn-brand")]
+});
+
+DIALOGS.log = () => ({
+  wide: true,
+  title: "~/.pilo/logs/pilo.log",
+  sub: "the server writes it; the dashboard does not read it yet",
+  prose: "There is no endpoint that serves the log, so nothing is shown here rather than something made up.\n\n  tail -f ~/.pilo/logs/pilo.log",
+  actions: [right(T("desk.act.close"), "close-dialog")]
+});
 
 /* ---------- actions ---------- */
 function readAgentForm() {
@@ -1265,6 +1430,25 @@ function keepAgentForm() {
   state.form = { ...state.form, ...readAgentForm(), role: state.form.role, projectName: state.form.projectName };
 }
 
+function keepDialogForm() {
+  const val = (id) => ($(id) ? $(id).value.trim() : "");
+  state.form = { ...state.form, name: val("f-name"), cwd: val("f-cwd"), specialty: val("f-specialty"),
+    projectId: $("f-project") ? $("f-project").value : state.form.projectId,
+    target: $("f-target") ? $("f-target").value : state.form.target,
+    writeRules: $("f-write-rules") ? $("f-write-rules").checked : state.form.writeRules };
+}
+
+function readScheduleForm() {
+  return {
+    name: $("s-name").value.trim(),
+    toAgentId: $("s-agent").value,
+    cadence: $("s-cadence").value.trim(),
+    request: $("s-request").value.trim(),
+    weekdaysOnly: $("s-weekdays").checked,
+    onMiss: state.schedule.onMiss || "run"
+  };
+}
+
 function readProjectForm() {
   return {
     name: $("p-name").value.trim(),
@@ -1275,44 +1459,97 @@ function readProjectForm() {
 }
 
 const actions = {
-  async "role"(el) {
-    keepAgentForm();
-    state.form.role = el.dataset.role;
-    state.form.parentAgentId = "";
+  async "open-palette"() { state.palette = true; state.palQuery = ""; render(); },
+  async "close-palette"() { state.palette = false; state.palQuery = ""; render(); },
+  async "go-screen"(el) { state.palette = false; state.palQuery = ""; state.tab = el.dataset.value; location.hash = state.tab; render(); await loadDetail(); render(); },
+  async "pal-copy"(el) { await navigator.clipboard.writeText(el.dataset.value); state.palette = false; toast(`${el.dataset.value} copied`); render(); },
+  // Typing here never sends: the line goes into the composer so you read it once more.
+  async "pal-send"() { state.draft = state.palQuery; state.palette = false; state.palQuery = ""; state.tab = "work"; location.hash = "work"; render(); },
+  async "go-agents"() { state.tab = "agents"; location.hash = "agents"; render(); },
+  async "go-events"() { state.tab = "events"; location.hash = "events"; render(); },
+  async "close-dialog"() { state.dlg = null; state.rules = null; render(); },
+  async "open-agent"(el) { state.dlg = { kind: "agent", id: el.dataset.id }; render(); },
+  // role empty on purpose: the dialog derives it from the project until you pick.
+  async "add-agent"() { state.form = { ...emptyForm(), role: "" }; state.dlg = { kind: "add-agent" }; render(); },
+  async "resend-rules"() { state.rules = null; state.dlg = { kind: "rules" }; render(); },
+  async "dlg-role"(el) { state.dlg = { ...state.dlg, role: el.dataset.value }; render(); },
+  async "form-role"(el) { keepDialogForm(); state.form.role = el.dataset.value; render(); },
+  async "save-agent"(el) {
+    const val = (id) => ($(id) ? $(id).value.trim() : undefined);
+    await call("PATCH", `/api/agents/${el.dataset.id}`, {
+      name: val("d-name"), role: state.dlg.role, projectId: $("d-project") ? $("d-project").value || null : undefined,
+      cwd: val("d-cwd"), specialty: val("d-specialty"), aliases: val("d-aliases"), note: val("d-note")
+    });
+    state.dlg = null;
+    toast("saved");
+    await load();
+  },
+  async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
+  async "new-schedule"() { state.dlg = { kind: "new-schedule" }; render(); },
+  async "sched-miss"(el) { state.schedule = { ...state.schedule, onMiss: el.dataset.value }; render(); },
+  async "save-schedule"(el) {
+    await call("POST", `/api/schedules/${el.dataset.id}`, readScheduleForm());
+    state.dlg = null;
+    toast("saved");
+    await load();
+  },
+  // The prompt goes into the composer rather than firing straight off: a
+  // standing instruction sent by accident is a real request to a real agent.
+  async "run-schedule"(el) {
+    const s = (state.data.schedules || []).find((x) => String(x.id) === String(el.dataset.id));
+    state.dlg = null;
+    state.draft = s?.request || "";
+    state.tab = "work";
+    location.hash = "work";
+    toast("the prompt is in the box — press enter to send it");
     render();
   },
-  async "use-session"(el) {
-    const session = (state.data.sessions || []).find((s) => s.target === el.dataset.target);
-    if (!session) return;
-    const { pilo, pms } = state.data.tree;
-    const role = pilo ? "pm" : "pilo";
-    state.editing = null;
-    state.candidates = [];
-    state.form = {
-      ...emptyForm(),
-      name: session.suggestedName,
-      role,
-      parentAgentId: role === "pm" ? (pilo ? pilo.id : "") : "",
-      projectId: role === "pilo" ? "" : session.suggestedProjectId || "",
-      projectName: role === "pilo" ? "" : session.suggestedProjectId ? "" : session.suggestedProjectName,
-      cwd: session.cwd,
-      runtime: session.runtime
-    };
-    if (role === "pilo") state.form.name = "pilo";
-    toast(`${session.runtime} 세션을 폼에 채웠습니다 — role 확인 후 등록`);
+  async "open-event"(el) {
+    state.selected.event = el.dataset.id;
+    state.data.eventDetail = await get(`/api/events/${el.dataset.id}`);
+    state.dlg = { kind: "event", id: el.dataset.id };
     render();
   },
+  async "open-artifact"(el) {
+    state.selected.artifact = el.dataset.id;
+    state.data.artifactDetail = await get(`/api/artifacts/${el.dataset.id}`);
+    state.dlg = { kind: "artifact", id: el.dataset.id };
+    render();
+  },
+  async "open-project"(el) { state.dlg = { kind: "project", id: el.dataset.id }; render(); },
+  async "new-project"() { state.project = { id: null, name: "", repo: "", path: "", note: "" }; state.dlg = { kind: "new-project" }; render(); },
+  async "save-project"(el) {
+    await call("PATCH", `/api/projects/${el.dataset.id}`, readProjectForm());
+    state.dlg = null;
+    toast("saved");
+    await load();
+  },
+  async "ask-project"(el) {
+    const p = (state.data.projects || []).find((x) => String(x.id) === String(el.dataset.id));
+    state.dlg = null;
+    state.draft = state.draft || `${p?.name || ""} — `;
+    state.tab = "work";
+    location.hash = "work";
+    render();
+  },
+  async "open-log"() { state.dlg = { kind: "log" }; render(); },
+  async "req-filter"(el) { state.reqFilter = el.dataset.value; render(); },
+  async "req-agent"(el) { state.reqAgent = el.dataset.name || ""; render(); },
+  async "clear-req-filter"() { state.reqFilter = "All"; state.reqAgent = ""; render(); },
+  async "ev-filter"(el) { state.eventFilter = el.dataset.value; render(); },
+  async "follow-request"(el) {
+    const detail = state.data.inboxDetail;
+    state.tab = "work";
+    location.hash = "work";
+    state.selected.inbox = el.dataset.id;
+    state.draft = state.draft || "";
+    render();
+  },
+  async "set-theme"(el) { setTheme(el.dataset.value); render(); },
+  async "set-lang"(el) { setLang(el.dataset.value); render(); },
   async "rules"(el) {
     state.rules = await get(`/api/agents/${el.dataset.id}/rules`);
-    state.tab = "agents";
-    render();
-  },
-  async "toggle-trace"(el) {
-    state.openTrace = state.openTrace === el.dataset.key ? null : el.dataset.key;
-    render();
-  },
-  async "close-rules"() {
-    state.rules = null;
+    state.dlg = { kind: "rules" };
     render();
   },
   async "write-rules"(el) {
@@ -1326,47 +1563,38 @@ const actions = {
     render();
   },
   async "create-agent"() {
-    const form = readAgentForm();
-    if (!form.name || !form.cwd) return toast("name과 cwd는 필수입니다", true);
-    const res = await call("POST", "/api/agents", form);
-    state.candidates = res.candidates || [];
-    state.form = emptyForm();
-    const wrote = res.rules && !res.rules.error
-      ? ` · ${res.rules.file.split("/").pop()} ${res.rules.updated ? "갱신" : "생성"}${res.rules.notified ? " · 세션 반영" : ""}`
-      : "";
-    if (res.rules?.error) toast(`등록됨, 지시문 실패: ${res.rules.error}`, true);
-    else toast(`${state.candidates.length > 1 ? "등록됨 — 세션 후보 여러 개" : "agent 등록됨"}${wrote}`);
-    await load();
-  },
-  async "edit-agent"(el) {
-    const id = el.dataset.id;
-    const all = [state.data.tree.pilo, ...state.data.tree.pms, ...state.data.tree.pms.flatMap((p) => p.children), ...state.data.tree.orphanWorkers].filter(Boolean);
-    const a = all.find((x) => String(x.id) === String(id));
-    if (!a) return;
-    state.editing = id;
-    state.form = {
-      name: a.name, role: a.role, parentAgentId: a.parentAgentId || "", projectId: a.projectId || "",
-      cwd: a.cwd || "", model: a.model || "", specialty: a.specialty || "", aliases: a.aliases || "", note: a.note || ""
+    keepDialogForm();
+    const f = state.form;
+    const sessions = state.data.sessions || [];
+    const chosen = sessions.find((x) => x.target === f.target) || sessions.find((x) => !x.boundAgent);
+    const pms = state.data.tree?.pms || [];
+    const pmHere = pms.find((p) => String(p.projectId) === String(f.projectId));
+    const role = f.role || (pmHere ? "worker" : "pm");
+    const pilo = state.data.tree?.pilo;
+    const parentAgentId = role === "worker" ? (pmHere?.id || pilo?.id || "") : pilo?.id || "";
+    const form = {
+      name: f.name || chosen?.suggestedName || "",
+      role,
+      parentAgentId: parentAgentId || null,
+      projectId: f.projectId || null,
+      cwd: f.cwd || chosen?.cwd || "",
+      specialty: f.specialty || "",
+      aliases: "", note: "", model: "",
+      writeRules: f.writeRules !== false
     };
-    state.tab = "agents";
-    render();
-  },
-  async "update-agent"() {
-    await call("PATCH", `/api/agents/${state.editing}`, readAgentForm());
-    state.editing = null;
+    if (!form.name || !form.cwd) return toast("a name and a folder are needed", true);
+    const res = await call("POST", "/api/agents", form);
     state.form = emptyForm();
-    toast("agent 수정됨");
+    state.dlg = null;
+    if (res.target) toast(`${form.name} · ${role} · ${res.target}`);
+    else toast(`${form.name} registered — no session matched ${form.cwd}`, true);
     await load();
-  },
-  async "cancel-edit"() {
-    state.editing = null;
-    state.form = emptyForm();
-    render();
   },
   async "delete-agent"(el) {
     if (!confirm("이 agent를 삭제할까요? 과거 기록은 그대로 남습니다.")) return;
     await call("DELETE", `/api/agents/${el.dataset.id}`);
-    toast("agent 삭제됨");
+    state.dlg = null;
+    toast("agent removed — its record stays");
     await load();
   },
   async "rebind"(el) {
@@ -1374,12 +1602,6 @@ const actions = {
     state.candidates = res.candidates || [];
     state.editing = state.editing || el.dataset.id;
     toast(res.target ? `세션 재바인딩: ${res.target}` : `후보 ${state.candidates.length}개 — 하나를 고르세요`, !res.target);
-    await load();
-  },
-  async "pick-target"(el) {
-    await call("POST", `/api/agents/${state.editing}/rebind`, { target: el.dataset.target });
-    state.candidates = [];
-    toast("세션 바인딩됨");
     await load();
   },
   async "wake"(el) {
@@ -1391,121 +1613,62 @@ const actions = {
     }
     await load();
   },
-  async "answer"(el) {
-    const field = $(`ans-${el.dataset.id}`);
-    const body = field ? field.value.trim() : "";
-    if (!body) return toast("답변을 입력하세요", true);
-    await call("POST", `/api/tasks/${el.dataset.id}/answer`, { body });
-    toast(`#${el.dataset.id} 회신 — agent를 다시 깨웁니다`);
-    await load();
-  },
   async "dismiss-wake"(el) {
     await call("POST", `/api/agents/${el.dataset.id}/dismiss-wake`, {});
     toast("확인 처리됨 — 기록은 Events에 남습니다");
     await load();
   },
-  async "filter-inbox"(el) {
-    const name = el.dataset.name || null;
-    state.inboxFilter = state.inboxFilter === name ? null : name;
-    const shown = state.data.inbox.filter(matchesFilter);
-    // The detail pane follows the list, so pull the first survivor into it.
-    if (shown.length && !shown.some((i) => String(i.id) === String(state.selected.inbox))) {
-      state.selected.inbox = shown[0].id;
-      state.data.inboxDetail = await get(`/api/inbox/${shown[0].id}`);
-    }
-    render();
-  },
-
   async "open-inbox"(el) {
     state.selected.inbox = el.dataset.id;
     state.data.inboxDetail = await get(`/api/inbox/${el.dataset.id}`);
     render();
   },
-  async "open-event"(el) {
-    state.tab = "events";
-    state.selected.event = el.dataset.id;
-    state.data.eventDetail = await get(`/api/events/${el.dataset.id}`);
-    render();
-  },
-  async "open-artifact"(el) {
-    state.selected.artifact = el.dataset.id;
-    state.data.artifactDetail = await get(`/api/artifacts/${el.dataset.id}`);
-    render();
-  },
-  async "copy-pm-result"(el) {
-    const task = (state.data.inboxDetail?.tasks || []).find((t) => String(t.id) === String(el.dataset.id));
-    await navigator.clipboard.writeText(task?.pmResult || "");
-    toast("PM 결과 복사됨");
-  },
 
   async "copy-json"() {
-    await navigator.clipboard.writeText(JSON.stringify(state.data.eventDetail.payload, null, 2));
-    toast("payload 복사됨");
+    await navigator.clipboard.writeText(JSON.stringify(state.data.eventDetail?.payload ?? {}, null, 2));
+    toast("payload copied");
   },
   async "copy-diff"() {
-    await navigator.clipboard.writeText(state.data.artifactDetail.diff || "");
-    toast("diff 복사됨");
+    await navigator.clipboard.writeText(state.data.artifactDetail?.diff || "");
+    toast("diff copied");
   },
   async "create-project"() {
     const form = readProjectForm();
-    if (!form.name) return toast("name은 필수입니다", true);
+    if (!form.name) return toast("a name is needed", true);
     await call("POST", "/api/projects", form);
     state.project = { id: null, name: "", repo: "", path: "", note: "" };
-    toast("프로젝트 등록됨");
+    state.dlg = null;
+    toast("project created");
     await load();
-  },
-  async "edit-project"(el) {
-    const p = state.data.projects.find((x) => String(x.id) === String(el.dataset.id));
-    state.project = { id: p.id, name: p.name, repo: p.repo || "", path: p.path || "", note: p.note || "" };
-    render();
-  },
-  async "update-project"() {
-    await call("PATCH", `/api/projects/${state.project.id}`, readProjectForm());
-    state.project = { id: null, name: "", repo: "", path: "", note: "" };
-    toast("프로젝트 수정됨");
-    await load();
-  },
-  async "cancel-project"() {
-    state.project = { id: null, name: "", repo: "", path: "", note: "" };
-    render();
   },
   async "create-schedule"() {
-    const form = {
-      name: $("s-name").value.trim(),
-      toAgentId: $("s-agent").value,
-      cadence: $("s-cadence").value.trim(),
-      request: $("s-request").value.trim(),
-      weekdaysOnly: $("s-weekdays").checked,
-      onMiss: $("s-miss").checked ? "skip" : "run"
-    };
-    if (!form.name || !form.request || !form.toAgentId) return toast("name · 대상 · 요청문은 필수입니다", true);
+    const form = readScheduleForm();
+    if (!form.name || !form.request || !form.toAgentId) return toast("a name, a target and a prompt are needed", true);
     await call("POST", "/api/schedules", form);
     state.schedule = { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" };
-    toast("예약 등록됨");
+    state.dlg = null;
+    toast("scheduled");
     await load();
-  },
-  async "show-runs"(el) {
-    const id = el.dataset.id;
-    if (String(state.runs.open) === String(id)) { state.runs = { open: null, rows: [] }; return render(); }
-    state.runs = { open: id, rows: await get(`/api/schedules/${id}/runs`) };
-    render();
   },
   async "toggle-schedule"(el) {
     const on = el.dataset.on === "1";
     await call("POST", `/api/schedules/${el.dataset.id}`, { enabled: on });
+    state.dlg = null;
     toast(on ? "예약을 켰습니다" : "예약을 껐습니다 — 켜기 전까지 돌지 않습니다");
     await load();
   },
   async "delete-schedule"(el) {
     if (!confirm("이 예약을 삭제할까요? 지난 실행 기록은 그대로 남습니다.")) return;
     await call("DELETE", `/api/schedules/${el.dataset.id}`);
-    toast("예약 삭제됨");
+    state.dlg = null;
+    toast("schedule removed — past runs stay");
     await load();
   },
   async "delete-project"(el) {
     if (!confirm("이 프로젝트를 삭제할까요?")) return;
     await call("DELETE", `/api/projects/${el.dataset.id}`);
-    toast("프로젝트 삭제됨");
+    state.dlg = null;
+    toast("project removed");
     await load();
   },
   async "toggle-rule"(el) {
@@ -1539,8 +1702,16 @@ function wire() {
       render();
     };
   });
+  $("dlg")?.querySelectorAll("[data-keep]").forEach((node) => { node.onclick = (event) => event.stopPropagation(); });
+  const box = $("palq");
+  if (box) {
+    box.focus();
+    box.selectionStart = box.value.length;
+    box.oninput = () => { state.palQuery = box.value; render(); };
+  }
   document.querySelectorAll("[data-act]").forEach((el) => {
-    el.onclick = async () => {
+    el.onclick = async (event) => {
+      event.stopPropagation();
       const run = actions[el.dataset.act];
       if (!run) return;
       try {
@@ -1550,25 +1721,35 @@ function wire() {
       }
     };
   });
-  const project = $("f-project");
-  if (project) {
-    project.onchange = () => {
-      if (project.value === "__new") {
-        keepAgentForm();
-        state.tab = "projects";
-        project.value = "";
-        render();
-      }
-    };
-  }
 }
 
+window.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === "k") {
+    event.preventDefault();
+    state.palette = !state.palette;
+    state.palQuery = "";
+    render();
+  }
+  if (event.key === "Escape" && (state.palette || state.dlg)) {
+    state.palette = false;
+    state.dlg = null;
+    render();
+  }
+});
+
 window.addEventListener("hashchange", async () => {
-  state.tab = location.hash.slice(1) || "overview";
+  state.tab = location.hash.slice(1) || "work";
   render();
   await loadDetail();
   render();
 });
+
+try {
+  setTheme(localStorage.getItem("pilo-theme") || "dark");
+  setLang(localStorage.getItem("pilo-lang") || "en");
+} catch (err) {
+  setTheme("dark");
+}
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
@@ -1581,7 +1762,7 @@ setInterval(async () => {
   try {
     await load();
   } catch (err) {
-    $("sync").textContent = "연결 끊김";
+    $("sync").textContent = "disconnected";
   }
 }, 5000);
 </script>
