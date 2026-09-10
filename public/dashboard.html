@@ -333,12 +333,30 @@ const OPEN_BY_DEFAULT = 2;
 // Rows for the unfiltered feed come out of the list load() already made, so the
 // first fifty conversations cost no request at all; past that, and whenever an
 // agent is picked, the server is asked for the next page.
+// Whether this request is one the agent took part in. The server answers this
+// properly — it can see who wrote the answer as well as who was handed the work
+// — and this is the same question asked of what is already in hand.
+function feedMatches(row, agent) {
+  if (!agent) return true;
+  const names = routedNames(row);
+  if (names.includes(agent)) return true;
+  return !names.length && agent === (state.data.tree?.pilo?.name || "pilo");
+}
+
 async function feedPage(before) {
   const f = state.feed;
   const q = new URLSearchParams({ limit: String(PAGE) });
   if (before) q.set("before", String(before));
   if (f.agent) q.set("agent", f.agent);
-  const rows = await get(`/api/inbox?${q}`);
+  let rows = await get(`/api/inbox?${q}`);
+  // A server still running the code it started with does not know these three
+  // words and hands back its own fifty. Cut them down here so the feed behaves
+  // either way; a restart is what makes the paging exact.
+  if (rows.length > PAGE || (f.agent && rows.some((row) => !feedMatches(row, f.agent)))) {
+    rows = rows
+      .filter((row) => (!before || Number(row.id) < Number(before)) && feedMatches(row, f.agent))
+      .slice(0, PAGE);
+  }
   if (rows.length < PAGE) f.done = true;
   return rows;
 }
