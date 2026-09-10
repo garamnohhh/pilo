@@ -1,11 +1,39 @@
-/* fonts — the two faces the design system names, sourced so the dashboard also
-   works with the network off. JetBrains Mono is the patched build that ships in
-   fonts/, which is why the codicon glyphs the TUI draws are available here too. */
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
+/* fonts — the two faces the design system names, both served from this origin.
+   Nothing here reaches the network: the dashboard runs on a private network and
+   used to pull Pretendard from a CDN, which simply failed there.
 
+   Pretendard is the full variable file rather than the design system's 459 KB
+   Korean subset. The subset carries Latin-1 and the 2,350 KS X 1001 syllables,
+   and this screen shows whatever an agent or the user writes: of the 1,211
+   distinct syllables already stored on this machine, 21 fall outside it. A
+   syllable the file lacks is drawn by another face mid-word, which is worse to
+   read than the file is to fetch — once, from localhost, then cached.
+
+   Both are SIL OFL 1.1; the licences ship beside the files in ../../fonts/. */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-style: normal;
+  font-weight: 45 920;
+  font-display: swap;
+  src: url("../../fonts/PretendardVariable.woff2") format("woff2");
+}
+
+/* JetBrains Mono for labels and code. The patched Nerd Font build that carries
+   the codicons is 2.5 MB and is left to the rail's own face (see desk.css);
+   text takes these two, which are 43 KB together. */
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("../../fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
+  font-style: normal;
   font-weight: 400 500;
   font-display: swap;
+  src: url("../../fonts/JetBrainsMono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("../../fonts/JetBrainsMono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
