@@ -10,8 +10,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Pilo">
-<link rel="apple-touch-icon" href="/icons/icon-192.png">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' fill='%233ED49C'/><text x='16' y='22' font-family='ui-monospace,monospace' font-size='15' font-weight='600' letter-spacing='-0.03em' fill='%2308090A' text-anchor='middle'>❯p</text></svg>">
+<!-- The tab and the installed app read the same files, so they cannot drift:
+     icons/app-*.png are the handoff's own app icon (Pilo Wordmark.dc.html)
+     rendered at each size, nothing redrawn. -->
+<link rel="apple-touch-icon" sizes="180x180" href="/icons/app-180.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/app-32.png">
+<link rel="icon" type="image/png" sizes="64x64" href="/icons/app-64.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/app-192.png">
 <link rel="stylesheet" href="/ds/styles.css">
 <link rel="stylesheet" href="/desk.css">
 <style>
