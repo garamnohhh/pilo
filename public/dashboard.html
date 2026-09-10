@@ -820,6 +820,30 @@ function feedMessages(item, detail) {
   if (!detail && item.finalReply) {
     msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply });
   }
+
+  // Until the answer lands the conversation says what it is waiting for, in the
+  // TUI's own words. Agents rarely leave a progress note, and without this the
+  // dashboard showed the question and then nothing at all — which is what the
+  // TUI's card was for. The ladder is the TUI's: writing the reply beats a
+  // note, and a note beats the general word for waiting.
+  const answered = (full.replies || []).length > 0 || Boolean(item.finalReply);
+  if (!answered) {
+    if (item.needsReply) {
+      msgs.push({
+        who: `${item.routed || "pilo"} · ${T("card.needsReply")}`,
+        kind: "attention",
+        text: Number(item.taskCount || 0) > 1
+          ? T("card.needsReplyMany", { count: item.taskCount })
+          : T("card.needsReplyOne")
+      });
+    } else if (!msgs.some((m) => m.kind === "working")) {
+      msgs.push({
+        who: item.routed || "pilo",
+        kind: "waiting",
+        text: item.routed ? T("card.waiting") : T("card.queued")
+      });
+    }
+  }
   return msgs;
 }
 
@@ -832,7 +856,10 @@ function bubble(m) {
     <span class="d-lbl">${esc(m.who)}</span>
     <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;width:100%">
       <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div></div></div>`;
-  const bar = m.kind === "answer" ? "var(--accent)" : m.kind === "working" ? WARN : "var(--line)";
+  // The bar carries the state, out of the same colours the rest of the screen
+  // uses: amber while something is still moving, red when it is waiting on you,
+  // accent for the answer, and the plain rule for a result that is only history.
+  const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR }[m.kind] || "var(--line)";
   const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
   return `<div style="display:flex;flex-direction:column;gap:6px">
     <span class="d-lbl">${esc(m.who)}</span>
