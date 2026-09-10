@@ -1,0 +1,21 @@
+/* density — two steps, same tokens. Site is roomy, console is tight.
+   data-density="console" on any subtree switches it; default is site. */
+:root {
+  --row-h: 44px;
+  --row-pad-x: var(--sp-4);
+  --row-pad-y: var(--sp-3);
+  --stack-gap: var(--sp-4);
+  --block-gap: var(--sp-8);
+  --density-font: var(--fs-body); /* @kind font */
+}
+[data-density="console"] {
+  --row-h: 34px;
+  --row-pad-x: var(--sp-3);
+  --row-pad-y: var(--sp-2);
+  --stack-gap: var(--sp-3);
+  --block-gap: var(--sp-4);
+  --density-font: var(--fs-small); /* @kind font */
+}
+[data-density="console"] .gn-table td,
+[data-density="console"] .gn-table th { padding: 5px var(--sp-3); }
+[data-density="console"] .gn-sidenav-item { padding: 5px var(--sp-4); }
