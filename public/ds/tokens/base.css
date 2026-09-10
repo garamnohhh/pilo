@@ -1,0 +1,68 @@
+/* base — element resets built on the tokens above.
+   Korean line breaking (keep-all) is part of the system, not an override. */
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+body, div, p, h1, h2, h3, h4, span, label, td, th, li, figcaption, button, input, textarea, select {
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+p, h1, h2, h3, h4, li { text-wrap: pretty; }
+pre, code, kbd, samp { font-family: var(--font-mono); word-break: normal; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: var(--w-strong); }
+h1 { font-size: var(--fs-h1); line-height: var(--lh-h1); letter-spacing: var(--ls-h1); }
+h2 { font-size: var(--fs-h2); line-height: var(--lh-h2); letter-spacing: var(--ls-h2); }
+p  { margin: 0; }
+
+strong, b { font-weight: var(--w-strong); }
+
+/* Links are NEVER underlined — not in body copy, not on inverted faces, not on
+   hover. Affordance comes from colour, and from the shape a link sits in
+   (a row, a card, a chip). Underline is reserved for nothing. */
+a { color: var(--accent-text); text-decoration: none; }
+a:hover { color: var(--accent); }
+
+:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-offset); }
+:focus:not(:focus-visible) { outline: none; }
+
+hr { height: var(--bw); margin: var(--sp-6) 0; border: 0; background: var(--line); }
+
+table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
+
+/* inline mono run — numbers, paths, tokens, IDs inside a sentence */
+.gn-mono {
+  font-family: var(--font-code);
+  font-variant-numeric: tabular-nums;
+}
+
+.gn-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+.gn-measure { max-width: var(--measure); }
+.gn-container { max-width: var(--container); margin-inline: auto; padding-inline: var(--gutter); }
+
+
+/* --------------------------------------------------------------- LANGUAGE
+   Bilingual documents. English renders by default; set data-lang="ko" on
+   <html> to swap. display:contents keeps the wrapper out of layout, so a
+   pair can sit inside a flex row, a heading, or a sentence alike. */
+.t-en { display: contents; }
+.t-ko { display: none; }
+[data-lang="ko"] .t-en { display: none; }
+[data-lang="ko"] .t-ko { display: contents; }
