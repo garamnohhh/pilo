@@ -1,7 +1,7 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
-import { claudeAgeMin } from "./quota.js";
+import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule } from "./api.js";
 import { changed } from "./changes.js";
 
@@ -316,8 +316,9 @@ export async function pumpSessions() {
 
 // Some of what the screens show changes without anyone writing it: herdr says a
 // session stopped working, or ten quiet minutes turn running into stalled (the
-// dashboard's STALL_MS). Nothing rings the bell for those, so the tick looks and
-// rings it itself when the picture differs from the last one.
+// dashboard's STALL_MS), and the usage figures move when Claude or Codex rewrite
+// their own files. Nothing rings the bell for those, so the tick looks and rings
+// it itself when the picture differs from the last one.
 let lastNotice = "";
 
 async function pumpNotice() {
@@ -332,7 +333,10 @@ async function pumpNotice() {
                  WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) < now() - interval '10 minutes'
        ) AS stalled`
   );
-  const seen = `${row?.sessions || ""}|${row?.stalled || ""}`;
+  // Read past the minute-long cache (about a millisecond), which also leaves the
+  // cache fresh for /api/quota. The age is left out: it moves every minute.
+  const usage = Object.entries(quotaReport(readQuota(Date.now(), 0))).map(([rt, u]) => `${rt}:${u.text}:${u.dim}:${u.week}`).join(",");
+  const seen = `${row?.sessions || ""}|${row?.stalled || ""}|${usage}`;
   if (seen === lastNotice) return;
   lastNotice = seen;
   changed();
