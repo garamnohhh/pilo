@@ -3,6 +3,7 @@
 #
 #   ~/pilo-switch.sh --dry-run   확인만. 아무것도 바꾸지 않음 — 반드시 먼저
 #   ~/pilo-switch.sh --run       실제 전환
+#   ~/pilo-switch.sh --check     전환 뒤 확인만 다시(5·7단계). 아무것도 바꾸지 않음
 #
 # 저장소 밖으로 꺼내서 돌린다. 3단계 병합이 저장소 파일을 바꾸기 때문:
 #   git -C ~/workspace/personal/github.com/garamnohhh/pilo show pglite:scripts/switch-to-pglite.sh > ~/pilo-switch.sh
@@ -12,7 +13,7 @@
 set -euo pipefail
 
 MODE="${1:-}"
-case "$MODE" in --dry-run|--run) ;; *) echo "usage: $0 --dry-run | --run"; exit 2 ;; esac
+case "$MODE" in --dry-run|--run|--check) ;; *) echo "usage: $0 --dry-run | --run | --check"; exit 2 ;; esac
 
 REPO="${PILO_REPO:-$HOME/workspace/personal/github.com/garamnohhh/pilo}"
 HOME_DIR="${PILO_HOME:-$HOME}/.pilo"
@@ -37,6 +38,16 @@ die()  { printf '\n  ✕ %s\n\n  되돌리기:\n' "$1"; printf '%s\n' "$UNDO" | 
 psql_()  { docker exec "$CONTAINER" psql -U pilo -d "$PGDB" -tAc "$1"; }
 health() { curl -fsS "http://127.0.0.1:$PORT/health" 2>/dev/null; }
 api()    { curl -fsS "http://127.0.0.1:$PORT$1"; }
+
+# JSON 한 조각을 파이썬으로 읽는다. 못 읽으면 죽지 않고 "확인 못 함"
+py() { python3 -c 'import sys, json
+try:
+    d = json.load(sys.stdin)
+    exec(sys.argv[1])
+except Exception:
+    print("확인 못 함")' "$1" 2>/dev/null || echo "확인 못 함"; }
+# /api/system 의 services 한 줄. 이름: server · postgres · wake(herdr 바인딩) · dashboard — 옛 서버·새 서버 같음
+svc() { { api /api/system 2>/dev/null || true; } | py "print(next((s.get('detail', '') for s in d['services'] if s.get('name') == '$1'), '확인 못 함'))"; }
 
 # 이 PILO_HOME 을 쓰는 프로세스만 (다른 격리 인스턴스는 건드리지 않게)
 ours() {
@@ -69,11 +80,49 @@ pglite_counts() {
     process.exit(0);
   " $TABLES)
 }
+# 5단계 판정: 새 서버가 새 코드 + PGlite 로 떴는지. 어긋난 줄을 ! 로 적고 1 을 돌려줌
+check_start() {
+  PORT="$(cat "$HOME_DIR/port" 2>/dev/null || echo "$PORT")"
+  local lockpid db bad=0
+  lockpid="$(cat "$HOME_DIR/db.lock" 2>/dev/null || true)"
+  if [ -n "$lockpid" ] && kill -0 "$lockpid" 2>/dev/null; then ok "db.lock → 살아 있는 서버 pid $lockpid"
+  else warn "db.lock 이 살아 있는 서버를 가리키지 않음"; bad=1; fi
+  db="$(svc postgres)"
+  case "$db" in
+    PGlite*) ok "DB: $db" ;;
+    "확인 못 함") warn "DB 종류 확인 못 함(/api/system) — db.lock·/api/history 로 판단" ;;
+    *) warn "서버가 PGlite 로 뜨지 않음: $db"; bad=1 ;;
+  esac
+  if api "/api/history?q=pilo&limit=1" >/dev/null 2>&1; then ok "/api/history 응답 — 새 코드"
+  else warn "/api/history 응답 없음 — 새 코드가 안 떴음"; bad=1; fi
+  return $bad
+}
+
+# 7단계: 확인만. 못 읽는 항목은 "확인 못 함" 으로 적고 계속
+check_after() {
+  local hist stream
+  ok "에이전트 $(api /api/agents 2>/dev/null | py 'print(len(d))')개 · $(svc wake)"
+  ok "최근 요청: $(api '/api/inbox?limit=1' 2>/dev/null | py 'r = d[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
+  hist="$("$PILO" history 수덕사 --limit 1 2>&1 | head -1 || true)"
+  case "$hist" in in-*) ok "pilo history: $hist" ;; *) warn "pilo history 확인 못 함: $hist" ;; esac
+  stream="$(curl -sN --max-time 2 "http://127.0.0.1:$PORT/api/stream" 2>/dev/null | head -c 11 || true)"
+  if [ "$stream" = "retry: 3000" ]; then ok "SSE 스트림 응답"; else warn "SSE 스트림 확인 못 함: '$stream'"; fi
+}
+
 same() { # 두 건수 파일이 같은지, 다르면 나란히 보여줌
   if diff -q "$1" "$2" >/dev/null; then return 0; fi
   paste "$1" "$2" | awk '{ printf "      %-17s %8s %8s %s\n", $1, $2, $4, ($2 == $4 ? "" : "← 다름") }'
   return 1
 }
+
+if [ "$MODE" = --check ]; then
+  bold "전환 뒤 확인 (--check, 바뀌는 것 없음)"
+  rc=0
+  check_start || rc=1
+  check_after
+  if [ "$rc" = 0 ]; then bold "확인 끝 — 새 서버 정상"; else bold "확인 끝 — 위 ! 줄 확인 필요"; fi
+  exit "$rc"
+fi
 
 # ------------------------------------------------------------------ 0. 사전 확인
 bold "0. 사전 확인 ($MODE)"
@@ -174,13 +223,8 @@ mv $HOME_DIR/data $HOME_DIR/data.failed-$STAMP     # 전환 뒤 쌓인 요청·�
 git -C $REPO reset --hard $MAIN_BEFORE && (cd $REPO && npm ci)
 $PILO up        # Postgres 로 복귀"
 "$PILO" up >/dev/null || die "서버 시작 실패 — tail -50 $HOME_DIR/logs/pilo.log"
-PORT="$(cat "$HOME_DIR/port" 2>/dev/null || echo "$PORT")"
-lockpid="$(cat "$HOME_DIR/db.lock" 2>/dev/null || true)"
-[ -n "$lockpid" ] && kill -0 "$lockpid" 2>/dev/null || die "db.lock 이 살아 있는 서버를 가리키지 않음"
-db="$(api /api/system | python3 -c 'import sys, json; print(next(s["detail"] for s in json.load(sys.stdin)["services"] if s["name"] == "postgres"))')"
-case "$db" in PGlite*) ;; *) die "서버가 PGlite 로 뜨지 않음: $db" ;; esac
-api "/api/history?q=pilo&limit=1" >/dev/null || die "/api/history 응답 없음 — 새 코드가 안 떴음"
-ok "서버 동작 · port $PORT · $db · lock pid $lockpid"
+check_start || die "새 서버 확인 실패 — 위 ! 줄"
+ok "서버 동작 · port $PORT"
 
 # ------------------------------------------------------------------ 6. 규칙
 bold "6. 규칙 재생성 (에이전트 파일 쓰고 각 세션에 알림)"
@@ -198,18 +242,13 @@ if [ -z "$failed" ]; then ok "규칙 ${written}개 모두 씀"
 else warn "실패한 에이전트:$failed — curl -X POST http://127.0.0.1:$PORT/api/agents/<id>/rules 로 다시"; fi
 
 # ------------------------------------------------------------------ 7. 확인
-bold "7. 자동 확인"
-ok "에이전트 $(api /api/agents | python3 -c 'import sys, json; print(len(json.load(sys.stdin)))')개 · $(api /api/system | python3 -c 'import sys, json; print(next(s["detail"] for s in json.load(sys.stdin)["services"] if s["name"] == "herdr"))')"
-ok "최근 요청: $(api '/api/inbox?limit=1' | python3 -c 'import sys, json; r = json.load(sys.stdin)[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
-hist="$("$PILO" history 수덕사 --limit 1 2>&1 | head -1 || true)"
-case "$hist" in in-*) ok "pilo history: $hist" ;; *) warn "pilo history 이상: $hist" ;; esac
-stream="$(curl -sN --max-time 2 "http://127.0.0.1:$PORT/api/stream" 2>/dev/null | head -c 11 || true)"
-[ "$stream" = "retry: 3000" ] && ok "SSE 스트림 응답" || warn "SSE 스트림 응답 이상: '$stream'"
+bold "7. 자동 확인 (못 읽는 항목은 ! 로 적고 계속 — 전환 자체는 끝난 상태)"
+check_after
 
 bold "전환 끝 — 이제 손으로"
 info "1) TUI 다시 열기:            pilo"
 info "2) 대시보드 탭 새로고침"
-info "3) 절차서 8단계 확인 목록"
+info "3) 절차서 8단계 확인 목록 · 다시 확인: $0 --check"
 info "4) 하루 써보고 문제 없으면:  docker stop $CONTAINER   (지우지 말 것)"
 info ""
 info "되돌리기가 필요하면:"
