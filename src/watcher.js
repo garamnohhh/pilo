@@ -239,6 +239,16 @@ async function pumpStalled() {
 // and the panel it opens is closed again a tick later. Nobody else is typed into.
 const QUOTA_STALE_MIN = Number(process.env.PILO_QUOTA_STALE_MIN || 6);
 let probe = { pane: "", askedAt: 0 };
+// The pane the probe runs in can go away — closed by hand, or lost with a herdr
+// restart — and a prompt to a pane that is not there fails every three seconds
+// for ever without a word. The first failure is written down; after that the
+// same pane is left alone for a while instead of being asked again each tick.
+let probeLost = { pane: "", at: 0 };
+const PROBE_RETRY_MS = Number(process.env.PILO_PROBE_RETRY_MS || 10 * 60 * 1000);
+
+export function probeWorthTrying(lost, pane, now = Date.now()) {
+  return !(lost.pane === pane && now - lost.at < PROBE_RETRY_MS);
+}
 
 async function pumpQuota() {
   // Close the panel we opened on an earlier tick before anything else.
@@ -265,11 +275,20 @@ async function pumpQuota() {
   );
   const pane = probeAgent?.target || "";
   if (!pane) return;
+  if (!probeWorthTrying(probeLost, pane)) return;
   try {
     await herdr.prompt(pane, "/usage");
     probe = { pane, askedAt: Date.now() };
-  } catch {
-    // a failed refresh is not worth a word: the reading keeps its age on screen
+    probeLost = { pane: "", at: 0 };
+  } catch (err) {
+    if (probeLost.pane !== pane) {
+      await logEvent({
+        type: "quota_probe_lost",
+        title: t("event.probeLost", { pane }),
+        payload: { pane, code: String(err?.message || "") }
+      }).catch(() => {});
+    }
+    probeLost = { pane, at: Date.now() };
   }
 }
 
