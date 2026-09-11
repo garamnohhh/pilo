@@ -3,6 +3,7 @@ import * as herdr from "./herdr.js";
 import { t } from "./text.js";
 import { claudeAgeMin } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule } from "./api.js";
+import { changed } from "./changes.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -313,6 +314,30 @@ export async function pumpSessions() {
   }
 }
 
+// Some of what the screens show changes without anyone writing it: herdr says a
+// session stopped working, or ten quiet minutes turn running into stalled (the
+// dashboard's STALL_MS). Nothing rings the bell for those, so the tick looks and
+// rings it itself when the picture differs from the last one.
+let lastNotice = "";
+
+async function pumpNotice() {
+  const row = await one(
+    `SELECT
+       (SELECT string_agg(agent_id || ':' || status, ',' ORDER BY agent_id) FROM agent_sessions) AS sessions,
+       (SELECT string_agg(a.id::text, ',' ORDER BY a.id)
+          FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+         WHERE a.archived_at IS NULL AND a.herdr_target <> '' AND coalesce(s.status, '') <> 'working'
+           AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked')
+           AND (SELECT max(GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at)) FROM tasks t
+                 WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) < now() - interval '10 minutes'
+       ) AS stalled`
+  );
+  const seen = `${row?.sessions || ""}|${row?.stalled || ""}`;
+  if (seen === lastNotice) return;
+  lastNotice = seen;
+  changed();
+}
+
 // Standing jobs, checked on the same loop as everything else: a schedule that
 // came due while the machine slept simply finds itself due when it wakes.
 async function pumpSchedules() {
@@ -356,6 +381,7 @@ export const tick = serialize(async () => {
     await pumpStalled();
     await pumpQuota();
     await pumpSessions();
+    await pumpNotice();
   } catch (err) {
     console.error("watcher:", err.message);
   }

@@ -3,6 +3,7 @@ import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
 import { databaseUrl } from "./paths.js";
+import { changed } from "./changes.js";
 
 export const root = normalize(join(fileURLToPath(import.meta.url), "../.."));
 
@@ -85,5 +86,7 @@ export async function logEvent({ type, title = "", agentId = null, taskId = null
      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb) RETURNING id`,
     [type, title, agentId, taskId, inboxId, JSON.stringify(payload), JSON.stringify(runLog)]
   );
+  // The watcher writes through here too, so a wake or a stall reaches the screens.
+  changed();
   return row.id;
 }
