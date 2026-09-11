@@ -1124,7 +1124,7 @@ function blockedCard(rows) {
 }
 
 function serviceCard(services) {
-  return `<div class="card"><h2>Runtime status</h2><p class="hint">server · postgres · wake · dashboard</p>
+  return `<div class="card"><h2>Runtime status</h2><p class="hint">server · database · wake · dashboard</p>
     ${services.map((s) => `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #171b19;font:11px var(--mono)">
       <span class="dot" style="background:${stateColor(s.state)}"></span>
       <span style="color:var(--text);width:78px">${esc(s.name)}</span>

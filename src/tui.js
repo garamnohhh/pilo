@@ -460,7 +460,6 @@ function setupScreen(setup, width) {
     rows.push("");
   }
   const steps = [
-    [t("setup.docker"), setup.docker, t("setup.dockerOk"), ""],
     [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t("setup.herdrHint")],
     [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo up"],
     [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.register")],
@@ -589,7 +588,7 @@ function railRows(tree, width, actions = []) {
 
 async function refresh() {
   const [setup, tree, inbox, overview, settings] = await Promise.all([
-    api("/api/setup", { docker: true, herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
+    api("/api/setup", { herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
     api("/api/agents/tree", { pilo: null, pms: [], orphanWorkers: [] }),
     api("/api/inbox", []),
     api("/api/overview", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
