@@ -13,13 +13,17 @@ let cache = { at: 0, value: {} };
 function claudeQuota() {
   const raw = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
   const u = raw?.cachedUsageUtilization;
-  const five = u?.utilization?.five_hour;
-  if (!u || !five || typeof five.utilization !== "number") return null;
+  if (!u) return null;
+  const five = u.utilization?.five_hour;
+  const ageMin = Math.round((Date.now() - Number(u.fetchedAtMs || 0)) / 60000);
+  // Claude Code can write a fetch time with nothing under it. That is a reading
+  // that says "unknown", not the absence of a reading, and it shows as such.
+  if (!five || typeof five.utilization !== "number") return { unknown: true, percent: null, resetsAt: "", week: null, ageMin };
   return {
     percent: five.utilization,
     resetsAt: five.resets_at || "",
     week: u.utilization?.seven_day?.utilization ?? null,
-    ageMin: Math.round((Date.now() - Number(u.fetchedAtMs || 0)) / 60000)
+    ageMin
   };
 }
 
@@ -120,4 +124,38 @@ export function readQuota(now = Date.now()) {
   }
   cache = { at: now, value };
   return value;
+}
+
+// How one reading reads on the status line. What was agreed in #1175 is the
+// five-hour figure and the time it resets, "51% ↻19:50", dimmed once it is more
+// than half an hour old. What drifted was the dim case: the reset time was
+// swapped for the age, so the line said "~2h" where it should have said when
+// the limit comes back. Now:
+//   no reading                  -> nothing
+//   a reading with no number    -> "?"            dim
+//   the reset time has passed   -> "?"            dim  (the old figure belongs to a window that is gone)
+//   older than STALE_MIN        -> "51% ↻19:50 ~2h" dim  (a reset still ahead keeps the figure honest:
+//                                   within one window it can only have risen)
+//   older, with no reset time   -> "?"            dim  (nothing says the window it was read in is still the one)
+//   fresh                       -> "51% ↻19:50"
+// Compact drops everything after the figure.
+export const STALE_MIN = 30;
+
+const clockOf = (at) => `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
+export const ageOf = (min) => (min >= 90 ? `${Math.round(min / 60)}h` : `${Math.round(min)}m`);
+
+export function quotaCell(found, now = Date.now(), compact = false) {
+  if (!found) return null;
+  if (found.unknown || typeof found.percent !== "number") return { text: "?", dim: true, percent: null };
+  const at = found.resetsAt ? new Date(found.resetsAt) : null;
+  const valid = at && !Number.isNaN(at.getTime());
+  if (valid && at.getTime() <= now) return { text: "?", dim: true, percent: null };
+  const stale = Number(found.ageMin) >= STALE_MIN;
+  // Claude reports 0% with no reset time when no window has started. An hour
+  // later a window may well have started, and nothing on the reading says so.
+  if (stale && !valid) return { text: "?", dim: true, percent: null };
+  if (compact) return { text: `${found.percent}%`, dim: stale, percent: found.percent };
+  const clock = valid ? ` ↻${clockOf(at)}` : "";
+  const age = stale ? ` ~${ageOf(Number(found.ageMin))}` : "";
+  return { text: `${found.percent}%${clock}${age}`, dim: stale, percent: found.percent };
 }
