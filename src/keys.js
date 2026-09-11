@@ -108,6 +108,24 @@ export function takePasteKeys(input, carried = "") {
   return { hits, rest, carry: "" };
 }
 
+// A Cmd or Ctrl chord on a key outside ASCII, reported without the base-layout
+// key, is how a paste arrives under the Korean input source from a terminal that
+// did not send alternate keys: ESC[12621;9u. Nothing in it says V, so Pilo cannot
+// attach — but it can say why nothing happened, instead of nothing happening.
+// Kitty's functional keys (the private-use range) are not letters and never count.
+export function unreadPasteKeys(input) {
+  let count = 0;
+  for (const [, code, alternates, mods, event] of String(input).matchAll(CSI_U_ANY)) {
+    if (Number(event || 1) === RELEASE) continue;
+    if (String(alternates || "").split(":")[2]) continue; // the base key is there: takePasteKeys has it
+    const key = Number(code);
+    if (key <= 127 || (key >= 57344 && key <= 63743)) continue;
+    const held = Number(mods || 1) - 1;
+    if (held & 8 || held & 4) count += 1;
+  }
+  return count;
+}
+
 // When nothing follows a carried piece, it was never going to finish. A lone
 // ESC is the Escape key and goes on; half a report is dropped, because handed
 // to readline it would type its digits.
