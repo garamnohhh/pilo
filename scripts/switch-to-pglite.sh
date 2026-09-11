@@ -162,7 +162,7 @@ if [ -n "$tuis" ]; then warn "TUI 가 열려 있음 (pid $tuis) — 새 코드�
 if [ -e "$HOME_DIR/data" ]; then
   warn "옛 PGlite 디렉터리 있음: $HOME_DIR/data ($(du -sh "$HOME_DIR/data" | cut -f1), $(stat -f %Sm -t %Y-%m-%d "$HOME_DIR/data")) — --run 이 data.before-$STAMP 로 옮김(안 지움)"
 fi
-pending="$(find "$SPOOL" -maxdepth 1 -name 'req-*.json' 2>/dev/null | wc -l | tr -d ' ')"
+pending="$(find "$SPOOL" -maxdepth 1 -name 'req-*.json' 2>/dev/null | wc -l | tr -d ' ' || true)"
 [ "$pending" = 0 ] && ok "스풀 대기 요청 없음" || warn "스풀에 처리 안 된 요청 ${pending}건 — --run 이 작업 폴더로 옮김"
 info "지금 Postgres 건수:"
 live_counts | awk '{ printf "      %-17s %s\n", $1, $2 }'
