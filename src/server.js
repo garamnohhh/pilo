@@ -61,6 +61,7 @@ const routes = [
   ["DELETE", /^\/api\/projects\/(\d+)$/, (m) => api.archiveProject(Number(m[1]))],
 
   ["GET", /^\/api\/inbox$/, (_m, _b, q) => api.listInbox(q.get("limit") || 50, q.get("before"), q.get("agent") || "")],
+  ["GET", /^\/api\/history$/, (_m, _b, q) => api.searchHistory({ q: q.get("q") || "", since: q.get("since") || null, agent: q.get("agent") || "", limit: q.get("limit") })],
   ["GET", /^\/api\/inbox\/count$/, (_m, _b, q) => api.countInbox(q.get("agent") || "")],
   ["POST", /^\/api\/inbox$/, (_m, body) => api.createInbox(body.userRequest || body.text || "", body.cwd || "")],
   ["GET", /^\/api\/inbox\/(\d+)$/, (m) => api.inboxDetail(Number(m[1]))],

@@ -164,10 +164,30 @@ const commands = {
   },
 
   async reply(args) {
-    const [inboxId, ...text] = args;
-    if (!inboxId || !text.length) throw new Error("usage: pilo reply <inboxId> <text>");
-    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: text.join(" ") });
-    return out(t("cli.replySaved", { id: res.id, inbox: inboxId }));
+    // A switch with no value, so it may sit anywhere after the id.
+    const attach = args.includes("--with-results");
+    const [inboxId, ...text] = args.filter((arg) => arg !== "--with-results");
+    if (!inboxId || (!text.length && !attach)) throw new Error("usage: pilo reply <inboxId> <text> [--with-results]");
+    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: text.join(" "), withResults: attach });
+    const saved = t("cli.replySaved", { id: res.id, inbox: inboxId });
+    return out(res.attached?.length ? saved + t("cli.replyAttached", { agents: res.attached.join(", ") }) : saved);
+  },
+
+  async history(args) {
+    const { rest, opts } = flags(args);
+    if (!rest.length) throw new Error("usage: pilo history <words…> [--since YYYY-MM-DD] [--agent name] [--limit N]");
+    const params = new URLSearchParams({ q: rest.join(" ") });
+    for (const key of ["since", "agent", "limit"]) if (opts[key]) params.set(key, opts[key]);
+    const res = await call("GET", `/api/history?${params}`);
+    if (!res.rows.length) return out(t("cli.historyNone", { words: res.words.join(" ") }));
+    const label = (m) => `${t(`history.${m.field}`)}${m.agent ? `(${m.agent})` : ""}`;
+    return out([
+      ...res.rows.map((row) => [
+        `in-${row.id} · ${row.at} KST${row.agents.length ? ` · ${row.agents.join(", ")}` : ""}`,
+        ...row.matches.map((m) => `  ${label(m)}: ${m.text}`)
+      ].join("\n")),
+      res.more ? t("cli.historyMore", { count: res.rows.length }) : t("cli.historyEnd")
+    ].join("\n"));
   },
 
   async task([id]) {
@@ -191,7 +211,9 @@ const commands = {
       status: opts.status || "done",
       error: opts.error || "",
       tokensIn: Number(opts.in || 0),
-      tokensOut: Number(opts.out || 0)
+      tokensOut: Number(opts.out || 0),
+      // what was checked and run: kept with the result, off the user's screen
+      runLog: opts.log ? [{ t: "", text: opts.log }] : undefined
     });
     return out(t("cli.result", { id: res.id, status: res.status }));
   },
