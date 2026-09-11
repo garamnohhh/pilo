@@ -101,8 +101,12 @@ check_start() {
 # 7단계: 확인만. 못 읽는 항목은 "확인 못 함" 으로 적고 계속
 check_after() {
   local hist stream
-  ok "에이전트 $(api /api/agents 2>/dev/null | py 'print(len(d))')개 · $(svc wake)"
-  ok "최근 요청: $(api '/api/inbox?limit=1' 2>/dev/null | py 'r = d[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
+  local agents wake recent
+  agents="$(api /api/agents 2>/dev/null | py 'print(len(d))')"
+  wake="$(svc wake)"
+  recent="$(api '/api/inbox?limit=1' 2>/dev/null | py 'r = d[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
+  case "$agents $wake" in *"확인 못 함"*) warn "에이전트 ${agents} · ${wake}" ;; *) ok "에이전트 ${agents}개 · ${wake}" ;; esac
+  case "$recent" in "확인 못 함") warn "최근 요청 확인 못 함" ;; *) ok "최근 요청: $recent" ;; esac
   hist="$("$PILO" history 수덕사 --limit 1 2>&1 | head -1 || true)"
   case "$hist" in in-*) ok "pilo history: $hist" ;; *) warn "pilo history 확인 못 함: $hist" ;; esac
   stream="$(curl -sN --max-time 2 "http://127.0.0.1:$PORT/api/stream" 2>/dev/null | head -c 11 || true)"
