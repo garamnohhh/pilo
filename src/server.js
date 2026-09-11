@@ -11,6 +11,7 @@ import { startWatcher } from "./watcher.js";
 import { startSpool } from "./spool.js";
 import { changed, openStream, listening } from "./changes.js";
 import { quotaReport } from "./quota.js";
+import { saveUpload } from "./attachments.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -146,6 +147,12 @@ async function handle(req, res) {
   const method = req.method;
   if (method === "GET" && url.pathname === "/api/stream") {
     openStream(req, res);
+    return;
+  }
+  // An image from the dashboard: raw bytes, not JSON, so it is read before the
+  // JSON body parser would try.
+  if (method === "POST" && url.pathname === "/api/attachments") {
+    json(res, 201, await saveUpload(req));
     return;
   }
   const known = routes.some(([m, pattern]) => m === method && pattern.test(url.pathname));

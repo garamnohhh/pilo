@@ -783,27 +783,124 @@ function render() {
 
 // The composer posts to the same endpoint the TUI does, so a line typed here
 // and a line typed there arrive as the same kind of request.
+//
+// Long pastes and images go in the TUI's way too. The draft holds a marker —
+// ⟦paste #1 · 40 lines · 2.3k chars⟧ or ⟦image #1 · 1280×720 · png 342KB⟧ — and
+// sending swaps it back for the pasted text, or for the image's saved path, which
+// is what an agent can open. A marker is deleted as one piece.
+const composerPastes = new Map();
+const composerImages = new Map();
+let pasteSeq = 0;
+let imageSeq = 0;
+const MARKER = /⟦(?:paste|image) #\d+ · [^⟧]*⟧/g;
+const IMAGE_MAX = 10 * 1024 * 1024;
+
+function pasteMarker(text, lines) {
+  pasteSeq += 1;
+  const size = text.length >= 1000 ? `${(text.length / 1000).toFixed(1)}k chars` : `${text.length} chars`;
+  const token = `⟦paste #${pasteSeq} · ${lines} lines · ${size}⟧`;
+  composerPastes.set(token, text);
+  return token;
+}
+
+function imageMarker({ file, width, height, bytes, kind }) {
+  imageSeq += 1;
+  const size = bytes >= 1024 * 1024 ? `${(bytes / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  const shape = width && height ? `${width}×${height} · ` : "";
+  const token = `⟦image #${imageSeq} · ${shape}${kind} ${size}⟧`;
+  composerImages.set(token, file);
+  return token;
+}
+
+function expandDraft(text) {
+  let out = text;
+  for (const [token, value] of composerPastes) out = out.split(token).join(value);
+  for (const [token, file] of composerImages) out = out.split(token).join(file);
+  return out;
+}
+
+function fitDraft(box) {
+  state.draft = box.value;
+  box.style.height = "auto";
+  box.style.height = Math.min(160, box.scrollHeight) + "px";
+}
+
+function putInDraft(box, text) {
+  box.setRangeText(text, box.selectionStart, box.selectionEnd, "end");
+  fitDraft(box);
+}
+
+async function attachImage(box, blob) {
+  if (!String(blob.type).startsWith("image/")) return toast("only images can be attached", true);
+  if (blob.size > IMAGE_MAX) return toast("an image can be at most 10MB", true);
+  const res = await fetch("/api/attachments", { method: "POST", headers: { "content-type": blob.type }, body: blob });
+  const found = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(found.error || `attach failed (${res.status})`, true);
+  putInDraft(box, imageMarker(found));
+}
+
+const imagesIn = (list) => [...(list || [])].filter((f) => String(f.type).startsWith("image/"));
+
 function restoreDraft() {
   const box = $("draft");
   if (!box) return;
   if (box.value !== (state.draft || "")) box.value = state.draft || "";
   box.style.height = "auto";
   box.style.height = Math.min(160, box.scrollHeight) + "px";
-  box.oninput = () => {
-    state.draft = box.value;
-    box.style.height = "auto";
-    box.style.height = Math.min(160, box.scrollHeight) + "px";
+  box.oninput = () => fitDraft(box);
+  // The TUI's rule: two lines and 200 characters go in as they are, anything
+  // longer becomes a marker. An image on the clipboard is uploaded.
+  box.onpaste = (event) => {
+    const images = imagesIn(event.clipboardData?.files);
+    if (images.length) {
+      event.preventDefault();
+      images.forEach((image) => attachImage(box, image));
+      return;
+    }
+    const text = (event.clipboardData?.getData("text/plain") || "").replace(/\r\n?/g, "\n");
+    const lines = text.split("\n").length;
+    if (!text || (lines <= 2 && text.length <= 200)) return;
+    event.preventDefault();
+    putInDraft(box, pasteMarker(text, lines));
+  };
+  box.ondragover = (event) => {
+    if ([...(event.dataTransfer?.items || [])].some((item) => item.kind === "file")) event.preventDefault();
+  };
+  box.ondrop = (event) => {
+    const images = imagesIn(event.dataTransfer?.files);
+    if (!images.length) return;
+    event.preventDefault();
+    images.forEach((image) => attachImage(box, image));
+  };
+  box.onbeforeinput = (event) => {
+    if (event.isComposing || box.selectionStart !== box.selectionEnd) return;
+    const back = event.inputType === "deleteContentBackward";
+    if (!back && event.inputType !== "deleteContentForward") return;
+    const at = box.selectionStart;
+    for (const hit of box.value.matchAll(MARKER)) {
+      const start = hit.index;
+      const end = start + hit[0].length;
+      if (back ? !(at > start && at <= end) : !(at >= start && at < end)) continue;
+      event.preventDefault();
+      box.setRangeText("", start, end, "end");
+      composerPastes.delete(hit[0]);
+      composerImages.delete(hit[0]);
+      fitDraft(box);
+      return;
+    }
   };
   box.onkeydown = async (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
-    const text = box.value.trim();
+    const text = expandDraft(box.value).trim();
     if (!text || state.sending) return;
     state.sending = true;
     try {
       await call("POST", "/api/inbox", { userRequest: text });
       state.draft = "";
       box.value = "";
+      composerPastes.clear();
+      composerImages.clear();
       state.data.inboxDetail = null;
       await load();
     } catch (err) {
