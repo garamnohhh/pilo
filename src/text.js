@@ -133,6 +133,7 @@ const EN = {
   "event.answered": "{agent} decision returned #{id}",
   "event.progress": "{agent} progress #{id}",
   "event.dismissed": "{agent} wake failures dismissed",
+  "event.probeLost": "usage probe pane {pane} is gone — the usage figure will go stale until it is back",
 
   // wake messages, which the instruction files quote verbatim
   "wake.inbox": "[pilo:inbox] request #{id} — for {agent}. read it with 'pilo inbox {id}'.",
@@ -342,6 +343,7 @@ const KO = {
   "event.answered": "{agent} 결정 회신 #{id}",
   "event.progress": "{agent} 진행 #{id}",
   "event.dismissed": "{agent} wake 실패 확인 처리",
+  "event.probeLost": "사용량 probe 창 {pane} 이 사라짐 — 다시 붙이기 전까지 사용량 값이 낡아감",
 
   "wake.inbox": "[pilo:inbox] 요청 도착 #{id} — {agent} 앞. 'pilo inbox {id}' 로 확인.",
   "wake.task": "[pilo:task] 작업 도착 #{id} — {agent} 앞. 'pilo task {id}' 로 읽고 'pilo done {id}' 로 보고.",
