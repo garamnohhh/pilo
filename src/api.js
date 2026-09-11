@@ -3,6 +3,8 @@ import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
 import { paths, readPort } from "./paths.js";
 import { t } from "./text.js";
+import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
+import { pickResults, withResults } from "./reply.js";
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -720,7 +722,78 @@ export async function blockedTasks(limit = 10) {
   );
 }
 
+// The desk's results, as `--with-results` attaches them: every finished task on
+// the request, less the workers whose PM already gathered them.
+async function resultsFor(inboxId) {
+  const tasks = await query(
+    `SELECT t.status, t.pm_result AS "pmResult", t.error, a.id AS "agentId", a.name AS agent, a.role,
+       a.parent_agent_id AS "parentId", pa.role AS "parentRole"
+     FROM tasks t JOIN agents a ON a.id = t.to_agent_id LEFT JOIN agents pa ON pa.id = a.parent_agent_id
+     WHERE t.inbox_id = $1 ORDER BY t.created_at, t.id`,
+    [inboxId]
+  );
+  return pickResults(tasks);
+}
+
+// What was asked, answered and reported before, found by words. Each word has to
+// turn up somewhere in the same request; newest first; pieces, not whole texts.
+export async function searchHistory({ q = "", since = null, agent = "", limit = DEFAULT_LIMIT } = {}) {
+  const words = terms(q);
+  if (!words.length) throw Object.assign(new Error("give at least one word to look for"), { status: 400 });
+  const from = sinceDate(since);
+  const most = Math.min(Math.max(Number(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
+  const params = [from ? from.toISOString() : null, agent || ""];
+  const each = words.map((word) => {
+    params.push(likePattern(word));
+    const k = `$${params.length}`;
+    return `(i.user_request ILIKE ${k} ESCAPE '\\'
+        OR EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id AND f.body ILIKE ${k} ESCAPE '\\')
+        OR EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id
+                     AND (t.pm_result ILIKE ${k} ESCAPE '\\' OR t.request ILIKE ${k} ESCAPE '\\')))`;
+  });
+  params.push(most + 1);
+  const rows = await query(
+    `SELECT i.id, i.user_request AS request, i.created_at AS "createdAt"
+     FROM inbox i
+     WHERE ($1::timestamptz IS NULL OR i.created_at >= $1::timestamptz)
+       AND ($2 = '' OR EXISTS (SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+                                WHERE t.inbox_id = i.id AND a.name = $2))
+       AND ${each.join("\n       AND ")}
+     ORDER BY i.id DESC LIMIT $${params.length}`,
+    params
+  );
+  const found = [];
+  for (const row of rows.slice(0, most)) {
+    const replies = await query("SELECT body FROM final_replies WHERE inbox_id = $1 ORDER BY created_at DESC", [row.id]);
+    const tasks = await query(
+      `SELECT t.pm_result AS "pmResult", t.request, a.name AS agent
+       FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = $1 ORDER BY t.created_at, t.id`,
+      [row.id]
+    );
+    const fields = [
+      { field: "request", text: row.request },
+      ...replies.map((r) => ({ field: "reply", text: r.body })),
+      ...tasks.map((task) => ({ field: "result", agent: task.agent, text: task.pmResult })),
+      ...tasks.map((task) => ({ field: "instruction", agent: task.agent, text: task.request }))
+    ];
+    found.push({
+      id: row.id,
+      at: kst(row.createdAt),
+      agents: [...new Set(tasks.map((task) => task.agent).filter(Boolean))],
+      matches: pieces(fields, words)
+    });
+  }
+  return { words, since: since || null, agent: agent || null, rows: found, more: rows.length > most };
+}
+
 export async function saveFinalReply(inboxId, input) {
+  // --with-results: the lead the desk wrote, then the results as their PMs wrote
+  // them. The desk is still the one saving; it only stops retyping them.
+  const attached = input.withResults ? await resultsFor(inboxId) : null;
+  if (attached && !attached.length) {
+    throw Object.assign(new Error(t("reply.nothingToAttach", { id: inboxId })), { status: 400 });
+  }
+  if (attached) input = { ...input, body: withResults(input.body, attached, t("reply.failed")) };
   const pilo = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const row = await one(
     "INSERT INTO final_replies (inbox_id, agent_id, body, elapsed_ms) VALUES ($1, $2, $3, $4) RETURNING id",
@@ -747,7 +820,7 @@ export async function saveFinalReply(inboxId, input) {
     agentId: pilo?.id || null,
     payload: { inbox_id: inboxId, agent: "pilo", surfaced_in_tui: true, summary: (input.body || "").slice(0, 400) }
   });
-  return { id: row.id };
+  return { id: row.id, attached: (attached || []).map((result) => result.agent) };
 }
 
 export async function listTasks(limit = 100) {
