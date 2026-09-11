@@ -2346,8 +2346,16 @@ function soon() {
   }, GATHER_MS);
 }
 
-function listen() {
+async function listen() {
   if (!("EventSource" in window)) return;
+  // A server from before the stream has no such route, and the browser would
+  // log a refused stream every half minute until it is restarted. Its /health
+  // does not count streams, so ask that first and keep to the clock meanwhile.
+  const health = await fetch("/health").then((res) => res.json()).catch(() => null);
+  if (!health || !("streams" in health)) {
+    setTimeout(listen, SAFETY_MS);
+    return;
+  }
   const stream = new EventSource("/api/stream");
   sync.stream = stream;
   // Whatever changed while the connection was down arrives as this one load.
