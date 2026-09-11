@@ -202,7 +202,7 @@ $PILO up        # Postgres 그대로, 데이터 안 바뀜"
 git merge --ff-only "$BRANCH" >/dev/null || die "fast-forward 실패"
 npm ci --no-audit --no-fund > "$WORK/npm-ci.log" 2>&1 || die "npm ci 실패 — $WORK/npm-ci.log"
 node --input-type=module -e "await import('@electric-sql/pglite')" >/dev/null 2>&1 || die "PGlite 모듈을 못 불러옴"
-ok "main $MAIN_BEFORE → $(git rev-parse --short HEAD) · PGlite $(node -p "require('@electric-sql/pglite/package.json').version")"
+ok "main $MAIN_BEFORE → $(git rev-parse --short HEAD) · PGlite $(node -p "require('./node_modules/@electric-sql/pglite/package.json').version" 2>/dev/null || echo "버전 확인 못 함")"
 
 # ------------------------------------------------------------------ 4. 이관
 bold "4. PGlite 로 이관"
