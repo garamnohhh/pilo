@@ -990,7 +990,7 @@ export async function systemStatus() {
       { name: "server", detail: `pid ${process.pid} · port ${port} · up ${Math.round(process.uptime())}s`, state: "running" },
       {
         name: "postgres",
-        detail: `postgres ${String(dbInfo.version).split(" ")[0]} · ${vector.n ? "pgvector" : "no pgvector"} · ${conn.n} conn`,
+        detail: `PGlite · postgres ${String(dbInfo.version).split(" ")[0]} · ${vector.n ? "pgvector" : "no pgvector"} · ${conn.n} conn`,
         state: "healthy"
       },
       {
@@ -1004,7 +1004,7 @@ export async function systemStatus() {
     sessions,
     wakeFailures: failures,
     commands: [
-      { cmd: "pilo up", desc: "start postgres and the server" },
+      { cmd: "pilo up", desc: "start the server — it opens the database itself" },
       { cmd: "pilo status", desc: "service status" },
       { cmd: "pilo doctor", desc: "diagnostics" }
     ]
@@ -1067,12 +1067,10 @@ export async function saveSetting(key, value) {
 }
 
 export async function setupState() {
-  const dockerOk = true; // the server only runs once postgres is up, so the runtime is present
   const sessions = await herdr.sessions();
   const pilos = await query("SELECT id, name, cwd, runtime, created_at AS \"createdAt\" FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const pms = await one("SELECT count(*)::int AS n FROM agents WHERE role = 'pm' AND archived_at IS NULL");
   return {
-    docker: dockerOk,
     herdr: sessions.length > 0,
     sessions: sessions.length,
     postgres: true,

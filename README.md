@@ -19,7 +19,7 @@ finds them with `herdr agent list` and wakes them with `herdr agent prompt`.
 
 ```bash
 ./bin/pilo            # start services, enter the TUI
-./bin/pilo up         # start postgres + server only
+./bin/pilo up         # start the server only — it opens the database itself
 ./bin/pilo status     # service status
 ./bin/pilo doctor     # diagnostics
 ./bin/pilo dashboard  # open the web dashboard
