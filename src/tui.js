@@ -6,7 +6,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
-import { isPasteImage, takePasteKeys } from "./keys.js";
+import { isPasteImage, takePasteKeys, flushCarry } from "./keys.js";
+import { appendFileSync } from "node:fs";
 import { readQuota } from "./quota.js";
 import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
@@ -1320,9 +1321,20 @@ process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2
 
 // The probe reads its own reply, so it runs before the key stream is wired up.
 await probeAmbiguous();
-// Half a sequence waits here for the rest of itself.
+// Half a sequence waits here for the rest of itself, but not forever. The
+// wait is readline's own escape timeout, 500 ms: long enough that a report
+// cut in two by a slow link still meets its other half, and no worse than
+// readline already is about a bare Escape.
 let pasteCarry = "";
+let carryTimer = null;
+// PILO_KEYLOG=<file> writes every raw read to that file, one JSON string a
+// line, so the bytes a terminal really sent can be looked at instead of guessed.
+const keylog = process.env.PILO_KEYLOG || "";
 process.stdin.on("data", (chunk) => {
+  if (keylog) {
+    try { appendFileSync(keylog, JSON.stringify(String(chunk)) + "\n"); } catch { /* a log must never break typing */ }
+  }
+  clearTimeout(carryTimer);
   const { wheel, clicks, rest } = parseMouse(chunk);
   if (wheel) scrollBy(wheel * 3);
   for (const click of clicks) handleClick(click);
@@ -1332,6 +1344,13 @@ process.stdin.on("data", (chunk) => {
   pasteCarry = taken.carry;
   for (let i = 0; i < taken.hits; i++) attachClipboard();
   if (taken.rest.length) keys.write(taken.rest);
+  if (pasteCarry) {
+    carryTimer = setTimeout(() => {
+      const held = flushCarry(pasteCarry);
+      pasteCarry = "";
+      if (held) keys.write(held);
+    }, 500);
+  }
 });
 
 // A crash must not leave the user staring at an empty alternate screen.
