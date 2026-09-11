@@ -8,7 +8,7 @@ import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
 import { isPasteImage, takePasteKeys, flushCarry } from "./keys.js";
 import { appendFileSync } from "node:fs";
-import { readQuota } from "./quota.js";
+import { readQuota, quotaCell } from "./quota.js";
 import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
@@ -259,26 +259,17 @@ const tokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0))
 // Past this the reading is drawn faint and carries its own age, because a
 // percentage with no date on it is the one thing worse than no percentage:
 // Codex only writes a new figure while it works, so an old one is normal there.
-const STALE_MIN = 30;
-const age = (min) => (min >= 90 ? `${Math.round(min / 60)}h` : `${Math.round(min)}m`);
 
 function quotaLine(compact = false) {
   const quota = readQuota();
   const parts = [];
   for (const runtime of ["claude", "codex"]) {
-    const found = quota[runtime];
-    if (!found) continue;
-    const stale = found.ageMin >= STALE_MIN;
-    const level = found.percent >= 90 ? c.red : found.percent >= 70 ? c.amber : c.green;
-    const at = found.resetsAt ? new Date(found.resetsAt) : null;
-    const clock = at && !Number.isNaN(at.getTime())
-      ? `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`
-      : "";
-    const stamp = stale ? ` ~${age(found.ageMin)}` : clock ? ` ↻${clock}` : "";
-    const body = `${found.percent}%${compact ? "" : stamp}`;
-    parts.push(stale
-      ? `${c.faint}${runtimeMark(runtime)} ${body}${c.reset}`
-      : `${runtimeMark(runtime)} ${level}${body}${c.reset}`);
+    const cell = quotaCell(quota[runtime], Date.now(), compact);
+    if (!cell) continue;
+    const level = cell.percent >= 90 ? c.red : cell.percent >= 70 ? c.amber : c.green;
+    parts.push(cell.dim
+      ? `${c.faint}${runtimeMark(runtime)} ${cell.text}${c.reset}`
+      : `${runtimeMark(runtime)} ${level}${cell.text}${c.reset}`);
   }
   if (!parts.length) return "";
   return ` ${c.line}│${c.reset} ${parts.join(`${c.faint} · ${c.reset}`)}`;

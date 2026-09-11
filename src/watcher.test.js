@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serialize } from "./watcher.js";
+import { serialize, probeWorthTrying } from "./watcher.js";
 
 // The bug this exists for: a herdr call hung for 78 minutes, setInterval kept
 // firing on the clock, and every waiting tick read the same "not woken yet"
@@ -21,4 +21,13 @@ test("a tick that is still running is not joined by another", async () => {
   assert.equal(await first, true);
   assert.equal(await tick(), true, "once the first finishes, the next may run");
   assert.equal(runs, 2);
+});
+
+test("a probe pane that has gone is not asked again every tick", () => {
+  const now = 1_000_000;
+  const lost = { pane: "w7:p7", at: now };
+  assert.equal(probeWorthTrying({ pane: "", at: 0 }, "w7:p7", now), true, "nothing lost yet");
+  assert.equal(probeWorthTrying(lost, "w7:p7", now + 3000), false, "the next tick leaves it alone");
+  assert.equal(probeWorthTrying(lost, "w7:p8", now + 3000), true, "a different pane is tried at once");
+  assert.equal(probeWorthTrying(lost, "w7:p7", now + 11 * 60 * 1000), true, "after a while it is tried again");
 });
