@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys } from "./keys.js";
+import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry } from "./keys.js";
+import { edit } from "./draft.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
 // objects a terminal actually produces.
@@ -70,4 +71,102 @@ test("a sequence split between two reads is put back together", () => {
   const second = takePasteKeys("8;3u", first.carry);
   assert.equal(second.hits, 1);
   assert.equal(second.rest, "");
+});
+
+
+// The TUI's own path, end to end: takePasteKeys, then readline, then edit().
+// What ends up in the draft is what the user would see in the prompt.
+async function typed(chunks) {
+  const stream = new PassThrough();
+  readline.emitKeypressEvents(stream);
+  let draft = { input: "", cursor: 0 };
+  let attached = 0;
+  stream.on("keypress", (ch, key) => {
+    if (isPasteImage(key)) { attached += 1; return; }
+    const next = edit(draft, ch, key, { width: 80 });
+    if (!next.action) draft = { input: next.input, cursor: next.cursor };
+  });
+  let carry = "";
+  for (const chunk of chunks) {
+    const taken = takePasteKeys(chunk, carry);
+    carry = taken.carry;
+    attached += taken.hits;
+    if (taken.rest) stream.write(taken.rest);
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  const held = flushCarry(carry);
+  if (held) stream.write(held);
+  await new Promise((resolve) => setImmediate(resolve));
+  return { draft: draft.input, attached };
+}
+
+// Each of these used to reach readline and type part of itself into the prompt.
+const SHREDDED = [
+  ["Cmd+V under the Korean input source", "\x1b[12621;9u"],
+  ["Option+V under the Korean input source", "\x1b[12621;3u"],
+  ["a five-digit key with no modifier", "\x1b[57414u"],
+  ["a four-digit key", "\x1b[1234;9u"],
+  ["an alternate-keys report", "\x1b[118:86;9u"],
+  ["a two-digit modifier", "\x1b[99;10u"],
+  ["a modifier nobody asked for", "\x1b[107;33u"]
+];
+
+for (const [label, sequence] of SHREDDED) {
+  test(`${label} leaves nothing in the prompt`, async () => {
+    assert.equal((await typed([sequence])).draft, "");
+  });
+}
+
+test("a report split into two or three reads at any point leaves nothing", async () => {
+  for (const sequence of ["\x1b[12621;9u", "\x1b[118;9:1u", "\x1b[57414u"]) {
+    for (let i = 1; i < sequence.length; i++) {
+      const two = await typed([sequence.slice(0, i), sequence.slice(i)]);
+      assert.equal(two.draft, "", `${JSON.stringify(sequence)} split at ${i}`);
+      for (let j = i + 1; j < sequence.length; j++) {
+        const three = await typed([sequence.slice(0, i), sequence.slice(i, j), sequence.slice(j)]);
+        assert.equal(three.draft, "", `${JSON.stringify(sequence)} split at ${i},${j}`);
+      }
+    }
+  }
+});
+
+test("a split Cmd+V still attaches exactly once", async () => {
+  const sequence = "\x1b[118;9:1u";
+  for (let i = 1; i < sequence.length; i++) {
+    assert.equal((await typed([sequence.slice(0, i), sequence.slice(i)])).attached, 1, `split at ${i}`);
+  }
+});
+
+test("a key going up is neither a second paste nor a second Enter", () => {
+  assert.deepEqual(takePasteKeys("\x1b[118;9:1u\x1b[118;9:3u"), { hits: 1, rest: "", carry: "" });
+  assert.equal(takePasteKeys("\x1b[13;2:3u").rest, "");
+  assert.equal(takePasteKeys("\x1b[13;2:1u").rest, "\x1b[13;2u");
+});
+
+test("with alternate keys, the base-layout V is the paste key whatever the input source", () => {
+  assert.equal(takePasteKeys("\x1b[12621::118;9u").hits, 1);
+});
+
+test("a lone ESC at the end of a read waits, and is the Escape key if nothing follows", () => {
+  assert.deepEqual(takePasteKeys("abc\x1b"), { hits: 0, rest: "abc", carry: "\x1b" });
+  assert.equal(flushCarry("\x1b"), "\x1b");
+  assert.equal(flushCarry("\x1b[1262"), "");
+});
+
+test("text that only looks like a report stays text", async () => {
+  const words = "1;9u 는 글자다 ;9u [118;9u 12621;9u";
+  assert.equal((await typed([words])).draft, words);
+  assert.equal(takePasteKeys(words).rest, words);
+});
+
+test("a pasted blob with the same characters in it arrives whole", () => {
+  const pasted = "\x1b[200~로그에 1;9u 가 찍혔다 ;9u\x1b[201~";
+  assert.equal(takePasteKeys(pasted).rest, pasted);
+});
+
+test("Korean text and ordinary keys pass straight through", async () => {
+  const sentence = "안녕하세요 한글 입력 abc 123";
+  assert.equal(takePasteKeys(sentence).rest, sentence);
+  assert.equal((await typed([sentence])).draft, sentence);
+  assert.equal((await typed(["가", "나", "다"])).draft, "가나다");
 });

@@ -52,29 +52,65 @@ export function isPasteSequence(sequence) {
   return Boolean(mods & 8) || Boolean(mods & 4) || Boolean(mods & 2);
 }
 
-// The kitty keyboard protocol writes every modified key as CSI <code>;<mods>u.
-// Pulling those out of the byte stream before readline sees them is the same
-// move the mouse reports needed: readline understands most of them, but a
-// sequence that arrives in the wrong shape gets shredded into loose characters
-// and lands in the prompt as text — "1;9u" in the middle of a sentence.
-const CSI_U_ANY = /\x1b\[(\d+);(\d+)(?::\d+)?u/g;
+// The kitty keyboard protocol reports keys as
+//   CSI key-code[:shifted[:base]] [; modifiers[:event]] [; text] u
+// and readline cannot read most of them. Its parser takes at most three digits
+// of the first number and a one-digit modifier, emits what it has as an unknown
+// key, and types the rest into the prompt. So "1;9u" is not a mystery: it is
+// the tail of ESC[12621;9u — ㅍ, the V key while the Korean input source is on,
+// with Cmd held — after readline has eaten "1262". A 57414 keypad Enter left
+// "4u" the same way, an alternate-keys report left "86;9u".
+//
+// So every such report is taken out here, before readline sees any of it. Only
+// the ones Pilo acts on survive: a paste key becomes a hit, and Enter is handed
+// on in the one shape readline does parse. The rest is dropped — a swallowed
+// key does nothing, a shredded one types its tail into someone's sentence.
+const CSI_U_ANY = /\x1b\[(\d+)((?::\d*)*)(?:;(\d*)(?::(\d+))?)?(?:;[\d:]*)?u/g;
+const RELEASE = 3;
 
-// A sequence can also arrive cut in half between two reads, which is the other
-// way its tail ends up as text. An unfinished one is carried to the next chunk
-// rather than passed on; the cap keeps a stray ESC from swallowing real input.
-const PARTIAL = /\x1b\[[\d;:]*$/;
-const CARRY_MAX = 16;
+function reportTo(match, code, alternates, mods, event, hit) {
+  if (Number(event || 1) === RELEASE) return ""; // a key going up is not a second press
+  const modifier = Number(mods || 1);
+  // With alternate keys on, the third field is the key on a US layout, which is
+  // how a V under another input source is still a V.
+  const base = String(alternates || "").split(":")[2];
+  const key = Number(base || code);
+  if (key === 118 && pasteModifier(modifier)) {
+    hit();
+    return "";
+  }
+  if (code === "13" || code === "10") {
+    return modifier <= 9 ? `\x1b[${code};${modifier}u` : "";
+  }
+  return "";
+}
+
+const pasteModifier = (modifier) => {
+  const mods = modifier - 1;
+  return Boolean(mods & 8) || Boolean(mods & 4) || Boolean(mods & 2);
+};
+
+// A report can also arrive cut in half between two reads — even right after the
+// ESC — which is the other way its tail ends up as text. The unfinished part is
+// carried to the next chunk rather than passed on.
+const PARTIAL = /\x1b(?:\[[\d;:]*)?$/;
+const CARRY_MAX = 32;
 
 export function takePasteKeys(input, carried = "") {
   let hits = 0;
-  const rest = String(carried + input).replace(CSI_U_ANY, (match) => {
-    if (!isPasteSequence(match)) return match; // shift+enter and friends carry on
-    hits += 1;
-    return "";
-  });
+  const rest = String(carried + input).replace(CSI_U_ANY, (match, code, alternates, mods, event) =>
+    reportTo(match, code, alternates, mods, event, () => { hits += 1; })
+  );
   const partial = PARTIAL.exec(rest);
   if (partial && partial[0].length <= CARRY_MAX) {
     return { hits, rest: rest.slice(0, partial.index), carry: partial[0] };
   }
   return { hits, rest, carry: "" };
+}
+
+// When nothing follows a carried piece, it was never going to finish. A lone
+// ESC is the Escape key and goes on; half a report is dropped, because handed
+// to readline it would type its digits.
+export function flushCarry(carry) {
+  return carry === "\x1b" ? "\x1b" : "";
 }
