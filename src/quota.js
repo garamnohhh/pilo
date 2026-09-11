@@ -111,8 +111,8 @@ export function claudeAgeMin() {
 
 // A missing file, a changed format, a machine with neither tool: all the same
 // answer — say nothing rather than put an error on the status line.
-export function readQuota(now = Date.now()) {
-  if (now - cache.at < CACHE_MS) return cache.value;
+export function readQuota(now = Date.now(), maxAgeMs = CACHE_MS) {
+  if (now - cache.at < maxAgeMs) return cache.value;
   const value = {};
   for (const [name, read] of [["claude", claudeQuota], ["codex", codexQuota]]) {
     try {
@@ -143,6 +143,27 @@ export const STALE_MIN = 30;
 
 const clockOf = (at) => `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 export const ageOf = (min) => (min >= 90 ? `${Math.round(min / 60)}h` : `${Math.round(min)}m`);
+
+// What the dashboard is sent: the cell the TUI draws, worked out here by the
+// TUI's own rule, the compact form for a narrow screen, and the weekly figure and
+// the reading's age for the hover. Nothing else from either file leaves the server.
+export function quotaReport(quota = readQuota(), now = Date.now()) {
+  const out = {};
+  for (const runtime of ["claude", "codex"]) {
+    const found = quota[runtime];
+    const cell = quotaCell(found, now);
+    if (!cell) continue;
+    out[runtime] = {
+      text: cell.text,
+      dim: cell.dim,
+      percent: cell.percent,
+      compact: quotaCell(found, now, true).text,
+      week: typeof found.week === "number" ? found.week : null,
+      ageMin: Number.isFinite(Number(found.ageMin)) ? Number(found.ageMin) : null
+    };
+  }
+  return out;
+}
 
 export function quotaCell(found, now = Date.now(), compact = false) {
   if (!found) return null;

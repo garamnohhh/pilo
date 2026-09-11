@@ -52,6 +52,12 @@
   }
   @media (prefers-reduced-motion: reduce) { .d-spin::before { animation: none } }
 
+  /* Usage in the topbar, where the TUI keeps it: mark, then the figure. Narrow keeps the figure only. */
+  .d-usage-row { display: flex; align-items: center; gap: 12px }
+  .d-usage { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap }
+  .d-usage-short { display: none }
+  @media (max-width: 780px) { .d-usage-full { display: none } .d-usage-short { display: inline } }
+
   /* One pulse for everything live: the bar under a conversation and the dot
      beside an agent, at the TUI's own beat. desk.css carries the handoff's
      .d-live at 1.06 s down to 25%; beside a 1.1 s bar those two drift a whole
@@ -349,12 +355,12 @@ async function call(method, path, body) {
 const get = (path) => call("GET", path);
 
 async function load() {
-  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules] = await Promise.all([
+  const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota] = await Promise.all([
     get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox"),
     get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup"),
-    get("/api/sessions"), get("/api/agents"), get("/api/schedules")
+    get("/api/sessions"), get("/api/agents"), get("/api/schedules"), get("/api/quota").catch(() => ({}))
   ]);
-  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules };
+  state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
   refreshFeed();
   await loadDetail();
   $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
@@ -527,6 +533,21 @@ function railHtml() {
     </div>`;
 }
 
+// The TUI's usage line, cell for cell: the server works each one out with the
+// TUI's rule (src/quota.js), so "53% ↻19:10", the dimmed old reading, "?" and
+// nothing-at-all all match. The weekly figure and the reading's age go in the hover.
+function usageHtml() {
+  const quota = state.data.quota || {};
+  const cells = ["claude", "codex"].filter((rt) => quota[rt]).map((rt) => {
+    const u = quota[rt];
+    const colour = u.dim ? "var(--text-3)" : u.percent >= 90 ? ERR : u.percent >= 70 ? WARN : OK;
+    const hint = `${rt} · 5h ${u.text}${u.week != null ? ` · week ${u.week}%` : ""}${u.ageMin != null ? ` · read ${u.ageMin}m ago` : ""}`;
+    return `<span class="d-m d-usage" title="${esc(hint)}" style="color:${colour}">${runtimeMark(rt)}` +
+      `<span class="d-usage-full">${esc(u.text)}</span><span class="d-usage-short">${esc(u.compact)}</span></span>`;
+  });
+  return cells.length ? `<span class="d-usage-row">${cells.join("")}</span>` : "";
+}
+
 function topstateHtml() {
   const st = state.data.overview?.stats || {};
   const server = state.data.system?.services?.find((x) => x.name === "server");
@@ -537,6 +558,7 @@ function topstateHtml() {
     <span class="d-m" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
     ${waiting ? `<span class="d-m" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
     ${st.failed?.total ? `<span class="d-m" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
+    ${usageHtml()}
     <button class="d-plain d-m" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
   // The old sidebar's herdr card has no home in the rail; the same facts are on
   // the System screen, and the topbar already says whether the server is up.

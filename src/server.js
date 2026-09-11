@@ -10,6 +10,7 @@ import { ensureHome, writePort, writePid, writeSocket, readPort, socketPath } fr
 import { startWatcher } from "./watcher.js";
 import { startSpool } from "./spool.js";
 import { changed, openStream, listening } from "./changes.js";
+import { quotaReport } from "./quota.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -41,6 +42,7 @@ const routes = [
   ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort(), streams: listening() })],
   ["GET", /^\/api\/overview$/, () => api.overview()],
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
+  ["GET", /^\/api\/quota$/, () => quotaReport()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
 
   ["GET", /^\/api\/sessions$/, () => api.listSessions()],
