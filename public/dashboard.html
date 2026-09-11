@@ -79,6 +79,14 @@
     .d-handling { overflow: visible }
   }
 
+  /* The request a message follows up, above the composer: it rides along as
+     "in-N" at the front of what is sent, and × drops it. */
+  .d-composer:has(.d-follow) { flex-direction: column; align-items: stretch }
+  .d-follow { display: flex; align-items: center; gap: 8px; padding: 10px 28px 0; min-width: 0 }
+  @container (max-width: 900px) { .d-follow { padding: 10px 16px 0 } }
+  .d-followbtn { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--text-3); padding: 0 }
+  .d-followbtn:hover { color: var(--accent-text) }
+
   /* Usage in the topbar, where the TUI keeps it: mark, then the figure. Narrow keeps the figure only. */
   .d-usage-row { display: flex; align-items: center; gap: 12px }
   .d-usage { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap }
@@ -328,7 +336,9 @@ const state = {
   palQuery: "",
   draft: "",
   sending: false,
-  fold: {}
+  fold: {},
+  // the request the next message follows up, shown above the composer
+  followUp: null
 };
 
 function emptyForm() {
@@ -855,6 +865,20 @@ async function attachImage(box, blob) {
 
 const imagesIn = (list) => [...(list || [])].filter((f) => String(f.type).startsWith("image/"));
 
+// "Ask a follow-up" names the request it follows. The name goes out as letters
+// at the front of the message — in-812 이어서 — so the desk can open that
+// request before it answers, with nothing new on the server.
+function followHtml() {
+  const follow = state.followUp;
+  if (!follow) return "";
+  return `<div class="d-follow">
+    <span class="d-m" style="color:var(--accent-text);flex:none">↳</span>
+    <span class="d-m" style="font-size:12px;color:var(--text-2);flex:none">${esc(T("desk.follow.chip", { id: follow.id }))}</span>
+    <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-3);flex:1">${esc(follow.line)}</span>
+    <button class="d-plain d-m" style="font-size:14px;line-height:1;color:var(--text-3);padding:0 4px;flex:none" data-act="cancel-follow"
+      title="${esc(T("desk.follow.cancel"))}" aria-label="${esc(T("desk.follow.cancel"))}">×</button></div>`;
+}
+
 function restoreDraft() {
   const box = $("draft");
   if (!box) return;
@@ -906,11 +930,14 @@ function restoreDraft() {
   box.onkeydown = async (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
-    const text = expandDraft(box.value).trim();
-    if (!text || state.sending) return;
+    const typed = expandDraft(box.value).trim();
+    if (!typed || state.sending) return;
+    const follow = state.followUp;
+    const text = follow ? T("desk.follow.prefix", { id: follow.id }) + typed : typed;
     state.sending = true;
     try {
       await call("POST", "/api/inbox", { userRequest: text });
+      state.followUp = null;
       state.draft = "";
       box.value = "";
       composerPastes.clear();
@@ -1090,11 +1117,11 @@ function feedMessages(item, detail) {
     msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
   }
   for (const reply of full.replies || []) {
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "" });
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "", inbox: item.id });
   }
   // The list row can carry the answer before a detail fetched earlier does.
   if (!(detail?.replies || []).length && item.finalReply) {
-    msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply });
+    msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply, inbox: item.id });
   }
 
   // Until the answer lands the conversation says what it is waiting for, in the
@@ -1139,8 +1166,10 @@ function bubble(m) {
   // still on purpose — it is waiting on you, and nothing is happening — and a
   // finished line has nothing to claim.
   const live = m.kind === "working" || m.kind === "waiting";
+  const follow = m.kind === "answer" && m.inbox
+    ? `<button class="d-plain d-followbtn" data-act="follow-request" data-id="${esc(m.inbox)}">↳ ${esc(T("desk.follow.ask"))}</button>` : "";
   return `<div style="display:flex;flex-direction:column;gap:6px">
-    <span class="d-lbl">${esc(m.who)}</span>
+    <span style="display:flex;align-items:center;gap:14px"><span class="d-lbl">${esc(m.who)}</span>${follow}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
       <div class="md md-said" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div>
@@ -1223,7 +1252,7 @@ function feedSize() {
 }
 
 views.work = () => `<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
-  <div class="d-composer"><div class="d-cin">
+  <div class="d-composer">${followHtml()}<div class="d-cin">
     <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
     <textarea class="d-ta" id="draft" rows="1" placeholder="${T("desk.composer")}"></textarea>
     <span class="d-m" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">${T("desk.composer.hint")}</span>
@@ -2242,12 +2271,26 @@ const actions = {
   async "clear-req-filter"() { state.reqFilter = "All"; state.reqAgent = ""; render(); },
   async "ev-filter"(el) { state.eventFilter = el.dataset.value; render(); },
   async "follow-request"(el) {
+    const id = String(el.dataset.id);
     const detail = state.data.inboxDetail;
+    const item = (String(detail?.id) === id ? detail : null)
+      || (state.data.inbox || []).find((i) => String(i.id) === id)
+      || state.feed.rows.find((i) => String(i.id) === id);
+    state.followUp = { id, line: firstLine(item?.userRequest || "") };
+    state.selected.inbox = id;
     state.tab = "work";
     location.hash = "work";
-    state.selected.inbox = el.dataset.id;
-    state.draft = state.draft || "";
     render();
+    const box = $("draft");
+    if (box) {
+      box.focus();
+      box.setSelectionRange(box.value.length, box.value.length);
+    }
+  },
+  async "cancel-follow"() {
+    state.followUp = null;
+    render();
+    $("draft")?.focus();
   },
   async "toggle-conv"(el) {
     const key = String(el.dataset.id);
