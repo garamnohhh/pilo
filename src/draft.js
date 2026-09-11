@@ -7,6 +7,22 @@ export { wide, cols } from "./width.js";
 
 // The prompt wraps long lines, so a "line" on screen is not a line in the string.
 // Vertical motion has to follow what is drawn, which means both share this layout.
+// Swaps each image marker for its saved path. A path is only useful on its own,
+// so where the marker touched other text, or another marker, a space keeps them
+// apart: two pictures pasted one after the other used to arrive as one long,
+// broken path.
+export function expandImages(text, images) {
+  let out = String(text);
+  for (const [token, path] of images) {
+    for (let at = out.indexOf(token); at !== -1; at = out.indexOf(token)) {
+      const before = at > 0 && !/\s/.test(out[at - 1]) ? " " : "";
+      const after = at + token.length < out.length && !/\s/.test(out[at + token.length]) ? " " : "";
+      out = out.slice(0, at) + before + path + after + out.slice(at + token.length);
+    }
+  }
+  return out;
+}
+
 export function layoutDraft(input, width) {
   const rows = [];
   let index = 0;

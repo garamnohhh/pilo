@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
-import { edit, layoutDraft } from "./draft.js";
+import { expandImages, edit, layoutDraft } from "./draft.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -670,8 +670,7 @@ function expandPastes(text) {
   let out = text;
   for (const [token, value] of state.pastes) out = out.split(token).join(value);
   // An image leaves the path behind, which is what the agent can actually open.
-  for (const [token, path] of state.images) out = out.split(token).join(path);
-  return out;
+  return expandImages(out, state.images);
 }
 
 // The image marker is the twin of the paste marker: same brackets, its own
