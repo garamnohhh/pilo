@@ -9,6 +9,7 @@ import { buildRules } from "./rules.js";
 import { ensureHome, writePort, writePid, writeSocket, readPort, socketPath } from "./paths.js";
 import { startWatcher } from "./watcher.js";
 import { startSpool } from "./spool.js";
+import { changed, openStream, listening } from "./changes.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -37,7 +38,7 @@ async function readBody(req) {
 }
 
 const routes = [
-  ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort() })],
+  ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort(), streams: listening() })],
   ["GET", /^\/api\/overview$/, () => api.overview()],
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
@@ -130,6 +131,8 @@ export async function dispatch(method, pathname, body = {}, query = new URLSearc
     const match = pattern.exec(path);
     if (!match) continue;
     const payload = (await run(match, body, params)) ?? { ok: true };
+    // Every write, from the dashboard, the CLI's socket or the spool, passes here.
+    if (method !== "GET") changed();
     return { status: method === "POST" ? 201 : 200, payload };
   }
   return null;
@@ -138,6 +141,10 @@ export async function dispatch(method, pathname, body = {}, query = new URLSearc
 async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const method = req.method;
+  if (method === "GET" && url.pathname === "/api/stream") {
+    openStream(req, res);
+    return;
+  }
   const known = routes.some(([m, pattern]) => m === method && pattern.test(url.pathname));
   if (known) {
     const body = method === "GET" || method === "DELETE" ? {} : await readBody(req);

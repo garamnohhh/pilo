@@ -622,7 +622,56 @@ function syncPulse() {
 
 let renderedTab = null;
 
+// A repaint replaces every element it covers, and the composer sits inside the
+// feed's view. Refreshing used to stop outright while any field had focus: the
+// words survived, but a new answer stayed off the screen until the cursor left.
+// Now typed words, the cursor and focus are carried across the repaint, and a
+// repaint that would land in the middle of Hangul composition waits for the
+// syllable to be finished.
+let composing = false;
+let owedRender = false;
+const endComposition = () => {
+  composing = false;
+  if (!owedRender) return;
+  owedRender = false;
+  render();
+};
+document.addEventListener("compositionstart", () => { composing = true; });
+document.addEventListener("compositionend", endComposition);
+document.addEventListener("focusout", () => { if (composing) endComposition(); });
+
+function holdFields() {
+  const fields = [...document.querySelectorAll("input[id], textarea[id]")]
+    .filter((el) => el.type !== "checkbox" && el.type !== "radio" && el.value !== el.defaultValue)
+    .map((el) => ({ id: el.id, value: el.value }));
+  const el = document.activeElement;
+  const focus = el?.id && ["INPUT", "TEXTAREA", "SELECT"].includes(el.tagName)
+    ? { id: el.id, start: el.selectionStart, end: el.selectionEnd, dir: el.selectionDirection, top: el.scrollTop }
+    : null;
+  return { fields, focus };
+}
+
+function returnFields({ fields, focus }) {
+  // Only a field drawn fresh takes the words back; one left in place still has them.
+  for (const field of fields) {
+    const el = $(field.id);
+    if (el && el.value === el.defaultValue && el.value !== field.value) el.value = field.value;
+  }
+  const el = focus && $(focus.id);
+  if (!el || el === document.activeElement) return;
+  el.focus({ preventScroll: true });
+  try {
+    el.setSelectionRange(focus.start, focus.end, focus.dir);
+  } catch (err) { /* not a text field */ }
+  el.scrollTop = focus.top;
+}
+
 function render() {
+  if (composing) {
+    owedRender = true;
+    return;
+  }
+  const held = holdFields();
   const tabChanged = renderedTab !== state.tab;
   const saved = tabChanged ? {} : scrollState();
   const before = feedNode();
@@ -644,6 +693,7 @@ function render() {
     wire();
     watchFeed();
     syncPulse();
+    returnFields(held);
   }
   renderedTab = state.tab;
 
@@ -2254,15 +2304,80 @@ if ("serviceWorker" in navigator) {
 }
 
 await load();
-setInterval(async () => {
-  if (document.hidden) return;
-  if (document.activeElement && ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+// Refreshing. The server says when something changed (/api/stream) and the page
+// loads then. The clock is only a safety net: thirty seconds while the stream is
+// up, the old five while it is not — an older server without the route, or a
+// stream something in between refuses, still leaves a page that keeps up.
+// Notices that arrive together, or while a load is running, become one more
+// load, not one each.
+const SAFETY_MS = 30000;
+const FALLBACK_MS = 5000;
+const GATHER_MS = 200;
+const SILENT_MS = 60000; // the server pings every twenty
+const sync = { live: false, loading: false, again: false, soon: null, lastLoad: Date.now(), heard: 0, stream: null };
+
+async function refresh() {
+  if (document.hidden) return; // coming back loads once, below
+  if (sync.loading) {
+    sync.again = true;
+    return;
+  }
+  sync.loading = true;
   try {
     await load();
   } catch (err) {
     $("sync").textContent = "disconnected";
+  } finally {
+    sync.loading = false;
+    sync.lastLoad = Date.now();
   }
-}, 5000);
+  if (sync.again) {
+    sync.again = false;
+    refresh();
+  }
+}
+
+function soon() {
+  sync.heard = Date.now();
+  if (sync.soon) return;
+  sync.soon = setTimeout(() => {
+    sync.soon = null;
+    refresh();
+  }, GATHER_MS);
+}
+
+function listen() {
+  if (!("EventSource" in window)) return;
+  const stream = new EventSource("/api/stream");
+  sync.stream = stream;
+  // Whatever changed while the connection was down arrives as this one load.
+  stream.onopen = () => {
+    sync.live = true;
+    soon();
+  };
+  stream.onmessage = () => soon();
+  stream.addEventListener("ping", () => { sync.heard = Date.now(); });
+  stream.onerror = () => {
+    sync.live = false;
+    // A dropped connection is retried by the browser itself; a refused one is
+    // closed for good, so ask again later.
+    if (stream.readyState === EventSource.CLOSED && sync.stream === stream) setTimeout(listen, SAFETY_MS);
+  };
+}
+
+setInterval(() => {
+  if (document.hidden) return;
+  if (sync.live && Date.now() - sync.heard > SILENT_MS) {
+    sync.stream.close();
+    sync.live = false;
+    listen();
+  }
+  if (Date.now() - sync.lastLoad >= (sync.live ? SAFETY_MS : FALLBACK_MS)) refresh();
+}, 1000);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refresh();
+});
+listen();
 </script>
 </body>
 </html>
