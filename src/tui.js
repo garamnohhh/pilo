@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { edit, layoutDraft } from "./draft.js";
-import { isPasteImage, takePasteKeys, flushCarry } from "./keys.js";
+import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
 import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
@@ -1300,6 +1300,9 @@ readline.emitKeypressEvents(keys);
 process.stdin.setRawMode(true);
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
+// Flags 1 + 4: disambiguate, and report the base-layout key beside the typed
+// one, so Cmd+V under the Korean input source arrives as ESC[12621::118;9u —
+// a V — rather than as a character Pilo has no way to recognise.
 // Push the current title so it can be restored, then name the tab.
 // iTerm draws "title (job)", so a title of our own would read "Pilo (Pilo)".
 // Clear the title and let the process name alone name the tab.
@@ -1307,7 +1310,7 @@ process.title = "Pilo";
 // The caret should read as part of the prompt, so it takes the accent green the
 // ❯ is drawn in; OSC 112 in restoreTerminal puts the old colour back.
 const cursorColour = COLOR === "none" ? "" : "\x1b]12;#3ed49c\x07";
-process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>1u\x1b[?2004h" + cursorColour + MOUSE_ON);
+process.stdout.write("\x1b[22;0t\x1b]1;\x07\x1b]2;\x07\x1b[?1049h\x1b[>5u\x1b[?2004h" + cursorColour + MOUSE_ON);
 
 // The probe reads its own reply, so it runs before the key stream is wired up.
 await probeAmbiguous();
@@ -1330,9 +1333,14 @@ process.stdin.on("data", (chunk) => {
   for (const click of clicks) handleClick(click);
   // Take the paste keys out here rather than after readline: a stray tail of one
   // of these was ending up in the prompt as text.
+  const unread = unreadPasteKeys(pasteCarry + rest);
   const taken = takePasteKeys(rest, pasteCarry);
   pasteCarry = taken.carry;
   for (let i = 0; i < taken.hits; i++) attachClipboard();
+  if (unread && !taken.hits) {
+    note(t("note.pasteKeyUnread"));
+    render();
+  }
   if (taken.rest.length) keys.write(taken.rest);
   if (pasteCarry) {
     carryTimer = setTimeout(() => {
