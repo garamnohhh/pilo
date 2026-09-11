@@ -121,6 +121,12 @@
      the only cue. 700 makes that cue carry — 35.7% more ink than 400 against
      600's 25.1%, measured on Korean at 15px. */
   .md strong { font-weight: 700; color: var(--text) }
+  /* What an agent wrote reads the same wherever it is shown: the words in the
+     quieter --text-2, the bold in --text, so bold stands out by colour as well
+     as by weight. Work's answer bubble used to set the words to --text too,
+     which left only the weight to tell them apart. The user's own words keep
+     --text: they are the question, not the reply. */
+  .md.md-said { color: var(--text-2) }
   /* Only shown while the conversation has moved on without you. */
   #newlines { position: absolute; left: 50%; transform: translateX(-50%); bottom: 74px; z-index: 30 }
   /* The handoff has no count on the rail at all, so this is new: the values are
@@ -812,10 +818,18 @@ function imageMarker({ file, width, height, bytes, kind }) {
   return token;
 }
 
+// A path only works on its own, so where a marker touched other text or another
+// marker a space keeps them apart — the same rule as expandImages in src/draft.js.
 function expandDraft(text) {
   let out = text;
   for (const [token, value] of composerPastes) out = out.split(token).join(value);
-  for (const [token, file] of composerImages) out = out.split(token).join(file);
+  for (const [token, file] of composerImages) {
+    for (let at = out.indexOf(token); at !== -1; at = out.indexOf(token)) {
+      const before = at > 0 && !/\s/.test(out[at - 1]) ? " " : "";
+      const after = at + token.length < out.length && !/\s/.test(out[at + token.length]) ? " " : "";
+      out = out.slice(0, at) + before + file + after + out.slice(at + token.length);
+    }
+  }
   return out;
 }
 
@@ -1121,7 +1135,6 @@ function bubble(m) {
   // uses: amber while something is still moving, red when it is waiting on you,
   // accent for the answer, and the plain rule for a result that is only history.
   const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR }[m.kind] || "var(--line)";
-  const fg = m.kind === "answer" ? "var(--text)" : "var(--text-2)";
   // Only a line about work that is moving pulses. The TUI holds the red one
   // still on purpose — it is waiting on you, and nothing is happening — and a
   // finished line has nothing to claim.
@@ -1130,7 +1143,7 @@ function bubble(m) {
     <span class="d-lbl">${esc(m.who)}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
-      <div class="md" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62;color:${fg}">${prose(m.text)}</div>
+      <div class="md md-said" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div>
     </div></div>`;
 }
 
@@ -1447,12 +1460,12 @@ views.inbox = () => {
         <div class="d-list" style="margin-top:24px">${(detail.trace || []).filter((t) => t.stage !== "inbox").map((t) => `
           <div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${t.stage === "final_reply" ? ACCT : t.stage === "pm_result" ? INFO : "var(--text-3)"}">${esc(STAGE[t.stage] || t.stage)} · ${esc(t.who)}</span>
-            <span class="md" style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2)">${prose(t.text)}</span>
+            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.text)}</span>
           </div>`).join("") || `<div class="d-tr"><span class="d-lbl">not handed on yet</span></div>`}</div>
         ${detail.tasks.some(inFlight) ? `<div style="margin-top:24px">${rule("in flight")}
           <div class="d-list">${detail.tasks.filter(inFlight).map((t) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${WARN}">${esc(t.agent || "agent")} · ${ago(t.progressAt)}</span>
-            <span class="md" style="font-size:var(--fs-body);line-height:1.62;color:var(--text-2)">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
+            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
         ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written — <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
         <div style="display:flex;gap:8px;margin-top:24px">
           ${btn("Ask a follow-up", "follow-request", `data-id="${detail.id}"`)}

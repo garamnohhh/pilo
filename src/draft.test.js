@@ -204,3 +204,13 @@ test("hangul columns count double when moving between rows", () => {
   const moved = press({ input, cursor: 25 }, up);
   assert.equal(moved.cursor, 15);
 });
+
+test("image markers become paths that stand on their own", async () => {
+  const { expandImages } = await import("./draft.js");
+  const images = new Map([["⟦image #1 · png 1KB⟧", "/a/1.png"], ["⟦image #2 · png 1KB⟧", "/a/2.png"]]);
+  assert.equal(expandImages("⟦image #1 · png 1KB⟧⟦image #2 · png 1KB⟧", images), "/a/1.png /a/2.png");
+  assert.equal(expandImages("look⟦image #1 · png 1KB⟧here", images), "look /a/1.png here");
+  assert.equal(expandImages("look ⟦image #1 · png 1KB⟧\n⟦image #2 · png 1KB⟧", images), "look /a/1.png\n/a/2.png");
+  assert.equal(expandImages("⟦image #1 · png 1KB⟧ twice ⟦image #1 · png 1KB⟧", images), "/a/1.png twice /a/1.png");
+  assert.equal(expandImages("no markers", images), "no markers");
+});
