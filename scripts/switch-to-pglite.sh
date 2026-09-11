@@ -102,9 +102,9 @@ check_start() {
 check_after() {
   local hist stream
   local agents wake recent
-  agents="$(api /api/agents 2>/dev/null | py 'print(len(d))')"
+  agents="$({ api /api/agents 2>/dev/null || true; } | py 'print(len(d))')"
   wake="$(svc wake)"
-  recent="$(api '/api/inbox?limit=1' 2>/dev/null | py 'r = d[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
+  recent="$({ api '/api/inbox?limit=1' 2>/dev/null || true; } | py 'r = d[0]; print("in-%s %s %s" % (r["id"], r["status"], r["userRequest"][:40].replace(chr(10), " ")))')"
   case "$agents $wake" in *"확인 못 함"*) warn "에이전트 ${agents} · ${wake}" ;; *) ok "에이전트 ${agents}개 · ${wake}" ;; esac
   case "$recent" in "확인 못 함") warn "최근 요청 확인 못 함" ;; *) ok "최근 요청: $recent" ;; esac
   hist="$("$PILO" history 수덕사 --limit 1 2>&1 | head -1 || true)"
@@ -232,7 +232,8 @@ ok "서버 동작 · port $PORT"
 
 # ------------------------------------------------------------------ 6. 규칙
 bold "6. 규칙 재생성 (에이전트 파일 쓰고 각 세션에 알림)"
-ids="$(api /api/agents | python3 -c 'import sys, json; print(" ".join(str(a["id"]) for a in json.load(sys.stdin) if a.get("role") != "system" and a.get("cwd")))')"
+ids="$({ api /api/agents 2>/dev/null || true; } | py 'print(" ".join(str(a["id"]) for a in d if a.get("role") != "system" and a.get("cwd")))')"
+case "$ids" in ""|"확인 못 함") warn "에이전트 목록을 못 읽음 — 절차서 6단계 한 줄 명령으로 규칙 재생성"; ids="" ;; esac
 failed=""; written=0
 for id in $ids; do
   if curl -fsS -X POST "http://127.0.0.1:$PORT/api/agents/$id/rules" -o "$WORK/rules-$id.json" 2>/dev/null; then
