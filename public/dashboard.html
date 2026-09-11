@@ -52,6 +52,33 @@
   }
   @media (prefers-reduced-motion: reduce) { .d-spin::before { animation: none } }
 
+  /* Every page's title row stays in view while the page scrolls under it. The
+     row reaches up over the page's top padding so nothing shows above it. */
+  .d-scroll.d-pad, .d-fill.d-pad { --d-pad-top: 24px }
+  .d-scroll.d-pad > .d-head:first-child, .d-fill.d-pad > .d-head:first-child {
+    position: sticky; top: calc(var(--d-pad-top) * -1); z-index: 4; background: var(--bg);
+    margin-top: calc(var(--d-pad-top) * -1); padding-top: var(--d-pad-top); padding-bottom: 12px; margin-bottom: 12px }
+  @container (max-width: 900px) { .d-scroll.d-pad, .d-fill.d-pad { --d-pad-top: 16px } }
+
+  /* Requests holds still: the agent list, the request list and the handling
+     each scroll inside themselves. Too narrow for side-by-side panes, the page
+     scrolls as one instead. */
+  .d-fill { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden }
+  .d-fill > .d-split { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch }
+  .d-reqcol { min-width: 0; min-height: 0; display: flex; flex-direction: column }
+  .d-reqcol > .d-lblrule { flex: none }
+  .d-byagent { flex: 0 1 auto; min-height: 120px; max-height: 38%; overflow-y: auto }
+  .d-reqsec { flex: 1; min-height: 0; display: flex; flex-direction: column; margin-top: 48px }
+  .d-reqlist { flex: 1; min-height: 0; overflow-y: auto }
+  .d-handling { min-width: 0; min-height: 0; overflow-y: auto }
+  @container (max-width: 1180px) {
+    .d-fill { overflow-y: auto }
+    .d-fill > .d-split { flex: none; grid-template-rows: none }
+    .d-byagent { max-height: 320px }
+    .d-reqlist { flex: none; max-height: 480px }
+    .d-handling { overflow: visible }
+  }
+
   /* Usage in the topbar, where the TUI keeps it: mark, then the figure. Narrow keeps the figure only. */
   .d-usage-row { display: flex; align-items: center; gap: 12px }
   .d-usage { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap }
@@ -294,7 +321,8 @@ const state = {
   palette: false,
   palQuery: "",
   draft: "",
-  sending: false
+  sending: false,
+  fold: {}
 };
 
 function emptyForm() {
@@ -578,7 +606,11 @@ function paint(id, html) {
   return true;
 }
 
-const SCROLLERS = [["tree", "#tree .d-scroll"], ["view", "#view .d-scroll"], ["dlg", "#dlg .d-dlgbody"]];
+const SCROLLERS = [["tree", "#tree .d-scroll"], ["view", "#view .d-scroll"], ["dlg", "#dlg .d-dlgbody"],
+  // requests: the page when it is too narrow for the panes, then each pane
+  ["reqpage", "#view .d-fill"], ["byagent", "#view .d-byagent"], ["reqlist", "#view .d-reqlist"], ["handling", "#view .d-handling"]];
+// A different request opens its handling at the top; the same one keeps its place.
+let handlingFor = null;
 
 function scrollState() {
   const saved = {};
@@ -710,6 +742,12 @@ function render() {
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
 
   if (viewChanged && !tabChanged) restoreScroll(saved);
+  const reading = state.tab === "inbox" ? String(state.selected.inbox ?? "") : null;
+  if (reading !== null && reading !== handlingFor) {
+    const pane = document.querySelector("#view .d-handling");
+    if (pane) pane.scrollTop = 0;
+  }
+  handlingFor = reading;
   if (touched) {
     if (isWork) restoreDraft();
     wire();
@@ -896,14 +934,14 @@ function renderWorkPanes() {
       const padL = 12 + lvl * 18;
       const picked = state.feed.agent === a.name;
       return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid ${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};cursor:pointer" data-act="pick-agent" data-name="${esc(a.name)}">
-        <span style="display:flex;align-items:center;gap:9px;padding:9px 12px 9px ${padL}px">
+        <span style="display:flex;align-items:center;gap:9px;padding:6px 12px 2px ${padL}px">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
           ${agentMark(a, colour)}
           ${runtimeMark(a.runtime)}
           <span class="d-clip" style="font-size:14px;flex:1">${esc(a.name)}</span>
           <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)}">${role}</span>
         </span>
-        <span style="display:block;padding:0 12px 9px ${padL + 17}px">
+        <span style="display:block;padding:0 12px 6px ${padL + 17}px">
           <span class="d-m d-clip" style="display:block;font-size:11px;color:${colour}">${esc(agentNote(a))}</span>
         </span>
       </button>`;
@@ -1179,7 +1217,15 @@ function failureCard(failures) {
 }
 
 views.agents = () => {
-  const rows = treeRows();
+  // The handoff's fold: a PM row with workers folds them from anywhere on the row,
+  // and says which way it stands with + (folded) or − (open) after its plate.
+  const kids = new Map();
+  const parentOf = new Map();
+  (state.data.tree?.pms || []).forEach((pm) => {
+    kids.set(String(pm.id), (pm.children || []).length);
+    (pm.children || []).forEach((w) => parentOf.set(String(w.id), pm.name));
+  });
+  const rows = treeRows().filter(({ a, lvl }) => !(lvl > 1 && state.fold[parentOf.get(String(a.id))]));
   const st = state.data.overview?.stats || {};
   const bound = (state.data.sessions || []).filter((x) => !x.boundAgent).length;
   return page(
@@ -1188,10 +1234,14 @@ views.agents = () => {
     `<div class="gn-ladder gn-ladder-bar">${rows.map(({ a, lvl }) => {
       const role = a.role.toUpperCase();
       const colour = agentTone(a);
+      const canFold = lvl > 0 && (kids.get(String(a.id)) || 0) > 0;
+      const folded = Boolean(state.fold[a.name]);
+      const fold = canFold ? ` data-fold="on" role="button" tabindex="0" aria-expanded="${!folded}" data-act="fold-agent" data-name="${esc(a.name)}"` : "";
       return `<div class="gn-ladder-row">
         <span class="gn-ladder-indent" data-level="${lvl}"></span>
-        <span class="gn-ladder-block" data-role="${role.toLowerCase()}">
+        <span class="gn-ladder-block" data-role="${role.toLowerCase()}"${fold}>
           <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
+          <span class="gn-ladder-twist">${canFold ? (folded ? "+" : "−") : ""}</span>
           <span class="gn-ladder-name">${esc(a.name)}</span>
           ${runtimeMark(a.runtime)}
           <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
@@ -1200,7 +1250,7 @@ views.agents = () => {
           <button class="gn-btn gn-btn-sm gn-btn-ghost" style="margin-right:8px;flex:none" data-act="open-agent" data-id="${a.id}">open</button>
         </span></div>`;
     }).join("")}</div>` +
-    `<div class="d-hint">A child row starts where its parent's plate ends. open holds everything about one agent — rules, binding, waking, removal.
+    `<div class="d-hint">A child row starts where its parent's plate ends. Click a PM row anywhere to fold its workers. open holds everything about one agent — rules, binding, waking, removal.
       ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet — Add agent picks one up.` : ""}</div>`
   );
 };
@@ -1314,21 +1364,20 @@ views.inbox = () => {
     : `<div style="min-width:0"><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span></div>
         <div style="padding:48px 4px;font-size:var(--fs-body);color:var(--text-3)">Pick a request on the left.</div></div>`;
 
-  return page(
+  return `<div class="d-pad d-fill">` +
     pageHead(T("desk.title.inbox"), `${all.length} in all`,
       seg([["Open", "Open"], ["Closed", "Closed"], ["All", "All"]], state.reqFilter, "req-filter")) +
-    `<div class="d-split"><div style="min-width:0">
+    `<div class="d-split"><div class="d-reqcol">
       <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.byAgent")}</span>
         <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${rows.length} / ${byState.length}</span></div>
-      <div class="d-list">${agentOpts}</div>
-      <div style="margin-top:48px">
+      <div class="d-list d-byagent">${agentOpts}</div>
+      <div class="d-reqsec">
         <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.requests")}</span>
           <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${esc(state.reqAgent || "every agent")}</span></div>
-        <div class="d-list">${reqRows}</div>
+        <div class="d-reqlist"><div class="d-list">${reqRows}</div>
         ${rows.length ? "" : `<div style="padding:48px 4px;text-align:center"><div class="d-lbl">${T("desk.lbl.nothingHere")}</div>
-          <div style="margin-top:16px">${btn(T("desk.lbl.clearFilter"), "clear-req-filter")}</div></div>`}
-      </div></div>${handling}</div>`
-  );
+          <div style="margin-top:16px">${btn(T("desk.lbl.clearFilter"), "clear-req-filter")}</div></div>`}</div>
+      </div></div><div class="d-handling">${handling}</div></div></div>`;
 };
 
 // ---------- SCHEDULES ----------
@@ -1686,9 +1735,10 @@ function fieldHtml(f) {
 
 const traceHtml = (label, rows) => `<div style="margin-top:24px">
   <div class="d-lbl">${esc(label)}</div>
-  <div style="margin-top:12px">${rows.length ? rows.map(([k, v, color]) => `<div style="display:flex;gap:16px;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
+  <div style="margin-top:12px">${rows.length ? rows.map(([k, v, color, action]) => `<div style="display:flex;align-items:center;gap:16px;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
     <span class="d-m" style="font-size:12px;color:${color || DIM};width:96px;flex:none">${esc(k)}</span>
-    <span style="font-size:var(--fs-small);line-height:1.6;color:var(--text-2);min-width:0;white-space:pre-wrap">${esc(v)}</span>
+    <span style="font-size:var(--fs-small);line-height:1.6;color:var(--text-2);min-width:0;white-space:pre-wrap;flex:1">${esc(v)}</span>
+    ${action ? `<span style="flex:none">${action}</span>` : ""}
   </div>`).join("") : `<div class="d-lbl" style="padding:12px 0">nothing yet</div>`}</div></div>`;
 
 // A diff keeps its gutter and its tint; a payload is the same block with the
@@ -1793,13 +1843,28 @@ DIALOGS["add-agent"] = () => {
 DIALOGS.rules = () => {
   const r = state.rules;
   const agents = allAgents();
+  // Every agent that can take rules gets its own button, and one button sends to
+  // all of them. The ones left out say why, instead of simply not being there.
+  const eligible = agents.filter((a) => a.role !== "system" && a.cwd);
+  const seen = new Set(agents.map((a) => String(a.id)));
+  const system = (state.data.agents || []).filter((a) => a.role === "system" && !seen.has(String(a.id)));
+  const left = [
+    ...agents.filter((a) => a.role !== "system" && !a.cwd).map((a) => [a.name, `${a.role} · no folder, so there is no file to write into`, DIM]),
+    ...agents.filter((a) => a.role === "system").concat(system).map((a) => [a.name, "system · Pilo's own errand runner — takes no instructions", DIM])
+  ];
   if (!r) return {
     title: "Rules",
-    sub: "each agent carries its own file",
-    prose: "Pilo has no one list of rules yet: each agent's instructions live in the CLAUDE.md or AGENTS.md next to its own work. Open one below to read and re-send it.",
-    trace: agents.map((a) => [a.name, `${a.role} · ${a.cwd || "no cwd"}`, roleFg(a.role.toUpperCase())]),
-    traceLabel: "agents",
-    actions: agents.slice(0, 6).map((a) => btn(a.name, "rules", `data-id="${a.id}"`, "gn-btn-ghost"))
+    sub: `each agent carries its own file · ${eligible.length} can take rules`,
+    prose: "Pilo has no one list of rules yet: each agent's instructions live in the CLAUDE.md or AGENTS.md next to its own work. Open one to read and re-send it, or send the current rules to all of them.",
+    trace: [
+      ...eligible.map((a) => [a.name, `${a.role} · ${a.cwd}`, roleFg(a.role.toUpperCase()), btn("open", "rules", `data-id="${a.id}"`, "gn-btn-ghost")]),
+      ...left
+    ],
+    traceLabel: `agents · ${eligible.length}${left.length ? ` · ${left.length} left out` : ""}`,
+    actions: [
+      btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"),
+      right(`Send to all ${eligible.length}`, "write-rules-all", "", "gn-btn-brand")
+    ]
   };
   return {
     wide: true,
@@ -2122,6 +2187,25 @@ const actions = {
     state.dlg = { kind: "rules" };
     render();
   },
+  async "write-rules-all"() {
+    const targets = allAgents().filter((a) => a.role !== "system" && a.cwd);
+    toast(`규칙 ${targets.length}개 보내는 중…`);
+    const failed = [];
+    for (const a of targets) {
+      try {
+        await call("POST", `/api/agents/${a.id}/rules`, {});
+      } catch (err) {
+        failed.push(a.name);
+      }
+    }
+    toast(failed.length
+      ? `규칙 ${targets.length - failed.length}/${targets.length} 보냄 · 실패: ${failed.join(", ")}`
+      : `규칙 ${targets.length}개 모두 보냄 · 각 세션에 반영 요청`, failed.length > 0);
+  },
+  async "fold-agent"(el) {
+    state.fold = { ...state.fold, [el.dataset.name]: !state.fold[el.dataset.name] };
+    render();
+  },
   async "write-rules"(el) {
     const res = await call("POST", `/api/agents/${el.dataset.id}/rules`, {});
     toast(
@@ -2279,6 +2363,14 @@ function wire() {
     box.selectionStart = box.value.length;
     box.oninput = () => { state.palQuery = box.value; render(); };
   }
+  // A foldable row is a button to the keyboard too.
+  document.querySelectorAll('[data-fold="on"]').forEach((el) => {
+    el.onkeydown = (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      el.click();
+    };
+  });
   document.querySelectorAll("[data-act]").forEach((el) => {
     el.onclick = async (event) => {
       event.stopPropagation();
