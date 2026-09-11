@@ -43,6 +43,15 @@
      so a full cycle is 1.1s and the dim is 55% of the bright. The bar is its
      own element so only it moves; the words hold still. */
   .d-bar { width: 2px; flex: none; align-self: stretch }
+  /* The sidebar spinner: a fixed box one glyph wide so a name never moves. */
+  .d-spin, .d-spin-still { display: inline-block; width: 10px; flex: none; text-align: center; font: 14px/1 var(--mono) }
+  .d-spin::before { content: "⠋"; animation: d-spin 1.2s steps(1, end) infinite }
+  @keyframes d-spin {
+    0% { content: "⠋" } 10% { content: "⠙" } 20% { content: "⠹" } 30% { content: "⠸" } 40% { content: "⠼" }
+    50% { content: "⠴" } 60% { content: "⠦" } 70% { content: "⠧" } 80% { content: "⠇" } 90% { content: "⠏" }
+  }
+  @media (prefers-reduced-motion: reduce) { .d-spin::before { animation: none } }
+
   /* One pulse for everything live: the bar under a conversation and the dot
      beside an agent, at the TUI's own beat. desk.css carries the handoff's
      .d-live at 1.06 s down to 25%; beside a 1.1 s bar those two drift a whole
@@ -607,7 +616,7 @@ function showUnseen() {
 // This runs when something has been painted, never on the beat itself.
 function syncPulse() {
   for (const anim of document.getAnimations()) {
-    if (anim.animationName === "d-pulse" && anim.startTime !== 0) anim.startTime = 0;
+    if ((anim.animationName === "d-pulse" || anim.animationName === "d-spin") && anim.startTime !== 0) anim.startTime = 0;
   }
 }
 
@@ -767,6 +776,17 @@ function agentTone(a) {
   return OK;
 }
 
+// The sidebar tree marks a working agent the way the TUI does: a braille spinner,
+// ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, a frame every 120 ms (the TUI's own tick), 1.2 s round. Only a
+// running agent that has not gone quiet spins; a stalled one shows the TUI's
+// still ◌, and every other state keeps its dot. The frames are a CSS keyframe
+// on ::before, so what is painted never changes and nothing is redrawn for it.
+function agentMark(a, colour) {
+  if (a.status === "running" && !stalled(a)) return `<span class="d-spin" style="color:${colour}" aria-label="working"></span>`;
+  if (a.status === "running") return `<span class="d-spin-still" style="color:${colour}" aria-label="stalled">◌</span>`;
+  return `<span class="d-dot" style="background:${colour}"></span>`;
+}
+
 function agentNote(a) {
   if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return T("state.limited");
   if (a.gaveUp > 0 && a.status !== "running") return T("state.gaveUp");
@@ -806,7 +826,7 @@ function renderWorkPanes() {
       return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid ${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};cursor:pointer" data-act="pick-agent" data-name="${esc(a.name)}">
         <span style="display:flex;align-items:center;gap:9px;padding:9px 12px 9px ${padL}px">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
-          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour}"></span>
+          ${agentMark(a, colour)}
           ${runtimeMark(a.runtime)}
           <span class="d-clip" style="font-size:14px;flex:1">${esc(a.name)}</span>
           <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)}">${role}</span>
