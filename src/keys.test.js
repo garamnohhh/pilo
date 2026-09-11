@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry } from "./keys.js";
+import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
 import { edit } from "./draft.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
@@ -169,4 +169,17 @@ test("Korean text and ordinary keys pass straight through", async () => {
   assert.equal(takePasteKeys(sentence).rest, sentence);
   assert.equal((await typed([sentence])).draft, sentence);
   assert.equal((await typed(["가", "나", "다"])).draft, "가나다");
+});
+
+test("under the Korean input source, Cmd+V with alternate keys attaches; without them it is named, never typed", async () => {
+  assert.equal(takePasteKeys("\x1b[12621::118;9u").hits, 1);
+  assert.equal(unreadPasteKeys("\x1b[12621::118;9u"), 0);
+  assert.equal(unreadPasteKeys("\x1b[12621;9u"), 1);
+  assert.equal(unreadPasteKeys("\x1b[12621;5u"), 1, "Ctrl held counts too");
+  assert.equal(unreadPasteKeys("\x1b[12621;9:3u"), 0, "a key going up is not a press");
+  assert.equal(unreadPasteKeys("\x1b[118;9u"), 0, "an English V is the paste key itself");
+  assert.equal(unreadPasteKeys("\x1b[12621;3u"), 0, "Option alone types a character");
+  assert.equal(unreadPasteKeys("\x1b[57414;5u"), 0, "a keypad key is not a letter");
+  assert.equal(unreadPasteKeys("가나다 1;9u 12621;9u"), 0, "text that looks like one is text");
+  assert.equal((await typed(["\x1b[12621;9u"])).draft, "");
 });
