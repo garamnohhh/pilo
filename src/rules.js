@@ -209,8 +209,8 @@ function piloRules(agent, base, agents) {
   const roster = agents
     .filter((a) => a.role !== "pilo")
     .map((a) => {
-      // Who owns this agent decides who may hand it work: the desk owns the PMs
-      // and its own workers, a PM owns the workers hanging off it.
+      // Who owns this agent decides who may hand it work: the desk owns the PMs,
+      // a PM owns the workers hanging off it.
       const owner = agents.find((x) => String(x.id) === String(a.parentAgentId));
       const reportsTo = !owner || owner.role === "pilo" ? "you" : owner.name;
       return `| ${a.id} | ${a.name} | ${a.role} | ${reportsTo} | ${a.projectName || "—"} | ${a.aliases || "—"} | ${a.specialty || "—"} |`;
@@ -219,11 +219,10 @@ function piloRules(agent, base, agents) {
   return RULES[dialect()].desk(roster, base);
 }
 
-// A worker takes work from the one agent above it: its PM, or the desk when the
-// desk owns it directly. Naming that agent in its own file is what lets the
-// worker notice a task that should never have reached it.
-const owner = (parent) => (!parent || parent.role === "pilo" ? "the desk agent" : `your PM, ${parent.name}`);
-const ownerShort = (parent) => (!parent || parent.role === "pilo" ? "The desk" : parent.name);
+// A worker takes work from the one agent above it, its PM. Naming that agent in
+// its own file is what lets the worker notice a task that should never have reached it.
+const owner = (parent) => (parent ? `your PM, ${parent.name}` : "your PM");
+const ownerShort = (parent) => (parent ? parent.name : "Your PM");
 
 function workerRules(agent, base, children = [], parent = null) {
   const kind = agent.role === "pm" ? "PM agent" : "worker agent";

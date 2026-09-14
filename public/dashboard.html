@@ -994,7 +994,6 @@ function treeRows() {
   const rows = [];
   const push = (a, lvl) => rows.push({ a, lvl });
   push(tree.pilo, 0);
-  (tree.pilo.children || []).forEach((w) => push(w, 1));
   (tree.pms || []).forEach((pm) => {
     push(pm, 1);
     (pm.children || []).forEach((w) => push(w, 2));
@@ -2535,7 +2534,7 @@ const actions = {
     const pmHere = pms.find((p) => String(p.projectId) === String(f.projectId));
     const role = f.role || (pmHere ? "worker" : "pm");
     const pilo = state.data.tree?.pilo;
-    const parentAgentId = role === "worker" ? (pmHere?.id || pilo?.id || "") : pilo?.id || "";
+    const parentAgentId = role === "worker" ? pmHere?.id || "" : pilo?.id || "";
     const form = {
       name: f.name || chosen?.suggestedName || "",
       role,
