@@ -75,7 +75,7 @@ function reportTo(match, code, alternates, mods, event, hit) {
   // how a V under another input source is still a V.
   const base = String(alternates || "").split(":")[2];
   const key = Number(base || code);
-  if (key === 118 && pasteModifier(modifier)) {
+  if (isV(key) && pasteModifier(modifier)) {
     hit();
     return "";
   }
@@ -84,6 +84,14 @@ function reportTo(match, code, alternates, mods, event, hit) {
   }
   return "";
 }
+
+// Ghostty matches its own Cmd+V to the character a key types, so under the
+// Korean input source it neither pastes nor says the key was V: it sends
+// ESC[12621;9u, ㅍ with Cmd held — even with alternate keys asked for. On the
+// two-set Korean layout ㅍ sits on the V key, so it is read as V. Every other
+// jamo is some other key (ㅊ is C), which is what keeps Cmd+C out of this.
+const HANGUL_V = 0x314d;
+const isV = (key) => key === 118 || key === HANGUL_V;
 
 const pasteModifier = (modifier) => {
   const mods = modifier - 1;
@@ -120,6 +128,8 @@ export function unreadPasteKeys(input) {
     if (String(alternates || "").split(":")[2]) continue; // the base key is there: takePasteKeys has it
     const key = Number(code);
     if (key <= 127 || (key >= 57344 && key <= 63743)) continue;
+    // Hangul jamo are known keys: ㅍ is the paste key, the rest are not paste keys.
+    if (key >= 0x3131 && key <= 0x318e) continue;
     const held = Number(mods || 1) - 1;
     if (held & 8 || held & 4) count += 1;
   }
