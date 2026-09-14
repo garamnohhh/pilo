@@ -486,10 +486,14 @@ function railRows(tree, width, actions = []) {
 
   // One line per agent: status dot, name, and the badge right behind the name —
   // its position follows the name's length rather than lining up in a column.
-  // The status word sits at the right edge, and workers do without one: their
-  // dot already says it.
+  // The status word sits at the right edge, workers included: the dot alone left
+  // idle, unbound and "no answer" to be told apart by a glyph most people never learn.
   const STATUS = { running: c.amberBright, failed: c.redSoft, blocked: c.blue };
   const put = (indent, icon, name, tag, status, action, nameColor = c.fg, runtime = "") => {
+    // The name comes first: on the narrowest rail a worker four levels in has no
+    // room for both, and a cut name is worse than a missing word the dot still carries.
+    const fixed = indent + (indent ? 2 : 0) + cols(icon.icon) + 1 + (runtimeMark(runtime) ? cols(runtimeMark(runtime)) + 1 : 0) + cols(SEPARATOR) + 2 + cols(badgeText(tag));
+    if (status && fixed + cols(name) + cols(status) + 1 > width) status = "";
     const prefix = indent ? `${" ".repeat(indent)}${c.branch}└${c.reset} ` : "";
     const tagWidth = cols(badgeText(tag));
     const stateWidth = status ? cols(status) + 1 : 0;
@@ -503,9 +507,9 @@ function railRows(tree, width, actions = []) {
     const sepWidth = cols(SEPARATOR) + 2;
     // dot + space, then the separator before the badge, then whatever the status
     // word needs on the right — the name gives up whatever is left.
-    const room = width - indent - (indent ? 2 : 0) - 2 - sepWidth - markWidth - tagWidth - stateWidth;
+    const room = width - indent - (indent ? 2 : 0) - cols(icon.icon) - 1 - sepWidth - markWidth - tagWidth - stateWidth;
     const label = cut(name, Math.max(4, room));
-    const used = indent + (indent ? 2 : 0) + 2 + markWidth + cols(label) + sepWidth + tagWidth;
+    const used = indent + (indent ? 2 : 0) + cols(icon.icon) + 1 + markWidth + cols(label) + sepWidth + tagWidth;
     const gap = Math.max(1, width - used - (status ? cols(status) : 0));
     const tone = STATUS[status] || c.faint;
     rows.push(
@@ -572,7 +576,7 @@ function railRows(tree, width, actions = []) {
     pm.children.forEach((w) => {
       const wSeen = sessionLine(w, w.status);
       const wIcon = statusIcon(w.status, state.spin, stalled(w));
-      put(4, wIcon, w.name, "WORKER", "", filter, picked, w.runtime);
+      put(4, wIcon, w.name, "WORKER", word(w, wSeen), filter, picked, w.runtime);
     });
 
     divider();

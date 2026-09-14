@@ -45,6 +45,10 @@
   .d-bar { width: 2px; flex: none; align-self: stretch }
   /* The sidebar spinner: a fixed box one glyph wide so a name never moves. */
   .d-spin, .d-spin-still { display: inline-block; width: 10px; flex: none; text-align: center; font: 14px/1 var(--mono) }
+  /* the work tree's one-line row; 32px keeps it an easy target */
+  .d-arow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border-left: 2px solid transparent; cursor: pointer }
+  .d-arow:hover { background: var(--bg-2) }
+  .d-chip-sm { font-size: 9px; letter-spacing: 0.08em; padding: 2px 5px; flex: none }
   .d-spin::before { content: "⠋"; animation: d-spin 1.2s steps(1, end) infinite }
   @keyframes d-spin {
     0% { content: "⠋" } 10% { content: "⠙" } 20% { content: "⠹" } 30% { content: "⠸" } 40% { content: "⠼" }
@@ -1014,38 +1018,36 @@ function stalled(a) {
   return Date.now() - new Date(a.lastSignal).getTime() > STALL_MS;
 }
 
-// The word and the colour come out of the same ladder, so a dot and the word
-// beside it can never say different things about the same agent.
-function agentTone(a) {
-  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return WARN;
-  if (a.gaveUp > 0 && a.status !== "running") return ERR;
-  if (a.status === "running" && stalled(a)) return WARN;
-  if (a.status === "blocked") return INFO;
-  if (a.status === "failed" || a.status === "unbound") return ERR;
-  if (a.status === "running" || a.sessionStatus === "working") return WARN;
-  return OK;
+// One ladder, walked once: the word, the colour and the mark all come out of the
+// state it lands on, so a dot and the word beside it (or under the pointer) can
+// never say different things about the same agent.
+function agentState(a) {
+  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
+  if (a.gaveUp > 0 && a.status !== "running") return "gaveUp";
+  if (a.status === "running" && stalled(a)) return "stalled";
+  if (a.status === "blocked") return "blocked";
+  if (a.status === "failed") return "failed";
+  if (a.status === "unbound") return "unbound";
+  if (a.status === "running" || a.sessionStatus === "working") return "running";
+  return "idle";
 }
 
-// The sidebar tree marks a working agent the way the TUI does: a braille spinner,
-// ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, a frame every 120 ms (the TUI's own tick), 1.2 s round. Only a
-// running agent that has not gone quiet spins; a stalled one shows the TUI's
-// still ◌, and every other state keeps its dot. The frames are a CSS keyframe
-// on ::before, so what is painted never changes and nothing is redrawn for it.
+const TONE = { limited: () => WARN, gaveUp: () => ERR, stalled: () => WARN, blocked: () => INFO, failed: () => ERR, unbound: () => ERR, running: () => WARN, idle: () => OK };
+const agentTone = (a) => TONE[agentState(a)]();
+const agentNote = (a) => T(`state.${agentState(a)}`);
+
+// The work tree has no room for the word, so the mark carries it. A working agent
+// spins the TUI's braille, ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, a frame every 120 ms, as a CSS keyframe on
+// ::before so nothing is redrawn for it. The states that share a colour get
+// shapes of their own — the TUI's where it has one — so no two read the same:
+// stalled ◌ against limited ‖ (both amber), failed ✕ · no answer ! · unbound ○
+// (all red), blocked ◆. Idle keeps the plain dot.
+const MARK = { stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
-  if (a.status === "running" && !stalled(a)) return `<span class="d-spin" style="color:${colour}" aria-label="working"></span>`;
-  if (a.status === "running") return `<span class="d-spin-still" style="color:${colour}" aria-label="stalled">◌</span>`;
-  return `<span class="d-dot" style="background:${colour}"></span>`;
-}
-
-function agentNote(a) {
-  if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return T("state.limited");
-  if (a.gaveUp > 0 && a.status !== "running") return T("state.gaveUp");
-  if (a.status === "running" && stalled(a)) return T("state.stalled");
-  if (a.status === "blocked") return T("state.blocked");
-  if (a.status === "failed") return T("state.failed");
-  if (a.status === "unbound") return T("state.unbound");
-  if (a.status === "running" || a.sessionStatus === "working") return T("state.running");
-  return T("state.idle");
+  const key = agentState(a);
+  if (key === "running" && a.status === "running") return `<span class="d-spin" style="color:${colour}" aria-hidden="true"></span>`;
+  if (MARK[key]) return `<span class="d-spin-still" style="color:${colour}" aria-hidden="true">${MARK[key]}</span>`;
+  return `<span class="d-spin-still" aria-hidden="true"><span class="d-dot" style="background:${colour};display:inline-block"></span></span>`;
 }
 
 function renderWorkPanes() {
@@ -1073,17 +1075,16 @@ function renderWorkPanes() {
       const colour = agentTone(a);
       const padL = 12 + lvl * 18;
       const picked = state.feed.agent === a.name;
-      return `<button class="d-plain" style="display:block;width:100%;border-left:2px solid ${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};cursor:pointer" data-act="pick-agent" data-name="${esc(a.name)}">
-        <span style="display:flex;align-items:center;gap:9px;padding:6px 12px 2px ${padL}px">
+      // One line: the word left the row and stays under the pointer and in the
+      // accessible name, so it is still there for whoever needs it spelled out.
+      const note = agentNote(a);
+      return `<button class="d-plain d-arow" style="border-left-color:${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};padding-left:${padL}px"
+          data-act="pick-agent" data-name="${esc(a.name)}" title="${esc(`${a.name} · ${note}`)}" aria-label="${esc(`${a.name}, ${a.role}, ${note}`)}">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
           ${agentMark(a, colour)}
           ${runtimeMark(a.runtime)}
-          <span class="d-clip" style="font-size:14px;flex:1">${esc(a.name)}</span>
-          <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)}">${role}</span>
-        </span>
-        <span style="display:block;padding:0 12px 6px ${padL + 17}px">
-          <span class="d-m d-clip" style="display:block;font-size:11px;color:${colour}">${esc(agentNote(a))}</span>
-        </span>
+          <span class="d-clip" style="font-size:14px;flex:1;text-align:left">${esc(a.name)}</span>
+          <span class="d-chip d-chip-sm" style="color:${roleFg(role)};background:${roleBg(role)}">${role}</span>
       </button>`;
     }).join("")}</div>
     <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
