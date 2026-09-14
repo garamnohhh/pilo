@@ -418,7 +418,10 @@ async function loadDetail() {
   const list = state.data.inbox || [];
   // Work reads the same detail: the conversation is the newest request in full.
   if (state.tab === "inbox" || state.tab === "work") {
-    const id = list.some((x) => String(x.id) === String(state.selected.inbox)) ? state.selected.inbox : list[0]?.id;
+    // A request opened by number from ⌘K may be older than the list; it stays picked.
+    const kept = list.some((x) => String(x.id) === String(state.selected.inbox))
+      || (state.selected.inbox != null && String(state.data.inboxDetail?.id) === String(state.selected.inbox));
+    const id = kept ? state.selected.inbox : list[0]?.id;
     state.selected.inbox = id ?? null;
     state.data.inboxDetail = id ? await get(`/api/inbox/${id}`) : null;
   }
@@ -1819,32 +1822,143 @@ views.system = () => {
 // of actions. Everything the old right-hand column could do lives in here.
 const DIALOGS = {};
 
-// ⌘K. The rows are the screens and the CLI catalogue; what you type is not
-// sent from here — it lands in the composer, where you can still read it.
+// ⌘K. Screens, the dashboard's own switches, a request by number, an agent by
+// name, and whatever was typed as a request. The frame is drawn once per opening
+// and only the rows under the input are redrawn, so a syllable being composed in
+// the input is never taken out from under the IME.
 function paletteHtml() {
   if (!state.palette) return "";
-  const q = (state.palQuery || "").trim().toLowerCase();
-  const rows = [
-    ...RAIL.map(([key]) => [`:${key}`, T(`desk.rail.${key}`), () => `go-screen" data-value="${key}`]),
-    ...CLI_COMMANDS.map((c) => [`pilo ${c.name}`, c.summary, null])
-  ].filter(([c, d]) => !q || `${c} ${d}`.toLowerCase().includes(q)).slice(0, 8);
   return `<div class="d-scrim" data-act="close-palette">
     <div class="d-dlg" data-keep="1">
       <div style="display:flex;align-items:center;gap:12px;padding:16px 20px;border-bottom:var(--bw) solid var(--line)">
         <span class="d-m" style="color:var(--accent-text)">❯</span>
-        <input class="gn-input" id="palq" style="border:none;background:transparent;padding:0" placeholder="Type a command or a request" value="${esc(state.palQuery || "")}">
+        <input class="gn-input" id="palq" autocomplete="off" style="border:none;background:transparent;padding:0" placeholder="A screen, in-812, an agent, or a request to send">
         <span class="gn-kbd" style="flex:none">esc</span>
       </div>
-      <div class="d-dlgbody" style="padding:8px 0">
-        ${rows.map(([c, d, go]) => `<button class="d-plain d-rowbtn" style="display:flex;align-items:center;gap:16px;width:100%;min-height:40px;padding:0 20px"
-          ${go ? `data-act="${go()}"` : `data-act="pal-copy" data-value="${esc(c)}"`}>
-          <span class="d-m" style="font-size:var(--fs-small);color:var(--accent-text);width:120px;flex:none">${esc(c)}</span>
-          <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-2);flex:1">${esc(d)}</span>
-        </button>`).join("")}
-        ${q ? `<button class="d-plain d-rowbtn" style="display:flex;align-items:center;gap:16px;width:100%;min-height:40px;padding:0 20px" data-act="pal-send">
-          <span class="d-m" style="font-size:var(--fs-small);color:var(--accent-text);width:120px;flex:none">ask</span>
-          <span class="d-clip" style="font-size:var(--fs-small);flex:1">${esc(state.palQuery)}</span></button>` : ""}
-      </div></div></div>`;
+      <div class="d-dlgbody" id="palrows" style="padding:8px 0"></div></div></div>`;
+}
+
+const closePalette = () => { state.palette = false; state.palQuery = ""; };
+const fire = (act, dataset = {}) => actions[act]({ dataset });
+
+// Every row is [key, label, run]. Nothing here removes or overwrites anything:
+// deleting an agent or a schedule stays behind its own dialog.
+function paletteRows() {
+  const raw = (state.palQuery || "").trim();
+  const q = raw.toLowerCase();
+  const hit = (...words) => !q || words.join(" ").toLowerCase().includes(q);
+  const rows = [];
+  const num = /^(?:in-?)?(\d+)$/i.exec(raw);
+  if (num) rows.push([`in-${num[1]}`, "open this request", () => openRequest(num[1])]);
+  if (q && !num) {
+    for (const a of (state.data.agents || []).filter((x) => x.role !== "system" && x.name.toLowerCase().includes(q))) {
+      rows.push([`@${a.name}`, `${a.role} · show only its conversations on work`, () => fire("pick-agent", { name: a.name })]);
+      rows.push([`open ${a.name}`, "rules, binding, waking", () => fire("open-agent", { id: String(a.id) })]);
+    }
+  }
+  const dark = state.theme === "dark";
+  const tools = [
+    ["fold all", "shut every conversation on work", () => foldAll(true)],
+    ["unfold all", "open every conversation on work", () => foldAll(false)],
+    [dark ? "light theme" : "dark theme", "switch the theme", () => fire("set-theme", { value: dark ? "light" : "dark" })],
+    [state.lang === "ko" ? "english" : "한국어", "switch the language", () => fire("set-lang", { value: state.lang === "ko" ? "en" : "ko" })],
+    ["resend rules", "rewrite an agent's instructions and tell it", () => fire("resend-rules")],
+    ["add agent", "register a session", () => fire("add-agent")],
+    ["new schedule", "a request on its own clock", () => fire("new-schedule")],
+    ["new project", "a folder work happens in", () => fire("new-project")],
+    ["to the end", "jump to the newest line on work", () => goThen("work", () => fire("to-end"))]
+  ];
+  rows.push(...tools.filter(([key, label]) => hit(key, label)));
+  rows.push(...RAIL.filter(([key]) => hit(`:${key}`, T(`desk.rail.${key}`)))
+    .map(([key]) => [`:${key}`, T(`desk.rail.${key}`), () => fire("go-screen", { value: key })]));
+  if (raw && !num) rows.push(["ask", raw, () => askNow(raw)]);
+  return rows;
+}
+
+let palRows = [];
+function fillPalette() {
+  const box = $("palrows");
+  if (!box) return;
+  const query = state.palQuery || "";
+  if (state.palFor !== query) { state.palFor = query; state.palPick = 0; }
+  palRows = paletteRows();
+  state.palPick = Math.min(state.palPick || 0, Math.max(palRows.length - 1, 0));
+  box.innerHTML = palRows.map(([key, label], i) => `<button class="d-plain d-rowbtn d-pick" data-pal="${i}" aria-selected="${i === state.palPick}"
+      style="display:flex;align-items:center;gap:16px;width:100%;min-height:40px;padding:0 20px">
+      <span class="d-m d-clip" style="font-size:var(--fs-small);color:var(--accent-text);width:140px;flex:none">${esc(key)}</span>
+      <span class="d-clip" style="font-size:var(--fs-small);color:${key === "ask" ? "var(--text)" : "var(--text-2)"};flex:1">${esc(label)}</span>
+    </button>`).join("") || `<div class="d-lbl" style="padding:12px 20px">nothing matches</div>`;
+  box.querySelectorAll("[data-pal]").forEach((el) => {
+    el.onmousemove = () => { if (Number(el.dataset.pal) !== state.palPick) pickPalette(Number(el.dataset.pal)); };
+    el.onclick = (event) => { event.stopPropagation(); runPalette(Number(el.dataset.pal)); };
+  });
+}
+
+function pickPalette(i) {
+  if (!palRows.length) return;
+  state.palPick = (i + palRows.length) % palRows.length;
+  $("palrows")?.querySelectorAll("[data-pal]").forEach((el) => {
+    const on = Number(el.dataset.pal) === state.palPick;
+    el.setAttribute("aria-selected", String(on));
+    if (on) el.scrollIntoView({ block: "nearest" });
+  });
+}
+
+async function runPalette(i) {
+  const row = palRows[i];
+  if (!row) return;
+  closePalette();
+  try {
+    await row[2]();
+  } catch (err) {
+    toast(err.message, true);
+  }
+  render();
+}
+
+async function goThen(tab, then) {
+  state.tab = tab;
+  location.hash = tab;
+  render();
+  await loadDetail();
+  render();
+  await then?.();
+}
+
+// Requests, not work: the requests screen reads any number back in full, while
+// work only holds the pages already scrolled into it.
+async function openRequest(id) {
+  const detail = await get(`/api/inbox/${id}`).catch(() => null);
+  if (!detail) return toast(`in-${id} was not found`, true);
+  state.selected.inbox = String(id);
+  state.data.inboxDetail = detail;
+  await goThen("inbox");
+}
+
+async function foldAll(shut) {
+  const f = state.feed;
+  const ids = f.rows.map((row) => String(row.id));
+  f.open = shut ? new Set() : new Set(ids);
+  f.shut = shut ? new Set(ids) : new Set();
+  await goThen("work");
+  if (!shut) { await loadOpenDetails(); render(); }
+}
+
+// Sent as it stands. A follow-up chip belongs to the composer it sits above, so
+// it is left there rather than fastened to words typed somewhere else.
+async function askNow(text) {
+  if (!text.trim() || state.sending) return;
+  state.sending = true;
+  try {
+    const row = await call("POST", "/api/inbox", { userRequest: text.trim() });
+    toast(`sent — in-${row.id}`);
+    if (state.feed.agent) { state.feed.agent = ""; state.feed.rows = []; state.feed.done = false; }
+    await load();
+    refreshFeed();
+    await goThen("work", () => fire("to-end"));
+  } finally {
+    state.sending = false;
+  }
 }
 
 function dialogHtml() {
@@ -2234,9 +2348,7 @@ const actions = {
   async "open-palette"() { state.palette = true; state.palQuery = ""; render(); },
   async "close-palette"() { state.palette = false; state.palQuery = ""; render(); },
   async "go-screen"(el) { state.palette = false; state.palQuery = ""; state.tab = el.dataset.value; location.hash = state.tab; render(); await loadDetail(); render(); },
-  async "pal-copy"(el) { await navigator.clipboard.writeText(el.dataset.value); state.palette = false; toast(`${el.dataset.value} copied`); render(); },
   // Typing here never sends: the line goes into the composer so you read it once more.
-  async "pal-send"() { state.draft = state.palQuery; state.palette = false; state.palQuery = ""; state.tab = "work"; location.hash = "work"; render(); },
   async "go-agents"() { state.tab = "agents"; location.hash = "agents"; render(); },
   async "go-events"() { state.tab = "events"; location.hash = "events"; render(); },
   async "close-dialog"() { state.dlg = null; state.rules = null; render(); },
@@ -2557,9 +2669,20 @@ function wire() {
   $("dlg")?.querySelectorAll("[data-keep]").forEach((node) => { node.onclick = (event) => event.stopPropagation(); });
   const box = $("palq");
   if (box) {
-    box.focus();
-    box.selectionStart = box.value.length;
-    box.oninput = () => { state.palQuery = box.value; render(); };
+    if (document.activeElement !== box) box.focus();
+    box.oninput = () => { state.palQuery = box.value; fillPalette(); };
+    box.onkeydown = (event) => {
+      // Enter and the arrows finish a syllable while one is being composed.
+      if (event.isComposing || event.keyCode === 229) return;
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        event.preventDefault();
+        pickPalette(state.palPick + (event.key === "ArrowDown" ? 1 : -1));
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        runPalette(state.palPick);
+      }
+    };
+    fillPalette();
   }
   // A foldable row is a button to the keyboard too.
   document.querySelectorAll('[data-fold="on"]').forEach((el) => {
