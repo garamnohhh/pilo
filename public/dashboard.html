@@ -49,6 +49,8 @@
   .d-arow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border-left: 2px solid transparent; cursor: pointer }
   .d-arow:hover { background: var(--bg-2) }
   .d-chip-sm { font-size: 9px; letter-spacing: 0.08em; padding: 2px 5px; flex: none }
+  .d-tip { position: fixed; z-index: 350; pointer-events: none; padding: 5px 9px; font: 12px/1.4 var(--mono); white-space: nowrap;
+    color: var(--text); background: var(--surface); border: var(--bw) solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18) }
   .d-spin::before { content: "⠋"; animation: d-spin 1.2s steps(1, end) infinite }
   @keyframes d-spin {
     0% { content: "⠋" } 10% { content: "⠙" } 20% { content: "⠹" } 30% { content: "⠸" } 40% { content: "⠼" }
@@ -286,6 +288,7 @@
   </main>
 </div>
 <div id="dlg"></div>
+<div class="d-tip" id="agenttip" role="tooltip" hidden></div>
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -761,6 +764,7 @@ function render() {
   $("strip").hidden = !isWork;
   $("tree").hidden = !isWork;
   if (isWork) touched |= renderWorkPanes();
+  syncAgentTip();
   const viewChanged = paint("view", views[state.tab]());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
 
@@ -960,6 +964,33 @@ function restoreDraft() {
 }
 
 
+// The state word under the pointer in the work tree. Drawn by the page, not left
+// to the browser's title tooltip: that one waits a second, vanishes whenever a
+// refresh replaces the row, and cannot be seen or checked from a screenshot.
+// #tree is never repainted itself, so the listeners on it outlive every render.
+let tipFor = "";
+function syncAgentTip() {
+  const tip = $("agenttip");
+  const row = tipFor && [...document.querySelectorAll('#tree [data-act="pick-agent"]')].find((el) => el.dataset.name === tipFor);
+  if (!row || $("tree").hidden) { tip.hidden = true; return; }
+  const box = row.getBoundingClientRect();
+  tip.innerHTML = `<span style="color:${row.dataset.tone}">●</span> ${esc(row.dataset.tip)}`;
+  tip.hidden = false;
+  tip.style.left = `${Math.round(box.right + 8)}px`;
+  tip.style.top = `${Math.round(box.top + box.height / 2 - tip.offsetHeight / 2)}px`;
+}
+{
+  const tree = $("tree");
+  tree.addEventListener("mouseover", (event) => {
+    const name = event.target.closest?.('[data-act="pick-agent"]')?.dataset.name || "";
+    if (name === tipFor) return;
+    tipFor = name;
+    syncAgentTip();
+  });
+  tree.addEventListener("mouseleave", () => { tipFor = ""; syncAgentTip(); });
+  tree.addEventListener("scroll", () => syncAgentTip(), true);
+}
+
 /* ---------- views ---------- */
 const views = {};
 
@@ -1079,7 +1110,7 @@ function renderWorkPanes() {
       // accessible name, so it is still there for whoever needs it spelled out.
       const note = agentNote(a);
       return `<button class="d-plain d-arow" style="border-left-color:${picked ? "var(--accent)" : "transparent"};background:${picked ? "var(--bg-2)" : "transparent"};padding-left:${padL}px"
-          data-act="pick-agent" data-name="${esc(a.name)}" title="${esc(`${a.name} · ${note}`)}" aria-label="${esc(`${a.name}, ${a.role}, ${note}`)}">
+          data-act="pick-agent" data-name="${esc(a.name)}" data-tip="${esc(`${a.name} · ${note}`)}" data-tone="${colour}" aria-label="${esc(`${a.name}, ${a.role}, ${note}`)}">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
           ${agentMark(a, colour)}
           ${runtimeMark(a.runtime)}
