@@ -1520,8 +1520,18 @@ views.inbox = () => {
 };
 
 // ---------- SCHEDULES ----------
+// The watcher's own jobs, as they read on the Schedules screen. The work is code;
+// the row only says whether it runs and how often.
+const SYSTEM_JOBS = {
+  "usage-probe": ["Claude usage probe", "Types /usage into the idle system Claude pane when the usage figure is older than N minutes, and closes the panel 5 seconds later. No model, no tokens."],
+  "stalled-nudge": ["Stalled-task nudge", "A task quiet for 10 minutes on a session that is not working gets a nudge; the same task again every N minutes until it moves."]
+};
+const jobResultColor = (r) => !r ? "var(--text-3)" : /ok|nudged/.test(r) ? OK : /missing/.test(r) ? ERR : WARN;
+
 views.schedules = () => {
-  const list = state.data.schedules || [];
+  const all = state.data.schedules || [];
+  const list = all.filter((s) => s.kind !== "system");
+  const jobs = all.filter((s) => s.kind === "system");
   // 09.10 09:00 — the columns are narrow and a locale string wraps in them.
   const when = (iso) => {
     if (!iso) return "—";
@@ -1544,6 +1554,23 @@ views.schedules = () => {
         <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
       </button>`).join("") : `<div class="d-tr"><span class="d-lbl">nothing standing yet</span></div>`}
     </div>
+    ${jobs.length ? `<div style="margin-top:48px">
+      <div class="d-lblrule"><span class="d-lbl">system · run by the watcher</span>
+        <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${jobs.filter((s) => s.enabled).length} of ${jobs.length} on</span></div>
+      <div class="d-list">
+        <div class="d-th" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px minmax(0,200px) 52px">
+          <span class="d-lbl">job</span><span class="d-lbl">owner</span><span class="d-lbl">every</span><span class="d-lbl">last run</span><span class="d-lbl">result</span><span class="d-lbl d-num">on</span>
+        </div>
+        ${jobs.map((s) => `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px minmax(0,200px) 52px" data-act="open-schedule" data-id="${s.id}">
+          <span class="d-clip" style="font-size:var(--fs-body);color:${s.enabled ? "var(--text)" : "var(--text-3)"}">${esc(SYSTEM_JOBS[s.name]?.[0] || s.name)}</span>
+          <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)">watcher</span>
+          <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.cadence.replace(/^every:(\d+)$/, "every $1 min"))}</span>
+          <span class="d-m" style="font-size:12px;color:var(--text-3)">${esc(when(s.lastRunAt))}</span>
+          <span class="d-m d-clip" style="font-size:12px;color:${s.enabled ? jobResultColor(s.lastResult) : "var(--text-3)"}">${esc(s.enabled ? s.lastResult || "—" : "off")}</span>
+          <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
+        </button>`).join("")}
+      </div>
+    </div>` : ""}
     <div style="margin-top:48px">
       <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.recentRuns")}</span>
         <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${runs.length}</span></div>
@@ -2020,6 +2047,18 @@ DIALOGS.rules = () => {
 DIALOGS.schedule = (d) => {
   const s = (state.data.schedules || []).find((x) => String(x.id) === String(d.id));
   if (!s) return { title: "schedule", sub: "", prose: "This schedule is gone." };
+  if (s.kind === "system") return {
+    title: esc(SYSTEM_JOBS[s.name]?.[0] || s.name),
+    sub: `${esc(s.name)} · run by the watcher · ${s.enabled ? "on" : "off"}`,
+    fields: [{ id: "s-cadence", label: "every", value: s.cadence, hint: "every:N minutes" }],
+    prose: esc(SYSTEM_JOBS[s.name]?.[1] || ""),
+    traceLabel: "last run",
+    trace: s.lastRunAt || s.lastResult ? [[s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("ko-KR") : "—", s.lastResult || "—", jobResultColor(s.lastResult)]] : [],
+    actions: [
+      btn(s.enabled ? "Turn off" : "Turn on", "toggle-schedule", `data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}"`, "gn-btn-ghost"),
+      right(T("desk.act.save"), "save-job", `data-id="${s.id}"`, "gn-btn-brand")
+    ]
+  };
   const targets = (state.data.agents || []).filter((a) => a.role !== "system");
   const runs = String(state.runs.open) === String(s.id) ? state.runs.rows : [];
   return {
@@ -2220,6 +2259,12 @@ const actions = {
   async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
   async "new-schedule"() { state.dlg = { kind: "new-schedule" }; render(); },
   async "sched-miss"(el) { state.schedule = { ...state.schedule, onMiss: el.dataset.value }; render(); },
+  async "save-job"(el) {
+    await call("POST", `/api/schedules/${el.dataset.id}`, { cadence: $("s-cadence").value.trim() });
+    state.dlg = null;
+    toast("saved");
+    await load();
+  },
   async "save-schedule"(el) {
     await call("POST", `/api/schedules/${el.dataset.id}`, readScheduleForm());
     state.dlg = null;

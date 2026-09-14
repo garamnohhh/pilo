@@ -2,7 +2,7 @@ import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule } from "./api.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan } from "./api.js";
 import { changed } from "./changes.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
@@ -12,6 +12,24 @@ const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // 90 seconds forever. Delays grow, and after GIVE_UP attempts we stop and say so.
 const BACKOFF_SECONDS = [90, 300, 900, 3600];
 const GIVE_UP = 6;
+
+// The watcher's own jobs are rows on the Schedules screen: off stops the job,
+// every:N sets its minutes. No row (a database before migration 013) runs on the
+// built-in default.
+export function jobSetting(row, fallback) {
+  const every = /^every:(\d+)$/.exec(row?.cadence || "");
+  return { on: row ? row.enabled : true, minutes: every ? Number(every[1]) : fallback };
+}
+
+// What the last run did, written to the row. A result that is not a run (no pane
+// to probe) is written once, not every tick it stays true.
+const lastResult = {};
+async function noteJob(name, result, ran = true) {
+  if (!ran && lastResult[name] === result) return;
+  lastResult[name] = result;
+  await systemJobRan(name, result, ran).catch(() => {});
+  changed();
+}
 
 async function shouldWake(column, id) {
   // An answer resets the clock: attempts before it should not hold back the retry.
@@ -196,6 +214,8 @@ const STALL_MINUTES = Number(process.env.PILO_STALL_MIN || 10);
 const NUDGE_EVERY_MINUTES = Number(process.env.PILO_NUDGE_EVERY_MIN || 30);
 
 async function pumpStalled() {
+  const job = jobSetting(await systemJob("stalled-nudge"), NUDGE_EVERY_MINUTES);
+  if (!job.on) return;
   const stuck = await query(
     `SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.herdr_target, a.runtime,
             EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'task_opened') AS opened
@@ -213,8 +233,10 @@ async function pumpStalled() {
        AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled'
                          AND e2.created_at > now() - ($2 || ' minutes')::interval)
      ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5`,
-    [String(STALL_MINUTES), String(NUDGE_EVERY_MINUTES)]
+    [String(STALL_MINUTES), String(job.minutes)]
   );
+  const nudged = [];
+  const held = [];
   for (const task of stuck) {
     const agent = { id: task.agent_id, name: task.name, herdr_target: task.herdr_target, runtime: task.runtime };
     await logEvent({
@@ -230,8 +252,9 @@ async function pumpStalled() {
     const message = task.opened
       ? t("wake.nudge", { id: task.id })
       : t("wake.task", { id: task.id, agent: agent.name });
-    await wake(agent, message, { taskId: task.id, inboxId: task.inbox_id });
+    (await wake(agent, message, { taskId: task.id, inboxId: task.inbox_id }) ? nudged : held).push(`#${task.id}`);
   }
+  if (stuck.length) await noteJob("stalled-nudge", [nudged.length && `nudged ${nudged.join(" ")}`, held.length && `held ${held.join(" ")}`].filter(Boolean).join(" · "));
 }
 
 // The five-hour figure on the status line only moves when some Claude session
@@ -254,17 +277,20 @@ export function probeWorthTrying(lost, pane, now = Date.now()) {
 async function pumpQuota() {
   // Close the panel we opened on an earlier tick before anything else.
   if (probe.askedAt && Date.now() - probe.askedAt > 5000) {
-    const pane = probe.pane;
+    const { pane, minutes } = probe;
     probe = { pane: "", askedAt: 0 };
     try {
       await herdr.sendKeys(pane, "esc");
     } catch {
       // the pane went away; the next round will find another
     }
+    await noteJob("usage-probe", claudeAgeMin() < minutes ? "probe ok" : "asked, figure not refreshed yet");
     return;
   }
   if (probe.askedAt) return;
-  if (claudeAgeMin() < QUOTA_STALE_MIN) return;
+  const job = jobSetting(await systemJob("usage-probe"), QUOTA_STALE_MIN);
+  if (!job.on) return;
+  if (claudeAgeMin() < job.minutes) return;
   // The pane is whichever system agent runs Claude — a registered fact, not a
   // name matched in two files.
   const probeAgent = await one(
@@ -275,11 +301,11 @@ async function pumpQuota() {
      ORDER BY a.id LIMIT 1`
   );
   const pane = probeAgent?.target || "";
-  if (!pane) return;
+  if (!pane) return noteJob("usage-probe", "no idle system pane", false);
   if (!probeWorthTrying(probeLost, pane)) return;
   try {
     await herdr.prompt(pane, "/usage");
-    probe = { pane, askedAt: Date.now() };
+    probe = { pane, askedAt: Date.now(), minutes: job.minutes };
     probeLost = { pane: "", at: 0 };
   } catch (err) {
     if (probeLost.pane !== pane) {
@@ -288,6 +314,7 @@ async function pumpQuota() {
         title: t("event.probeLost", { pane }),
         payload: { pane, code: String(err?.message || "") }
       }).catch(() => {});
+      await noteJob("usage-probe", `pane missing (${pane})`);
     }
     probeLost = { pane, at: Date.now() };
   }
