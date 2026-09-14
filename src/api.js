@@ -97,14 +97,11 @@ export async function agentTree() {
   const workers = agents.filter((a) => a.role === "worker");
   // System agents are Pilo's own tools, not part of the org chart, so the tree
   // never draws them.
-  const deskWorkers = pilo ? workers.filter((w) => w.parentAgentId === pilo.id) : [];
   return {
-    pilo: pilo ? { ...pilo, children: deskWorkers } : null,
+    pilo,
     pms: pms.map((pm) => ({ ...pm, children: workers.filter((w) => w.parentAgentId === pm.id) })),
-    // still everything with no home above it, desk workers excluded
-    orphanWorkers: workers.filter(
-      (w) => !pms.some((pm) => pm.id === w.parentAgentId) && !deskWorkers.some((d) => d.id === w.id)
-    )
+    // a worker whose PM is gone, drawn so it can be moved rather than lost
+    orphanWorkers: workers.filter((w) => !pms.some((pm) => pm.id === w.parentAgentId))
   };
 }
 
@@ -130,9 +127,9 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
   const parent = await one("SELECT id, role FROM agents WHERE id = $1 AND archived_at IS NULL", [parentAgentId]);
   if (!parent) throw Object.assign(new Error("parent not found"), { status: 400 });
   if (role === "pm" && parent.role !== "pilo") throw Object.assign(new Error("pm must hang off the pilo agent"), { status: 400 });
-  // A worker usually belongs to a PM, but the desk agent keeps its own hands too:
-  // odd jobs that belong to no project have nowhere else to hang.
-  if (role === "worker" && parent.role === "worker") throw Object.assign(new Error("worker cannot hang off another worker"), { status: 400 });
+  // A worker belongs to a project's PM and to nobody else — not another worker,
+  // and not the desk. Work with no project gets a PM of its own (handy).
+  if (role === "worker" && parent.role !== "pm") throw Object.assign(new Error("a worker hangs off a PM"), { status: 400 });
   if (role === "system" && parent.role !== "pilo") throw Object.assign(new Error("a system agent hangs off the pilo agent"), { status: 400 });
   return parent.id;
 }
