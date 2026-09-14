@@ -1180,7 +1180,7 @@ async function command(parsed) {
     if (!rows.length) return note(t("note.noSchedules"));
     return note(
       rows
-        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${s.cadence} → ${s.agent} · ${new Date(s.nextRunAt).toLocaleString()}`)
+        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${s.cadence} → ${s.agent || "watcher"} · ${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}`)
         .join("  │  ")
     );
   }
