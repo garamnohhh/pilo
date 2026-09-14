@@ -1130,18 +1130,34 @@ export async function createSchedule(input) {
 export async function setSchedule(id, input) {
   const current = await one("SELECT * FROM schedules WHERE id = $1", [id]);
   if (!current) throw Object.assign(new Error("schedule not found"), { status: 404 });
+  // Everything the dashboard's dialog sends is kept. Only enabled and cadence
+  // used to be, so a name or a request edited on the Schedules screen was
+  // dropped without a word.
   const enabled = typeof input.enabled === "boolean" ? input.enabled : current.enabled;
-  const cadence = input.cadence || current.cadence;
-  // Turning one back on re-reads the clock: an old next_run_at would fire at once.
-  const next = enabled && (!current.enabled || input.cadence)
-    ? nextRun(cadence, current.weekdays_only)
-    : current.next_run_at;
+  const cadence = input.cadence ? String(input.cadence).trim() : current.cadence;
+  const weekdaysOnly = typeof input.weekdaysOnly === "boolean" ? input.weekdaysOnly : current.weekdays_only;
+  const onMiss = input.onMiss === "run" || input.onMiss === "skip" ? input.onMiss : current.on_miss;
+  const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : current.name;
+  const request = typeof input.request === "string" ? input.request.trim() : current.request;
+  if (!request) throw Object.assign(new Error("request is empty"), { status: 400 });
+  let toAgentId = current.to_agent_id;
+  if (input.toAgentId !== undefined && input.toAgentId !== "" && String(input.toAgentId) !== String(current.to_agent_id)) {
+    const agent = await one("SELECT id FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
+    if (!agent) throw Object.assign(new Error("target agent not found"), { status: 400 });
+    toAgentId = agent.id;
+  }
+  // The next run is worked out again only when what decides it changed: the
+  // time, the weekday rule, or the schedule coming back on. Saving a new name
+  // leaves it where it was.
+  const retime = enabled && (!current.enabled || cadence !== current.cadence || weekdaysOnly !== current.weekdays_only);
+  const next = retime ? nextRun(cadence, weekdaysOnly) : current.next_run_at;
   await query(
-    `UPDATE schedules SET enabled = $2, cadence = $3, next_run_at = $4,
-       fail_count = CASE WHEN $2 THEN 0 ELSE fail_count END, updated_at = now() WHERE id = $1`,
-    [id, enabled, cadence, next]
+    `UPDATE schedules SET name = $2, to_agent_id = $3, request = $4, cadence = $5, weekdays_only = $6,
+       on_miss = $7, enabled = $8, next_run_at = $9,
+       fail_count = CASE WHEN $8 THEN 0 ELSE fail_count END, updated_at = now() WHERE id = $1`,
+    [id, name, toAgentId, request, cadence, weekdaysOnly, onMiss, enabled, next]
   );
-  return { id: String(id), enabled, cadence, nextRunAt: next };
+  return { id: String(id), name, toAgentId: String(toAgentId), cadence, weekdaysOnly, onMiss, enabled, nextRunAt: next };
 }
 
 export async function deleteSchedule(id) {
