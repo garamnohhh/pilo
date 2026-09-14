@@ -475,7 +475,7 @@ function setupScreen(setup, width) {
   return rows;
 }
 
-function railRows(tree, width, actions = []) {
+function railRows(tree, width, actions = [], spins = []) {
   const rows = [`${c.faint}${t("tree.title")}${c.reset}`, ""];
   actions.push(null, null);
   if (!tree.pilo) {
@@ -495,6 +495,8 @@ function railRows(tree, width, actions = []) {
     const fixed = indent + (indent ? 2 : 0) + cols(icon.icon) + 1 + (runtimeMark(runtime) ? cols(runtimeMark(runtime)) + 1 : 0) + cols(SEPARATOR) + 2 + cols(badgeText(tag));
     if (status && fixed + cols(name) + cols(status) + 1 > width) status = "";
     const prefix = indent ? `${" ".repeat(indent)}${c.branch}└${c.reset} ` : "";
+    // where the spinner glyph lands, so a tick can rewrite that one cell
+    if (icon.spin) spins.push({ railRow: rows.length, col: indent ? indent + 2 : 0 });
     const tagWidth = cols(badgeText(tag));
     const stateWidth = status ? cols(status) + 1 : 0;
     // The runtime mark sits between the dot and the name, and costs a space of
@@ -830,7 +832,7 @@ function sessionLine(agent, base) {
 function statusIcon(status, spin, stopped = false) {
   // A stalled task keeps its place in the tree but stops pretending to move.
   if (status === "running" && stopped) return { icon: "◌", color: c.amberDim };
-  if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber };
+  if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber, spin: true };
   // waiting on a person, not on work: a spinner here would be a lie
   if (status === "blocked") return { icon: "◆", color: c.blue };
   if (status === "failed") return { icon: "✕", color: c.red };
@@ -846,6 +848,7 @@ function render() {
   const pre = " ".repeat(marginX);
 
   if (!state.data) return;
+  state.spinSpots = [];
   const { setup, tree, inbox, overview, settings } = state.data;
   const screen = [""];
   const emit = (text) => screen.push(text);
@@ -967,7 +970,10 @@ function render() {
   pulseWhile(waiting > 0);
 
   const railActions = [];
-  const rail = railWidth ? railRows(tree, railWidth, railActions) : [];
+  const railSpins = [];
+  const rail = railWidth ? railRows(tree, railWidth, railActions, railSpins) : [];
+  // rail row → terminal row, filled in as the rows are emitted
+  const railAt = [];
 
   // A dotted box pinned to the bottom of the rail, inside the same slots the feed
   // uses, so no coordinate anywhere else moves.
@@ -1022,7 +1028,10 @@ function render() {
     // misjudges then only moves the tail of its own row, where nothing lines up
     // against anything — the rail and its divider are past caring by then.
     if (!railWidth) emit(pre + cut(shown[i] || "", mainWidth));
-    else emit(pre + `${pad(cut(rail[i] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(shown[i] || "", mainWidth)}`);
+    else {
+      emit(pre + `${pad(cut(rail[i] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(shown[i] || "", mainWidth)}`);
+      railAt[i] = screen.length;
+    }
     // screen[0] is a blank line, so the terminal row is index + 1
     state.hits.set(screen.length, { main: rowActions[first + i] || null, rail: railActions[i] || null });
   }
@@ -1035,6 +1044,7 @@ function render() {
     if (!railWidth) return text;
     const action = railActions[railTail] || null;
     const row = `${pad(cut(rail[railTail] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(text, mainWidth)}`;
+    railAt[railTail] = screen.length + 1;
     railTail += 1;
     state.hits.set(screen.length + 1, { main: null, rail: action });
     return row;
@@ -1067,6 +1077,9 @@ function render() {
 
   // Keep the divider going to the bottom, one row of padding left over.
   for (let i = 0; i < filler; i++) emit(pre + withRail(""));
+
+  state.spinSpots = railSpins.filter((s) => railAt[s.railRow]).map((s) => ({ row: railAt[s.railRow], col: marginX + s.col + 1 }));
+  state.cursorAt = [cursorRow, cursorCol];
 
   // One write per frame: home, each row cleared to end of line, then clear the
   // rest. Clearing the whole screen first is what made the display blink.
@@ -1453,11 +1466,109 @@ keys.on("keypress", async (ch, key) => {
 
 process.stdout.on("resize", render);
 
-// Data on a timer, frames on demand. Typing no longer waits on five HTTP calls.
-setInterval(async () => {
-  await refresh();
-  render();
-}, 2500).unref();
+// Data when the server says something changed, frames on demand. The stream is
+// the dashboard's: /api/stream sends "changed" and a ping every 20 s. The clock
+// stays as a net — every 30 s while the stream is live, every 2.5 s when there is
+// no stream (a server from before it, or one that is down).
+const POLL_MS = 2500;
+const SAFETY_MS = 30000;
+const SILENT_MS = 60000;
+const BUNDLE_MS = 1000;
+const sync = { live: false, heard: 0, lastLoad: Date.now(), ctl: null, due: null, busy: false, again: false };
+
+async function reload() {
+  if (sync.busy) { sync.again = true; return; }
+  sync.busy = true;
+  sync.lastLoad = Date.now();
+  try {
+    await refresh();
+    render();
+  } finally {
+    sync.busy = false;
+  }
+  if (sync.again) { sync.again = false; await reload(); }
+}
+
+// The first change is fetched at once; the ones behind it wait out the second,
+// so a burst of writes costs one load a second at most.
+function soon() {
+  if (sync.due) return;
+  sync.due = setTimeout(async () => {
+    sync.due = null;
+    // the usage figures live in files this process reads; read past its cache
+    readQuota(Date.now(), 0);
+    await reload();
+    await eventNotes();
+  }, Math.max(0, sync.lastLoad + BUNDLE_MS - Date.now()));
+  sync.due.unref?.();
+}
+
+async function listen() {
+  const health = await fetch(base + "/health").then((res) => res.json()).catch(() => null);
+  // down: try again shortly; up but older than the stream: keep to the clock
+  if (!health || !("streams" in health)) {
+    setTimeout(listen, health ? SAFETY_MS : 3000).unref();
+    return;
+  }
+  const ctl = new AbortController();
+  sync.ctl = ctl;
+  try {
+    const res = await fetch(base + "/api/stream", { signal: ctl.signal });
+    if (!res.ok || !res.body) throw new Error("no stream");
+    sync.live = true;
+    sync.heard = Date.now();
+    // whatever changed while it was down comes in as this one load
+    soon();
+    const text = new TextDecoder();
+    let buffer = "";
+    for await (const chunk of res.body) {
+      sync.heard = Date.now();
+      buffer += text.decode(chunk, { stream: true });
+      let end;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        if (/^data: changed/m.test(block)) soon();
+      }
+    }
+  } catch {
+    // dropped, refused, or cut by the silence check below
+  }
+  if (sync.ctl !== ctl) return;
+  sync.live = false;
+  setTimeout(listen, 3000).unref();
+}
+
+setInterval(() => {
+  // A stream left open across a laptop's sleep can look open and hear nothing.
+  if (sync.live && Date.now() - sync.heard > SILENT_MS) sync.ctl?.abort();
+  if (Date.now() - sync.lastLoad >= (sync.live ? SAFETY_MS : POLL_MS)) reload();
+}, 500).unref();
+
+// Some of what lands in the events table is worth a line on this screen: the
+// usage probe losing its pane, an agent that stopped answering, a schedule that
+// failed, a wake storm held back. Each shows once, fades, and the same line is not
+// repeated for ten minutes.
+const NOTICE_TYPES = new Set(["quota_probe_lost", "wake_gave_up", "schedule_failed", "wake_suppressed"]);
+const REPEAT_MS = 10 * 60 * 1000;
+const seenEvents = { primed: false, ids: new Set(), shown: new Map() };
+async function eventNotes() {
+  const rows = await api("/api/events", null);
+  if (!Array.isArray(rows)) return;
+  const fresh = rows.filter((e) => !seenEvents.ids.has(e.id)).reverse();
+  fresh.forEach((e) => seenEvents.ids.add(e.id));
+  if (!seenEvents.primed) { seenEvents.primed = true; return; }
+  let shown = false;
+  for (const e of fresh) {
+    if (!NOTICE_TYPES.has(e.type)) continue;
+    const key = `${e.type}|${e.title}`;
+    if (Date.now() - (seenEvents.shown.get(key) || 0) < REPEAT_MS) continue;
+    seenEvents.shown.set(key, Date.now());
+    note(e.title);
+    shown = true;
+  }
+  if (shown) render();
+}
 
 // The waiting dot pulses, but only while there is a card to pulse: the timer is
 // started by the render that draws one and cleared by the render that does not.
@@ -1476,18 +1587,22 @@ function pulseWhile(alive) {
   }
 }
 
-// The spinner only ticks while something is actually running.
+// The spinner only ticks while something is actually running, and a tick rewrites
+// the spinner cells alone: a whole frame eight times a second was most of what
+// this process spent. The last full render said where those cells are; any change
+// of layout (data, typing, a resize) goes through a full render and says again.
 setInterval(() => {
-  const tree = state.data?.tree;
-  const busy =
-    tree &&
-    [tree.pilo, ...(tree.pms || []), ...(tree.pms || []).flatMap((p) => p.children || [])].some(
-      (a) => a && a.status === "running"
-    );
-  if (!busy) return;
+  const spots = state.spinSpots || [];
+  if (!spots.length || !state.cursorAt) return;
   state.spin += 1;
-  render();
+  const glyph = SPINNER[state.spin % SPINNER.length];
+  process.stdout.write(
+    "\x1b[?25l" + spots.map((s) => `\x1b[${s.row};${s.col}H${c.amber}${glyph}${c.reset}`).join("") +
+    `\x1b[${state.cursorAt[0]};${state.cursorAt[1]}H\x1b[?25h`
+  );
 }, 120).unref();
 
 await refresh();
 render();
+eventNotes();
+listen();
