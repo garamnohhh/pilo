@@ -1,4 +1,5 @@
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { existsSync, unlinkSync, chmodSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
@@ -32,6 +33,22 @@ function json(res, code, payload) {
   res.end(JSON.stringify(payload));
 }
 
+// A read that has not changed since the caller last saw it costs a tag, not the
+// body. The browser revalidates by itself under no-cache; the TUI sends the tag
+// it kept. A client that sends none gets the full answer as before.
+function jsonRead(req, res, payload) {
+  const body = JSON.stringify(payload);
+  const tag = `W/"${createHash("sha1").update(body).digest("base64url").slice(0, 22)}"`;
+  const headers = { "content-type": types[".json"], "cache-control": "no-cache", etag: tag };
+  if (req.headers["if-none-match"] === tag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
+  res.end(body);
+}
+
 async function readBody(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
@@ -41,7 +58,9 @@ async function readBody(req) {
 
 const routes = [
   ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort(), streams: listening() })],
-  ["GET", /^\/api\/overview$/, () => api.overview()],
+  // part=stats: the counts alone, which is all the TUI's status line reads
+  ["GET", /^\/api\/overview$/, async (_m, _b, q) => (q.get("part") === "stats" ? { stats: (await api.overview()).stats } : api.overview())],
+  ["GET", /^\/api\/replies$/, (_m, _b, q) => api.replyBodies(q.get("ids") || "")],
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
   ["GET", /^\/api\/quota$/, () => quotaReport()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
@@ -63,7 +82,7 @@ const routes = [
   ["PATCH", /^\/api\/projects\/(\d+)$/, (m, body) => api.updateProject(Number(m[1]), body)],
   ["DELETE", /^\/api\/projects\/(\d+)$/, (m) => api.archiveProject(Number(m[1]))],
 
-  ["GET", /^\/api\/inbox$/, (_m, _b, q) => api.listInbox(q.get("limit") || 50, q.get("before"), q.get("agent") || "")],
+  ["GET", /^\/api\/inbox$/, (_m, _b, q) => api.listInbox(q.get("limit") || 50, q.get("before"), q.get("agent") || "", { replies: q.get("replies") !== "0" })],
   ["GET", /^\/api\/history$/, (_m, _b, q) => api.searchHistory({ q: q.get("q") || "", since: q.get("since") || null, agent: q.get("agent") || "", limit: q.get("limit") })],
   ["GET", /^\/api\/inbox\/count$/, (_m, _b, q) => api.countInbox(q.get("agent") || "")],
   ["POST", /^\/api\/inbox$/, (_m, body) => api.createInbox(body.userRequest || body.text || "", body.cwd || "")],
@@ -159,7 +178,8 @@ async function handle(req, res) {
   if (known) {
     const body = method === "GET" || method === "DELETE" ? {} : await readBody(req);
     const result = await dispatch(method, url.pathname, body, url.searchParams);
-    json(res, result.status, result.payload);
+    if (method === "GET" && result.status === 200) jsonRead(req, res, result.payload);
+    else json(res, result.status, result.payload);
     return;
   }
   if (req.method === "GET" || req.method === "HEAD") {
