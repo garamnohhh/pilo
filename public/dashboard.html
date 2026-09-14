@@ -49,7 +49,7 @@
   .d-arow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border-left: 2px solid transparent; cursor: pointer }
   .d-arow:hover { background: var(--bg-2) }
   .d-chip-sm { font-size: 9px; letter-spacing: 0.08em; padding: 2px 5px; flex: none }
-  .d-tip { position: fixed; z-index: 350; pointer-events: none; padding: 5px 9px; font: 12px/1.4 var(--mono); white-space: nowrap;
+  .d-tip { position: fixed; z-index: 350; pointer-events: none; padding: 5px 9px; font: 12px/1.4 var(--mono); overflow-wrap: anywhere;
     color: var(--text); background: var(--surface); border: var(--bw) solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18) }
   .d-spin::before { content: "⠋"; animation: d-spin 1.2s steps(1, end) infinite }
   @keyframes d-spin {
@@ -969,26 +969,39 @@ function restoreDraft() {
 // refresh replaces the row, and cannot be seen or checked from a screenshot.
 // #tree is never repainted itself, so the listeners on it outlive every render.
 let tipFor = "";
+let tipAt = null;
+// Just below and right of the pointer, and never outside the agents pane: pushed
+// left at its right edge, lifted above the pointer at its bottom, wrapped when the
+// pane is narrow. The chat beside it is left alone.
 function syncAgentTip() {
   const tip = $("agenttip");
+  const tree = $("tree");
   const row = tipFor && [...document.querySelectorAll('#tree [data-act="pick-agent"]')].find((el) => el.dataset.name === tipFor);
-  if (!row || $("tree").hidden) { tip.hidden = true; return; }
-  const box = row.getBoundingClientRect();
-  tip.innerHTML = `<span style="color:${row.dataset.tone}">●</span> ${esc(row.dataset.tip)}`;
+  if (!row || !tipAt || tree.hidden) { tip.hidden = true; return; }
+  const html = `<span style="color:${row.dataset.tone}">●</span> ${esc(row.dataset.tip)}`;
+  if (tip.innerHTML !== html) tip.innerHTML = html;
+  const pane = tree.getBoundingClientRect();
+  tip.style.maxWidth = `${Math.max(80, Math.floor(pane.width - 16))}px`;
   tip.hidden = false;
-  tip.style.left = `${Math.round(box.right + 8)}px`;
-  tip.style.top = `${Math.round(box.top + box.height / 2 - tip.offsetHeight / 2)}px`;
+  const { offsetWidth: w, offsetHeight: h } = tip;
+  const x = Math.max(pane.left + 8, Math.min(tipAt.x + 12, pane.right - 8 - w));
+  // the list, not the pane, for up and down: the Add agent button below stays clear
+  const list = tree.querySelector(".d-scroll")?.getBoundingClientRect() || pane;
+  const y = tipAt.y + 18 + h > list.bottom - 4 ? tipAt.y - 8 - h : tipAt.y + 18;
+  tip.style.left = `${Math.round(x)}px`;
+  tip.style.top = `${Math.round(y)}px`;
 }
 {
   const tree = $("tree");
-  tree.addEventListener("mouseover", (event) => {
-    const name = event.target.closest?.('[data-act="pick-agent"]')?.dataset.name || "";
-    if (name === tipFor) return;
-    tipFor = name;
+  const under = () => document.elementFromPoint(tipAt.x, tipAt.y)?.closest?.('#tree [data-act="pick-agent"]')?.dataset.name || "";
+  tree.addEventListener("mousemove", (event) => {
+    tipAt = { x: event.clientX, y: event.clientY };
+    tipFor = event.target.closest?.('[data-act="pick-agent"]')?.dataset.name || "";
     syncAgentTip();
   });
-  tree.addEventListener("mouseleave", () => { tipFor = ""; syncAgentTip(); });
-  tree.addEventListener("scroll", () => syncAgentTip(), true);
+  tree.addEventListener("mouseleave", () => { tipFor = ""; tipAt = null; syncAgentTip(); });
+  // the list moves under a still pointer: whatever row is there now is the one
+  tree.addEventListener("scroll", () => { if (tipAt) { tipFor = under(); syncAgentTip(); } }, true);
 }
 
 /* ---------- views ---------- */
