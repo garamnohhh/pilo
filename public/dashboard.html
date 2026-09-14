@@ -407,7 +407,7 @@ const get = (path) => call("GET", path);
 
 async function load() {
   const [overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota] = await Promise.all([
-    get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox"),
+    get("/api/overview"), get("/api/agents/tree"), get("/api/projects"), get("/api/inbox?replies=0").then(withReplies),
     get("/api/events"), get("/api/artifacts"), get("/api/settings"), get("/api/system"), get("/api/setup"),
     get("/api/sessions"), get("/api/agents"), get("/api/schedules"), get("/api/quota").catch(() => ({}))
   ]);
@@ -467,12 +467,29 @@ function feedMatches(row, agent) {
   return !names.length && agent === (state.data.tree?.pilo?.name || "pilo");
 }
 
+// The request list comes without answer bodies (four fifths of its weight); each
+// body is fetched once, kept by request and answer time, and put back on the row,
+// so the feed and the requests screen read finalReply as they always did. An
+// older server sends the bodies itself and no hasReply. Unchanged reads are
+// answered 304 by the server and served from the browser's own copy.
+const replyBodies = new Map();
+async function withReplies(rows) {
+  if (!Array.isArray(rows) || !rows.some((row) => "hasReply" in row)) return rows;
+  const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
+  for (let i = 0; i < missing.length; i += 100) {
+    const got = await get(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`).catch(() => []);
+    for (const reply of got) replyBodies.set(String(reply.id), { at: reply.repliedAt, body: reply.finalReply });
+  }
+  return rows.map((row) => (row.hasReply ? { ...row, finalReply: replyBodies.get(String(row.id))?.body ?? null } : row));
+}
+
 async function feedPage(before) {
   const f = state.feed;
   const q = new URLSearchParams({ limit: String(PAGE) });
   if (before) q.set("before", String(before));
   if (f.agent) q.set("agent", f.agent);
-  let rows = await get(`/api/inbox?${q}`);
+  q.set("replies", "0");
+  let rows = await withReplies(await get(`/api/inbox?${q}`));
   // A server still running the code it started with does not know these three
   // words and hands back its own fifty. Cut them down here so the feed behaves
   // either way; a restart is what makes the paging exact.

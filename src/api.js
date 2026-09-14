@@ -487,8 +487,11 @@ export async function archiveProject(id) {
 // page at a time; `agent` narrows it to the requests one agent took part in —
 // either it was handed a task, or it wrote the answer, which is how the desk
 // agent's own replies stay findable.
-export async function listInbox(limit = 50, before = null, agent = "") {
-  return query(
+// replies=0 leaves the answer bodies out — four fifths of the list by weight —
+// and says which rows have one; a client keeps bodies by id and answer time and
+// asks /api/replies only for the ones it does not hold.
+export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
+  const rows = await query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.created_at AS "createdAt",
        (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = i.id) AS routed,
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id) AS "taskCount",
@@ -519,6 +522,18 @@ export async function listInbox(limit = 50, before = null, agent = "") {
              WHERE f.inbox_id = i.id AND a.name = $3))
      ORDER BY i.id DESC LIMIT $1`,
     [Math.min(Number(limit) || 50, 100), before ? String(before) : null, agent || ""]
+  );
+  if (replies) return rows;
+  return rows.map(({ finalReply, ...row }) => ({ ...row, finalReply: null, hasReply: Boolean(finalReply) }));
+}
+
+export async function replyBodies(ids) {
+  const list = String(ids).split(",").map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0).slice(0, 100);
+  if (!list.length) return [];
+  return query(
+    `SELECT DISTINCT ON (f.inbox_id) f.inbox_id AS id, f.body AS "finalReply", f.created_at AS "repliedAt"
+     FROM final_replies f WHERE f.inbox_id = ANY($1::bigint[]) ORDER BY f.inbox_id, f.created_at DESC`,
+    [list]
   );
 }
 
