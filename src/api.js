@@ -1103,11 +1103,11 @@ export function nextRun(cadence, weekdaysOnly, from = new Date()) {
 const SCHEDULE_COLUMNS = `s.id, s.name, s.request, s.cadence, s.enabled, s.on_miss AS "onMiss",
   s.weekdays_only AS "weekdaysOnly", s.next_run_at AS "nextRunAt", s.last_run_at AS "lastRunAt",
   s.last_task_id AS "lastTaskId", s.fail_count AS "failCount",
-  s.to_agent_id AS "toAgentId", a.name AS agent`;
+  s.to_agent_id AS "toAgentId", a.name AS agent, s.kind, s.last_result AS "lastResult"`;
 
 export async function listSchedules() {
-  return query(`SELECT ${SCHEDULE_COLUMNS} FROM schedules s JOIN agents a ON a.id = s.to_agent_id
-    ORDER BY s.enabled DESC, s.next_run_at`);
+  return query(`SELECT ${SCHEDULE_COLUMNS} FROM schedules s LEFT JOIN agents a ON a.id = s.to_agent_id
+    ORDER BY s.kind = 'system', s.enabled DESC, s.next_run_at`);
 }
 
 export async function createSchedule(input) {
@@ -1130,6 +1130,14 @@ export async function createSchedule(input) {
 export async function setSchedule(id, input) {
   const current = await one("SELECT * FROM schedules WHERE id = $1", [id]);
   if (!current) throw Object.assign(new Error("schedule not found"), { status: 404 });
+  // A watcher job: its work is code, so only whether it runs and how often move.
+  if (current.kind === "system") {
+    const enabled = typeof input.enabled === "boolean" ? input.enabled : current.enabled;
+    const cadence = input.cadence ? String(input.cadence).trim() : current.cadence;
+    if (!/^every:[1-9]\d*$/.test(cadence)) throw Object.assign(new Error("a system job runs every:N minutes"), { status: 400 });
+    await query("UPDATE schedules SET enabled = $2, cadence = $3, updated_at = now() WHERE id = $1", [id, enabled, cadence]);
+    return { id: String(id), name: current.name, kind: "system", cadence, enabled };
+  }
   // Everything the dashboard's dialog sends is kept. Only enabled and cadence
   // used to be, so a name or a request edited on the Schedules screen was
   // dropped without a word.
@@ -1160,7 +1168,21 @@ export async function setSchedule(id, input) {
   return { id: String(id), name, toAgentId: String(toAgentId), cadence, weekdaysOnly, onMiss, enabled, nextRunAt: next };
 }
 
+// What the watcher reads each tick for one of its own jobs, and where it writes
+// down what the last run did.
+export async function systemJob(name) {
+  return one("SELECT enabled, cadence FROM schedules WHERE kind = 'system' AND name = $1", [name]);
+}
+
+// ran = false notes a result without calling it a run ("no idle system pane").
+export async function systemJobRan(name, result, ran = true) {
+  await query(`UPDATE schedules SET last_run_at = CASE WHEN $3 THEN now() ELSE last_run_at END, last_result = $2,
+     updated_at = now() WHERE kind = 'system' AND name = $1`, [name, result, ran]);
+}
+
 export async function deleteSchedule(id) {
+  const system = await one("SELECT 1 AS hit FROM schedules WHERE id = $1 AND kind = 'system'", [id]);
+  if (system) throw Object.assign(new Error("a system job can be turned off, not removed"), { status: 400 });
   const row = await one("DELETE FROM schedules WHERE id = $1 RETURNING id", [id]);
   if (!row) throw Object.assign(new Error("schedule not found"), { status: 404 });
   return { id: String(id), deleted: true };
@@ -1224,5 +1246,5 @@ export async function scheduleRuns(id, limit = 5) {
 export async function dueSchedules() {
   return query(`SELECT ${SCHEDULE_COLUMNS}, s.weekdays_only AS "weekdaysOnly" FROM schedules s
     JOIN agents a ON a.id = s.to_agent_id
-    WHERE s.enabled AND s.next_run_at <= now() ORDER BY s.next_run_at LIMIT 5`);
+    WHERE s.kind = 'request' AND s.enabled AND s.next_run_at <= now() ORDER BY s.next_run_at LIMIT 5`);
 }

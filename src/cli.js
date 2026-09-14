@@ -130,7 +130,7 @@ const commands = {
     const rows = await call("GET", "/api/schedules");
     if (!rows.length) return out("no schedules");
     return out(rows.map((s) =>
-      `${s.id}\t${s.enabled ? "on " : "off"}\t${s.cadence}\t→ ${s.agent}\t${new Date(s.nextRunAt).toLocaleString()}\t${s.name}`
+      `${s.id}\t${s.enabled ? "on " : "off"}\t${s.cadence}\t→ ${s.agent || "watcher"}\t${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}\t${s.name}`
     ).join("\n"));
   },
 
