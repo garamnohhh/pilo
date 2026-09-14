@@ -201,10 +201,29 @@ async function resolveProject(input) {
   return row.id;
 }
 
+// A project is one PM and the workers under it (Pilo Model). A worker's project is
+// its PM's, whatever was sent; a second PM in a project that has one is refused.
+async function settleProject(role, parentAgentId, projectId, id = null) {
+  if (role === "worker") {
+    return (await one("SELECT project_id FROM agents WHERE id = $1", [parentAgentId]))?.project_id ?? null;
+  }
+  if (role === "pm" && projectId) {
+    const other = await one(
+      `SELECT name FROM agents WHERE project_id = $1 AND role = 'pm' AND archived_at IS NULL
+         AND ($2::bigint IS NULL OR id <> $2)`,
+      [projectId, id]
+    );
+    if (other) {
+      throw Object.assign(new Error(`this project already has a PM, ${other.name} — make one of them a worker first`), { status: 409 });
+    }
+  }
+  return projectId || null;
+}
+
 export async function createAgent(input) {
   const role = input.role || "pm";
   const parentAgentId = await validateHierarchy({ role, parentAgentId: input.parentAgentId || null });
-  const projectId = await resolveProject(input);
+  const projectId = await settleProject(role, parentAgentId, role === "worker" ? null : await resolveProject(input));
   const detected = await detectSession(input.cwd || "", input.runtime || "");
   const row = await one(
     `INSERT INTO agents (name, role, parent_agent_id, project_id, runtime, herdr_target, runtime_detected_at,
@@ -245,6 +264,7 @@ export async function updateAgent(id, input) {
     parentAgentId: input.parentAgentId ?? current.parent_agent_id,
     id
   });
+  const projectId = await settleProject(role, parentAgentId, input.projectId ?? current.project_id, id);
   const cwd = input.cwd ?? current.cwd;
   let runtime = input.runtime ?? current.runtime;
   let target = current.herdr_target;
@@ -258,11 +278,16 @@ export async function updateAgent(id, input) {
        herdr_target = $7, model = $8, cwd = $9, aliases = $10, specialty = $11, note = $12, updated_at = now()
      WHERE id = $1`,
     [
-      id, input.name ?? current.name, role, parentAgentId, input.projectId ?? current.project_id, runtime,
+      id, input.name ?? current.name, role, parentAgentId, projectId, runtime,
       target, input.model ?? current.model, cwd, input.aliases ?? current.aliases,
       input.specialty ?? current.specialty, input.note ?? current.note
     ]
   );
+  // A PM that moves takes its workers with it.
+  if (role === "pm") {
+    await query("UPDATE agents SET project_id = $1, updated_at = now() WHERE parent_agent_id = $2 AND role = 'worker' AND project_id IS DISTINCT FROM $1",
+      [projectId, id]);
+  }
   const broadcast = await propagateRules(`${input.name ?? current.name} updated`, [
     id,
     current.parent_agent_id,
