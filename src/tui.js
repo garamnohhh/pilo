@@ -9,7 +9,7 @@ import { expandImages, edit, layoutDraft } from "./draft.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
-import { clipboardImage, droppedPaths, imageSize } from "./clipboard.js";
+import { clipboardImage, clipboardText, droppedPaths, imageSize } from "./clipboard.js";
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
 import { parseCommand, suggest, HELP } from "./commands.js";
@@ -696,13 +696,35 @@ function insertDraft(text) {
 // clipboard holds only an image) and then sends the key itself. Two triggers,
 // one intent, so a second attach on the heels of the first is dropped.
 let lastAttach = 0;
+let lastTerminalPaste = 0;
 
-async function attachClipboard({ quiet = false } = {}) {
+// A pasted blob of text goes in whole when short, as a marker when long.
+function insertPasted(text) {
+  const lines = text.split("\n").length;
+  const inline = lines <= 2 && text.length <= 200;
+  const insert = inline ? text : placeholderFor(text, lines);
+  state.input = state.input.slice(0, state.cursor) + insert + state.input.slice(state.cursor);
+  state.cursor += insert.length;
+  state.scroll = 0;
+  render();
+}
+
+// fromKey: a paste key the terminal did not paste for — Ctrl+V, or a Cmd+V it
+// did not recognise (Ghostty under the Korean input source). Then text on the
+// clipboard is ours to put in. An empty terminal paste is the other trigger,
+// and there the terminal has already handled any text.
+async function attachClipboard({ quiet = false, fromKey = false } = {}) {
   if (Date.now() - lastAttach < 1500) return;
   const found = await clipboardImage();
-  // Text on the clipboard is the terminal's own business: it has already pasted
-  // it by the time this runs, so saying anything would be noise.
   if (found.miss) {
+    if (found.miss === "text" && fromKey && Date.now() - lastTerminalPaste > 1500) {
+      const text = (await clipboardText()).replace(/\r\n?/g, "\n");
+      if (text) {
+        lastAttach = Date.now();
+        insertPasted(text);
+      }
+      return;
+    }
     if (found.miss !== "text" && !quiet) note(t("note.noClipboardImage"));
     return;
   }
@@ -1335,7 +1357,7 @@ process.stdin.on("data", (chunk) => {
   const unread = unreadPasteKeys(pasteCarry + rest);
   const taken = takePasteKeys(rest, pasteCarry);
   pasteCarry = taken.carry;
-  for (let i = 0; i < taken.hits; i++) attachClipboard();
+  for (let i = 0; i < taken.hits; i++) attachClipboard({ fromKey: true });
   if (unread && !taken.hits) {
     note(t("note.pasteKeyUnread"));
     render();
@@ -1374,7 +1396,7 @@ keys.on("keypress", async (ch, key) => {
     return;
   }
 
-  if (isPasteImage(key)) return attachClipboard();
+  if (isPasteImage(key)) return attachClipboard({ fromKey: true });
 
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
     pasting: state.pasting,
@@ -1391,19 +1413,13 @@ keys.on("keypress", async (ch, key) => {
     state.pasting = false;
     const text = state.pasteBuffer;
     state.pasteBuffer = "";
+    if (text) lastTerminalPaste = Date.now();
     // An image on the clipboard gives the terminal nothing to paste, so an empty
     // paste is the one hint that arrives without any terminal configuration.
     if (!text) return attachClipboard({ quiet: true });
     const dropped = droppedPaths(text);
     if (dropped.length) return attachFiles(dropped);
-    const lines = text.split("\n").length;
-    const inline = lines <= 2 && text.length <= 200;
-    const insert = inline ? text : placeholderFor(text, lines);
-    state.input = state.input.slice(0, state.cursor) + insert + state.input.slice(state.cursor);
-    state.cursor += insert.length;
-    state.scroll = 0;
-    render();
-    return;
+    return insertPasted(text);
   }
   if (next.action === "send") {
     const text = expandPastes(state.input).replace(/\s+$/, "");

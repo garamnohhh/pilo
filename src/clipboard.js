@@ -124,6 +124,23 @@ export async function imageSize(file) {
   }
 }
 
+// Text on the clipboard, for a paste key the terminal did not turn into a paste
+// itself — Ctrl+V anywhere, and Cmd+V where the terminal did not recognise it.
+export async function clipboardText() {
+  const tools = process.platform === "darwin"
+    ? [["pbpaste", []]]
+    : [["wl-paste", ["--no-newline"]], ["xclip", ["-selection", "clipboard", "-o"]]];
+  for (const [cmd, args] of tools) {
+    try {
+      const { stdout } = await run(cmd, args, { maxBuffer: 16 * 1024 * 1024 });
+      return String(stdout);
+    } catch {
+      // not installed, or nothing to give; try the next one
+    }
+  }
+  return "";
+}
+
 const stamp = () => new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
 
 // Returns the saved image, or a word saying why there was none: "text" when the
