@@ -275,14 +275,37 @@ function quotaLine(compact = false) {
   return ` ${c.line}│${c.reset} ${parts.join(`${c.faint} · ${c.reset}`)}`;
 }
 
+// Each read keeps the tag the server gave it; an unchanged answer comes back as a
+// bare 304 and the copy already parsed is used again.
+const tagged = new Map();
 async function api(path, fallback) {
   try {
-    const res = await fetch(base + path);
+    const kept = tagged.get(path);
+    const res = await fetch(base + path, kept ? { headers: { "if-none-match": kept.tag } } : undefined);
+    if (res.status === 304 && kept) return kept.value;
     if (!res.ok) return fallback;
-    return await res.json();
+    const value = await res.json();
+    const tag = res.headers.get("etag");
+    if (tag) tagged.set(path, { tag, value });
+    return value;
   } catch {
     return fallback;
   }
+}
+
+// The list comes without answer bodies; they are fetched once per answer (id and
+// the time it was written) and put back, so everything below reads finalReply as
+// before. A server older than this sends the bodies and has no hasReply.
+const replyBodies = new Map();
+async function withReplies(rows) {
+  if (!Array.isArray(rows) || !rows.some((row) => "hasReply" in row)) return rows;
+  const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
+  for (let i = 0; i < missing.length; i += 100) {
+    for (const reply of await api(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`, [])) {
+      replyBodies.set(String(reply.id), { at: reply.repliedAt, body: reply.finalReply });
+    }
+  }
+  return rows.map((row) => (row.hasReply ? { ...row, finalReply: replyBodies.get(String(row.id))?.body ?? null } : row));
 }
 
 function wrap(text, width) {
@@ -595,8 +618,8 @@ async function refresh() {
   const [setup, tree, inbox, overview, settings] = await Promise.all([
     api("/api/setup", { herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
     api("/api/agents/tree", { pilo: null, pms: [], orphanWorkers: [] }),
-    api("/api/inbox", []),
-    api("/api/overview", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
+    api("/api/inbox?replies=0", []).then(withReplies),
+    api("/api/overview?part=stats", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
     api("/api/settings", { tokens: { showInTui: true } })
   ]);
   state.data = { setup, tree, inbox, overview, settings };
