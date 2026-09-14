@@ -171,15 +171,19 @@ test("Korean text and ordinary keys pass straight through", async () => {
   assert.equal((await typed(["가", "나", "다"])).draft, "가나다");
 });
 
-test("under the Korean input source, Cmd+V with alternate keys attaches; without them it is named, never typed", async () => {
-  assert.equal(takePasteKeys("\x1b[12621::118;9u").hits, 1);
-  assert.equal(unreadPasteKeys("\x1b[12621::118;9u"), 0);
-  assert.equal(unreadPasteKeys("\x1b[12621;9u"), 1);
-  assert.equal(unreadPasteKeys("\x1b[12621;5u"), 1, "Ctrl held counts too");
-  assert.equal(unreadPasteKeys("\x1b[12621;9:3u"), 0, "a key going up is not a press");
-  assert.equal(unreadPasteKeys("\x1b[118;9u"), 0, "an English V is the paste key itself");
-  assert.equal(unreadPasteKeys("\x1b[12621;3u"), 0, "Option alone types a character");
+test("under the Korean input source Cmd+V is a paste, with or without alternate keys; Cmd+C is not", async () => {
+  assert.equal(takePasteKeys("\x1b[12621::118;9u").hits, 1, "with the base key");
+  assert.equal(takePasteKeys("\x1b[12621;9u").hits, 1, "ㅍ with Cmd, as Ghostty sends it");
+  assert.equal(takePasteKeys("\x1b[12621;5u").hits, 1, "ㅍ with Ctrl");
+  assert.deepEqual(takePasteKeys("\x1b[12618;9u"), { hits: 0, rest: "", carry: "" }, "ㅊ with Cmd is Cmd+C: no paste, nothing typed");
+  assert.equal(takePasteKeys("\x1b[12621;9:3u").hits, 0, "a key going up is not a press");
+  assert.equal(takePasteKeys("\x1b[12621;1u").hits, 0, "a bare ㅍ is not a paste");
+  for (const jamo of ["\x1b[12621;9u", "\x1b[12618;9u", "\x1b[12609;5u"]) {
+    assert.equal(unreadPasteKeys(jamo), 0, `${JSON.stringify(jamo)}: a Hangul key is never "unreadable"`);
+  }
+  assert.equal(unreadPasteKeys("\x1b[12354;9u"), 1, "a key from a script Pilo cannot map still says so");
   assert.equal(unreadPasteKeys("\x1b[57414;5u"), 0, "a keypad key is not a letter");
-  assert.equal(unreadPasteKeys("가나다 1;9u 12621;9u"), 0, "text that looks like one is text");
+  assert.equal((await typed(["\x1b[12621;9u"])).attached, 1);
   assert.equal((await typed(["\x1b[12621;9u"])).draft, "");
+  assert.equal((await typed(["\x1b[12618;9u"])).draft, "");
 });
