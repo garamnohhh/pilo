@@ -12,7 +12,7 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   (SELECT count(*)::int FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_gave_up'
      AND e.created_at > now() - interval '1 day') AS "gaveUp",
   a.limited_until AS "limitedUntil",
-  a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note,
+  a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note, a.reviewer,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
   (SELECT t.blocked_question FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked'
@@ -220,19 +220,29 @@ async function settleProject(role, parentAgentId, projectId, id = null) {
   return projectId || null;
 }
 
+// Only a worker reviews: the gate is a PM handing a check to one of its own.
+// Asking for the mark on anything else is refused; a worker that stops being one
+// loses it.
+export function settleReviewer(role, asked, current = false) {
+  if (asked === true && role !== "worker") throw Object.assign(new Error("only a worker can be a reviewer"), { status: 400 });
+  return role === "worker" && (typeof asked === "boolean" ? asked : Boolean(current));
+}
+
 export async function createAgent(input) {
   const role = input.role || "pm";
   const parentAgentId = await validateHierarchy({ role, parentAgentId: input.parentAgentId || null });
+  settleReviewer(role, input.reviewer);
   const projectId = await settleProject(role, parentAgentId, role === "worker" ? null : await resolveProject(input));
   const detected = await detectSession(input.cwd || "", input.runtime || "");
   const row = await one(
     `INSERT INTO agents (name, role, parent_agent_id, project_id, runtime, herdr_target, runtime_detected_at,
-       model, cwd, aliases, specialty, note)
-     VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 = '' THEN NULL ELSE now() END, $7, $8, $9, $10, $11)
+       model, cwd, aliases, specialty, note, reviewer)
+     VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 = '' THEN NULL ELSE now() END, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
     [
       input.name, role, parentAgentId, projectId, detected.runtime, detected.target,
-      input.model || "", input.cwd || "", input.aliases || "", input.specialty || "", input.note || ""
+      input.model || "", input.cwd || "", input.aliases || "", input.specialty || "", input.note || "",
+      settleReviewer(role, input.reviewer)
     ]
   );
   await logEvent({
@@ -275,12 +285,13 @@ export async function updateAgent(id, input) {
   }
   await query(
     `UPDATE agents SET name = $2, role = $3, parent_agent_id = $4, project_id = $5, runtime = $6,
-       herdr_target = $7, model = $8, cwd = $9, aliases = $10, specialty = $11, note = $12, updated_at = now()
+       herdr_target = $7, model = $8, cwd = $9, aliases = $10, specialty = $11, note = $12, reviewer = $13, updated_at = now()
      WHERE id = $1`,
     [
       id, input.name ?? current.name, role, parentAgentId, projectId, runtime,
       target, input.model ?? current.model, cwd, input.aliases ?? current.aliases,
-      input.specialty ?? current.specialty, input.note ?? current.note
+      input.specialty ?? current.specialty, input.note ?? current.note,
+      settleReviewer(role, input.reviewer, current.reviewer)
     ]
   );
   // A PM that moves takes its workers with it.
