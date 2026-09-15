@@ -1360,7 +1360,7 @@ export async function modelOverview() {
   const rows = [];
   for (const a of agents) {
     const session = live.find((x) => x.target && x.target === a.target);
-    const busy = session?.status === "working" || a.openTasks > 0;
+    const busy = !models.sessionIdle(session?.status) || a.openTasks > 0;
     let model = null, effort = null, source = "global";
     if (a.runtime === "claude") {
       const seen = models.tapReading(session?.session);
@@ -1374,7 +1374,8 @@ export async function modelOverview() {
       effort = a.pin?.effort && shown && shown === a.pin.model ? a.pin.effort : codex.effort;
       source = shown ? "pane" : "global";
     }
-    rows.push({ id: String(a.id), name: a.name, role: a.role, runtime: a.runtime, bound: Boolean(session),
+    rows.push({ id: String(a.id), name: a.name, role: a.role, runtime: a.runtime, bound: Boolean(session), sessionState: session?.status || "",
+      openTasks: a.openTasks,
       busy, model, effort, source, pending: a.pending, pin: a.pin, system: a.role === "system" });
   }
   return {

@@ -1556,6 +1556,12 @@ views.agents = () => {
 // Models and efforts. A Claude session takes a change once it is idle, and its
 // own status line says whether it did; Codex takes one from its next start.
 const MODEL_FROM = { session: "this session", pane: "its pane", global: "global file" };
+let tapOn = false;
+// Why a change is still waiting, in herdr's and Pilo's own terms.
+const waitReason = (r) => !r.bound ? "waits — no session bound"
+  : r.openTasks > 0 ? `waits — ${r.openTasks} open task${r.openTasks > 1 ? "s" : ""}`
+  : r.sessionState === "working" ? "waits until the session is idle"
+  : `waits — session reads "${r.sessionState || "unknown"}"`;
 function modelState(r, global) {
   if (r.system) return ["not changed here", "var(--text-3)"];
   if (r.pending?.kind === "pin") {
@@ -1564,8 +1570,8 @@ function modelState(r, global) {
   }
   if (r.pin && !r.pending) return [`kept on ${[r.pin.model, r.pin.effort].filter(Boolean).join(" · ")}`, INFO];
   if (r.pending) {
-    if (r.pending.typedAt) return ["typed — confirmed on its next reply", INFO];
-    return [r.busy ? "waits until the session is idle" : "about to be typed", WARN];
+    if (r.pending.typedAt) return tapOn ? ["typed — confirmed on its next reply", INFO] : ["typed — turn on reading to confirm it", WARN];
+    return [r.busy ? waitReason(r) : "about to be typed", WARN];
   }
   if (r.runtime === "codex" && r.source === "pane" && global.codex.model && r.model !== global.codex.model) return ["changes on its next start", WARN];
   if (r.runtime === "claude" && r.source === "global") return ["not read from the session", "var(--text-3)"];
@@ -1574,6 +1580,7 @@ function modelState(r, global) {
 function modelsHtml() {
   const m = state.data.models;
   if (!m) return `<div style="margin-top:48px">${rule("models", "loading…")}</div>`;
+  tapOn = Boolean(m.tap?.on);
   if (m.missing) return `<div style="margin-top:48px">${rule("models")}<div class="d-hint">The server running now is older than this screen — start Pilo again to see and change models.</div></div>`;
   const opts = (list, current) => list.map((v) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(v)}</option>`).join("");
   const codexEfforts = [...new Set(m.choices.codex.flatMap((c) => c.efforts))];
