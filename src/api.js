@@ -1369,7 +1369,9 @@ export async function modelOverview() {
     } else if (a.runtime === "codex") {
       const shown = models.codexModelOnPane(await herdr.readPane(a.target));
       model = shown || codex.model;
-      effort = codex.effort;
+      // the pane never shows effort; a pinned session that came back on its pinned
+      // model was started with its pinned effort too
+      effort = a.pin?.effort && shown && shown === a.pin.model ? a.pin.effort : codex.effort;
       source = shown ? "pane" : "global";
     }
     rows.push({ id: String(a.id), name: a.name, role: a.role, runtime: a.runtime, bound: Boolean(session),
@@ -1448,4 +1450,36 @@ export async function modelTap(on) {
   if (result.changed) await setSetting("statuslineOriginal", result.original);
   await logEvent({ type: "models_tap", title: `Claude model reading ${on ? "on" : "off"}`, payload: { changed: result.changed } });
   return { on: Boolean(on), changed: result.changed };
+}
+
+// A model an agent keeps: its session is started again, while idle, on that model
+// and effort, resuming the same conversation in the same pane — the binding and
+// the rules file stay as they are. A change for everyone leaves a pinned agent
+// alone. Unpinning restarts nothing; the next start simply reads the global file.
+export async function pinModel(id, input) {
+  const agent = await one("SELECT id, name, role, runtime, herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
+  if (agent.role === "system") throw Object.assign(new Error("a system agent is not pinned"), { status: 400 });
+  if (!["claude", "codex"].includes(agent.runtime) || !agent.target) throw Object.assign(new Error(`${agent.name} has no Claude or Codex session to start again`), { status: 400 });
+  if (input.off) {
+    await query("UPDATE agents SET model_pin = NULL, updated_at = now() WHERE id = $1", [id]);
+    await logEvent({ type: "models_changed", title: `${agent.name}: pin removed — next start reads the global file`, agentId: id, payload: {} });
+    return { id: String(id), pin: null };
+  }
+  const model = String(input.model || "").trim() || null;
+  const effort = String(input.effort || "").trim() || null;
+  if (agent.runtime === "claude") {
+    if (model && !models.CLAUDE_MODELS.includes(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
+    if (effort && !models.CLAUDE_EFFORTS.includes(effort)) throw Object.assign(new Error(`unknown effort: ${effort}`), { status: 400 });
+  } else {
+    const known = models.codexModels().find((m) => m.model === model);
+    if (!known) throw Object.assign(new Error(`unknown Codex model: ${model}`), { status: 400 });
+    if (effort && !known.efforts.includes(effort)) throw Object.assign(new Error(`${model} does not take effort ${effort}`), { status: 400 });
+  }
+  if (!model && !effort) throw Object.assign(new Error("pick a model or an effort"), { status: 400 });
+  const pin = { model, effort };
+  await query("UPDATE agents SET model_pin = $2, model_pending = $3, updated_at = now() WHERE id = $1",
+    [id, JSON.stringify(pin), JSON.stringify({ kind: "pin", ...pin, at: Date.now() })]);
+  await logEvent({ type: "models_changed", title: `${agent.name}: pinned to ${[model, effort].filter(Boolean).join(" · ")} — restarts when idle`, agentId: id, payload: pin });
+  return { id: String(id), pin, applied: "restart when idle" };
 }

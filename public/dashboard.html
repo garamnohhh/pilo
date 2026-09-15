@@ -1558,6 +1558,11 @@ views.agents = () => {
 const MODEL_FROM = { session: "this session", pane: "its pane", global: "global file" };
 function modelState(r, global) {
   if (r.system) return ["not changed here", "var(--text-3)"];
+  if (r.pending?.kind === "pin") {
+    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started — checking" }[r.pending.step];
+    return [step || (r.busy ? "restarts once the session is idle" : "about to restart"), WARN];
+  }
+  if (r.pin && !r.pending) return [`kept on ${[r.pin.model, r.pin.effort].filter(Boolean).join(" · ")}`, INFO];
   if (r.pending) {
     if (r.pending.typedAt) return ["typed — confirmed on its next reply", INFO];
     return [r.busy ? "waits until the session is idle" : "about to be typed", WARN];
@@ -1604,8 +1609,8 @@ function modelsHtml() {
           <span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(r.runtime ? MODEL_FROM[r.source] || "—" : "no session")}</span>
           <span class="d-m d-clip" style="font-size:11px;color:${tone}">${esc(word)}</span>
           <span style="display:flex;justify-content:flex-end;gap:6px">${r.pending
-            ? btn("Cancel", "model-cancel", `data-id="${r.id}"`, "gn-btn-ghost")
-            : r.runtime === "claude" && !r.system ? btn("Change", "model-agent", `data-id="${r.id}"`, "gn-btn-ghost") : ""}</span>
+            ? (r.pending.step ? "" : btn("Cancel", "model-cancel", `data-id="${r.id}"`, "gn-btn-ghost"))
+            : (r.runtime === "claude" || r.runtime === "codex") && !r.system && r.bound ? btn("Change", "model-agent", `data-id="${r.id}"`, "gn-btn-ghost") : ""}</span>
         </div>`;
       }).join("")}
     </div></div>`;
@@ -2308,19 +2313,24 @@ DIALOGS.model = (d) => {
   const m = state.data.models;
   const r = m?.agents.find((x) => x.id === String(d.id));
   if (!r) return { title: "model", sub: "", prose: "This agent is gone." };
+  const codex = r.runtime === "codex";
+  const modelsList = codex ? m.choices.codex.map((c) => c.model) : m.choices.claude.models;
+  const efforts = codex ? [...new Set(m.choices.codex.flatMap((c) => c.efforts))] : m.choices.claude.efforts;
+  const global = codex ? m.global.codex : m.global.claude;
   return {
     title: esc(r.name),
-    sub: `now ${esc(r.model || "—")} · ${esc(r.effort || "—")} · read from ${esc(MODEL_FROM[r.source] || "—")}`,
+    sub: `now ${esc(r.model || "—")} · ${esc(r.effort || "—")} · read from ${esc(MODEL_FROM[r.source] || "—")}${r.pin ? ` · kept on ${esc([r.pin.model, r.pin.effort].filter(Boolean).join(" · "))}` : ""}`,
     fields: [
-      { id: "ma-model", label: "model", kind: "select", value: r.model && m.choices.claude.models.includes(r.model) ? r.model : m.global.claude.model,
-        options: m.choices.claude.models.map((v) => [v, v]) },
-      { id: "ma-effort", label: "effort", kind: "select", value: r.effort || m.global.claude.effort,
-        options: m.choices.claude.efforts.map((v) => [v, v]) }
+      { id: "ma-model", label: "model", kind: "select", value: r.pin?.model || (modelsList.includes(r.model) ? r.model : global.model), options: modelsList.map((v) => [v, v]) },
+      { id: "ma-effort", label: "effort", kind: "select", value: r.pin?.effort || r.effort || global.effort, options: efforts.map((v) => [v, v]) }
     ],
-    prose: "Typed into this session once it is idle, and confirmed by its own status line on its next reply. Only this agent changes: the global default every new session reads is put back as it was. A session started again later uses the global default.",
+    prose: (codex ? "" : "Change now: typed into this session once it is idle and confirmed on its next reply; the global default is put back, so a later restart reads it again.\n")
+      + "Keep: when the session is idle it leaves and starts again in the same pane, resuming the same conversation on this model — the binding and its rules stay. A change for everyone leaves it alone until the pin is removed.",
     actions: [
       btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"),
-      right("Change this agent", "save-model", `data-id="${r.id}"`, "gn-btn-brand")
+      r.pin ? btn("Remove pin", "unpin-model", `data-id="${r.id}"`, "gn-btn-ghost") : "",
+      codex ? "" : btn("Change now", "save-model", `data-id="${r.id}"`, "gn-btn-ghost"),
+      right("Keep on this agent", "pin-model", `data-id="${r.id}"`, "gn-btn-brand")
     ]
   };
 };
@@ -2612,6 +2622,21 @@ const actions = {
     await call("POST", "/api/models", { runtime: "claude", scope: "agent", agentIds: [el.dataset.id], model: $("ma-model").value, effort: $("ma-effort").value });
     state.dlg = null;
     toast("waits for the session to be idle, then typed");
+    await loadDetail();
+    render();
+  },
+  async "pin-model"(el) {
+    if (!confirm("Start this session again on that model once it is idle? It resumes the same conversation in the same pane.")) return;
+    await call("POST", `/api/models/pin/${el.dataset.id}`, { model: $("ma-model").value, effort: $("ma-effort").value });
+    state.dlg = null;
+    toast("restarts on that model once the session is idle");
+    await loadDetail();
+    render();
+  },
+  async "unpin-model"(el) {
+    await call("POST", `/api/models/pin/${el.dataset.id}`, { off: true });
+    state.dlg = null;
+    toast("pin removed — its next start reads the global file");
     await loadDetail();
     render();
   },

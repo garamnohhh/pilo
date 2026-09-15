@@ -9,9 +9,16 @@ const bin = process.env.PILO_HERDR || "/opt/homebrew/bin/herdr";
 // failure, which backs off on its own.
 const TIMEOUT_MS = Number(process.env.PILO_HERDR_TIMEOUT_MS || 15000);
 
-async function herdr(args) {
-  const { stdout } = await run(bin, args, { maxBuffer: 8 * 1024 * 1024, timeout: TIMEOUT_MS });
+async function herdr(args, timeout = TIMEOUT_MS) {
+  const { stdout } = await run(bin, args, { maxBuffer: 8 * 1024 * 1024, timeout });
   return stdout;
+}
+
+// Start a Claude or Codex session in a pane that is back at its shell prompt,
+// with arguments for the runtime after "--". herdr waits for it to be ready.
+export async function startAgent(name, kind, pane, args = []) {
+  await herdr(["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", "60000", "--", ...args], 75000);
+  return true;
 }
 
 export async function available() {
