@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Pilo's tap on Claude Code's status line. It notes which model and effort this
+# session runs — the status line input is the one place a running session says so —
+# and hands the same input to the status line that was configured before it, so
+# what the user sees does not change.
+input=$(cat)
+dir="$HOME/.pilo/claude-sessions"
+if command -v jq >/dev/null 2>&1; then
+  id=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null)
+  if [ -n "$id" ] && [[ "$id" =~ ^[A-Za-z0-9_-]+$ ]]; then
+    mkdir -p "$dir"
+    printf '%s' "$input" | jq -c '{session: .session_id, cwd: (.cwd // .workspace.current_dir), model: .model.id, name: .model.display_name, effort: (.effort.level // null), at: (now * 1000 | floor)}' > "$dir/$id.json.tmp" 2>/dev/null \
+      && mv "$dir/$id.json.tmp" "$dir/$id.json"
+  fi
+fi
+[ "$#" -gt 0 ] && printf '%s' "$input" | sh -c "$*"
+exit 0

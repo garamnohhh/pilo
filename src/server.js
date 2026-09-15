@@ -62,6 +62,10 @@ const routes = [
   ["GET", /^\/api\/overview$/, async (_m, _b, q) => (q.get("part") === "stats" ? { stats: (await api.overview()).stats } : api.overview())],
   ["GET", /^\/api\/replies$/, (_m, _b, q) => api.replyBodies(q.get("ids") || "")],
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
+  ["GET", /^\/api\/models$/, () => api.modelOverview()],
+  ["POST", /^\/api\/models$/, (_m, body) => api.requestModels(body)],
+  ["POST", /^\/api\/models\/tap$/, (_m, body) => api.modelTap(body.on)],
+  ["DELETE", /^\/api\/models\/pending\/(\d+)$/, (m) => api.cancelModelChange(Number(m[1]))],
   ["GET", /^\/api\/quota$/, () => quotaReport()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
 
