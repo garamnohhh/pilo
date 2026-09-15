@@ -95,6 +95,7 @@ const routes = [
   ["POST", /^\/api\/tasks\/(\d+)\/hold$/, (m, body) => api.holdTask(Number(m[1]), body.note || "")],
   ["POST", /^\/api\/tasks\/(\d+)\/resume$/, (m) => api.resumeTask(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/limited$/, (m, body) => api.setLimited(Number(m[1]), body.until || null)],
+  ["POST", /^\/api\/tasks\/(\d+)\/ask$/, (m, body) => api.askUser(Number(m[1]), body.body || body.text || "")],
   ["POST", /^\/api\/tasks\/(\d+)\/answer$/, (m, body) => api.answerTask(Number(m[1]), body.body || body.answer || "")],
   ["GET", /^\/api\/blocked$/, () => api.blockedTasks()],
   ["POST", /^\/api\/tasks\/(\d+)\/progress$/, (m, body) => api.noteProgress(Number(m[1]), body.text || body.progress || "")],
