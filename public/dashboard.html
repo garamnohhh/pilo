@@ -1446,6 +1446,7 @@ views.agents = () => {
           <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
           <span class="gn-ladder-twist">${canFold ? (folded ? "+" : "−") : ""}</span>
           <span class="gn-ladder-name">${esc(a.name)}</span>
+          ${a.reviewer ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);margin-left:6px" title="reviewer — its PM hands it checks">REVIEW</span>` : ""}
           ${runtimeMark(a.runtime)}
           <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
           <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
@@ -2130,6 +2131,10 @@ DIALOGS.agent = (d) => {
             options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
       { label: "reports to", kind: "note", value: parent },
       { id: "d-cwd", label: "cwd", value: a.cwd, place: "~/work/notes" },
+      (d.role || a.role) === "worker"
+        ? { id: "d-reviewer", label: "reviewer", kind: "switch", value: a.reviewer,
+            hint: "its PM hands it a check before calling work done — the mark counts, not the name" }
+        : null,
       { id: "d-specialty", label: "what it looks after", kind: "textarea", value: a.specialty },
       { id: "d-aliases", label: "aliases", value: a.aliases, place: "@d, dd" },
       { id: "d-note", label: "note", value: a.note }
@@ -2171,6 +2176,10 @@ DIALOGS["add-agent"] = () => {
       { id: "f-name", label: "name", value: f.name || chosen?.suggestedName || "" },
       { id: "f-cwd", label: "cwd", value: f.cwd || chosen?.cwd || "", hint: "the session's own folder, unless you say otherwise" },
       { id: "f-specialty", label: "what it looks after", kind: "textarea", value: f.specialty || "" },
+      role === "worker"
+        ? { id: "f-reviewer", label: "reviewer", kind: "switch", value: Boolean(f.reviewer),
+            hint: "its PM hands it a check before calling work done" }
+        : null,
       { id: "f-write-rules", label: "write rules", kind: "switch", value: f.writeRules !== false,
         hint: "writes the pilo block into CLAUDE.md / AGENTS.md and tells the session" }
     ],
@@ -2382,7 +2391,8 @@ function keepDialogForm() {
   state.form = { ...state.form, name: val("f-name"), cwd: val("f-cwd"), specialty: val("f-specialty"),
     projectId: $("f-project") ? $("f-project").value : state.form.projectId,
     target: $("f-target") ? $("f-target").value : state.form.target,
-    writeRules: $("f-write-rules") ? $("f-write-rules").checked : state.form.writeRules };
+    writeRules: $("f-write-rules") ? $("f-write-rules").checked : state.form.writeRules,
+    reviewer: $("f-reviewer") ? $("f-reviewer").checked : state.form.reviewer };
 }
 
 function readScheduleForm() {
@@ -2423,7 +2433,8 @@ const actions = {
     const val = (id) => ($(id) ? $(id).value.trim() : undefined);
     await call("PATCH", `/api/agents/${el.dataset.id}`, {
       name: val("d-name"), role: state.dlg.role, projectId: $("d-project") ? $("d-project").value || null : undefined,
-      cwd: val("d-cwd"), specialty: val("d-specialty"), aliases: val("d-aliases"), note: val("d-note")
+      cwd: val("d-cwd"), specialty: val("d-specialty"), aliases: val("d-aliases"), note: val("d-note"),
+      reviewer: $("d-reviewer") ? $("d-reviewer").checked : undefined
     });
     state.dlg = null;
     toast("saved");
@@ -2605,6 +2616,7 @@ const actions = {
       cwd: f.cwd || chosen?.cwd || "",
       specialty: f.specialty || "",
       aliases: "", note: "", model: "",
+      reviewer: role === "worker" && Boolean(f.reviewer),
       writeRules: f.writeRules !== false
     };
     if (!form.name || !form.cwd) return toast("a name and a folder are needed", true);
