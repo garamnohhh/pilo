@@ -41,3 +41,11 @@ test("the tap wraps the status line that was there, and knows itself", () => {
   assert.equal(tapped({ command: cmd }), true);
   assert.equal(tapped({ command: "bash /Users/x/.claude/statusline-command.sh" }), false);
 });
+
+test("a pinned session starts again resuming the same conversation on its own model", async () => {
+  const { resumeArgs } = await import("./models.js");
+  assert.deepEqual(resumeArgs("claude", "abc", { model: "sonnet", effort: "low" }), ["--resume", "abc", "--model", "sonnet", "--effort", "low"]);
+  assert.deepEqual(resumeArgs("claude", "abc"), ["--resume", "abc"]);
+  assert.deepEqual(resumeArgs("codex", "u-1", { model: "gpt-5.6-luna", effort: "high" }), ["resume", "u-1", "-m", "gpt-5.6-luna", "-c", 'model_reasoning_effort="high"']);
+  assert.deepEqual(resumeArgs("codex", ""), ["resume", "--last"]);
+});

@@ -420,14 +420,16 @@ const MODEL_GAP_MS = Number(process.env.PILO_MODEL_GAP_MS || 1500);
 
 async function pumpModels() {
   const rows = await query(
-    `SELECT a.id, a.name, a.herdr_target AS target, a.model_pending AS p,
+    `SELECT a.id, a.name, a.runtime, a.herdr_target AS target, a.model_pending AS p,
        (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS open
-     FROM agents a WHERE a.archived_at IS NULL AND a.runtime = 'claude' AND a.model_pending IS NOT NULL`
+     FROM agents a WHERE a.archived_at IS NULL AND a.model_pending IS NOT NULL
+       AND (a.runtime = 'claude' OR a.model_pending->>'kind' = 'pin')`
   );
   if (!rows.length) return;
   const live = await herdr.freshSessions();
   for (const a of rows) {
     const p = a.p;
+    if (p.kind === "pin") { await stepPin(a, p, live); continue; }
     const session = live.find((s) => s.target && s.target === a.target);
     if (!p.typedAt) {
       if (!session || session.status !== "idle" || a.open > 0 || pending.has(a.id)) continue;
@@ -470,6 +472,88 @@ async function pumpModels() {
     } else if (Date.now() - p.typedAt > MODEL_CONFIRM_MS) {
       await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
       await logEvent({ type: "model_unconfirmed", title: `${a.name}: ${p.model || p.effort} typed, the session never showed it`, agentId: a.id, payload: { asked: p, seen } });
+    }
+  }
+}
+
+// A pin restarts the session, one step a tick: ask it to leave (only when idle),
+// wait for the pane to be back at its shell, start it again resuming the same
+// conversation with the pinned model, and read the result back. A start that
+// fails is tried once more without the pin, so the pane is never left empty.
+const PIN_WAIT_MS = Number(process.env.PILO_PIN_WAIT_MS || 30000);
+const starting = new Map();
+
+async function savePin(id, p) {
+  await query("UPDATE agents SET model_pending = $2 WHERE id = $1", [id, p ? JSON.stringify(p) : null]);
+}
+
+// A pin that never took is not a pin: the next change for everyone must reach it.
+async function dropPin(id) {
+  await query("UPDATE agents SET model_pending = NULL, model_pin = NULL WHERE id = $1", [id]);
+}
+
+async function stepPin(a, p, live) {
+  const session = live.find((s) => s.target && s.target === a.target);
+  const pin = { model: p.model, effort: p.effort };
+  if (!p.step) {
+    if (!session || session.status !== "idle" || a.open > 0 || pending.has(a.id) || !session.session) return;
+    pending.add(a.id);
+    try {
+      await herdr.prompt(a.target, a.runtime === "codex" ? "/quit" : "/exit");
+    } catch (err) {
+      await dropPin(a.id);
+      await logEvent({ type: "model_failed", title: `${a.name}: could not ask the session to leave`, agentId: a.id, payload: { error: err.message } });
+      return;
+    }
+    await savePin(a.id, { ...p, step: "leaving", session: session.session, name: session.name || a.name, stepAt: Date.now() });
+    await logEvent({ type: "model_restarting", title: `${a.name}: leaving to start again on ${[pin.model, pin.effort].filter(Boolean).join(" · ")}`, agentId: a.id, payload: pin });
+    return;
+  }
+  if (p.step === "leaving") {
+    if (session) {
+      if (Date.now() - p.stepAt > PIN_WAIT_MS) {
+        await dropPin(a.id);
+        await logEvent({ type: "model_failed", title: `${a.name}: the session did not leave — nothing was restarted`, agentId: a.id, payload: pin });
+      }
+      return;
+    }
+    const kind = a.runtime === "codex" ? "codex" : "claude";
+    const job = herdr.startAgent(p.name, kind, a.target, models.resumeArgs(kind, p.session, pin))
+      .then(() => ({ ok: true }))
+      .catch(async (err) => {
+        // put the session back as it was, without the pin
+        const back = await herdr.startAgent(p.name, kind, a.target, models.resumeArgs(kind, p.session)).then(() => true).catch(() => false);
+        return { ok: false, error: err.message, back };
+      });
+    starting.set(a.id, job);
+    await savePin(a.id, { ...p, step: "starting", stepAt: Date.now() });
+    return;
+  }
+  if (p.step === "starting") {
+    const job = starting.get(a.id);
+    if (!job) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return; }
+    const done = await Promise.race([job, new Promise((r) => setTimeout(() => r(null), 10))]);
+    if (!done) return;
+    starting.delete(a.id);
+    if (done.ok) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return; }
+    await dropPin(a.id);
+    await logEvent({ type: "model_failed", title: `${a.name}: could not start on ${pin.model || pin.effort} — ${done.back ? "started again as it was" : "and could not start it again: the pane needs a look"}`,
+      agentId: a.id, payload: { error: done.error, back: done.back } });
+    return;
+  }
+  if (p.step === "checking") {
+    let took = false;
+    if (a.runtime === "codex") took = Boolean(session) && models.codexModelOnPane(await herdr.readPane(a.target)) === pin.model;
+    else {
+      const seen = models.tapReading(session?.session || p.session);
+      took = Boolean(seen) && seen.at >= p.stepAt - 60000 && models.modelMatches(pin.model, seen.model) && (!pin.effort || !seen.effort || seen.effort === pin.effort);
+    }
+    if (took) {
+      await savePin(a.id, null);
+      await logEvent({ type: "model_applied", title: `${a.name}: started again on ${[pin.model, pin.effort].filter(Boolean).join(" · ")}`, agentId: a.id, payload: pin });
+    } else if (Date.now() - p.stepAt > PIN_WAIT_MS * 4) {
+      await savePin(a.id, null);
+      await logEvent({ type: "model_unconfirmed", title: `${a.name}: started again, but the session never showed ${pin.model || pin.effort}`, agentId: a.id, payload: pin });
     }
   }
 }
