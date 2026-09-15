@@ -14,6 +14,7 @@ export const CATALOGUE = [
   { scope: "tui", name: "copy", args: "[last|in-N|task-N|draft]", summary: "답변이나 입력 중인 글을 클립보드로", example: ":copy in-42" },
   { scope: "tui", name: "icons", args: "[on|off]", summary: "agent 이름 앞 runtime 아이콘 — 없으면 글자 라벨", example: ":icons on" },
   { scope: "tui", name: "mouse", args: "", summary: "마우스 끄기/켜기 — 끄면 터미널 드래그 선택", example: ":mouse" },
+  { scope: "tui", name: "follow", aliases: ["f"], args: "[in-N|off]", summary: "이어 묻기 — 다음 말 앞에 in-N 이어서 가 붙음. 번호 없으면 가장 최근 답 · 답 카드 클릭도 같음 · Esc 취소", example: ":follow in-812" },
   { scope: "tui", name: "fold", args: "[id|all|default]", summary: "답변 접기", example: ":fold all" },
   { scope: "tui", name: "unfold", args: "", summary: "접은 것 모두 펼치기", example: ":unfold" },
   { scope: "tui", name: "cost", args: "", summary: "토큰 사용량", example: ":cost" },

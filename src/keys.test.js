@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
+import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
 import { edit } from "./draft.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
@@ -186,4 +186,13 @@ test("under the Korean input source Cmd+V is a paste, with or without alternate 
   assert.equal((await typed(["\x1b[12621;9u"])).attached, 1);
   assert.equal((await typed(["\x1b[12621;9u"])).draft, "");
   assert.equal((await typed(["\x1b[12618;9u"])).draft, "");
+});
+
+test("Escape is known as a key of its own, bare or in the kitty form", () => {
+  assert.equal(isEscapeKey("\x1b"), true);
+  assert.equal(isEscapeKey("\x1b[27u"), true);
+  assert.equal(isEscapeKey("\x1b[27;1u"), true);
+  assert.equal(isEscapeKey("\x1bn"), false, "Alt+n is not Escape");
+  assert.equal(isEscapeKey("\x1b[A"), false);
+  assert.equal(isEscapeKey("\x1b[12621::118;9u"), false, "Cmd+V under a Korean source");
 });
