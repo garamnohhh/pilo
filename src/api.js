@@ -1129,6 +1129,26 @@ export async function overview() {
   const system = await systemStatus();
   const failedWakes = { n: system.wakeFailures.length };
   const blocked = await blockedTasks(5);
+  // What waits on the user, whole: every decision still open (in the desk's words
+  // once it has spoken), the failures nobody has dealt with, and agents whose
+  // session is gone. The screens count this one number and list these rows.
+  const decisions = await query(
+    `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", a.name AS agent, ${OPEN_ASK_TEXT} AS text,
+       split_part(i.user_request, E'\n', 1) AS request,
+       COALESCE((SELECT max(k.created_at) FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL), t.updated_at) AS at
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN inbox i ON i.id = t.inbox_id
+     WHERE t.status = 'blocked' ORDER BY at LIMIT 20`
+  );
+  // answered in the last half hour, so the line the user answered at the bottom
+  // turns "answered" instead of vanishing under their hand
+  const answeredDecisions = await query(
+    `SELECT e.task_id AS "taskId", e.inbox_id AS "inboxId", a.name AS agent, e.payload->>'question' AS text,
+       e.payload->>'answer' AS answer, split_part(i.user_request, E'\n', 1) AS request, e.created_at AS at
+     FROM events e LEFT JOIN agents a ON a.id = e.agent_id LEFT JOIN inbox i ON i.id = e.inbox_id
+     WHERE e.type = 'task_answered' AND e.created_at > now() - interval '30 minutes' ORDER BY e.created_at LIMIT 10`
+  );
+  const lost = agents.filter((a) => a.role !== "system" && a.status === "unbound").length;
+  const failedTotal = openFailures.n + failedWakes.n;
   return {
     stats: {
       agents: agents.length,
@@ -1137,11 +1157,14 @@ export async function overview() {
       worker: agents.filter((a) => a.role === "worker").length,
       inboxToday,
       tokens,
-      failed: { task: openFailures.n, wake: failedWakes.n, total: openFailures.n + failedWakes.n },
+      failed: { task: openFailures.n, wake: failedWakes.n, total: failedTotal },
+      needsYou: { total: decisions.length + failedTotal + lost, decisions: decisions.length, failed: failedTotal, lost },
       history: { failedTasks: history.tasks, wakeFailures: history.wakes }
     },
     tasks,
     blocked,
+    decisions,
+    answeredDecisions,
     services: system.services,
     paths: system.paths,
     wakeFailures: system.wakeFailures
