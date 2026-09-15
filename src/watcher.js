@@ -466,9 +466,12 @@ async function pumpModels() {
     }
     const seen = models.tapReading(session?.session || p.session);
     const took = seen && seen.at >= p.typedAt && models.modelMatches(p.model, seen.model) && (!p.effort || !seen.effort || seen.effort === p.effort);
-    if (took) {
+    // Without the status line tap, Claude's own answer in the pane says it too.
+    const said = !took && models.paneConfirms(await herdr.readPane(a.target), p);
+    if (took || said) {
       await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
-      await logEvent({ type: "model_applied", title: `${a.name}: now ${seen.model}${seen.effort ? ` · ${seen.effort}` : ""}`, agentId: a.id, payload: { asked: p, seen } });
+      await logEvent({ type: "model_applied", title: `${a.name}: now ${took ? `${seen.model}${seen.effort ? ` · ${seen.effort}` : ""}` : `${[p.model, p.effort].filter(Boolean).join(" · ")} (its pane says so)`}`,
+        agentId: a.id, payload: { asked: p, seen: took ? seen : "pane" } });
     } else if (Date.now() - p.typedAt > MODEL_CONFIRM_MS) {
       await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
       await logEvent({ type: "model_unconfirmed", title: `${a.name}: ${p.model || p.effort} typed, the session never showed it`, agentId: a.id, payload: { asked: p, seen } });
