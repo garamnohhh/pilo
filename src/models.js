@@ -154,6 +154,18 @@ export function modelMatches(asked, id) {
   return String(id || "").includes(family);
 }
 
+// The arguments that start a session again where it was, on a model of its own:
+// Claude resumes the conversation with --model/--effort, Codex with -m and the
+// reasoning effort key. Without a pin they resume it as it was.
+export function resumeArgs(runtime, session, pin = null) {
+  if (runtime === "codex") {
+    return ["resume", ...(session ? [session] : ["--last"]),
+      ...(pin?.model ? ["-m", pin.model] : []), ...(pin?.effort ? ["-c", `model_reasoning_effort="${pin.effort}"`] : [])];
+  }
+  return [...(session ? ["--resume", session] : ["--continue"]),
+    ...(pin?.model ? ["--model", pin.model] : []), ...(pin?.effort ? ["--effort", pin.effort] : [])];
+}
+
 // The model a Codex pane shows on its bottom line.
 export function codexModelOnPane(text) {
   const hits = String(text || "").match(/\b(?:gpt-[\w.-]+|codex-[\w-]+)\b/g);
