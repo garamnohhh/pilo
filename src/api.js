@@ -5,6 +5,7 @@ import { paths, readPort } from "./paths.js";
 import { t } from "./text.js";
 import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
 import { pickResults, withResults } from "./reply.js";
+import * as models from "./models.js";
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -1339,4 +1340,112 @@ export async function dueSchedules() {
   return query(`SELECT ${SCHEDULE_COLUMNS}, s.weekdays_only AS "weekdaysOnly" FROM schedules s
     JOIN agents a ON a.id = s.to_agent_id
     WHERE s.kind = 'request' AND s.enabled AND s.next_run_at <= now() ORDER BY s.next_run_at LIMIT 5`);
+}
+
+// ---------- models ----------
+// What every agent runs, as far as it can be seen from outside, and where each
+// figure comes from: the session itself (Claude, through the status line tap),
+// the pane (Codex's model name), or only the global file (everything unseen).
+export async function modelOverview() {
+  const claude = models.claudeGlobal();
+  const codex = models.codexGlobal();
+  const live = await herdr.sessions();
+  const agents = await query(
+    `SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pending AS pending, a.model_pin AS pin,
+       (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
+       s.status AS "sessionStatus"
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.archived_at IS NULL ORDER BY a.role = 'pilo' DESC, a.name`
+  );
+  const rows = [];
+  for (const a of agents) {
+    const session = live.find((x) => x.target && x.target === a.target);
+    const busy = session?.status === "working" || a.openTasks > 0;
+    let model = null, effort = null, source = "global";
+    if (a.runtime === "claude") {
+      const seen = models.tapReading(session?.session);
+      if (seen) { model = seen.model; effort = seen.effort; source = "session"; }
+      else { model = claude.model; effort = claude.effort; }
+    } else if (a.runtime === "codex") {
+      const shown = models.codexModelOnPane(await herdr.readPane(a.target));
+      model = shown || codex.model;
+      effort = codex.effort;
+      source = shown ? "pane" : "global";
+    }
+    rows.push({ id: String(a.id), name: a.name, role: a.role, runtime: a.runtime, bound: Boolean(session),
+      busy, model, effort, source, pending: a.pending, pin: a.pin, system: a.role === "system" });
+  }
+  return {
+    choices: { claude: { models: models.CLAUDE_MODELS, efforts: models.CLAUDE_EFFORTS }, codex: models.codexModels() },
+    global: { claude: { model: claude.model, effort: claude.effort }, codex },
+    tap: { on: models.tapped(claude.statusLine) },
+    agents: rows
+  };
+}
+
+// A change is written down, not typed: the watcher types it into a Claude session
+// only once that session is idle, and checks the session's own reading after.
+// Everything (all of one runtime) also changes the global file every new session
+// reads; one agent keeps the global file as it was. Codex takes a change from
+// its next start.
+export async function requestModels(input) {
+  const runtime = input.runtime === "codex" ? "codex" : "claude";
+  const model = String(input.model || "").trim();
+  const effort = String(input.effort || "").trim() || null;
+  if (runtime === "claude") {
+    if (model && !models.CLAUDE_MODELS.includes(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
+    if (effort && !models.CLAUDE_EFFORTS.includes(effort)) throw Object.assign(new Error(`unknown effort: ${effort}`), { status: 400 });
+  } else {
+    const known = models.codexModels().find((m) => m.model === model);
+    if (model && !known) throw Object.assign(new Error(`unknown Codex model: ${model}`), { status: 400 });
+    if (effort && known && !known.efforts.includes(effort)) throw Object.assign(new Error(`${model} does not take effort ${effort}`), { status: 400 });
+  }
+  if (!model && !effort) throw Object.assign(new Error("pick a model or an effort"), { status: 400 });
+
+  const all = input.scope === "all";
+  const ids = all ? [] : (input.agentIds || []).map(String);
+  const targets = await query(
+    `SELECT id, name, role, runtime, model_pin AS pin FROM agents
+     WHERE archived_at IS NULL AND role <> 'system' AND runtime = $1 ${all ? "" : "AND id::text = ANY($2)"}`,
+    all ? [runtime] : [runtime, ids]
+  );
+  if (!all && !targets.length) throw Object.assign(new Error("no such agent for that runtime"), { status: 400 });
+
+  if (runtime === "codex") {
+    if (!all) throw Object.assign(new Error("a Codex agent changes on its own only by starting it again with the model — not in this step"), { status: 400 });
+    models.setCodexGlobal({ model: model || null, effort });
+    await logEvent({ type: "models_changed", title: `codex → ${model || "same model"}${effort ? ` · ${effort}` : ""} from next start`, payload: { runtime, model, effort } });
+    return { runtime, applied: "next start", agents: targets.map((a) => a.name) };
+  }
+
+  const keep = models.claudeGlobal();
+  if (all) models.setClaudeGlobal({ model: model || null, effort });
+  const at = Date.now();
+  const skipped = [];
+  for (const a of targets) {
+    if (all && a.pin) { skipped.push(a.name); continue; }
+    // one agent only: typing /model also saves it as everyone's default, so the
+    // global values are put back once the session has written them
+    const restore = all ? null : { model: keep.model, effort: keep.effort };
+    await query("UPDATE agents SET model_pending = $2, updated_at = now() WHERE id = $1",
+      [a.id, JSON.stringify({ model: model || null, effort, at, restore })]);
+  }
+  await logEvent({ type: "models_changed", title: `claude → ${model || "same model"}${effort ? ` · ${effort}` : ""}${all ? " for all" : ` for ${targets.map((a) => a.name).join(", ")}`}`,
+    payload: { runtime, model, effort, all, skipped } });
+  return { runtime, applied: "when idle", agents: targets.filter((a) => !skipped.includes(a.name)).map((a) => a.name), skipped };
+}
+
+export async function cancelModelChange(id) {
+  await query("UPDATE agents SET model_pending = NULL, updated_at = now() WHERE id = $1", [id]);
+  await logEvent({ type: "models_changed", title: `model change for agent ${id} cancelled`, agentId: id, payload: {} });
+  return { id: String(id) };
+}
+
+// The status line tap, on or off. The status line that was there is kept and put
+// back when the tap comes off.
+export async function modelTap(on) {
+  const result = models.setTap(Boolean(on), await getSetting("statuslineOriginal", null));
+  if (result.changed) await setSetting("statuslineOriginal", result.original);
+  await logEvent({ type: "models_tap", title: `Claude model reading ${on ? "on" : "off"}`, payload: { changed: result.changed } });
+  return { on: Boolean(on), changed: result.changed };
 }
