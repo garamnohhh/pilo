@@ -4,6 +4,7 @@ import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule } from "./api.js";
 import { changed } from "./changes.js";
+import * as models from "./models.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -408,6 +409,71 @@ async function pumpDecisions() {
   }
 }
 
+// A model or effort change asked for on the dashboard. It is typed into a Claude
+// session only when that session is idle — checked against herdr right before the
+// keys go in, and never on the same tick as a wake to that agent. Then the
+// session's own reading (the status line tap) says whether it took; the status
+// line only runs again on the session's next message, so until then it is
+// "typed", and after the wait with no reading it is "not confirmed".
+const MODEL_CONFIRM_MS = Number(process.env.PILO_MODEL_CONFIRM_MS || 30 * 60 * 1000);
+const MODEL_GAP_MS = Number(process.env.PILO_MODEL_GAP_MS || 1500);
+
+async function pumpModels() {
+  const rows = await query(
+    `SELECT a.id, a.name, a.herdr_target AS target, a.model_pending AS p,
+       (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS open
+     FROM agents a WHERE a.archived_at IS NULL AND a.runtime = 'claude' AND a.model_pending IS NOT NULL`
+  );
+  if (!rows.length) return;
+  const live = await herdr.freshSessions();
+  for (const a of rows) {
+    const p = a.p;
+    const session = live.find((s) => s.target && s.target === a.target);
+    if (!p.typedAt) {
+      if (!session || session.status !== "idle" || a.open > 0 || pending.has(a.id)) continue;
+      pending.add(a.id);
+      // the session may redraw its status line while the keys are still going in
+      const typedAt = Date.now();
+      try {
+        if (p.model) await herdr.prompt(a.target, `/model ${p.model}`);
+        if (p.model && p.effort) await new Promise((r) => setTimeout(r, MODEL_GAP_MS));
+        if (p.effort) await herdr.prompt(a.target, `/effort ${p.effort}`);
+      } catch (err) {
+        await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
+        await logEvent({ type: "model_failed", title: `${a.name}: could not type the model change`, agentId: a.id, payload: { error: err.message, ...p } });
+        continue;
+      }
+      await query("UPDATE agents SET model_pending = $2 WHERE id = $1", [a.id, JSON.stringify({ ...p, typedAt, session: session.session })]);
+      await logEvent({ type: "model_typed", title: `${a.name}: ${[p.model, p.effort].filter(Boolean).join(" · ")} typed`, agentId: a.id, payload: p });
+      continue;
+    }
+    // One agent only: put the global default back once the session has saved its
+    // pick there — and only while the file still holds exactly that pick, so a
+    // change for everyone made in between is never undone. The row is read again
+    // first: a newer request may have replaced this one mid-tick.
+    if (p.restore && !p.restored) {
+      const still = await one("SELECT model_pending AS p FROM agents WHERE id = $1", [a.id]);
+      const now = models.claudeGlobal();
+      const saved = (!p.model || now.model === p.model) && (!p.effort || now.effort === p.effort);
+      const differs = (p.model && p.model !== p.restore.model) || (p.effort && p.effort !== p.restore.effort);
+      if (still?.p?.at === p.at && saved && differs) {
+        models.setClaudeGlobal({ model: p.model ? p.restore.model : null, effort: p.effort ? p.restore.effort : null });
+        p.restored = true;
+        await query("UPDATE agents SET model_pending = $2 WHERE id = $1", [a.id, JSON.stringify(p)]);
+      }
+    }
+    const seen = models.tapReading(session?.session || p.session);
+    const took = seen && seen.at >= p.typedAt && models.modelMatches(p.model, seen.model) && (!p.effort || !seen.effort || seen.effort === p.effort);
+    if (took) {
+      await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
+      await logEvent({ type: "model_applied", title: `${a.name}: now ${seen.model}${seen.effort ? ` · ${seen.effort}` : ""}`, agentId: a.id, payload: { asked: p, seen } });
+    } else if (Date.now() - p.typedAt > MODEL_CONFIRM_MS) {
+      await query("UPDATE agents SET model_pending = NULL WHERE id = $1", [a.id]);
+      await logEvent({ type: "model_unconfirmed", title: `${a.name}: ${p.model || p.effort} typed, the session never showed it`, agentId: a.id, payload: { asked: p, seen } });
+    }
+  }
+}
+
 // Standing jobs, checked on the same loop as everything else: a schedule that
 // came due while the machine slept simply finds itself due when it wakes.
 async function pumpSchedules() {
@@ -450,6 +516,7 @@ export const tick = serialize(async () => {
     await pumpResults();
     await pumpStalled();
     await pumpDecisions();
+    await pumpModels();
     await pumpQuota();
     await pumpSessions();
     await pumpNotice();
