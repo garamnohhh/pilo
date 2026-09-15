@@ -345,7 +345,9 @@ const state = {
   sending: false,
   fold: {},
   // the request the next message follows up, shown above the composer
-  followUp: null
+  followUp: null,
+  // a task waiting on the user that the next message answers instead
+  answering: null
 };
 
 function emptyForm() {
@@ -570,6 +572,8 @@ function folded(id, fromNewest) {
   const key = String(id);
   if (state.feed.open.has(key)) return false;
   if (state.feed.shut.has(key)) return true;
+  // a conversation that waits on the user is never tucked away by default
+  if (state.feed.rows.some((row) => String(row.id) === key && row.decisions > 0)) return false;
   return fromNewest >= OPEN_BY_DEFAULT;
 }
 
@@ -897,6 +901,13 @@ const imagesIn = (list) => [...(list || [])].filter((f) => String(f.type).starts
 // at the front of the message — in-812 이어서 — so the desk can open that
 // request before it answers, with nothing new on the server.
 function followHtml() {
+  const answering = state.answering;
+  if (answering) return `<div class="d-follow">
+    <span class="d-m" style="color:${ERR};flex:none">↳</span>
+    <span class="d-m" style="font-size:12px;color:${ERR};flex:none">${esc(T("desk.decision.chip", { id: answering.taskId }))}</span>
+    <span class="d-clip" style="font-size:var(--fs-small);color:var(--text-3);flex:1">${esc(answering.line)}</span>
+    <button class="d-plain d-m" style="font-size:14px;line-height:1;color:var(--text-3);padding:0 4px;flex:none" data-act="cancel-answer"
+      title="${esc(T("desk.follow.cancel"))}" aria-label="${esc(T("desk.follow.cancel"))}">×</button></div>`;
   const follow = state.followUp;
   if (!follow) return "";
   return `<div class="d-follow">
@@ -960,6 +971,28 @@ function restoreDraft() {
     event.preventDefault();
     const typed = expandDraft(box.value).trim();
     if (!typed || state.sending) return;
+    // The line goes to the waiting task as its answer, not out as a new request.
+    if (state.answering) {
+      state.sending = true;
+      try {
+        await call("POST", `/api/tasks/${state.answering.taskId}/answer`, { body: typed });
+        toast(T("note.answered", { id: state.answering.taskId }));
+        // the conversation just answered stays where the eye is, and reads again
+        const key = state.answering.inbox;
+        if (key) { state.feed.open.add(key); state.feed.shut.delete(key); delete state.feed.detail[key]; }
+        state.answering = null;
+        state.draft = "";
+        box.value = "";
+        composerPastes.clear();
+        composerImages.clear();
+        await load();
+      } catch (err) {
+        toast(err.message, true);
+      } finally {
+        state.sending = false;
+      }
+      return;
+    }
     const follow = state.followUp;
     const text = follow ? T("desk.follow.prefix", { id: follow.id }) + typed : typed;
     state.sending = true;
@@ -1187,6 +1220,14 @@ function feedMessages(item, detail) {
   if (!(detail?.replies || []).length && item.finalReply) {
     msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply, inbox: item.id });
   }
+  // A decision is a red line with its own answer button until the user answers it,
+  // then a quiet one that keeps what was asked and what they said.
+  for (const d of decisionsOf(item, detail)) {
+    msgs.push(d.open
+      ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "decision", text: d.text || "", task: d.taskId, inbox: item.id }
+      : { who: T("desk.decision.done", { agent: d.agent || "agent", id: d.taskId }), kind: "decided", text: `${d.text || ""}\n\n**→ ${d.answer || ""}**` });
+  }
+  if (openDecisions(item, detail).length) return msgs;
 
   // Until the answer lands the conversation says what it is waiting for, in the
   // TUI's own words. Agents rarely leave a progress note, and without this the
@@ -1225,13 +1266,15 @@ function bubble(m) {
   // The bar carries the state, out of the same colours the rest of the screen
   // uses: amber while something is still moving, red when it is waiting on you,
   // accent for the answer, and the plain rule for a result that is only history.
-  const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR }[m.kind] || "var(--line)";
+  const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
   // Only a line about work that is moving pulses. The TUI holds the red one
   // still on purpose — it is waiting on you, and nothing is happening — and a
   // finished line has nothing to claim.
   const live = m.kind === "working" || m.kind === "waiting";
   const follow = m.kind === "answer" && m.inbox
-    ? `<button class="d-plain d-followbtn" data-act="follow-request" data-id="${esc(m.inbox)}">↳ ${esc(T("desk.follow.ask"))}</button>` : "";
+    ? `<button class="d-plain d-followbtn" data-act="follow-request" data-id="${esc(m.inbox)}">↳ ${esc(T("desk.follow.ask"))}</button>`
+    : m.kind === "decision" && m.task
+      ? `<button class="d-plain d-followbtn" style="color:${ERR}" data-act="answer-decision" data-task="${esc(m.task)}" data-inbox="${esc(m.inbox)}" data-line="${esc(firstLine(m.text))}">↳ ${esc(T("desk.decision.answer"))}</button>` : "";
   return `<div style="display:flex;flex-direction:column;gap:6px">
     <span style="display:flex;align-items:center;gap:14px"><span class="d-lbl">${esc(m.who)}</span>${follow}</span>
     <div style="display:flex;width:100%">
@@ -1265,8 +1308,15 @@ function convState(item, detail) {
 
 const convMood = (item, detail) => {
   const s = convState(item, detail);
+  if (!s.answered && openDecisions(item, detail).length) return ERR;
   return s.answered ? OK : s.needsReply || s.failed ? ERR : WARN;
 };
+
+// What waits on the user in one conversation. The detail has every decision, answered
+// ones included; a row not opened yet carries the oldest open one.
+const decisionsOf = (item, detail) => detail?.decisions
+  || (item.decision ? [{ ...item.decision, open: true }] : []);
+const openDecisions = (item, detail) => decisionsOf(item, detail).filter((d) => d.open);
 
 // The folded row. The TUI clips the question to two lines and shows the state
 // mark and who took it; the time is added here because a page of ten covers
@@ -2505,6 +2555,7 @@ const actions = {
     const item = (String(detail?.id) === id ? detail : null)
       || (state.data.inbox || []).find((i) => String(i.id) === id)
       || state.feed.rows.find((i) => String(i.id) === id);
+    state.answering = null;
     state.followUp = { id, line: firstLine(item?.userRequest || "") };
     state.selected.inbox = id;
     state.tab = "work";
@@ -2515,6 +2566,19 @@ const actions = {
       box.focus();
       box.setSelectionRange(box.value.length, box.value.length);
     }
+  },
+  async "answer-decision"(el) {
+    state.followUp = null;
+    state.answering = { taskId: String(el.dataset.task), inbox: String(el.dataset.inbox || ""), line: el.dataset.line || "" };
+    state.tab = "work";
+    location.hash = "work";
+    render();
+    $("draft")?.focus();
+  },
+  async "cancel-answer"() {
+    state.answering = null;
+    render();
+    $("draft")?.focus();
   },
   async "cancel-follow"() {
     state.followUp = null;
@@ -2784,6 +2848,10 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     state.palette = !state.palette;
     state.palQuery = "";
+    render();
+  }
+  if (event.key === "Escape" && !state.palette && !state.dlg && state.answering) {
+    state.answering = null;
     render();
   }
   if (event.key === "Escape" && (state.palette || state.dlg)) {

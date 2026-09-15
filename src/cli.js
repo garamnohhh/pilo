@@ -259,6 +259,14 @@ const commands = {
     return out(rows.map((r) => `#${r.id} ${r.agent} · ${r.project || "—"}\n   ${r.question}`).join("\n"));
   },
 
+  // the desk, to the user, about a task that waits on them — not the answer
+  async ask(args) {
+    const [taskId, ...text] = args;
+    if (!taskId || !text.length) throw new Error('usage: pilo ask <taskId> "what the user needs to decide or do"');
+    const res = await call("POST", `/api/tasks/${taskId}/ask`, { body: text.join(" ") });
+    return out(t("cli.asked", { id: res.taskId, inbox: res.inboxId }));
+  },
+
   async answer(args) {
     const [taskId, ...text] = args;
     if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <answer>");

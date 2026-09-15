@@ -29,6 +29,7 @@ Do not call HTTP (\`curl ${base}\`) from an agent session — the sandbox blocks
 | --- | --- |
 | \`[pilo:inbox] request #N\` | \`pilo inbox N\` to read it, then create a task for the PM who owns that project |
 | \`[pilo:result] results in for #N\` | \`pilo inbox N\` to read every \`tasks[].pmResult\` in full, then \`pilo reply\` — see "Writing the answer" |
+| \`[pilo:blocked] task #T in request #N is waiting on the user\` | \`pilo inbox N\` to read the question, then \`pilo ask T "…"\` — see "When a PM is waiting on the user" |
 
 \`\`\`bash
 pilo inbox                       # requests with no answer yet
@@ -37,6 +38,8 @@ pilo agents                      # id · name · role · project
 pilo send <agentId> N "the request, in full"
 pilo reply N "what the user should read"
 pilo reply N "a short lead" --with-results   # the lead, with each PM's result under it
+pilo ask T "what the user needs to decide or do"   # speak to the user about blocked task T — not an answer
+pilo blocked                     # every task still waiting on the user
 pilo history <words> [--since YYYY-MM-DD] [--agent name]   # past requests, answers, results
 \`\`\`
 
@@ -74,6 +77,18 @@ Run \`pilo agents\` if that list looks stale.
   - the request picks up an earlier one and the answer has to join them
 - A request no PM owns — the morning briefing among them — is answered in full, as before.
 - **After \`pilo reply\`, stop.** No closing words in the pane: nobody reads them, and they keep you busy.
+
+### When a PM is waiting on the user
+
+- \`[pilo:blocked]\` means a task is stopped until the user decides something. They talk only to you, so you tell them.
+- Read the question with \`pilo inbox N\` (the blocked task's \`blockedQuestion\`, or its \`pmResult\`), then
+  \`pilo ask T "…"\`: two to four plain lines in the user's language — what is waiting, what they need to decide or do,
+  the options if there are any, and what happens once they answer. It shows as a red line in that conversation,
+  and whatever the user types under it goes to the task as its answer; the PM carries on by itself.
+- \`pilo ask\` is not the answer: it does not close the request, and \`pilo reply\` still comes at the end as usual.
+- Do not answer for the user, and do not guess the decision. After \`pilo ask\`, stop.
+- The morning briefing starts with every decision still waiting (\`pilo blocked\`): each question in full, and how to
+  answer it — in that conversation in Pilo.
 
 ### Past records
 
@@ -116,6 +131,8 @@ ${roster}
 - **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
 - Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
+- **\`pilo block\` only for what the user must decide.** The desk tells them for you. For a step only they can take — a
+  restart, a permission — write exactly what is needed and what you do once it is done, so one answer is enough.
 - Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
 - **Write \`pmResult\` so it can be read as it stands**: the conclusion first, then what changed, what is left and
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
@@ -141,6 +158,7 @@ HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 �
 | --- | --- |
 | \`[pilo:inbox] request #N\` | \`pilo inbox N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
 | \`[pilo:result] results in for #N\` | \`pilo inbox N\` 으로 모든 \`tasks[].pmResult\` 전문 확인 → 아래 "답 쓰기" 대로 \`pilo reply\` |
+| \`[pilo:blocked] 요청 #N 의 작업 #T 가 사용자 결정 대기\` | \`pilo inbox N\` 으로 질문 확인 → \`pilo ask T "…"\` — 아래 "PM 이 사용자 결정을 기다릴 때" |
 
 ### 등록된 agent
 
@@ -171,6 +189,16 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 - 담당 PM 이 없는 요청(아침 브리핑 등)은 지금처럼 전부 직접 쓴다.
 - **\`pilo reply\` 뒤에는 멈춘다.** pane 에 마무리 문장을 쓰지 않는다 — 아무도 안 읽고, 그동안 붙잡혀 있다.
 
+### PM 이 사용자 결정을 기다릴 때
+
+- \`[pilo:blocked]\` 는 사용자가 무언가 정해야 작업이 이어진다는 뜻이다. 사용자는 너와만 대화하니 네가 말한다.
+- \`pilo inbox N\` 으로 질문(멈춘 task 의 \`blockedQuestion\`, 없으면 \`pmResult\`)을 읽고 \`pilo ask T "…"\`:
+  사용자 언어로 2~4줄 — 무엇이 멈춰 있는지, 무엇을 정하거나 하면 되는지, 선택지가 있으면 선택지, 답하면 어떻게 이어지는지.
+  그 대화 안에 빨간 줄로 뜨고, 사용자가 그 아래에 쓴 답이 그 task 의 answer 로 들어가 PM 이 알아서 이어간다.
+- \`pilo ask\` 는 답이 아니다. 요청을 닫지 않고, \`pilo reply\` 는 평소처럼 마지막에 한다.
+- 사용자 대신 답하거나 결정을 짐작하지 않는다. \`pilo ask\` 뒤에는 멈춘다.
+- 아침 브리핑은 아직 기다리는 결정(\`pilo blocked\`)부터 시작한다: 질문 전문과 답하는 방법(Pilo 의 그 대화에서 답하기).
+
 ### 과거 기록
 
 - 과거 결정·답변·사실이 필요한 질문이면 **먼저 \`pilo history <단어> [--since YYYY-MM-DD] [--agent 이름]\` 로 찾고**,
@@ -195,6 +223,8 @@ ${roster}
 
 - **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
+- **\`pilo block\` 은 사용자가 정해야 하는 것만.** 사용자에게는 데스크가 대신 말한다. 사용자만 할 수 있는 절차(재시작·권한 등)는
+  무엇이 필요한지와 끝나면 무엇을 할지를 분명히 적어 답 한 번으로 이어지게 한다.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다.
 - **\`pmResult\` 는 그대로 읽힐 글로 쓴다**: 결론 먼저, 그다음 바뀐 것·남은 것·결정할 것. 짧고 담백하게, 20줄 이하, 인사말 없이.
 - 확인한 파일·실행한 명령·읽은 것은 보고가 아니라 로그로: \`pilo done\` 의 \`--log "…"\`, 또는 \`runLog\`. 변경한 파일은 \`artifacts\`.
@@ -250,6 +280,9 @@ const REVIEWER_DUTY = {
   ko: `- **너는 검수 담당이다.** PM 이 확인을 맡기면 읽기·실행 확인만 하고 코드·데이터는 고치지 않는다.
   결과는 \`통과\`, 또는 문제 목록(무엇 · 어디 · 재현 방법)으로.`
 };
+
+// the desk's block with a roster supplied, for tests
+export const deskRulesText = (roster = [], base = "http://127.0.0.1:0") => RULES[dialect()].desk(roster.join("\n"), base);
 
 function piloRules(agent, base, agents) {
   const roster = agents
