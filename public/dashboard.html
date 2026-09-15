@@ -49,6 +49,10 @@
   .d-arow { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 4px 12px; border-left: 2px solid transparent; cursor: pointer }
   .d-arow:hover { background: var(--bg-2) }
   .d-chip-sm { font-size: 9px; letter-spacing: 0.08em; padding: 2px 5px; flex: none }
+  .d-railfoot { margin-top: auto; flex: none; box-sizing: border-box; height: 56px; width: 100%; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 3px; border-top: var(--bw) solid var(--line); cursor: pointer }
+  .d-railfoot:hover { background: var(--bg-2) }
+  .d-railstate { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--text-2) }
   .d-tip { position: fixed; z-index: 350; pointer-events: none; padding: 5px 9px; font: 12px/1.4 var(--mono); overflow-wrap: anywhere;
     color: var(--text); background: var(--surface); border: var(--bw) solid var(--line); box-shadow: 0 4px 16px rgba(0,0,0,.18) }
   .d-spin::before { content: "⠋"; animation: d-spin 1.2s steps(1, end) infinite }
@@ -603,9 +607,23 @@ function railHtml() {
       </span>
       <span class="d-railtxt">${label}</span>
     </button>`;
-  }).join("") + `<div style="margin-top:auto;padding:10px 8px;border-top:var(--bw) solid var(--line)">
-      <button class="d-plain d-m" style="width:100%;font-size:9px;color:var(--line);text-align:center;line-height:1.5" data-act="open-palette">⌘K</button>
-    </div>`;
+  }).join("") + herdrFootHtml();
+}
+
+// herdr, from the wake service's own line ("herdr 19 sessions · 18/18 agents bound"):
+// every agent bound is fine, some unbound is a warning, no sessions at all is down.
+// The foot is as tall as the bars beside it, so the three rules line up. ⌘K stays
+// in the top bar and on the keyboard.
+function herdrFootHtml() {
+  const wake = (state.data.system?.services || []).find((x) => x.name === "wake");
+  const counts = /(\d+)\/(\d+) agents bound/.exec(wake?.detail || "");
+  const tone = !wake ? DIM : wake.state === "running" ? OK : wake.state === "degraded" ? WARN : ERR;
+  const short = counts ? `${counts[1]}/${counts[2]}` : "—";
+  const tip = wake?.detail || "herdr — no reading yet";
+  return `<button class="d-plain d-railfoot" data-tab="system" data-tip="${esc(tip)}" data-tone="${tone}" aria-label="${esc(tip)}">
+      <span class="d-railstate"><span class="d-dot" style="background:${tone}"></span><span class="d-m">${esc(short)}</span></span>
+      <span class="d-railtxt">herdr</span>
+    </button>`;
 }
 
 // The TUI's usage line, cell for cell: the server works each one out with the
@@ -1027,7 +1045,7 @@ function syncAgentTip() {
   const tip = $("agenttip");
   const tree = $("tree");
   const row = tipFor && [...document.querySelectorAll('#tree [data-act="pick-agent"]')].find((el) => el.dataset.name === tipFor);
-  if (!row || !tipAt || tree.hidden) { tip.hidden = true; return; }
+  if (!row || !tipAt || tree.hidden) return syncRailTip();
   const html = `<span style="color:${row.dataset.tone}">●</span> ${esc(row.dataset.tip)}`;
   if (tip.innerHTML !== html) tip.innerHTML = html;
   const pane = tree.getBoundingClientRect();
@@ -1052,6 +1070,30 @@ function syncAgentTip() {
   tree.addEventListener("mouseleave", () => { tipFor = ""; tipAt = null; syncAgentTip(); });
   // the list moves under a still pointer: whatever row is there now is the one
   tree.addEventListener("scroll", () => { if (tipAt) { tipFor = under(); syncAgentTip(); } }, true);
+}
+
+// The herdr line at the foot of the rail, in the same drawn tip. The rail is too
+// narrow to hold it, so it opens above the pointer and runs right, kept on screen.
+let railTipAt = null;
+function syncRailTip() {
+  const tip = $("agenttip");
+  const foot = railTipAt && document.querySelector("#rail [data-tip]");
+  if (!foot) { tip.hidden = true; return; }
+  const html = `<span style="color:${foot.dataset.tone}">●</span> ${esc(foot.dataset.tip)}`;
+  if (tip.innerHTML !== html) tip.innerHTML = html;
+  tip.style.maxWidth = `${Math.max(120, innerWidth - 24)}px`;
+  tip.hidden = false;
+  const { offsetWidth: w, offsetHeight: h } = tip;
+  tip.style.left = `${Math.round(Math.max(8, Math.min(railTipAt.x + 12, innerWidth - 8 - w)))}px`;
+  tip.style.top = `${Math.round(Math.max(8, railTipAt.y - 12 - h))}px`;
+}
+{
+  const rail = $("rail");
+  rail.addEventListener("mousemove", (event) => {
+    railTipAt = event.target.closest?.("[data-tip]") ? { x: event.clientX, y: event.clientY } : null;
+    syncAgentTip();
+  });
+  rail.addEventListener("mouseleave", () => { railTipAt = null; syncAgentTip(); });
 }
 
 /* ---------- views ---------- */
