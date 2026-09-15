@@ -1187,6 +1187,16 @@ function agentMark(a, colour) {
   return `<span class="d-spin-still" aria-hidden="true"><span class="d-dot" style="background:${colour};display:inline-block"></span></span>`;
 }
 
+// Everything that waits on the user, as one number: decisions still open, failures
+// nobody dealt with, sessions gone. The server counts it; an older one did not, and
+// then the count falls back to what it used to be.
+function needsYou(st, lost) {
+  const n = st.needsYou;
+  if (!n) return ["needs you", String(lost || st.failed?.total || 0), lost ? "session lost" : st.failed?.total ? "failed" : "nothing", (lost || st.failed?.total) ? ERR : "var(--text)"];
+  const sub = n.decisions ? `${n.decisions} decision${n.decisions > 1 ? "s" : ""}` : n.lost ? "session lost" : n.failed ? "failed" : "nothing";
+  return ["needs you", String(n.total), sub, n.total ? ERR : "var(--text)", n.total ? "needs-you" : ""];
+}
+
 function renderWorkPanes() {
   const st = state.data.overview?.stats || {};
   const rows = treeRows();
@@ -1196,12 +1206,12 @@ function renderWorkPanes() {
     ["requests today", String(st.inboxToday?.total ?? 0), `${st.inboxToday?.replied ?? 0} answered`, "var(--text)"],
     ["in flight", String(running), running ? "working" : "nothing on", running ? WARN : "var(--text)"],
     ["tokens", fmtTokens(st.tokens?.total ?? 0), "today", "var(--text)"],
-    ["needs you", String(lost || st.failed?.total || 0), lost ? "session lost" : st.failed?.total ? "failed" : "nothing", (lost || st.failed?.total) ? ERR : "var(--text)"]
+    needsYou(st, lost)
   ];
-  const stripHtml = strip.map(([k, v, sub, color]) => `<div>
+  const stripHtml = strip.map(([k, v, sub, color, act]) => `<${act ? `button class="d-plain" style="text-align:left;cursor:pointer" data-act="${act}"` : "div"}>
     <div class="d-lbl">${k}</div>
     <div class="d-m" style="font-size:24px;margin-top:6px;color:${color}">${v}<span style="font-size:13px;color:var(--text-3)"> · ${sub}</span></div>
-  </div>`).join("");
+  </${act ? "button" : "div"}>`).join("");
 
   const treeHtml = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
       <span class="d-lbl">${T("desk.rail.agents")}</span>
@@ -1267,7 +1277,7 @@ function feedMessages(item, detail) {
   // then a quiet one that keeps what was asked and what they said.
   for (const d of decisionsOf(item, detail)) {
     msgs.push(d.open
-      ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "decision", text: d.text || "", task: d.taskId, inbox: item.id }
+      ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "decision", text: `${firstLine(d.text || "")} — ${T("desk.decision.below")}`, task: d.taskId, inbox: item.id }
       : { who: T("desk.decision.done", { agent: d.agent || "agent", id: d.taskId }), kind: "decided", text: `${d.text || ""}\n\n**→ ${d.answer || ""}**` });
   }
   if (openDecisions(item, detail).length) return msgs;
@@ -1396,15 +1406,31 @@ function workFeed() {
         <span class="d-lbl">only ${esc(f.agent)}</span>
         ${btn("Every agent", "clear-feed-filter", "", "gn-btn-ghost")}</div>`
     : "";
-  // Newest at the bottom, the way the TUI stacks them.
+  // Newest at the bottom, the way the TUI stacks them. What waits on the user comes
+  // last of all, as the desk speaking to them now, whichever request it belongs to.
   const blocks = f.rows.map((item, i) => convBlock(item, i)).reverse().join("");
-  return banner + top + blocks;
+  return banner + top + blocks + decisionBubbles().map(bubble).join("");
 }
 
 // A number that grows whenever there is something new to read, so the feed
 // knows whether to follow.
+// Open decisions and the ones answered in the last half hour, oldest first, so the
+// newest word to the user is the last thing on the screen.
+function decisionBubbles() {
+  const o = state.data.overview || {};
+  const answered = (o.answeredDecisions || []).map((d) => ({
+    who: `you · ${T("desk.decision.answered")} · in-${d.inboxId} · task #${d.taskId}`, kind: "decided", at: d.at,
+    text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}\n\n**→ ${d.answer || ""}**`
+  }));
+  const open = (o.decisions || []).map((d) => ({
+    who: `pilo → you · ${T("desk.decision.needs")} · in-${d.inboxId} · ${d.agent || "agent"} · task #${d.taskId}`, kind: "decision", at: d.at,
+    text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}`, task: d.taskId, inbox: d.inboxId
+  }));
+  return [...answered, ...open].sort((a, b) => new Date(a.at) - new Date(b.at));
+}
+
 function feedSize() {
-  return state.feed.rows.reduce((n, item, i) =>
+  return decisionBubbles().length + state.feed.rows.reduce((n, item, i) =>
     n + 1 + (folded(item.id, i) ? 0 : feedMessages(item, state.feed.detail[item.id]).length), 0);
 }
 
@@ -2752,6 +2778,15 @@ const actions = {
       box.focus();
       box.setSelectionRange(box.value.length, box.value.length);
     }
+  },
+  async "needs-you"() {
+    const n = state.data.overview?.stats?.needsYou || {};
+    if (n.decisions) return actions["go-screen"]({ dataset: { value: "work" } }).then(() => actions["to-end"]());
+    state.tab = n.lost ? "agents" : "events";
+    location.hash = state.tab;
+    render();
+    await loadDetail();
+    render();
   },
   async "answer-decision"(el) {
     state.followUp = null;

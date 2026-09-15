@@ -391,21 +391,38 @@ function replyBlock(item, width, tagged) {
 
 // A task stopped until the user decides. Red and still, in the desk's words when
 // it has spoken; clicking any line of it points the prompt at that task.
+// Inside its request the decision is only a marker; the desk's words to the user
+// sit at the bottom of the feed, where the newest thing said always is.
 function decisionBlock(item, width) {
   const box = Math.max(24, width - 2);
   const d = item.decision;
   const more = Number(item.decisions || 0) - 1;
-  const body = wrap(alignTables(d.text || "", box - 5), box - 5);
-  if (more > 0) body.push("", t("card.decisionMore", { count: more }));
   return cardBlock({
     box,
     title: `${t("card.decision")} · ${d.agent || "agent"}`,
     titleColor: c.red,
-    right: `in-${item.id} · task #${d.taskId}`,
-    body,
-    footer: t("card.decisionFooter", { id: d.taskId }),
+    right: `task #${d.taskId}${more > 0 ? ` +${more}` : ""}`,
+    body: [t("card.decisionBelow")],
     surface: "reply",
     state: "attention"
+  });
+}
+
+// One decision at the bottom of the feed: the request it belongs to, what the desk
+// said, and — once answered in the last half hour — what the user said back.
+function decisionCard(d, width) {
+  const box = Math.max(24, width - 2);
+  const body = [...wrap(`in-${d.inboxId} · ${d.request || ""}`, box - 5).slice(0, 2), "", ...wrap(alignTables(d.text || "", box - 5), box - 5)];
+  if (d.answered) body.push("", ...wrap(`→ ${d.answer || ""}`, box - 5));
+  return cardBlock({
+    box,
+    title: d.answered ? `${t("card.decisionAnswered")} · ${d.agent || "agent"}` : `pilo → you · ${t("card.decision")} · ${d.agent || "agent"}`,
+    titleColor: d.answered ? c.muted : c.red,
+    right: `in-${d.inboxId} · task #${d.taskId}`,
+    body,
+    footer: d.answered ? "" : t("card.decisionFooter", { id: d.taskId }),
+    surface: "reply",
+    state: d.answered ? "done" : "attention"
   });
 }
 
@@ -931,7 +948,7 @@ function render() {
 
   const running = tree.pms.filter((p) => p.status === "running").length;
   const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
-  const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}`;
+  const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}${overview.stats.needsYou?.total ? ` · ${c.muted}needs you${c.reset} ${c.red}${overview.stats.needsYou.total}${c.reset}` : ""}`;
   const showTokens = settings.tokens?.showInTui !== false;
   const tokenPart = showTokens
     ? ` ${c.line}│${c.reset} ${c.muted}tokens${c.reset} ${c.fg}${tokens(overview.stats.tokens.total)}${c.reset}`
@@ -1023,6 +1040,14 @@ function render() {
         actions.push(null);
       }
     });
+    const said = [...(overview.answeredDecisions || []).map((d) => ({ ...d, answered: true })), ...(overview.decisions || [])]
+      .sort((x, y) => new Date(x.at) - new Date(y.at));
+    for (const d of said) {
+      const block = decisionCard(d, mainWidth - CARD_INDENT.length + 2).map((r) => CARD_INDENT + r);
+      const answer = d.answered ? null : { type: "answer", taskId: String(d.taskId), line: firstLine(d.text) };
+      feed.push(...block, "");
+      actions.push(...block.map(() => answer), null);
+    }
     for (const item of liveNotes()) {
       const tint = item.sticky ? c.red : c.muted;
       const lines = wrap(item.text, mainWidth - 8).map((x) => `  ${c.faint}pilo${c.reset} ${tint}${x}${c.reset}`);
