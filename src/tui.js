@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft } from "./draft.js";
-import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys } from "./keys.js";
+import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
 import { clipboardImage, clipboardText, droppedPaths, imageSize } from "./clipboard.js";
@@ -223,6 +223,8 @@ const state = {
   unfolded: new Set(),
   // a task waiting on the user that the next line answers, picked by clicking its card
   answering: null,
+  // the request the next line follows up — the dashboard's chip, in the TUI
+  follow: null,
   hits: new Map(),
   rowCount: 0,
   pad: 0,
@@ -666,7 +668,13 @@ function handleClick({ x, y }) {
     return note(t("note.agentsTab"));
   }
   if (action.type === "project") return applyProject(action.name);
+  if (action.type === "follow") {
+    state.answering = null;
+    state.follow = { id: action.id, line: action.line };
+    return render();
+  }
   if (action.type === "answer") {
+    state.follow = null;
     state.answering = { taskId: action.taskId, line: action.line };
     note(t("note.answering", { id: action.taskId }));
     return render();
@@ -691,6 +699,9 @@ function handleClick({ x, y }) {
 
 // Older requests are folded by default; only the newest two open on their own.
 const OPEN_BY_DEFAULT = 2;
+
+// the first line with anything on it, for the one-line chips
+const firstLine = (text) => String(text || "").split("\n").map((x) => x.trim()).find(Boolean) || "";
 
 function isFolded(id, fromNewest) {
   const key = String(id);
@@ -1005,7 +1016,9 @@ function render() {
         // only the header line folds, so clicking inside an answer does nothing;
         // anywhere on a decision card picks it to answer
         const answer = deciding ? { type: "answer", taskId: String(item.decision.taskId), line: String(item.decision.text || "").split("\n")[0] } : null;
-        actions.push(...block.map((_row, i) => answer || (i === 0 ? fold : null)));
+        // inside an answer card, a click follows that request up
+        const follow = item.finalReply ? { type: "follow", id: String(item.id), line: firstLine(item.userRequest) } : null;
+        actions.push(...block.map((_row, i) => answer || (i === 0 ? fold : follow)));
         feed.push("");
         actions.push(null);
       }
@@ -1037,7 +1050,7 @@ function render() {
   // header rows: blank, title, rule, status, rule
   const HEAD_ROWS = 5;
   // one blank row stands between the feed and the prompt
-  const filler = Math.max(0, height - HEAD_ROWS - visible - 1 - draft.length - 1);
+  const filler = Math.max(0, height - HEAD_ROWS - visible - 1 - draft.length - 1 - (state.follow ? 1 : 0));
   if (railWidth) {
     const label = t("tree.register");
     const inner = Math.max(cols(label) + 2, railWidth - 2);
@@ -1120,6 +1133,13 @@ function render() {
   const MARKER = /⟦(image|paste)[^⟧]*⟧/g;
   const paint = (text) =>
     COLOR === "none" ? text : text.replace(MARKER, (mark, kind) => `${kind === "image" ? c.blue : c.muted}${mark}${c.reset}`);
+  // The dashboard's follow-up chip, one line: ↳ follow-up to in-812 · its first line
+  if (state.follow) {
+    const head = t("desk.follow.chip", { id: state.follow.id });
+    const rest = Math.max(0, mainWidth - 4 - cols(head) - 3 - cols(t("tui.follow.cancel")) - 3);
+    const line = state.follow.line ? `${c.faint} · ${cut(state.follow.line, rest)}${c.reset}` : "";
+    emit(pre + withRail(`${c.green}↳${c.reset} ${c.muted}${head}${c.reset}${line}   ${c.faint}${t("tui.follow.cancel")}${c.reset}`));
+  }
   draft.forEach((row, i) => {
     const mark = i === 0 ? c.green + "❯" + c.reset : " ";
     const hint = state.answering ? `${c.red}${t("feed.answering", { id: state.answering.taskId })}${c.reset}` : `${c.faint}${PLACEHOLDER}${c.reset}`;
@@ -1287,6 +1307,21 @@ async function command(parsed) {
       return note(`failed: ${err.message}`, { sticky: true });
     }
   }
+  if (word === "follow") {
+    const arg = String(rest[0] || "").trim();
+    if (arg === "off") {
+      state.follow = null;
+      return note(t("tui.follow.off"));
+    }
+    const inbox = state.data?.inbox || [];
+    const id = arg ? (/^(?:in-)?(\d+)$/i.exec(arg) || [])[1] : String(inbox.find((row) => row.finalReply)?.id || "");
+    if (!id) return note(arg ? t("tui.follow.usage") : t("tui.follow.none"), { sticky: Boolean(arg) });
+    const found = inbox.find((row) => String(row.id) === id) || (await api(`/api/inbox/${id}`, null));
+    if (!found?.id) return note(t("tui.follow.missing", { id }), { sticky: true });
+    state.answering = null;
+    state.follow = { id, line: firstLine(found.userRequest) };
+    return note(t("tui.follow.on", { id }));
+  }
   if (word === "fold" || word === "unfold") {
     const target = rest.join("").replace(/^in-/, "");
     const ids = (state.data?.inbox || []).map((i) => String(i.id));
@@ -1324,6 +1359,13 @@ async function command(parsed) {
 async function send(text) {
   const parsed = parseCommand(text.replace(/\n/g, " "));
   if (parsed) return command(parsed);
+  // Sent as the dashboard sends it: the request number written in front, so the
+  // desk finds the earlier request the same way from either screen.
+  if (state.follow) {
+    const { id } = state.follow;
+    state.follow = null;
+    text = t("desk.follow.prefix", { id }) + text;
+  }
   // the line answers the picked task instead of going out as a new request
   if (state.answering) {
     const { taskId } = state.answering;
@@ -1434,6 +1476,10 @@ process.stdin.on("data", (chunk) => {
     try { appendFileSync(keylog, JSON.stringify(String(chunk)) + "\n"); } catch { /* a log must never break typing */ }
   }
   clearTimeout(carryTimer);
+  if (isEscapeKey(chunk)) {
+    pasteCarry = "";
+    return onEscape();
+  }
   const { wheel, clicks, rest } = parseMouse(chunk);
   if (wheel) scrollBy(wheel * 3);
   for (const click of clicks) handleClick(click);
@@ -1452,10 +1498,20 @@ process.stdin.on("data", (chunk) => {
     carryTimer = setTimeout(() => {
       const held = flushCarry(pasteCarry);
       pasteCarry = "";
-      if (held) keys.write(held);
+      if (held === "\x1b") onEscape();
+      else if (held) keys.write(held);
     }, 500);
   }
 });
+
+// Escape cancels whatever the next line was pointed at — a follow-up or an answer
+// to a waiting task — and otherwise does nothing.
+function onEscape() {
+  if (!state.answering && !state.follow) return;
+  state.answering = null;
+  state.follow = null;
+  render();
+}
 
 // A crash must not leave the user staring at an empty alternate screen.
 process.on("exit", restoreTerminal);
@@ -1482,10 +1538,7 @@ keys.on("keypress", async (ch, key) => {
   }
 
   if (isPasteImage(key)) return attachClipboard({ fromKey: true });
-  if (key.name === "escape" && state.answering) {
-    state.answering = null;
-    return render();
-  }
+
 
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
     pasting: state.pasting,
