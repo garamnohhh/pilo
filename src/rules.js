@@ -205,6 +205,52 @@ ${extra}`
 
 const dialect = () => (RULES[process.env.PILO_LANG] ? process.env.PILO_LANG : "en");
 
+// How many reviewers look at one piece of work when a PM has several. The user
+// has not settled this; one is the default, and this is the one place to change it.
+export const REVIEWERS_PER_CHECK = 1;
+
+// The review gate every PM carries, reviewer or not: a reviewer may be added
+// later, and the PM finds one by the mark in its workers table, never by a name.
+const REVIEW_GATE = {
+  en: () => `
+### Review before done
+
+Every PM follows this, with or without a reviewer today. A reviewer is a worker marked **yes** in the
+reviewer column of your workers table — the mark decides, not the name.
+
+- **With a reviewer**: before \`pilo done\`, hand the reviewer a check of what changed —
+  \`pilo send <reviewerId> <inboxId> "what to check, where, how to run it"\` — read its result, and put the
+  outcome on the first line of your report: \`검수: 통과\` or \`검수: 문제 N건 (what)\`.
+- **Without one**: skip it, and add the line \`검수 담당 없음\`.
+- **Review**: a screen or a behaviour that changed · right before a deploy or a data change lands · words or links a user will see.
+- **Skip**, and say \`검수 생략 (why)\`: docs only · research or a report only · a one-line setting · the user said no review.
+- **One more round at most**: when problems come back, fix them and send one more check. If that fails too, stop and \`pilo block\` with what is still wrong.
+- **Reviewer out of usage** (limited, or not answering): skip, and write \`검수 못 함 (한도)\`.
+- **More than one reviewer**: ${REVIEWERS_PER_CHECK === 1 ? "hand each check to one — whichever is idle, else the first in the table" : `hand each check to ${REVIEWERS_PER_CHECK}, idle ones first`}.
+`,
+  ko: () => `
+### 끝내기 전 검수
+
+검수 담당이 지금 있든 없든 모든 PM 이 따른다. 검수 담당은 worker 표의 reviewer 칸이 **yes** 인 worker 다 — 이름이 아니라 표시로 판단한다.
+
+- **검수 담당이 있으면**: \`pilo done\` 전에 바뀐 것의 확인을 맡긴다 —
+  \`pilo send <검수담당Id> <inboxId> "무엇을, 어디서, 어떻게 실행해 확인할지"\` — 결과를 읽고 보고 첫 줄에 \`검수: 통과\` 또는 \`검수: 문제 N건 (무엇)\`.
+- **없으면**: 건너뛰고 \`검수 담당 없음\` 한 줄.
+- **검수함**: 화면·동작이 바뀐 것 · 배포·데이터 반영 직전 · 사용자에게 보이는 문구·링크.
+- **안 함**, 보고에 \`검수 생략 (이유)\`: 문서만 · 조사·보고만 · 설정 한 줄 · 사용자가 검수 없이라고 한 것.
+- **다시 검수는 한 번만**: 문제가 나오면 고치고 한 번 더 맡긴다. 그것도 실패면 멈추고 남은 문제와 함께 \`pilo block\`.
+- **검수 담당이 한도에 걸림**(사용량 한도·응답 없음): 건너뛰고 \`검수 못 함 (한도)\`.
+- **검수 담당이 여럿이면**: ${REVIEWERS_PER_CHECK === 1 ? "한 번에 한 명 — 한가한 쪽, 없으면 표의 첫 번째" : `한 번에 ${REVIEWERS_PER_CHECK}명, 한가한 쪽부터`}.
+`
+};
+
+const REVIEWER_DUTY = {
+  en: `- **You are a reviewer.** When your PM hands you a check, read and run only — change no code and no data — and
+  report \`통과\`, or the problems as a numbered list: what, where, how to reproduce.`,
+  ko: `- **너는 검수 담당이다.** PM 이 확인을 맡기면 읽기·실행 확인만 하고 코드·데이터는 고치지 않는다.
+  결과는 \`통과\`, 또는 문제 목록(무엇 · 어디 · 재현 방법)으로.`
+};
+
 function piloRules(agent, base, agents) {
   const roster = agents
     .filter((a) => a.role !== "pilo")
@@ -224,11 +270,11 @@ function piloRules(agent, base, agents) {
 const owner = (parent) => (parent ? `your PM, ${parent.name}` : "your PM");
 const ownerShort = (parent) => (parent ? parent.name : "Your PM");
 
-function workerRules(agent, base, children = [], parent = null) {
+export function workerRules(agent, base, children = [], parent = null) {
   const kind = agent.role === "pm" ? "PM agent" : "worker agent";
   const roster = children.length
-    ? `\n### Your workers\n\n| id | name | specialty |\n| --- | --- | --- |\n${children
-        .map((w) => `| ${w.id} | ${w.name} | ${w.specialty || "—"} |`)
+    ? `\n### Your workers\n\n| id | name | reviewer | specialty |\n| --- | --- | --- | --- |\n${children
+        .map((w) => `| ${w.id} | ${w.name} | ${w.reviewer ? "yes" : "—"} | ${w.specialty || "—"} |`)
         .join("\n")}\n`
     : "";
   // A PM with nobody under it was still being told about "the workers listed
@@ -250,12 +296,14 @@ function workerRules(agent, base, children = [], parent = null) {
       : `- **Work reaches you from ${owner(parent)}, and from nobody else.** A task from anywhere else is a
   mistake upstream: say so in your report rather than doing the work. ${ownerShort(parent)} gathers
   your result — you never report to the user directly.`;
-  return RULES[dialect()].worker(agent, kind, roster, extra);
+  const lang = dialect();
+  const duty = agent.role === "pm" ? REVIEW_GATE[lang]() : agent.reviewer ? `${REVIEWER_DUTY[lang]}\n` : "";
+  return RULES[lang].worker(agent, kind, roster, `${extra}\n${duty}`);
 }
 
 export async function buildRules(id) {
   const agent = await one(
-    `SELECT a.id, a.name, a.role, a.runtime, a.cwd, a.aliases, a.specialty,
+    `SELECT a.id, a.name, a.role, a.runtime, a.cwd, a.aliases, a.specialty, a.reviewer,
        a.parent_agent_id AS "parentAgentId", p.name AS "projectName"
      FROM agents a LEFT JOIN projects p ON p.id = a.project_id
      WHERE a.id = $1 AND a.archived_at IS NULL`,
@@ -270,7 +318,7 @@ export async function buildRules(id) {
 
   const base = `http://127.0.0.1:${readPort()}`;
   const agents = await query(
-    `SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.parent_agent_id AS "parentAgentId",
+    `SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.reviewer, a.parent_agent_id AS "parentAgentId",
        p.name AS "projectName"
      FROM agents a LEFT JOIN projects p ON p.id = a.project_id
      WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role, a.name`
