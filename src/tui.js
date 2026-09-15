@@ -221,6 +221,8 @@ const state = {
   pulse: true,
   folded: new Set(),
   unfolded: new Set(),
+  // a task waiting on the user that the next line answers, picked by clicking its card
+  answering: null,
   hits: new Map(),
   rowCount: 0,
   pad: 0,
@@ -382,6 +384,26 @@ function replyBlock(item, width, tagged) {
     footer: t("card.replyFooter"),
     surface: "reply",
     state: "done"
+  });
+}
+
+// A task stopped until the user decides. Red and still, in the desk's words when
+// it has spoken; clicking any line of it points the prompt at that task.
+function decisionBlock(item, width) {
+  const box = Math.max(24, width - 2);
+  const d = item.decision;
+  const more = Number(item.decisions || 0) - 1;
+  const body = wrap(alignTables(d.text || "", box - 5), box - 5);
+  if (more > 0) body.push("", t("card.decisionMore", { count: more }));
+  return cardBlock({
+    box,
+    title: `${t("card.decision")} · ${d.agent || "agent"}`,
+    titleColor: c.red,
+    right: `in-${item.id} · task #${d.taskId}`,
+    body,
+    footer: t("card.decisionFooter", { id: d.taskId }),
+    surface: "reply",
+    state: "attention"
   });
 }
 
@@ -644,6 +666,11 @@ function handleClick({ x, y }) {
     return note(t("note.agentsTab"));
   }
   if (action.type === "project") return applyProject(action.name);
+  if (action.type === "answer") {
+    state.answering = { taskId: action.taskId, line: action.line };
+    note(t("note.answering", { id: action.taskId }));
+    return render();
+  }
   if (action.type === "fold") {
     // The view is anchored to the bottom, so opening an answer would push the
     // clicked line upward. Shift the scroll by exactly what was added below it.
@@ -669,6 +696,8 @@ function isFolded(id, fromNewest) {
   const key = String(id);
   if (state.unfolded.has(key)) return false;
   if (state.folded.has(key)) return true;
+  // a request that waits on the user stays open until folded by hand
+  if ((state.data?.inbox || []).some((row) => String(row.id) === key && row.decision)) return false;
   return fromNewest >= OPEN_BY_DEFAULT;
 }
 
@@ -944,7 +973,8 @@ function render() {
       // once answered, amber while the work is out, red when it needs a person.
       // Colour alone would strand anyone without it, so the colourless build
       // swaps the glyph instead.
-      const mood = item.finalReply ? "done" : item.needsReply ? "attention" : "working";
+      const deciding = !item.finalReply && Boolean(item.decision);
+      const mood = item.finalReply ? "done" : item.needsReply || deciding ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
       const markColour = pulseColour(mood);
       const question = shownLines.map((x, i) => {
@@ -961,7 +991,7 @@ function render() {
       actions.push(null);
       // The mark pulses whether or not the card is open, so a folded request
       // still keeps the clock running.
-      if (!item.finalReply && !item.needsReply) waiting += 1;
+      if (!item.finalReply && !item.needsReply && !deciding) waiting += 1;
       if (!folded) {
         // The bar lines up with the question's badge, not with the ❯: the mark and
         // the space after it are the two columns the card is indented past. What
@@ -969,10 +999,13 @@ function render() {
         // card used to stop four short of the pane edge, which read as a ragged
         // right against the header above it.
         const room = mainWidth - CARD_INDENT.length;
-        const block = (item.finalReply ? replyBlock(item, room + 2, tagged) : waitingBlock(item, room + 2)).map((r) => CARD_INDENT + r);
+        const block = (item.finalReply ? replyBlock(item, room + 2, tagged)
+          : deciding ? decisionBlock(item, room + 2) : waitingBlock(item, room + 2)).map((r) => CARD_INDENT + r);
         feed.push(...block);
-        // only the header line folds, so clicking inside an answer does nothing
-        actions.push(...block.map((_row, i) => (i === 0 ? fold : null)));
+        // only the header line folds, so clicking inside an answer does nothing;
+        // anywhere on a decision card picks it to answer
+        const answer = deciding ? { type: "answer", taskId: String(item.decision.taskId), line: String(item.decision.text || "").split("\n")[0] } : null;
+        actions.push(...block.map((_row, i) => answer || (i === 0 ? fold : null)));
         feed.push("");
         actions.push(null);
       }
@@ -1089,7 +1122,8 @@ function render() {
     COLOR === "none" ? text : text.replace(MARKER, (mark, kind) => `${kind === "image" ? c.blue : c.muted}${mark}${c.reset}`);
   draft.forEach((row, i) => {
     const mark = i === 0 ? c.green + "❯" + c.reset : " ";
-    const shown = i === 0 && !state.input ? `${c.faint}${PLACEHOLDER}${c.reset}` : paint(row.text);
+    const hint = state.answering ? `${c.red}${t("feed.answering", { id: state.answering.taskId })}${c.reset}` : `${c.faint}${PLACEHOLDER}${c.reset}`;
+    const shown = i === 0 && !state.input ? hint : paint(row.text);
     emit(pre + withRail(`${mark} ${shown}`));
     const end = row.start + row.text.length;
     if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
@@ -1290,6 +1324,18 @@ async function command(parsed) {
 async function send(text) {
   const parsed = parseCommand(text.replace(/\n/g, " "));
   if (parsed) return command(parsed);
+  // the line answers the picked task instead of going out as a new request
+  if (state.answering) {
+    const { taskId } = state.answering;
+    const res = await fetch(`${base}/api/tasks/${taskId}/answer`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ body: text })
+    }).catch(() => null);
+    const data = res ? await res.json().catch(() => ({})) : {};
+    state.answering = null;
+    return note(res?.ok ? t("note.answered", { id: taskId }) : `failed: ${data.error || "no answer from the server"}`, { sticky: !res?.ok });
+  }
   const res = await fetch(`${base}/api/inbox`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1436,6 +1482,10 @@ keys.on("keypress", async (ch, key) => {
   }
 
   if (isPasteImage(key)) return attachClipboard({ fromKey: true });
+  if (key.name === "escape" && state.answering) {
+    state.answering = null;
+    return render();
+  }
 
   const next = edit({ input: state.input, cursor: state.cursor }, ch, key, {
     pasting: state.pasting,
@@ -1572,7 +1622,7 @@ setInterval(() => {
 // usage probe losing its pane, an agent that stopped answering, a schedule that
 // failed, a wake storm held back. Each shows once, fades, and the same line is not
 // repeated for ten minutes.
-const NOTICE_TYPES = new Set(["quota_probe_lost", "wake_gave_up", "schedule_failed", "wake_suppressed"]);
+const NOTICE_TYPES = new Set(["quota_probe_lost", "wake_gave_up", "schedule_failed", "wake_suppressed", "decision_reminded"]);
 const REPEAT_MS = 10 * 60 * 1000;
 const seenEvents = { primed: false, ids: new Set(), shown: new Map() };
 async function eventNotes() {

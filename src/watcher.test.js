@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serialize, probeWorthTrying, jobSetting } from "./watcher.js";
+import { serialize, probeWorthTrying, jobSetting, reminderDue } from "./watcher.js";
 
 // The bug this exists for: a herdr call hung for 78 minutes, setInterval kept
 // firing on the clock, and every waiting tick read the same "not woken yet"
@@ -38,4 +38,14 @@ test("a watcher job's row turns it off and sets its minutes", () => {
   // no row yet, or a cadence it cannot read: the built-in default, still on
   assert.deepEqual(jobSetting(null, 9), { on: true, minutes: 9 });
   assert.deepEqual(jobSetting({ enabled: true, cadence: "09:00" }, 9), { on: true, minutes: 9 });
+});
+
+test("a decision nobody answered is raised at 30 minutes and 2 hours, then left to the briefing", () => {
+  const blocked = new Date("2026-09-15T00:00:00Z");
+  const at = (min) => blocked.getTime() + min * 60000;
+  assert.equal(reminderDue(blocked, 0, at(29)), false);
+  assert.equal(reminderDue(blocked, 0, at(30)), true);
+  assert.equal(reminderDue(blocked, 1, at(90)), false);
+  assert.equal(reminderDue(blocked, 1, at(120)), true);
+  assert.equal(reminderDue(blocked, 2, at(60 * 24)), false, "two rounds and no more");
 });

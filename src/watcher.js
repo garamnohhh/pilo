@@ -2,7 +2,7 @@ import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan } from "./api.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule } from "./api.js";
 import { changed } from "./changes.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
@@ -369,6 +369,45 @@ async function pumpNotice() {
   changed();
 }
 
+// A task waiting on the user used to ring once and go quiet: the desk never heard
+// of it, so nobody spoke to the user in Pilo. Now the desk is woken once per block
+// to say it in that conversation, and a decision still unanswered is raised again
+// at 30 minutes and 2 hours — as an event, a notification and a line on the
+// screens, not another desk turn. The morning briefing carries whatever is left.
+const REMIND_MIN = String(process.env.PILO_DECISION_REMIND_MIN || "30,120").split(",").map(Number).filter((n) => n > 0);
+
+export function reminderDue(blockedAt, rounds, now = Date.now(), steps = REMIND_MIN) {
+  if (rounds >= steps.length) return false;
+  return now - new Date(blockedAt).getTime() >= steps[rounds] * 60000;
+}
+
+async function pumpDecisions() {
+  const waiting = await query(
+    `SELECT t.id, t.inbox_id, a.name AS agent, b.at AS "blockedAt",
+       EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'decision_woken' AND e.created_at >= b.at) AS woken,
+       (SELECT count(*)::int FROM events e WHERE e.task_id = t.id AND e.type = 'decision_reminded' AND e.created_at >= b.at) AS rounds
+     FROM tasks t
+       LEFT JOIN agents a ON a.id = t.to_agent_id
+       CROSS JOIN LATERAL (SELECT COALESCE(max(e.created_at), t.updated_at) AS at FROM events e
+                            WHERE e.task_id = t.id AND e.type = 'task_blocked') b
+     WHERE t.status = 'blocked' ORDER BY b.at LIMIT 10`
+  );
+  if (!waiting.length) return;
+  const desk = await one("SELECT id, name, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  for (const task of waiting) {
+    if (!task.woken && desk?.herdr_target && !pending.has(desk.id)) {
+      await wake(desk, t("wake.blocked", { id: task.id, inbox: task.inbox_id }), { taskId: task.id, inboxId: task.inbox_id });
+      await logEvent({ type: "decision_woken", title: `desk woken for #${task.id}`, taskId: task.id, inboxId: task.inbox_id,
+        agentId: desk.id, payload: {} });
+    }
+    if (reminderDue(task.blockedAt, task.rounds)) {
+      const title = t("event.reminded", { id: task.id, agent: task.agent || "agent" });
+      await logEvent({ type: "decision_reminded", title, taskId: task.id, inboxId: task.inbox_id, payload: { round: task.rounds + 1 } });
+      await notifyRule("approval needed", `Pilo · ${title}`, `in-${task.inbox_id}`).catch(() => {});
+    }
+  }
+}
+
 // Standing jobs, checked on the same loop as everything else: a schedule that
 // came due while the machine slept simply finds itself due when it wakes.
 async function pumpSchedules() {
@@ -410,6 +449,7 @@ export const tick = serialize(async () => {
     await pumpTasks();
     await pumpResults();
     await pumpStalled();
+    await pumpDecisions();
     await pumpQuota();
     await pumpSessions();
     await pumpNotice();
