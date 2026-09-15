@@ -60,8 +60,25 @@ async function readSessions() {
     // working spell from being reported twice.
     seq: Number(a.state_change_seq || 0),
     title: a.terminal_title_stripped || a.terminal_title || "",
-    name: a.name || ""
+    name: a.name || "",
+    // the runtime's own session id (Claude's and Codex's), where herdr knows it
+    session: a.agent_session?.value || ""
   }));
+}
+
+// Straight from herdr, past the cache: the check made right before typing.
+export async function freshSessions() {
+  cache = { at: 0, rows: [] };
+  return sessions();
+}
+
+export async function readPane(target) {
+  if (!target) return "";
+  try {
+    return await herdr(["pane", "read", target]);
+  } catch {
+    return "";
+  }
 }
 
 function expand(path) {

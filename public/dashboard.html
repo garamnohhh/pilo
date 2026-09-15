@@ -449,6 +449,7 @@ async function loadDetail() {
     await loadOpenDetails();
   }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
+  if (state.tab === "agents") state.data.models = await get("/api/models").catch(() => ({ missing: true }));
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
   if (state.dlg?.kind === "schedule") state.runs = { open: state.dlg.id, rows: await get(`/api/schedules/${state.dlg.id}/runs`) };
@@ -1547,9 +1548,68 @@ views.agents = () => {
         </span></div>`;
     }).join("")}</div>` +
     `<div class="d-hint">A child row starts where its parent's plate ends. Click a PM row anywhere to fold its workers. open holds everything about one agent — rules, binding, waking, removal.
-      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet — Add agent picks one up.` : ""}</div>`
+      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet — Add agent picks one up.` : ""}</div>` +
+    modelsHtml()
   );
 };
+
+// Models and efforts. A Claude session takes a change once it is idle, and its
+// own status line says whether it did; Codex takes one from its next start.
+const MODEL_FROM = { session: "this session", pane: "its pane", global: "global file" };
+function modelState(r, global) {
+  if (r.system) return ["not changed here", "var(--text-3)"];
+  if (r.pending) {
+    if (r.pending.typedAt) return ["typed — confirmed on its next reply", INFO];
+    return [r.busy ? "waits until the session is idle" : "about to be typed", WARN];
+  }
+  if (r.runtime === "codex" && r.source === "pane" && global.codex.model && r.model !== global.codex.model) return ["changes on its next start", WARN];
+  if (r.runtime === "claude" && r.source === "global") return ["not read from the session", "var(--text-3)"];
+  return ["", "var(--text-3)"];
+}
+function modelsHtml() {
+  const m = state.data.models;
+  if (!m) return `<div style="margin-top:48px">${rule("models", "loading…")}</div>`;
+  if (m.missing) return `<div style="margin-top:48px">${rule("models")}<div class="d-hint">The server running now is older than this screen — start Pilo again to see and change models.</div></div>`;
+  const opts = (list, current) => list.map((v) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(v)}</option>`).join("");
+  const codexEfforts = [...new Set(m.choices.codex.flatMap((c) => c.efforts))];
+  const bulk = (runtime, models_, efforts, global, note) => `<div class="d-tr" style="grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px">
+      <span class="d-lbl">${runtime}</span>
+      <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0">
+        <select class="gn-select gn-input-sm" id="m-${runtime}-model" style="width:auto;min-width:150px">${opts(models_, global.model)}</select>
+        <select class="gn-select gn-input-sm" id="m-${runtime}-effort" style="width:auto;min-width:96px">${opts(efforts, global.effort)}</select>
+        <span class="d-m" style="font-size:11px;color:var(--text-3)">now ${esc(global.model || "—")} · ${esc(global.effort || "—")} · ${note}</span>
+      </span>
+      ${btn(runtime === "claude" ? "Apply to every Claude agent" : "Apply from next start", "models-all", `data-runtime="${runtime}"`)}
+    </div>`;
+  return `<div style="margin-top:48px">
+    ${rule("models", `Claude reading ${m.tap.on ? "on" : "off"}`)}
+    <div class="d-hint" style="margin-top:8px">Claude: typed into each idle session (a working one waits), and its own status line confirms it on the next reply. Codex: from each session's next start. A different model or effort uses the usage limits at a different rate.
+      ${m.tap.on ? "" : "Claude's real model and effort are read through its status line — turning that on wraps the status line you have and changes nothing you see."}
+      ${btn(m.tap.on ? "Stop reading" : "Read from the sessions", "model-tap", `data-on="${m.tap.on ? "0" : "1"}"`, "gn-btn-ghost")}</div>
+    <div class="d-list" style="margin-top:16px">
+      ${bulk("claude", m.choices.claude.models, m.choices.claude.efforts, m.global.claude, "every new session and each idle one")}
+      ${bulk("codex", m.choices.codex.map((c) => c.model), codexEfforts, m.global.codex, "next start")}
+    </div>
+    <div class="d-list" style="margin-top:24px">
+      <div class="d-th" style="grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr) 72px 110px minmax(0,1.4fr) 132px">
+        <span class="d-lbl">agent</span><span class="d-lbl">runtime</span><span class="d-lbl">model</span><span class="d-lbl">effort</span><span class="d-lbl">read from</span><span class="d-lbl">state</span><span></span>
+      </div>
+      ${m.agents.map((r) => {
+        const [word, tone] = modelState(r, m.global);
+        return `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr) 72px 110px minmax(0,1.4fr) 132px">
+          <span class="d-clip" style="font-size:var(--fs-body)">${esc(r.name)}</span>
+          <span style="display:flex;align-items:center">${runtimeMark(r.runtime) || esc(r.runtime || "—")}</span>
+          <span class="d-m d-clip" style="font-size:12px">${esc(r.model || "—")}</span>
+          <span class="d-m" style="font-size:12px">${esc(r.effort || "—")}</span>
+          <span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(r.runtime ? MODEL_FROM[r.source] || "—" : "no session")}</span>
+          <span class="d-m d-clip" style="font-size:11px;color:${tone}">${esc(word)}</span>
+          <span style="display:flex;justify-content:flex-end;gap:6px">${r.pending
+            ? btn("Cancel", "model-cancel", `data-id="${r.id}"`, "gn-btn-ghost")
+            : r.runtime === "claude" && !r.system ? btn("Change", "model-agent", `data-id="${r.id}"`, "gn-btn-ghost") : ""}</span>
+        </div>`;
+      }).join("")}
+    </div></div>`;
+}
 
 // A request belongs to every project it was handed to; one handed nowhere is
 // the desk's own.
@@ -2244,6 +2304,27 @@ DIALOGS.agent = (d) => {
 // The design derives the role from the project: a project without a PM gets a
 // PM, one that has a PM gets a worker. Our register call still wants the role
 // and the parent, so both are derived here and shown before they are used.
+DIALOGS.model = (d) => {
+  const m = state.data.models;
+  const r = m?.agents.find((x) => x.id === String(d.id));
+  if (!r) return { title: "model", sub: "", prose: "This agent is gone." };
+  return {
+    title: esc(r.name),
+    sub: `now ${esc(r.model || "—")} · ${esc(r.effort || "—")} · read from ${esc(MODEL_FROM[r.source] || "—")}`,
+    fields: [
+      { id: "ma-model", label: "model", kind: "select", value: r.model && m.choices.claude.models.includes(r.model) ? r.model : m.global.claude.model,
+        options: m.choices.claude.models.map((v) => [v, v]) },
+      { id: "ma-effort", label: "effort", kind: "select", value: r.effort || m.global.claude.effort,
+        options: m.choices.claude.efforts.map((v) => [v, v]) }
+    ],
+    prose: "Typed into this session once it is idle, and confirmed by its own status line on its next reply. Only this agent changes: the global default every new session reads is put back as it was. A session started again later uses the global default.",
+    actions: [
+      btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"),
+      right("Change this agent", "save-model", `data-id="${r.id}"`, "gn-btn-brand")
+    ]
+  };
+};
+
 DIALOGS["add-agent"] = () => {
   const sessions = state.data.sessions || [];
   const free = sessions.filter((x) => !x.boundAgent);
@@ -2515,6 +2596,37 @@ const actions = {
   async "go-agents"() { state.tab = "agents"; location.hash = "agents"; render(); },
   async "go-events"() { state.tab = "events"; location.hash = "events"; render(); },
   async "close-dialog"() { state.dlg = null; state.rules = null; render(); },
+  async "models-all"(el) {
+    const runtime = el.dataset.runtime;
+    const model = $(`m-${runtime}-model`)?.value || "";
+    const effort = $(`m-${runtime}-effort`)?.value || "";
+    const who = runtime === "claude" ? "every Claude agent (each once it is idle)" : "every Codex agent from its next start";
+    if (!confirm(`${runtime}: ${model} · ${effort} for ${who}? The global ${runtime === "claude" ? "~/.claude/settings.json" : "~/.codex/config.toml"} changes too (a copy is kept).`)) return;
+    const res = await call("POST", "/api/models", { runtime, scope: "all", model, effort });
+    toast(`${runtime} → ${model} · ${effort} — ${res.applied}${res.skipped?.length ? ` · kept: ${res.skipped.join(", ")}` : ""}`);
+    await loadDetail();
+    render();
+  },
+  async "model-agent"(el) { state.dlg = { kind: "model", id: el.dataset.id }; render(); },
+  async "save-model"(el) {
+    await call("POST", "/api/models", { runtime: "claude", scope: "agent", agentIds: [el.dataset.id], model: $("ma-model").value, effort: $("ma-effort").value });
+    state.dlg = null;
+    toast("waits for the session to be idle, then typed");
+    await loadDetail();
+    render();
+  },
+  async "model-cancel"(el) {
+    await call("DELETE", `/api/models/pending/${el.dataset.id}`);
+    await loadDetail();
+    render();
+  },
+  async "model-tap"(el) {
+    const on = el.dataset.on === "1";
+    await call("POST", "/api/models/tap", { on });
+    toast(on ? "reading Claude's model from each session's status line" : "status line put back as it was");
+    await loadDetail();
+    render();
+  },
   async "open-agent"(el) { state.dlg = { kind: "agent", id: el.dataset.id }; render(); },
   // role empty on purpose: the dialog derives it from the project until you pick.
   async "add-agent"() { state.form = { ...emptyForm(), role: "" }; state.dlg = { kind: "add-agent" }; render(); },
