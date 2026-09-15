@@ -172,6 +172,18 @@ export function resumeArgs(runtime, session, pin = null) {
 // (working, blocked, unknown, empty) is treated as busy: keys never go in on a guess.
 export const sessionIdle = (status) => status === "idle" || status === "done";
 
+// Claude Code answers /model and /effort in the pane: "Set model to Opus 5 (1M
+// context) and saved as your default…", "Set effort level to medium (saved as…)".
+// Both lines, for what was asked, near the bottom of the pane.
+export function paneConfirms(text, asked) {
+  const tail = String(text || "").split("\n").slice(-40).join("\n");
+  const family = String(asked.model || "").replace(/\[1m\]$/, "");
+  const model = !asked.model || new RegExp(`Set model to [^\n]*${family}`, "i").test(tail)
+    || (["default", "best", "opusplan"].includes(asked.model) && /Set model to/.test(tail));
+  const effort = !asked.effort || new RegExp(`Set effort level to ${asked.effort}\\b`).test(tail);
+  return Boolean(model && effort);
+}
+
 // The model a Codex pane shows on its bottom line.
 export function codexModelOnPane(text) {
   const hits = String(text || "").match(/\b(?:gpt-[\w.-]+|codex-[\w-]+)\b/g);

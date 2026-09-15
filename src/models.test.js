@@ -56,3 +56,12 @@ test("a session that finished its turn in an unviewed pane is idle; anything unc
   assert.equal(sessionIdle("done"), true, "herdr's done: finished, pane not looked at yet");
   for (const s of ["working", "blocked", "unknown", "", undefined]) assert.equal(sessionIdle(s), false, String(s));
 });
+
+test("Claude's own answer in the pane confirms a typed change", async () => {
+  const { paneConfirms } = await import("./models.js");
+  const pane = "❯ /model opus[1m]\n  ⎿  Set model to Opus 5 (1M context) and saved as your default for new sessions\n❯ /effort medium\n  ⎿  Set effort level to medium (saved as your default for new sessions): Balanced";
+  assert.equal(paneConfirms(pane, { model: "opus[1m]", effort: "medium" }), true);
+  assert.equal(paneConfirms(pane, { model: "sonnet", effort: "medium" }), false);
+  assert.equal(paneConfirms(pane, { model: "opus[1m]", effort: "high" }), false);
+  assert.equal(paneConfirms("nothing", { model: "opus" }), false);
+});
