@@ -48,3 +48,17 @@ test("a reviewer is told what a check allows; other workers are not", () => {
   assert.doesNotMatch(workerRules(worker(2, "c"), "", [], pm), /You are a reviewer/);
   assert.doesNotMatch(workerRules(worker(2, "c"), "", [], pm), /Review before done/);
 });
+
+test("the desk is told what a blocked wake means and how to speak to the user", async () => {
+  const { buildDeskText } = await import("./rules.js").then((m) => ({ buildDeskText: m.deskRulesText }));
+  const text = buildDeskText([]);
+  assert.match(text, /\[pilo:blocked\]/);
+  assert.match(text, /pilo ask T/);
+  assert.match(text, /not the answer/);
+  assert.match(text, /morning briefing starts with every decision still waiting/);
+});
+
+test("PMs and workers block only for what the user must decide", () => {
+  const out = workerRules({ id: 7, name: "hoban", role: "pm" }, "", []);
+  assert.match(out, /pilo block` only for what the user must decide/);
+});

@@ -32,6 +32,7 @@ export const CATALOGUE = [
   { scope: "cli", name: "done", args: "<taskId> <보고> [--log 확인한 것]", summary: "작업 결과 보고 — 확인·명령 기록은 --log 로", example: 'pilo done 301 "완료" --log "테스트 42개 통과" --in 12000 --out 3000' },
   { scope: "cli", name: "block", args: "<taskId> <질문>", summary: "사용자 결정 대기로 표시", example: 'pilo block 301 "가격 페이지 오늘 공개할까요?"' },
   { scope: "cli", name: "blocked", args: "", summary: "결정 대기 중인 작업 목록", example: "pilo blocked" },
+  { scope: "cli", name: "ask", args: "<taskId> <사용자에게 할 말>", summary: "데스크 → 사용자: 결정 대기 작업을 그 대화 안에 빨간 줄로 — 답이 아님", example: 'pilo ask 301 "가격 페이지를 오늘 공개할지 정해 주세요. 네/아니오로 답하면 PM 이 이어갑니다"' },
   { scope: "cli", name: "hold", args: "<taskId> <what you wait on>", summary: "waiting on something outside Pilo", example: 'pilo hold 812 "waiting on CI"' },
   { scope: "cli", name: "resume", args: "<taskId>", summary: "back into the queue", example: "pilo resume 812" },
   { scope: "cli", name: "limited", args: "<agentId> --until <time>", summary: "report a usage limit (omit --until to clear)", example: "pilo limited 6 --until 2026-09-08T18:00:00Z" },

@@ -79,7 +79,7 @@ function summarize(text, limit = 90) {
   return flat.length > limit ? flat.slice(0, limit) + "…" : flat;
 }
 
-async function notifyRule(when, title, body) {
+export async function notifyRule(when, title, body) {
   const rules = (await getSetting("notifications", [])) || [];
   const rule = rules.find((r) => r.when === when);
   if (!rule?.on || rule.channel !== "desktop") return false;
@@ -501,6 +501,11 @@ export async function archiveProject(id) {
 // replies=0 leaves the answer bodies out — four fifths of the list by weight —
 // and says which rows have one; a client keeps bodies by id and answer time and
 // asks /api/replies only for the ones it does not hold.
+// What a waiting decision says: the desk's latest word to the user if it has
+// spoken since the task blocked, else the PM's question as it stands.
+const OPEN_ASK_TEXT = `COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL
+    ORDER BY k.created_at DESC LIMIT 1), NULLIF(t.blocked_question, ''), t.pm_result)`;
+
 export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
   const rows = await query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.created_at AS "createdAt",
@@ -522,7 +527,13 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
        -- the user just cannot see it yet.
        (EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
         AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
-        AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply"
+        AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply",
+       -- the oldest decision still waiting on the user, in the desk's words when
+       -- it has spoken and the PM's otherwise, and how many are waiting in all
+       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status = 'blocked') AS decisions,
+       (SELECT json_build_object('taskId', t.id, 'agent', a.name, 'text', ${OPEN_ASK_TEXT})
+          FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+         WHERE t.inbox_id = i.id AND t.status = 'blocked' ORDER BY t.updated_at LIMIT 1) AS decision
      FROM inbox i
      WHERE ($2::bigint IS NULL OR i.id < $2)
        AND ($3::text = '' OR EXISTS (
@@ -589,6 +600,22 @@ export async function inboxDetail(id) {
      WHERE e.inbox_id = $1 ORDER BY e.created_at`,
     [id]
   );
+  // Open ones first-hand from the tasks; answered ones from the answer events, which
+  // keep the question and the answer whichever way the user replied.
+  const open = await query(
+    `SELECT t.id AS "taskId", a.name AS agent, ${OPEN_ASK_TEXT} AS text, t.updated_at AS at
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.inbox_id = $1 AND t.status = 'blocked' ORDER BY t.updated_at`,
+    [id]
+  );
+  const answered = await query(
+    `SELECT e.task_id AS "taskId", a.name AS agent, e.payload->>'question' AS text, e.payload->>'answer' AS answer,
+       e.created_at AS at
+     FROM events e LEFT JOIN agents a ON a.id = e.agent_id
+     WHERE e.inbox_id = $1 AND e.type = 'task_answered' ORDER BY e.created_at`,
+    [id]
+  );
+  const decisions = [...answered.map((d) => ({ ...d, open: false })), ...open.map((d) => ({ ...d, open: true }))];
   const trace = [
     { stage: "inbox", who: "user", at: row.createdAt, text: row.userRequest },
     ...tasks.map((t) => ({
@@ -599,7 +626,7 @@ export async function inboxDetail(id) {
     })),
     ...replies.map((r) => ({ stage: "final_reply", who: r.agent || "pilo", at: r.createdAt, text: r.body }))
   ];
-  return { ...row, tasks, replies, events, trace };
+  return { ...row, tasks, replies, events, trace, decisions };
 }
 
 export async function createInbox(userRequest, cwd = "") {
@@ -715,6 +742,7 @@ export async function answerTask(id, body) {
     "UPDATE tasks SET answer = $2, status = 'queued', updated_at = now() WHERE id = $1",
     [id, body]
   );
+  await query("UPDATE asks SET answered_at = now() WHERE task_id = $1 AND answered_at IS NULL", [id]);
   await logEvent({
     type: "task_answered",
     title: t("event.answered", { agent: task.agent || "agent", id }),
@@ -724,6 +752,22 @@ export async function answerTask(id, body) {
     payload: { question: task.blocked_question, answer: body }
   });
   return { id, status: "queued" };
+}
+
+// The desk speaking to the user about a task that waits on them. It is not the
+// answer and does not close the request; the user replies in that conversation,
+// and the reply lands on the task as its answer.
+export async function askUser(id, body) {
+  const text = String(body || "").trim();
+  if (!text) throw Object.assign(new Error("say something to the user"), { status: 400 });
+  const task = await one("SELECT id, status, inbox_id FROM tasks WHERE id = $1", [id]);
+  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (task.status !== "blocked") throw Object.assign(new Error(`task #${id} is ${task.status}, not waiting on the user`), { status: 400 });
+  const desk = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  const row = await one("INSERT INTO asks (task_id, inbox_id, body) VALUES ($1, $2, $3) RETURNING id", [id, task.inbox_id, text]);
+  await logEvent({ type: "decision_asked", title: t("event.asked", { id }), taskId: id, inboxId: task.inbox_id,
+    agentId: desk?.id || null, payload: { ask: text } });
+  return { id: row.id, taskId: String(id), inboxId: String(task.inbox_id) };
 }
 
 // A note left while the work is still running. It never touches pm_result, so
