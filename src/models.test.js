@@ -49,3 +49,10 @@ test("a pinned session starts again resuming the same conversation on its own mo
   assert.deepEqual(resumeArgs("codex", "u-1", { model: "gpt-5.6-luna", effort: "high" }), ["resume", "u-1", "-m", "gpt-5.6-luna", "-c", 'model_reasoning_effort="high"']);
   assert.deepEqual(resumeArgs("codex", ""), ["resume", "--last"]);
 });
+
+test("a session that finished its turn in an unviewed pane is idle; anything unclear is busy", async () => {
+  const { sessionIdle } = await import("./models.js");
+  assert.equal(sessionIdle("idle"), true);
+  assert.equal(sessionIdle("done"), true, "herdr's done: finished, pane not looked at yet");
+  for (const s of ["working", "blocked", "unknown", "", undefined]) assert.equal(sessionIdle(s), false, String(s));
+});

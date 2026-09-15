@@ -166,6 +166,12 @@ export function resumeArgs(runtime, session, pin = null) {
     ...(pin?.model ? ["--model", pin.model] : []), ...(pin?.effort ? ["--effort", pin.effort] : [])];
 }
 
+// Whether herdr's word for a session means nothing is being worked on. "done" is
+// a session that finished its turn in a pane nobody has looked at since — as idle
+// as "idle", which it becomes the moment the pane is selected. Anything else
+// (working, blocked, unknown, empty) is treated as busy: keys never go in on a guess.
+export const sessionIdle = (status) => status === "idle" || status === "done";
+
 // The model a Codex pane shows on its bottom line.
 export function codexModelOnPane(text) {
   const hits = String(text || "").match(/\b(?:gpt-[\w.-]+|codex-[\w-]+)\b/g);
