@@ -432,7 +432,7 @@ async function pumpModels() {
     if (p.kind === "pin") { await stepPin(a, p, live); continue; }
     const session = live.find((s) => s.target && s.target === a.target);
     if (!p.typedAt) {
-      if (!session || session.status !== "idle" || a.open > 0 || pending.has(a.id)) continue;
+      if (!session || !models.sessionIdle(session.status) || a.open > 0 || pending.has(a.id)) continue;
       pending.add(a.id);
       // the session may redraw its status line while the keys are still going in
       const typedAt = Date.now();
@@ -496,7 +496,7 @@ async function stepPin(a, p, live) {
   const session = live.find((s) => s.target && s.target === a.target);
   const pin = { model: p.model, effort: p.effort };
   if (!p.step) {
-    if (!session || session.status !== "idle" || a.open > 0 || pending.has(a.id) || !session.session) return;
+    if (!session || !models.sessionIdle(session.status) || a.open > 0 || pending.has(a.id) || !session.session) return;
     pending.add(a.id);
     try {
       await herdr.prompt(a.target, a.runtime === "codex" ? "/quit" : "/exit");
