@@ -1139,14 +1139,9 @@ export async function overview() {
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN inbox i ON i.id = t.inbox_id
      WHERE t.status = 'blocked' ORDER BY at LIMIT 20`
   );
-  // answered in the last half hour, so the line the user answered at the bottom
-  // turns "answered" instead of vanishing under their hand
-  const answeredDecisions = await query(
-    `SELECT e.task_id AS "taskId", e.inbox_id AS "inboxId", a.name AS agent, e.payload->>'question' AS text,
-       e.payload->>'answer' AS answer, split_part(i.user_request, E'\n', 1) AS request, e.created_at AS at
-     FROM events e LEFT JOIN agents a ON a.id = e.agent_id LEFT JOIN inbox i ON i.id = e.inbox_id
-     WHERE e.type = 'task_answered' AND e.created_at > now() - interval '30 minutes' ORDER BY e.created_at LIMIT 10`
-  );
+  // Answered ones are not sent: the line at the bottom of the chat is what still
+  // waits on the user, and it goes the moment they answer. What was asked and what
+  // they said stays in that request's own conversation.
   const lost = agents.filter((a) => a.role !== "system" && a.status === "unbound").length;
   const failedTotal = openFailures.n + failedWakes.n;
   return {
@@ -1164,7 +1159,6 @@ export async function overview() {
     tasks,
     blocked,
     decisions,
-    answeredDecisions,
     services: system.services,
     paths: system.paths,
     wakeFailures: system.wakeFailures

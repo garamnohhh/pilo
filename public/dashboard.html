@@ -1414,19 +1414,20 @@ function workFeed() {
 
 // A number that grows whenever there is something new to read, so the feed
 // knows whether to follow.
-// Open decisions and the ones answered in the last half hour, oldest first, so the
-// newest word to the user is the last thing on the screen.
+// What still waits on the user, oldest first, pinned under the conversation. An
+// answered one is gone from here at once; the answer itself stays in its own
+// request, where the rest of that conversation is.
 function decisionBubbles() {
-  const o = state.data.overview || {};
-  const answered = (o.answeredDecisions || []).map((d) => ({
-    who: `you · ${T("desk.decision.answered")} · in-${d.inboxId} · task #${d.taskId}`, kind: "decided", at: d.at,
-    text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}\n\n**→ ${d.answer || ""}**`
-  }));
-  const open = (o.decisions || []).map((d) => ({
+  // the same rule as src/decisions.js, inline: the dashboard is served by whichever
+  // server is running, and must not depend on a file an older one does not serve
+  const waiting = (state.data.overview?.decisions || [])
+    .filter((d) => d && d.taskId && d.open !== false && !d.answeredAt)
+    .slice()
+    .sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
+  return waiting.map((d) => ({
     who: `pilo → you · ${T("desk.decision.needs")} · in-${d.inboxId} · ${d.agent || "agent"} · task #${d.taskId}`, kind: "decision", at: d.at,
     text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}`, task: d.taskId, inbox: d.inboxId
   }));
-  return [...answered, ...open].sort((a, b) => new Date(a.at) - new Date(b.at));
 }
 
 function feedSize() {
