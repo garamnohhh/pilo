@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
+import { agentState, stalled } from "./agentstate.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -206,6 +207,10 @@ const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attent
 const PULSE_DIM = fg(120, 100, 46);
 const pulseColour = (which) =>
   which === "working" && !state.pulse ? PULSE_DIM : STATE_COLOUR[which] || STATE_COLOUR.done;
+
+// the pulse timer's handle, kept here because the first frame can be drawn
+// before the rest of this file has been evaluated — see pulseWhile
+let pulseTimer = null;
 
 const state = {
   input: "",
@@ -594,54 +599,33 @@ function railRows(tree, width, actions = [], spins = []) {
     actions.push(null);
   };
 
-  // The word on the right says what the agent is doing, in one token.
-  // Giving up used to be a line in the events table and nothing on the screen:
-  // the wake stopped and the tree still read "idle".
-  const limited = (agent) => agent.limitedUntil && new Date(agent.limitedUntil).getTime() > Date.now();
-  const word = (agent, seen) =>
-    limited(agent)
-      ? t("state.limited")
-      : agent.gaveUp > 0 && agent.status !== "running"
-      ? t("state.gaveUp")
-      : agent.status === "running" && stalled(agent)
-      ? t("state.stalled")
-      : agent.status === "blocked"
-      ? t("state.blocked")
-      : agent.status === "failed"
-        ? t("state.failed")
-        : agent.status === "unbound"
-          ? t("state.unbound")
-          : agent.status === "running" || seen.busy
-            ? t("state.running")
-            : t("state.idle");
+  // The word on the right says what the agent is doing, in one token, off the
+  // same rung as its dot. Giving up used to be a line in the events table and
+  // nothing on the screen: the wake stopped and the tree still read "idle".
+  const word = (agent) => t(`state.${agentState(agent)}`);
+  const dot = (agent) => stateIcon(agentState(agent), state.spin);
 
   const all = { type: "project", name: null };
-  const piloSeen = sessionLine(tree.pilo, tree.pilo.status);
-  put(0, statusIcon(tree.pilo.status, state.spin), tree.pilo.name, "PILO", word(tree.pilo, piloSeen), all, c.fg, tree.pilo.runtime);
+  put(0, dot(tree.pilo), tree.pilo.name, "PILO", word(tree.pilo), all, c.fg, tree.pilo.runtime);
 
   // A worker whose PM is gone sits under the desk until it is moved.
   (tree.orphanWorkers || []).forEach((w) => {
-    const wSeen = sessionLine(w, w.status);
-    put(2, statusIcon(w.status, state.spin, stalled(w)), w.name, "WORKER", word(w, wSeen), all, c.fg, w.runtime);
+    put(2, dot(w), w.name, "WORKER", word(w), all, c.fg, w.runtime);
   });
 
   const pms = tree.pms;
   if (pms.length) divider();
   pms.forEach((pm) => {
-    const seen = sessionLine(pm, pm.status);
     const filter = { type: "project", name: pm.projectName || pm.name };
     // The selection used to be a ◂ in front of the name. It is an East Asian
     // Ambiguous glyph, so terminals that draw those double-width knocked that
     // one row out of line. Colour costs no columns.
     const picked = state.filter === filter.name ? c.green : c.fg;
     // A running session spins even when Pilo has nothing on it.
-    const pmIcon = statusIcon(pm.status, state.spin, stalled(pm));
-    put(2, pmIcon, pm.name, "PM", word(pm, seen), filter, picked, pm.runtime);
+    put(2, dot(pm), pm.name, "PM", word(pm), filter, picked, pm.runtime);
 
     pm.children.forEach((w) => {
-      const wSeen = sessionLine(w, w.status);
-      const wIcon = statusIcon(w.status, state.spin, stalled(w));
-      put(4, wIcon, w.name, "WORKER", word(w, wSeen), filter, picked, w.runtime);
+      put(4, dot(w), w.name, "WORKER", word(w), filter, picked, w.runtime);
     });
 
     divider();
@@ -880,45 +864,24 @@ function scrollBy(rows) {
   render();
 }
 
-// The tree shows two things about an agent: the work Pilo gave it, and whether
-// its session is actually running right now. No inference beyond that — a busy
-// session is just a busy session, whoever started it.
-// herdr reads the pane and guesses; Pilo knows what it handed out. The guess is
-// only allowed to say "working" about work Pilo actually gave the agent —
-// otherwise a shell prompt that herdr mistakes for a running job leaves an idle
-// agent spinning in the tree for as long as the pane sits there.
-// Nothing here kills a task or changes a record: this only decides what the row
-// says. Ten minutes of silence from the work an agent holds, on a session that
-// is idle or finished, is the pair of signals that means it stopped without
-// reporting. Either one alone is normal — agents think for a long time between
-// progress lines, and a busy pane may be the user typing into it.
-const STALL_MS = 10 * 60 * 1000;
-function stalled(agent) {
-  if (agent.status !== "running" || !agent.lastSignal) return false;
-  if (agent.sessionStatus === "working") return false;
-  return Date.now() - new Date(agent.lastSignal).getTime() > STALL_MS;
-}
-
-function sessionLine(agent, base) {
-  const seen = agent.sessionStatus || "";
-  if (agent.status === "unbound") return { text: t("tree.sessionOff"), busy: false };
-  const busy = seen === "working" && agent.status === "running";
-  const tail = busy ? t("tree.sessionBusy") : seen ? t("tree.sessionQuiet") : t("tree.sessionGone");
-  if (agent.status === "idle") return { text: busy ? t("tree.sessionBusy") : seen ? t("state.idle") : tail, busy };
-  return { text: `${base} · ${tail}`, busy };
-}
-
-function statusIcon(status, spin, stopped = false) {
-  // A stalled task keeps its place in the tree but stops pretending to move.
-  if (status === "running" && stopped) return { icon: "◌", color: c.amberDim };
-  if (status === "running") return { icon: SPINNER[spin % SPINNER.length], color: c.amber, spin: true };
+// The dot comes off the same rung as the word next to it — the tree used to draw
+// a green idle dot beside "no answer", and the dashboard a red "!" for the same
+// agent. The shapes are the dashboard's, so the two screens read alike.
+const STATE_ICON = {
+  running: (spin) => ({ icon: SPINNER[spin % SPINNER.length], color: c.amber, spin: true }),
+  // work that stopped moving keeps its place in the tree but stops pretending to move
+  stalled: () => ({ icon: "◌", color: c.amberDim }),
+  limited: () => ({ icon: "‖", color: c.amber }),
+  gaveUp: () => ({ icon: "!", color: c.red }),
   // waiting on a person, not on work: a spinner here would be a lie
-  if (status === "blocked") return { icon: "◆", color: c.blue };
-  if (status === "failed") return { icon: "✕", color: c.red };
-  if (status === "unbound") return { icon: "○", color: c.faint };
-  if (status === "queued") return { icon: "◍", color: c.faint };
-  if (status === "archived") return { icon: "·", color: c.faint };
-  return { icon: "●", color: c.green };
+  blocked: () => ({ icon: "◆", color: c.blue }),
+  failed: () => ({ icon: "✕", color: c.red }),
+  unbound: () => ({ icon: "○", color: c.faint }),
+  idle: () => ({ icon: "●", color: c.green })
+};
+
+function stateIcon(key, spin) {
+  return (STATE_ICON[key] || STATE_ICON.idle)(spin);
 }
 
 function render() {
@@ -1721,7 +1684,9 @@ async function eventNotes() {
 
 // The waiting dot pulses, but only while there is a card to pulse: the timer is
 // started by the render that draws one and cleared by the render that does not.
-let pulseTimer = null;
+// The handle is declared up with the rest of the state: the smoke path draws its
+// one frame while this file is still being evaluated, and reading the handle from
+// down here threw before it existed.
 function pulseWhile(alive) {
   if (alive && !pulseTimer) {
     pulseTimer = setInterval(() => {
