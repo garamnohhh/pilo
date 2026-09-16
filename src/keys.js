@@ -139,12 +139,14 @@ export function unreadPasteKeys(input) {
 // When nothing follows a carried piece, it was never going to finish. A lone
 // ESC is the Escape key and goes on; half a report is dropped, because handed
 // to readline it would type its digits.
-// The Escape key, as a read of its own: a bare ESC from a plain terminal, or the
-// kitty protocol's CSI 27 u (with or without a modifier field) once disambiguation
-// is on. Handed to readline, a bare ESC waits for the next key and turns it into
-// Alt+that key, which is how a cancel swallowed the first letter typed after it.
+// Escape as a read of its own — but only in the kitty protocol's CSI 27 u form,
+// which nothing else starts with. A bare ESC cannot be answered on sight: an arrow
+// key is ESC [ A, and a terminal under load hands over the ESC in one read and the
+// rest in the next. Taking the bare ESC for Escape there ate the arrow and left
+// "[A" to be typed as text. The bare one waits in the carry instead, and becomes
+// Escape only when nothing follows it (flushCarry).
 export function isEscapeKey(chunk) {
-  return /^(?:\x1b|\x1b\[27(?:;1(?::1)?)?u)$/.test(String(chunk));
+  return /^\x1b\[27(?:;1(?::1)?)?u$/.test(String(chunk));
 }
 
 export function flushCarry(carry) {

@@ -188,11 +188,22 @@ test("under the Korean input source Cmd+V is a paste, with or without alternate 
   assert.equal((await typed(["\x1b[12618;9u"])).draft, "");
 });
 
-test("Escape is known as a key of its own, bare or in the kitty form", () => {
-  assert.equal(isEscapeKey("\x1b"), true);
+test("Escape on sight is only the kitty form; a bare ESC waits for what follows", () => {
   assert.equal(isEscapeKey("\x1b[27u"), true);
   assert.equal(isEscapeKey("\x1b[27;1u"), true);
+  // a lone ESC may be the head of an arrow key split across two reads
+  assert.equal(isEscapeKey("\x1b"), false);
+  assert.equal(flushCarry("\x1b"), "\x1b", "and the carry hands it back when nothing follows");
   assert.equal(isEscapeKey("\x1bn"), false, "Alt+n is not Escape");
   assert.equal(isEscapeKey("\x1b[A"), false);
   assert.equal(isEscapeKey("\x1b[12621::118;9u"), false, "Cmd+V under a Korean source");
+});
+
+test("a bare ESC is carried, so the rest of an arrow key can still join it", () => {
+  const first = takePasteKeys("\x1b", "");
+  assert.equal(first.carry, "\x1b", "held, not passed on as text");
+  assert.equal(first.rest, "");
+  const second = takePasteKeys("[D", first.carry);
+  assert.equal(second.rest, "\x1b[D", "the arrow arrives whole");
+  assert.equal(second.carry, "");
 });
