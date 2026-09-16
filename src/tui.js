@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
+import { waitingDecisions } from "./decisions.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -408,21 +409,19 @@ function decisionBlock(item, width) {
   });
 }
 
-// One decision at the bottom of the feed: the request it belongs to, what the desk
-// said, and — once answered in the last half hour — what the user said back.
+// One decision at the bottom of the feed: the request it belongs to and what the
+// desk said. Answering takes the card away; the answer stays in that request.
 function decisionCard(d, width) {
   const box = Math.max(24, width - 2);
-  const body = [...wrap(`in-${d.inboxId} · ${d.request || ""}`, box - 5).slice(0, 2), "", ...wrap(alignTables(d.text || "", box - 5), box - 5)];
-  if (d.answered) body.push("", ...wrap(`→ ${d.answer || ""}`, box - 5));
   return cardBlock({
     box,
-    title: d.answered ? `${t("card.decisionAnswered")} · ${d.agent || "agent"}` : `pilo → you · ${t("card.decision")} · ${d.agent || "agent"}`,
-    titleColor: d.answered ? c.muted : c.red,
+    title: `pilo → you · ${t("card.decision")} · ${d.agent || "agent"}`,
+    titleColor: c.red,
     right: `in-${d.inboxId} · task #${d.taskId}`,
-    body,
-    footer: d.answered ? "" : t("card.decisionFooter", { id: d.taskId }),
+    body: [...wrap(`in-${d.inboxId} · ${d.request || ""}`, box - 5).slice(0, 2), "", ...wrap(alignTables(d.text || "", box - 5), box - 5)],
+    footer: t("card.decisionFooter", { id: d.taskId }),
     surface: "reply",
-    state: d.answered ? "done" : "attention"
+    state: "attention"
   });
 }
 
@@ -1040,11 +1039,9 @@ function render() {
         actions.push(null);
       }
     });
-    const said = [...(overview.answeredDecisions || []).map((d) => ({ ...d, answered: true })), ...(overview.decisions || [])]
-      .sort((x, y) => new Date(x.at) - new Date(y.at));
-    for (const d of said) {
+    for (const d of waitingDecisions(overview)) {
       const block = decisionCard(d, mainWidth - CARD_INDENT.length + 2).map((r) => CARD_INDENT + r);
-      const answer = d.answered ? null : { type: "answer", taskId: String(d.taskId), line: firstLine(d.text) };
+      const answer = { type: "answer", taskId: String(d.taskId), line: firstLine(d.text) };
       feed.push(...block, "");
       actions.push(...block.map(() => answer), null);
     }
@@ -1402,6 +1399,9 @@ async function send(text) {
     }).catch(() => null);
     const data = res ? await res.json().catch(() => ({})) : {};
     state.answering = null;
+    // read the state back at once, so the line that was waiting goes now and not
+    // when the next change happens to arrive
+    if (res?.ok) await reload();
     return note(res?.ok ? t("note.answered", { id: taskId }) : `failed: ${data.error || "no answer from the server"}`, { sticky: !res?.ok });
   }
   const res = await fetch(`${base}/api/inbox`, {
