@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { edit, layoutDraft, rowAt } from "./draft.js";
+import { edit, layoutDraft, rowAt, cursorCell, cols } from "./draft.js";
 
 function key(sequence) {
   const stream = new PassThrough();
@@ -213,4 +213,56 @@ test("image markers become paths that stand on their own", async () => {
   assert.equal(expandImages("look ⟦image #1 · png 1KB⟧\n⟦image #2 · png 1KB⟧", images), "look /a/1.png\n/a/2.png");
   assert.equal(expandImages("⟦image #1 · png 1KB⟧ twice ⟦image #1 · png 1KB⟧", images), "/a/1.png twice /a/1.png");
   assert.equal(expandImages("no markers", images), "no markers");
+});
+
+// The cursor must blink in the cell the next character lands in. These walk every
+// position of a draft and compare the two, which is the invariant that broke on a
+// wrapped line ending exactly at the edge.
+function landsAt(input, cursor, width, ch = "X") {
+  const next = input.slice(0, cursor) + ch + input.slice(cursor);
+  const rows = layoutDraft(next, width);
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const at = cursor - row.start;
+    if (at >= 0 && at < row.text.length && row.text.slice(at, at + ch.length) === ch) {
+      return { row: i, col: cols(row.text.slice(0, at)) };
+    }
+  }
+  throw new Error(`nothing typed at ${cursor}`);
+}
+
+for (const [name, text] of Object.entries({
+  ascii: "hello world this is a fairly long line that wraps around",
+  korean: "안녕하세요 반갑습니다 이것은 한글 입력 시험용 문장입니다",
+  mixed: "hello 안녕 world 반가워 with 한글 and ascii together",
+  emoji: "ok 🙂 next 👍 line with emoji 🎉 and more text here",
+  marker: "before ⟦paste #1 · 3 lines · 742 chars⟧ after",
+  newlines: "first line\nsecond line is quite long and wraps here\n\nlast"
+})) {
+  test(`the cursor is drawn where the next character lands — ${name}`, () => {
+    for (const width of [16, 24, 37]) {
+      for (let cursor = 0; cursor <= text.length; cursor++) {
+        // a cursor inside a surrogate pair is not a place the arrows can reach
+        if (text.codePointAt(cursor - 1) > 0xffff && text.charCodeAt(cursor) >= 0xdc00 && text.charCodeAt(cursor) <= 0xdfff) continue;
+        const drawn = cursorCell(text, cursor, width);
+        const typed = landsAt(text, cursor, width);
+        assert.deepEqual({ row: drawn.row, col: drawn.col }, typed, `${name} w=${width} cursor=${cursor}`);
+      }
+    }
+  });
+}
+
+test("a line that ends exactly at the edge puts the cursor on the next row", () => {
+  const rows = layoutDraft("가나다라", 8); // four wide characters, width eight
+  assert.deepEqual(rows.map((r) => [r.start, r.text]), [[0, "가나다라"], [4, ""]]);
+  assert.deepEqual(cursorCell("가나다라", 4, 8), { row: 1, col: 0, rows });
+});
+
+test("arrows and backspace step over an emoji whole", () => {
+  const text = "a🙂b";
+  assert.equal(edit({ input: text, cursor: 4 }, null, { name: "left" }).cursor, 3);
+  assert.equal(edit({ input: text, cursor: 3 }, null, { name: "left" }).cursor, 1, "past the whole emoji");
+  assert.equal(edit({ input: text, cursor: 1 }, null, { name: "right" }).cursor, 3);
+  assert.deepEqual(edit({ input: text, cursor: 3 }, null, { name: "backspace" }), { input: "ab", cursor: 1 });
+  assert.deepEqual(edit({ input: text, cursor: 1 }, null, { name: "delete" }), { input: "ab", cursor: 1 });
 });
