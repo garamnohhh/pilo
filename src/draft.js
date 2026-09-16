@@ -42,28 +42,54 @@ export function layoutDraft(input, width) {
       used += w;
     }
     rows.push({ text: chunk, start: index + start });
+    // A line that ends exactly at the edge has one more row: the terminal puts the
+    // cursor at the start of the next line, and so does the next character typed.
+    // Without it the cursor was drawn one cell past the edge while what was typed
+    // appeared a row below.
+    if (used === width && width > 0) rows.push({ text: "", start: index + start + chunk.length });
     index += line.length + 1;
   }
   return rows;
 }
 
-// Which drawn row holds the cursor, and how far into it.
-export function rowAt(rows, cursor) {
+// Which drawn row holds the cursor, and how far into it. A wrap boundary belongs
+// to two rows at once: the end of one and the start of the next. It reads as the
+// end of the first while that row still has a column free — which is where the
+// next character goes — and as the start of the second once the first is full.
+export function rowAt(rows, cursor, width = Number.MAX_SAFE_INTEGER) {
   let index = 0;
+  let found = false;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const end = row.start + row.text.length;
-    if (cursor >= row.start && cursor <= end) index = i;
+    if (cursor < row.start || cursor > end) continue;
+    if (!found) { index = i; found = true; continue; }
+    // a second row claims the same cursor: only a wrapped line does that
+    const before = rows[index];
+    const wrapped = before.start + before.text.length === row.start;
+    if (!wrapped || cols(before.text) >= width) index = i;
   }
   return index;
 }
 
+// Where the cursor is drawn: the row it sits in and how many columns into it.
+// The renderer and the editing model must agree on this, or the cursor blinks in
+// one place and what is typed lands in another.
+export function cursorCell(input, cursor, width) {
+  const rows = layoutDraft(input, width);
+  const at = rowAt(rows, cursor, width);
+  const row = rows[at];
+  return { row: at, col: cols(row.text.slice(0, Math.max(0, cursor - row.start))), rows };
+}
+
 function indexAtColumn(row, column) {
   let used = 0;
-  for (let i = 0; i < row.text.length; i++) {
-    const w = charWidth(row.text[i]);
-    if (used + w > column) return row.start + i;
+  let at = 0;
+  for (const ch of row.text) {
+    const w = charWidth(ch);
+    if (used + w > column) return row.start + at;
     used += w;
+    at += ch.length;
   }
   return row.start + row.text.length;
 }
@@ -77,7 +103,7 @@ export function lineBounds(input, cursor) {
 
 function moveVertical(input, cursor, direction, width) {
   const rows = layoutDraft(input, width);
-  const current = rowAt(rows, cursor);
+  const current = rowAt(rows, cursor, width);
   const target = current + direction;
   if (target < 0 || target >= rows.length) return cursor;
   const column = cols(rows[current].text.slice(0, cursor - rows[current].start));
@@ -100,6 +126,20 @@ function wordRight(input, cursor) {
   while (i < input.length && /\s/.test(input[i])) i += 1;
   while (i < input.length && !/\s/.test(input[i])) i += 1;
   return i;
+}
+
+// Move by what the terminal draws as one character: an emoji is two UTF-16 units,
+// and a cursor left between them edits inside the character.
+export function stepLeft(input, cursor) {
+  if (cursor <= 0) return 0;
+  const before = input.codePointAt(cursor - 2);
+  return cursor - (cursor > 1 && before > 0xffff ? 2 : 1);
+}
+
+export function stepRight(input, cursor) {
+  if (cursor >= input.length) return input.length;
+  const here = input.codePointAt(cursor);
+  return cursor + (here > 0xffff ? 2 : 1);
 }
 
 export function edit(draft, ch, key, options = {}) {
@@ -136,38 +176,40 @@ export function edit(draft, ch, key, options = {}) {
 
   switch (key?.name) {
     case "left":
-      return { input, cursor: Math.max(0, cursor - 1) };
+      return { input, cursor: stepLeft(input, cursor) };
     case "right":
-      return { input, cursor: Math.min(input.length, cursor + 1) };
+      return { input, cursor: stepRight(input, cursor) };
     case "up":
       return { input, cursor: moveVertical(input, cursor, -1, width) };
     case "down":
       return { input, cursor: moveVertical(input, cursor, 1, width) };
     case "home": {
       const rows = layoutDraft(input, width);
-      return { input, cursor: rows[rowAt(rows, cursor)].start };
+      return { input, cursor: rows[rowAt(rows, cursor, width)].start };
     }
     case "end": {
       const rows = layoutDraft(input, width);
-      const row = rows[rowAt(rows, cursor)];
+      const row = rows[rowAt(rows, cursor, width)];
       return { input, cursor: row.start + row.text.length };
     }
-    case "backspace":
+    case "backspace": {
       if (cursor === 0) return { input, cursor };
-      return { input: input.slice(0, cursor - 1) + input.slice(cursor), cursor: cursor - 1 };
+      const from = stepLeft(input, cursor);
+      return { input: input.slice(0, from) + input.slice(cursor), cursor: from };
+    }
     case "delete":
-      return { input: input.slice(0, cursor) + input.slice(cursor + 1), cursor };
+      return { input: input.slice(0, cursor) + input.slice(stepRight(input, cursor)), cursor };
     default:
       break;
   }
 
   if (key?.ctrl && key.name === "a") {
     const rows = layoutDraft(input, width);
-    return { input, cursor: rows[rowAt(rows, cursor)].start };
+    return { input, cursor: rows[rowAt(rows, cursor, width)].start };
   }
   if (key?.ctrl && key.name === "e") {
     const rows = layoutDraft(input, width);
-    const row = rows[rowAt(rows, cursor)];
+    const row = rows[rowAt(rows, cursor, width)];
     return { input, cursor: row.start + row.text.length };
   }
   if (isPrintable(ch, key)) return put(ch);
