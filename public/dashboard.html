@@ -1158,9 +1158,15 @@ function stalled(a) {
 // One ladder, walked once: the word, the colour and the mark all come out of the
 // state it lands on, so a dot and the word beside it (or under the pointer) can
 // never say different things about the same agent.
+//
+// src/agentstate.js is the same ladder for the TUI, kept in step by a test rather
+// than imported: the page is served by whichever server is running, and an older
+// one would 404 the import and take the whole page down. Change both together.
 function agentState(a) {
   if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
-  if (a.gaveUp > 0 && a.status !== "running") return "gaveUp";
+  // a give-up counts only while that work is still waiting, so it outranks the
+  // "running" the queued task puts on the row — see src/agentstate.js
+  if (a.gaveUp > 0) return "gaveUp";
   if (a.status === "running" && stalled(a)) return "stalled";
   if (a.status === "blocked") return "blocked";
   if (a.status === "failed") return "failed";
