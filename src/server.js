@@ -59,7 +59,7 @@ async function readBody(req) {
 const routes = [
   ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort(), streams: listening() })],
   // part=stats: the counts alone, which is all the TUI's status line reads
-  ["GET", /^\/api\/overview$/, async (_m, _b, q) => (q.get("part") === "stats" ? (({ stats, decisions, answeredDecisions }) => ({ stats, decisions, answeredDecisions }))(await api.overview()) : api.overview())],
+  ["GET", /^\/api\/overview$/, async (_m, _b, q) => (q.get("part") === "stats" ? (({ stats, decisions }) => ({ stats, decisions }))(await api.overview()) : api.overview())],
   ["GET", /^\/api\/replies$/, (_m, _b, q) => api.replyBodies(q.get("ids") || "")],
   ["GET", /^\/api\/system$/, () => api.systemStatus()],
   ["GET", /^\/api\/models$/, () => api.modelOverview()],
