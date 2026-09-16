@@ -10,8 +10,16 @@ import * as models from "./models.js";
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
-  (SELECT count(*)::int FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_gave_up'
-     AND e.created_at > now() - interval '1 day') AS "gaveUp",
+  -- Giving up is the wake giving up, not the work failing: on 2026-09-15 hoban
+  -- stopped being nudged for #1553 at 19:26 and delivered it at 20:45. Counting
+  -- every give-up of the last day left a red "!" on an agent that had answered
+  -- hours ago, so it counts only while the work it gave up on is still waiting.
+  (SELECT count(*)::int FROM events e
+     LEFT JOIN tasks t ON t.id = e.task_id
+     LEFT JOIN inbox i ON i.id = e.inbox_id
+    WHERE e.agent_id = a.id AND e.type = 'wake_gave_up'
+      AND e.created_at > now() - interval '1 day'
+      AND COALESCE(t.status, i.status) IN ('queued', 'running', 'blocked', 'dispatched')) AS "gaveUp",
   a.limited_until AS "limitedUntil",
   a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note, a.reviewer,
   a.created_at AS "createdAt", p.name AS "projectName",
