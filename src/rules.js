@@ -252,8 +252,8 @@ reviewer column of your workers table — the mark decides, not the name.
   \`pilo send <reviewerId> <inboxId> "what to check, where, how to run it"\` — read its result, and put the
   outcome on the first line of your report: \`검수: 통과\` or \`검수: 문제 N건 (what)\`.
 - **Without one**: skip it, and add the line \`검수 담당 없음\`.
-- **Review**: a screen or a behaviour that changed · right before a deploy or a data change lands · words or links a user will see.
-- **Skip**, and say \`검수 생략 (why)\`: docs only · research or a report only · a one-line setting · the user said no review.
+- **Review**: code that changed · right before a deploy or a data change lands.
+- **Skip**, and say \`검수 생략 (why)\`: no code changed — docs, research, a report · a one-line setting · the user said no review.
 - **One more round at most**: when problems come back, fix them and send one more check. If that fails too, stop and \`pilo block\` with what is still wrong.
 - **Reviewer out of usage** (limited, or not answering): skip, and write \`검수 못 함 (한도)\`.
 - **More than one reviewer**: ${REVIEWERS_PER_CHECK === 1 ? "hand each check to one — whichever is idle, else the first in the table" : `hand each check to ${REVIEWERS_PER_CHECK}, idle ones first`}.
@@ -266,8 +266,8 @@ reviewer column of your workers table — the mark decides, not the name.
 - **검수 담당이 있으면**: \`pilo done\` 전에 바뀐 것의 확인을 맡긴다 —
   \`pilo send <검수담당Id> <inboxId> "무엇을, 어디서, 어떻게 실행해 확인할지"\` — 결과를 읽고 보고 첫 줄에 \`검수: 통과\` 또는 \`검수: 문제 N건 (무엇)\`.
 - **없으면**: 건너뛰고 \`검수 담당 없음\` 한 줄.
-- **검수함**: 화면·동작이 바뀐 것 · 배포·데이터 반영 직전 · 사용자에게 보이는 문구·링크.
-- **안 함**, 보고에 \`검수 생략 (이유)\`: 문서만 · 조사·보고만 · 설정 한 줄 · 사용자가 검수 없이라고 한 것.
+- **검수함**: 코드가 바뀐 것 · 배포·데이터 반영 직전.
+- **안 함**, 보고에 \`검수 생략 (이유)\`: 코드가 안 바뀐 것 — 문서·조사·보고 · 설정 한 줄 · 사용자가 검수 없이라고 한 것.
 - **다시 검수는 한 번만**: 문제가 나오면 고치고 한 번 더 맡긴다. 그것도 실패면 멈추고 남은 문제와 함께 \`pilo block\`.
 - **검수 담당이 한도에 걸림**(사용량 한도·응답 없음): 건너뛰고 \`검수 못 함 (한도)\`.
 - **검수 담당이 여럿이면**: ${REVIEWERS_PER_CHECK === 1 ? "한 번에 한 명 — 한가한 쪽, 없으면 표의 첫 번째" : `한 번에 ${REVIEWERS_PER_CHECK}명, 한가한 쪽부터`}.
@@ -275,10 +275,21 @@ reviewer column of your workers table — the mark decides, not the name.
 };
 
 const REVIEWER_DUTY = {
-  en: `- **You are a reviewer.** When your PM hands you a check, read and run only — change no code and no data — and
-  report \`통과\`, or the problems as a numbered list: what, where, how to reproduce.`,
-  ko: `- **너는 검수 담당이다.** PM 이 확인을 맡기면 읽기·실행 확인만 하고 코드·데이터는 고치지 않는다.
-  결과는 \`통과\`, 또는 문제 목록(무엇 · 어디 · 재현 방법)으로.`
+  en: `- **You are a reviewer, and you review code.** When your PM hands you a check, read the change and run what
+  proves it. Do not open a browser and do not take screenshots: no playwright, no ego-browser, no viewing images.
+- What you look at: does the change do what was asked, and did anything outside that ask come with it · the places
+  that break — edge values, empty input, errors, undoing · do the tests actually cover this change, and do the tests,
+  type check and build pass when you run them · what was deleted and left behind, references that now point nowhere ·
+  anything that must not be there: secrets, absolute paths, company material.
+- **Change nothing.** Read, run, report.
+- Report \`통과\`, or the problems as a numbered list: what · where (file and line) · how to reproduce.`,
+  ko: `- **너는 검수 담당이고, 코드를 검수한다.** PM 이 확인을 맡기면 바뀐 코드를 읽고, 그것을 증명하는 것을 직접 돌린다.
+  브라우저를 띄우거나 화면을 캡처하지 않는다 — playwright·ego-browser·이미지 보기 금지.
+- 보는 것: 바뀐 곳이 요청한 것과 맞는지, 요청 범위 밖 변경이 섞였는지 · 깨질 자리 — 경계값·빈 값·오류 처리·되돌리기 ·
+  테스트가 그 변경을 실제로 덮는지, 테스트·타입 검사·빌드를 직접 돌려 통과하는지 · 지우고 남은 것, 끊긴 참조 ·
+  들어가면 안 되는 것 — 비밀값·절대경로·회사 자료.
+- **아무것도 고치지 않는다.** 읽고, 돌려보고, 보고만.
+- 결과는 \`통과\`, 또는 문제 목록(무엇 · 어디: 파일과 줄 번호 · 재현 방법)으로.`
 };
 
 // the desk's block with a roster supplied, for tests
