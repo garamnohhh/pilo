@@ -43,10 +43,22 @@ test("several reviewers are all marked, and the gate says to use one per check",
   assert.match(out, /More than one reviewer\*\*: hand each check to one/);
 });
 
-test("a reviewer is told what a check allows; other workers are not", () => {
-  assert.match(workerRules(worker(57, "q", true), "", [], pm), /You are a reviewer/);
+test("a reviewer reviews code — reading and running it, never a browser", () => {
+  const r = workerRules(worker(57, "q", true), "", [], pm);
+  assert.match(r, /You are a reviewer, and you review code/);
+  assert.match(r, /no playwright, no ego-browser, no viewing images/);
+  assert.match(r, /do the tests actually cover this change/);
+  assert.match(r, /Change nothing/);
+  assert.match(r, /where \(file and line\)/);
   assert.doesNotMatch(workerRules(worker(2, "c"), "", [], pm), /You are a reviewer/);
   assert.doesNotMatch(workerRules(worker(2, "c"), "", [], pm), /Review before done/);
+});
+
+test("the gate asks for a check when code changed, and skips when none did", () => {
+  const gate = workerRules(pm, "", [worker(57, "q", true)]);
+  assert.match(gate, /\*\*Review\*\*: code that changed · right before a deploy or a data change lands\./);
+  assert.match(gate, /no code changed — docs, research, a report/);
+  assert.doesNotMatch(gate, /a screen or a behaviour that changed/);
 });
 
 test("the desk is told what a blocked wake means and how to speak to the user", async () => {
