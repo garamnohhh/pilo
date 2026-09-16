@@ -208,6 +208,10 @@ const PULSE_DIM = fg(120, 100, 46);
 const pulseColour = (which) =>
   which === "working" && !state.pulse ? PULSE_DIM : STATE_COLOUR[which] || STATE_COLOUR.done;
 
+// the pulse timer's handle, kept here because the first frame can be drawn
+// before the rest of this file has been evaluated — see pulseWhile
+let pulseTimer = null;
+
 const state = {
   input: "",
   icons: null,
@@ -1680,7 +1684,9 @@ async function eventNotes() {
 
 // The waiting dot pulses, but only while there is a card to pulse: the timer is
 // started by the render that draws one and cleared by the render that does not.
-let pulseTimer = null;
+// The handle is declared up with the rest of the state: the smoke path draws its
+// one frame while this file is still being evaluated, and reading the handle from
+// down here threw before it existed.
 function pulseWhile(alive) {
   if (alive && !pulseTimer) {
     pulseTimer = setInterval(() => {
