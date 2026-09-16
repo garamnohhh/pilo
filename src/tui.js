@@ -5,7 +5,7 @@ import { writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readPort } from "./paths.js";
-import { expandImages, edit, layoutDraft } from "./draft.js";
+import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -1165,15 +1165,16 @@ function render() {
     const line = state.follow.line ? `${c.faint} · ${cut(state.follow.line, rest)}${c.reset}` : "";
     emit(pre + withRail(`${c.green}↳${c.reset} ${c.muted}${head}${c.reset}${line}   ${c.faint}${t("tui.follow.cancel")}${c.reset}`));
   }
+  // One answer for where the cursor goes, shared with the editing model.
+  const caret = cursorCell(state.input, state.cursor, draftWidth());
   draft.forEach((row, i) => {
     const mark = i === 0 ? c.green + "❯" + c.reset : " ";
     const hint = state.answering ? `${c.red}${t("feed.answering", { id: state.answering.taskId })}${c.reset}` : `${c.faint}${PLACEHOLDER}${c.reset}`;
     const shown = i === 0 && !state.input ? hint : paint(row.text);
     emit(pre + withRail(`${mark} ${shown}`));
-    const end = row.start + row.text.length;
-    if (state.cursor >= row.start && (state.cursor <= end || i === draft.length - 1)) {
+    if (i === caret.row) {
       cursorRow = screen.length;
-      cursorCol = mainLeft + 3 + cols(row.text.slice(0, Math.max(0, state.cursor - row.start)));
+      cursorCol = mainLeft + 3 + caret.col;
     }
   });
 
@@ -1501,10 +1502,7 @@ process.stdin.on("data", (chunk) => {
     try { appendFileSync(keylog, JSON.stringify(String(chunk)) + "\n"); } catch { /* a log must never break typing */ }
   }
   clearTimeout(carryTimer);
-  if (isEscapeKey(chunk)) {
-    pasteCarry = "";
-    return onEscape();
-  }
+  if (isEscapeKey(chunk)) return onEscape();
   const { wheel, clicks, rest } = parseMouse(chunk);
   if (wheel) scrollBy(wheel * 3);
   for (const click of clicks) handleClick(click);
