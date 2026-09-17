@@ -4,7 +4,7 @@ import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
 import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
-import { edit } from "./draft.js";
+import { edit, cursorCell, layoutDraft, cols } from "./draft.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
 // objects a terminal actually produces.
@@ -233,4 +233,37 @@ test("a paste torn into many reads still arrives whole", () => {
 test("what is already text is left alone", () => {
   const decode = chunkDecoder();
   assert.equal(decode("\x1b[27u"), "\x1b[27u");
+});
+
+// The whole way in: raw bytes torn into reads, through the decoder and readline,
+// collected the way the prompt collects a paste, and asked where the cursor goes.
+test("a path pasted in torn reads arrives whole, composed, with the cursor where the next character lands", () => {
+  const bytes = Buffer.from(`\x1b[200~${PATH}\x1b[201~`, "utf8");
+  const decode = chunkDecoder();
+  const stream = new PassThrough();
+  readline.emitKeypressEvents(stream);
+  let pasting = false;
+  let buffer = "";
+  stream.on("keypress", (ch, k) => {
+    if (k?.name === "paste-start") return void (pasting = true);
+    if (k?.name === "paste-end") return void (pasting = false);
+    if (pasting && ch && !k.ctrl && !k.meta) buffer += ch;
+  });
+  for (let at = 0; at < bytes.length; at += 5) {
+    const text = decode(bytes.subarray(at, at + 5));
+    if (text) stream.write(text);
+  }
+  const pasted = buffer.normalize("NFC");
+  assert.doesNotMatch(pasted, /�/, "nothing was eaten at a read boundary");
+  assert.equal(pasted, PATH.normalize("NFC"), "one code point per syllable, whole");
+
+  // and the cursor sits in the cell the next character would fill
+  const width = 24;
+  const drawn = cursorCell(pasted, pasted.length, width);
+  const rows = layoutDraft(pasted + "X", width);
+  const last = rows.findIndex((r) => r.text.includes("X"));
+  assert.deepEqual(
+    { row: drawn.row, col: drawn.col },
+    { row: last, col: cols(rows[last].text.slice(0, rows[last].text.indexOf("X"))) }
+  );
 });

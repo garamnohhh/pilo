@@ -767,7 +767,13 @@ let lastAttach = 0;
 let lastTerminalPaste = 0;
 
 // A pasted blob of text goes in whole when short, as a marker when long.
-function insertPasted(text) {
+// It is put back together first: macOS hands over a file name one letter per
+// jamo, and while the draft draws either form the same, a backspace on the
+// decomposed one takes a vowel off and leaves half a syllable behind. The
+// composed form is the same name to the file system — the file on disk is
+// written that way — and one character to everything downstream.
+function insertPasted(raw) {
+  const text = raw.normalize("NFC");
   const lines = text.split("\n").length;
   const inline = lines <= 2 && text.length <= 200;
   const insert = inline ? text : placeholderFor(text, lines);
@@ -1546,7 +1552,8 @@ keys.on("keypress", async (ch, key) => {
   }
   if (next.action === "paste-end") {
     state.pasting = false;
-    const text = state.pasteBuffer;
+    // composed here too, before the path is looked for on disk — see insertPasted
+    const text = state.pasteBuffer.normalize("NFC");
     state.pasteBuffer = "";
     if (text) lastTerminalPaste = Date.now();
     // An image on the clipboard gives the terminal nothing to paste, so an empty
