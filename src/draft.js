@@ -79,7 +79,13 @@ export function cursorCell(input, cursor, width) {
   const rows = layoutDraft(input, width);
   const at = rowAt(rows, cursor, width);
   const row = rows[at];
-  return { row: at, col: cols(row.text.slice(0, Math.max(0, cursor - row.start))), rows };
+  const col = cols(row.text.slice(0, Math.max(0, cursor - row.start)));
+  // A prefix that already fills the row leaves no cell to sit in — the next
+  // character lands at the start of the row below, and so does the cursor. It is
+  // reachable when what follows on the row costs no columns of its own: the vowel
+  // of a decomposed Hangul syllable, a combining accent, a joiner.
+  if (width > 0 && col >= width && rows[at + 1]) return { row: at + 1, col: 0, rows };
+  return { row: at, col, rows };
 }
 
 function indexAtColumn(row, column) {

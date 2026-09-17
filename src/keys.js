@@ -1,3 +1,20 @@
+import { StringDecoder } from "node:string_decoder";
+
+// A read from the terminal is a pile of bytes, not a pile of characters. A paste
+// arrives in whatever sizes the terminal hands over, and a read can stop in the
+// middle of a character: "현" is three bytes, and two of them at the end of one
+// read with the third at the start of the next decoded as "�" the moment each
+// read was turned into text on its own. That is what put ◆ in a pasted path, and
+// the replacement character is a different width from the letter it ate, so the
+// cursor landed to the right of where the next character would go.
+//
+// One decoder for the whole session: it keeps the tail of a split character and
+// puts it back together when the rest arrives.
+export function chunkDecoder() {
+  const decoder = new StringDecoder("utf8");
+  return (chunk) => (Buffer.isBuffer(chunk) ? decoder.write(chunk) : String(chunk));
+}
+
 // Terminals disagree about Enter. Plain Enter is CR; Shift+Enter only becomes
 // distinguishable when the terminal speaks the kitty keyboard protocol and sends
 // CSI-u (\x1b[13;2u). Alt+Enter and Ctrl+J are the fallbacks everywhere else.

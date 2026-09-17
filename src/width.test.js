@@ -42,3 +42,15 @@ test("private use area icons are one cell, and CJK compatibility stays two", () 
     setAmbiguousWidth(1, 1, 1);
   }
 });
+
+test("a decomposed Hangul syllable is as wide as the one it came from", () => {
+  // macOS file names arrive this way: "현" as ᄒ + ᅧ + ᆫ, three code points the
+  // terminal stacks into the two columns the lead consonant already claimed.
+  assert.equal(cols("현"), 2);
+  assert.equal(cols("현".normalize("NFD")), 2);
+  assert.equal(charWidth("\u1112"), 2, "the lead consonant carries the width");
+  assert.equal(charWidth("\u1167"), 0, "the vowel rides along");
+  assert.equal(charWidth("\u11ab"), 0, "so does the final consonant");
+  const path = "/Users/garam/Downloads/랜딩 헤더 구현 지침 1B+2C.html";
+  assert.equal(cols(path.normalize("NFD")), cols(path), "the pasted path measures the same either way");
+});
