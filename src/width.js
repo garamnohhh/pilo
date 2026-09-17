@@ -8,8 +8,13 @@
 export const wide =
   /[ᄀ-ᅟ⺀-꓏가-힣\uf900-\ufaff︰-﹯＀-｠￠-￦\u{1f300}-\u{1f64f}\u{1f680}-\u{1f6ff}\u{1f900}-\u{1f9ff}\u{1fa70}-\u{1faff}\u{2702}-\u{276b}\u{2772}-\u{27b0}]/u;
 
-// Zero-width: combining marks, the emoji variation selector, the joiner.
-const zero = /[̀-ͯ​-‍︀-️]/;
+// Zero-width: combining marks, the emoji variation selector, the joiner, and
+// the vowel and final consonant of a decomposed Hangul syllable. macOS hands
+// over file names that way — "현" as ᄒ + ᅧ + ᆫ — and the terminal draws the
+// three of them stacked in the two columns the lead consonant already claimed.
+// Counting them one each put the cursor three columns right of the letter it
+// was meant to sit on, which is how a pasted path pushed it off to the edge.
+const zero = /[̀-ͯ​-‍︀-️ᅠ-ᇿힰ-퟿]/;
 
 // East Asian Ambiguous: arrows, curly quotes, bullets, box drawing, the middle
 // dot. Terminals draw them one column wide by default and two when configured
