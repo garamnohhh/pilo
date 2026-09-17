@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 
-import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
+import { isNewline, isSend, isPrintable, isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
 import { edit } from "./draft.js";
 
 // Feed raw bytes through the same parser the TUI uses, so the test sees the key
@@ -206,4 +206,31 @@ test("a bare ESC is carried, so the rest of an arrow key can still join it", () 
   const second = takePasteKeys("[D", first.carry);
   assert.equal(second.rest, "\x1b[D", "the arrow arrives whole");
   assert.equal(second.carry, "");
+});
+
+// The path the user pasted, in the form Finder hands over: decomposed Hangul,
+// one letter per jamo. A terminal splits a paste wherever it likes.
+const PATH = "/Users/garam/Downloads/랜딩 헤더 구현 지침 1B+2C.html".normalize("NFD");
+
+test("a character split across two reads is not eaten", () => {
+  const bytes = Buffer.from(PATH, "utf8");
+  for (let at = 1; at < bytes.length; at++) {
+    const decode = chunkDecoder();
+    const text = decode(bytes.subarray(0, at)) + decode(bytes.subarray(at));
+    assert.equal(text, PATH, `split after byte ${at}`);
+  }
+});
+
+test("a paste torn into many reads still arrives whole", () => {
+  const bytes = Buffer.from(PATH.repeat(3), "utf8");
+  const decode = chunkDecoder();
+  let text = "";
+  for (let at = 0; at < bytes.length; at += 7) text += decode(bytes.subarray(at, at + 7));
+  assert.equal(text, PATH.repeat(3));
+  assert.doesNotMatch(text, /\ufffd/, "no replacement characters");
+});
+
+test("what is already text is left alone", () => {
+  const decode = chunkDecoder();
+  assert.equal(decode("\x1b[27u"), "\x1b[27u");
 });

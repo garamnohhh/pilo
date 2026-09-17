@@ -8,7 +8,7 @@ import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
 import { agentState, stalled } from "./agentstate.js";
-import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
+import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
 import { clipboardImage, clipboardText, droppedPaths, imageSize } from "./clipboard.js";
@@ -1460,7 +1460,14 @@ let carryTimer = null;
 // PILO_KEYLOG=<file> writes every raw read to that file, one JSON string a
 // line, so the bytes a terminal really sent can be looked at instead of guessed.
 const keylog = process.env.PILO_KEYLOG || "";
-process.stdin.on("data", (chunk) => {
+// Bytes in, characters out — a character split across two reads is put back
+// together here rather than decoded into "�" twice over.
+const decode = chunkDecoder();
+process.stdin.on("data", (raw) => {
+  const chunk = decode(raw);
+  // a read that carried nothing but the front of a character: wait for the rest,
+  // and leave whatever is already in the carry on the timer it is already on
+  if (!chunk) return;
   if (keylog) {
     try { appendFileSync(keylog, JSON.stringify(String(chunk)) + "\n"); } catch { /* a log must never break typing */ }
   }
