@@ -8,7 +8,7 @@ import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
 import { agentState, stalled } from "./agentstate.js";
-import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey } from "./keys.js";
+import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
 import { clipboardImage, clipboardText, droppedPaths, imageSize } from "./clipboard.js";
@@ -767,7 +767,13 @@ let lastAttach = 0;
 let lastTerminalPaste = 0;
 
 // A pasted blob of text goes in whole when short, as a marker when long.
-function insertPasted(text) {
+// It is put back together first: macOS hands over a file name one letter per
+// jamo, and while the draft draws either form the same, a backspace on the
+// decomposed one takes a vowel off and leaves half a syllable behind. The
+// composed form is the same name to the file system — the file on disk is
+// written that way — and one character to everything downstream.
+function insertPasted(raw) {
+  const text = raw.normalize("NFC");
   const lines = text.split("\n").length;
   const inline = lines <= 2 && text.length <= 200;
   const insert = inline ? text : placeholderFor(text, lines);
@@ -1460,7 +1466,14 @@ let carryTimer = null;
 // PILO_KEYLOG=<file> writes every raw read to that file, one JSON string a
 // line, so the bytes a terminal really sent can be looked at instead of guessed.
 const keylog = process.env.PILO_KEYLOG || "";
-process.stdin.on("data", (chunk) => {
+// Bytes in, characters out — a character split across two reads is put back
+// together here rather than decoded into "�" twice over.
+const decode = chunkDecoder();
+process.stdin.on("data", (raw) => {
+  const chunk = decode(raw);
+  // a read that carried nothing but the front of a character: wait for the rest,
+  // and leave whatever is already in the carry on the timer it is already on
+  if (!chunk) return;
   if (keylog) {
     try { appendFileSync(keylog, JSON.stringify(String(chunk)) + "\n"); } catch { /* a log must never break typing */ }
   }
@@ -1539,7 +1552,8 @@ keys.on("keypress", async (ch, key) => {
   }
   if (next.action === "paste-end") {
     state.pasting = false;
-    const text = state.pasteBuffer;
+    // composed here too, before the path is looked for on disk — see insertPasted
+    const text = state.pasteBuffer.normalize("NFC");
     state.pasteBuffer = "";
     if (text) lastTerminalPaste = Date.now();
     // An image on the clipboard gives the terminal nothing to paste, so an empty
