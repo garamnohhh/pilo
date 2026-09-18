@@ -5,6 +5,7 @@ import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
+import { kst } from "./history.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -382,6 +383,53 @@ export function reminderDue(blockedAt, rounds, now = Date.now(), steps = REMIND_
   return now - new Date(blockedAt).getTime() >= steps[rounds] * 60000;
 }
 
+// A request whose remaining work has stopped for a reason nobody is told about.
+// in-1364 sat at "dispatched" for hours: four of its six tasks were done and the
+// other two were queued on a worker past its limit, so pumpResults — which only
+// speaks when every task has finished — never woke the desk, and the user saw a
+// request that had simply gone quiet. The desk is now told once, and again only
+// when what is holding it changes.
+async function pumpHeld() {
+  const pilo = await one("SELECT id, name, herdr_target, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  if (!pilo?.herdr_target) return;
+  const held = await query(
+    `SELECT i.id,
+       count(*) FILTER (WHERE t.status IN ('done', 'failed'))::int AS done,
+       count(*)::int AS total,
+       string_agg(DISTINCT a.name, ', ') FILTER (WHERE t.status IN ('queued', 'running') AND stuck.yes) AS who,
+       max(a.limited_until) FILTER (WHERE t.status IN ('queued', 'running') AND stuck.yes) AS until
+     FROM inbox i
+       JOIN tasks t ON t.inbox_id = i.id
+       JOIN agents a ON a.id = t.to_agent_id
+       CROSS JOIN LATERAL (SELECT (a.limited_until > now() OR a.herdr_target = '') AS yes) stuck
+     WHERE i.status = 'dispatched'
+     GROUP BY i.id
+     -- everything still open is held, and nothing is waiting on the user: a
+     -- decision has its own line and its own wake already
+     HAVING count(*) FILTER (WHERE t.status IN ('queued', 'running') AND stuck.yes) > 0
+        AND count(*) FILTER (WHERE t.status IN ('queued', 'running') AND NOT stuck.yes) = 0
+        AND count(*) FILTER (WHERE t.status = 'blocked') = 0
+     ORDER BY i.id LIMIT 5`
+  );
+  for (const row of held) {
+    const now = `${row.who}|${row.until ? new Date(row.until).toISOString() : ""}|${row.done}/${row.total}`;
+    const seen = await one(
+      `SELECT payload->>'held' AS held FROM events WHERE inbox_id = $1 AND type = 'request_held' ORDER BY id DESC LIMIT 1`,
+      [row.id]
+    );
+    if (seen?.held === now) continue;
+    const until = row.until ? kst(row.until).slice(11) : "";
+    await logEvent({
+      type: "request_held",
+      title: t("event.held", { id: row.id, who: row.who }),
+      inboxId: row.id,
+      payload: { held: now, done: row.done, total: row.total, who: row.who, until: row.until }
+    });
+    await wake(pilo, t(until ? "wake.heldUntil" : "wake.held",
+      { id: row.id, done: row.done, total: row.total, who: row.who, until }), { inboxId: row.id });
+  }
+}
+
 async function pumpDecisions() {
   const waiting = await query(
     `SELECT t.id, t.inbox_id, a.name AS agent, b.at AS "blockedAt",
@@ -603,6 +651,7 @@ export const tick = serialize(async () => {
     await pumpResults();
     await pumpStalled();
     await pumpDecisions();
+    await pumpHeld();
     await pumpModels();
     await pumpQuota();
     await pumpSessions();
