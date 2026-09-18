@@ -1228,9 +1228,10 @@ function cadenceFieldsHtml(form) {
   const rows = [{ label: T("cadence.field.repeat"), kind: "seg", act: "sched-repeat", value: form.repeat, options: REPEATS() }];
   if (form.repeat === "pick") rows.push({ label: T("cadence.field.days"), kind: "segmulti", act: "sched-day", value: form.days, options: DAY_OPTIONS() });
   if (form.repeat === "step" || form.repeat === "every") {
-    rows.push({ id: "s-interval", label: form.repeat === "step" ? T("cadence.repeat.step") : T("cadence.repeat.every"), value: String(form.interval || (form.repeat === "step" ? 2 : 30)) });
+    rows.push({ id: "s-interval", label: T("cadence.field.interval"), value: String(form.interval || (form.repeat === "step" ? 2 : 30)),
+      hint: T(form.repeat === "step" ? "cadence.hint.step" : "cadence.hint.every") });
   }
-  if (form.repeat !== "every") rows.push({ id: "s-at", label: T("cadence.field.at"), value: form.at, hint: "HH:MM · KST" });
+  if (form.repeat !== "every") rows.push({ id: "s-at", label: T("cadence.field.at"), value: form.at, hint: T("cadence.hint.at") });
   return rows;
 }
 
@@ -2815,8 +2816,11 @@ const actions = {
   async "sched-repeat"(el) {
     const form = cadenceForm(scheduleInDialog());
     const at = $("s-at") ? $("s-at").value.trim() : form.at;
-    const interval = $("s-interval") ? Number($("s-interval").value.trim()) : form.interval;
-    state.schedule = { ...state.schedule, repeat: el.dataset.value, at, days: form.days, interval };
+    const was = $("s-interval") ? Number($("s-interval").value.trim()) : form.interval;
+    // 45 minutes is not 45 days: the count only carries within its own kind
+    const repeat = el.dataset.value;
+    const interval = repeat === form.repeat ? was : repeat === "step" ? 2 : 30;
+    state.schedule = { ...state.schedule, repeat, at, days: form.days, interval };
     render();
   },
   async "sched-day"(el) {
