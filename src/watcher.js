@@ -1,8 +1,8 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
-import { claudeAgeMin, readQuota, quotaReport } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule } from "./api.js";
+import { claudeAgeMin, readQuota, quotaReport, limitReached } from "./quota.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
@@ -383,6 +383,38 @@ export function reminderDue(blockedAt, rounds, now = Date.now(), steps = REMIND_
   return now - new Date(blockedAt).getTime() >= steps[rounds] * 60000;
 }
 
+// The account runs out, not the agent: everything of that runtime is out at the
+// same moment. The figure is the one the status line already reads — Claude's
+// own /usage answer, refreshed by the usage-probe, and the rate_limits Codex
+// writes on every turn — so nothing new is typed into anyone's session.
+//
+// Parking is what stops the waking, and parking a worker hands its unopened
+// queue to its PM (setLimited). An agent already parked for at least as long is
+// left alone, so this says it once rather than every three seconds.
+const LIMIT_READING_MAX_MIN = Number(process.env.PILO_LIMIT_READING_MAX_MIN || 30);
+
+async function pumpLimits() {
+  const quota = readQuota();
+  for (const runtime of ["claude", "codex"]) {
+    const reading = quota[runtime];
+    // Codex writes its figure on a turn, so an idle session's file goes hours
+    // out of date. A limit is hit on a turn, which is when the file is fresh.
+    if (!reading || Number(reading.ageMin) > LIMIT_READING_MAX_MIN) continue;
+    const until = limitReached(reading);
+    if (!until) continue;
+    const agents = await query(
+      `SELECT id, name FROM agents
+        WHERE runtime = $1 AND archived_at IS NULL AND role <> 'system'
+          AND (limited_until IS NULL OR limited_until < $2)`,
+      [runtime, until]
+    );
+    for (const agent of agents) {
+      await setLimited(agent.id, until.toISOString()).catch(() => {});
+    }
+    if (agents.length) changed();
+  }
+}
+
 // A request whose remaining work has stopped for a reason nobody is told about.
 // in-1364 sat at "dispatched" for hours: four of its six tasks were done and the
 // other two were queued on a worker past its limit, so pumpResults — which only
@@ -651,6 +683,7 @@ export const tick = serialize(async () => {
     await pumpResults();
     await pumpStalled();
     await pumpDecisions();
+    await pumpLimits();
     await pumpHeld();
     await pumpModels();
     await pumpQuota();
