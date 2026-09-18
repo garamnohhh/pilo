@@ -1789,8 +1789,12 @@ const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", fi
 // as though its agent were busy, while the agent column beside it said stalled.
 // Nothing here can be mistaken for one of agentNote()'s words.
 const reqState = (i) => (i.needsReply ? "needs an answer"
+  // held: the rest of the work cannot move, and until #1769 that read as "open"
+  : i.held ? T(i.held.reason === "limited" ? "held.limited" : "held.unbound",
+      { done: i.doneCount ?? 0, total: i.taskCount ?? 0, who: i.held.agent,
+        until: i.held.until ? new Date(i.held.until).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "" })
   : { queued: "not handed on", dispatched: "open", replied: "answered", failed: "failed" }[i.status] || i.status);
-const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.status === "replied" ? OK : WARN);
+const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.held ? WARN : i.status === "replied" ? OK : WARN);
 const isOpen = (i) => i.status !== "replied";
 
 // ---------- REQUESTS ----------
