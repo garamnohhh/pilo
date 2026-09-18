@@ -1009,7 +1009,45 @@ export async function setLimited(agentId, until) {
   await logEvent({ type: parked ? "agent_limited" : "agent_resumed",
     title: parked ? t("event.limited", { agent: agent.name }) : t("event.unlimited", { agent: agent.name }),
     agentId, payload: { until: parked ? parked.toISOString() : null } });
-  return { id: agentId, limitedUntil: parked ? parked.toISOString() : null };
+  const handed = parked ? await handOverToPm(agentId) : [];
+  return { id: agentId, limitedUntil: parked ? parked.toISOString() : null, handedOver: handed };
+}
+
+// A worker that has just been parked is not going to read what is in its queue,
+// so its PM takes it — the moment the limit lands, not after a wait. Only work
+// it has not opened moves: a task already in hand is half-done somewhere, and
+// two agents finishing the same job is worse than one finishing it late. It does
+// not come back when the limit lifts; whoever holds it finishes it.
+export async function handOverToPm(agentId) {
+  const worker = await one(
+    `SELECT a.id, a.name, a.parent_agent_id AS pm, p.name AS "pmName", p.limited_until AS "pmLimited"
+       FROM agents a LEFT JOIN agents p ON p.id = a.parent_agent_id
+      WHERE a.id = $1 AND a.role = 'worker' AND a.archived_at IS NULL AND p.archived_at IS NULL`,
+    [agentId]
+  );
+  if (!worker?.pm) return [];
+  if (worker.pmLimited && new Date(worker.pmLimited).getTime() > Date.now()) return [];
+  const waiting = await query(
+    `SELECT id, inbox_id FROM tasks
+      WHERE to_agent_id = $1 AND status = 'queued'
+        AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = tasks.id AND e.type = 'task_opened')
+      ORDER BY id`,
+    [agentId]
+  );
+  const moved = [];
+  for (const task of waiting) {
+    await query("UPDATE tasks SET to_agent_id = $2, updated_at = now() WHERE id = $1", [task.id, worker.pm]);
+    await logEvent({
+      type: "task_handed_over",
+      title: t("event.handedOver", { id: task.id, from: worker.name, to: worker.pmName }),
+      agentId: worker.pm,
+      taskId: task.id,
+      inboxId: task.inbox_id,
+      payload: { from: worker.name, fromAgentId: String(agentId), to: worker.pmName, reason: "limited" }
+    });
+    moved.push(task.id);
+  }
+  return moved;
 }
 
 export async function taskDetail(id) {
