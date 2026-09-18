@@ -96,3 +96,24 @@ test("the weekdays switch only speaks for the older daily time", () => {
   assert.equal(usesWeekdayFlag("days:2d@14:00"), false);
   assert.equal(usesWeekdayFlag("every:30"), false);
 });
+
+// The dashboard cannot import this module — it is served by whichever server is
+// running, and an older one would 404 the import — so it keeps its own copy of
+// the ladder. This reads that copy and runs it against the same rows.
+test("the dashboard reads and says a cadence exactly as this does", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../public/dashboard.html", import.meta.url), "utf8");
+  const from = page.indexOf("const CAD_DAYS");
+  const to = page.indexOf("// the two controls the dialog draws");
+  assert.ok(from > 0 && to > from, "the dashboard still keeps its own copy");
+  const theirs = new Function(`${page.slice(from, to)}\nreturn { parseCadence, describeCadence, cadenceFields };`)();
+  const rows = ["days:daily@14:00", "days:weekday@09:00", "days:2d@14:00", "days:3d@07:05", "days:mon,thu@18:30",
+    "09:00", "every:30", "every:2880", "every:90", "nonsense", "days:0d@09:00"];
+  for (const cadence of rows) {
+    for (const weekdaysOnly of [true, false]) {
+      assert.deepEqual(theirs.parseCadence(cadence), parseCadence(cadence), cadence);
+      assert.equal(theirs.describeCadence(cadence, weekdaysOnly, ko), describeCadence(cadence, weekdaysOnly, ko), cadence);
+      assert.deepEqual(theirs.cadenceFields(cadence, weekdaysOnly), cadenceFields(cadence, weekdaysOnly), cadence);
+    }
+  }
+});
