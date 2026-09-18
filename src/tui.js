@@ -8,6 +8,7 @@ import { readPort } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
 import { agentState, stalled } from "./agentstate.js";
+import { describeCadence } from "./cadence.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -1265,7 +1266,7 @@ async function command(parsed) {
     if (!rows.length) return note(t("note.noSchedules"));
     return note(
       rows
-        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${s.cadence} → ${s.agent || "watcher"} · ${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}`)
+        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${describeCadence(s.cadence, s.weekdaysOnly, t)} → ${s.agent || "watcher"} · ${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}`)
         .join("  │  ")
     );
   }
