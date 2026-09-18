@@ -1143,6 +1143,98 @@ function treeRows() {
   return rows;
 }
 
+// When a standing job runs, read and said the same way src/cadence.js does it.
+// The page keeps its own copy rather than importing that module: it is served by
+// whichever server is running, and an older one would 404 the import and take the
+// whole page down. cadence.test.js reads this copy and holds the two in step.
+const CAD_DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+function parseCadence(cadence) {
+  const text = String(cadence ?? "").trim();
+  const every = /^every:(\d+)$/.exec(text);
+  if (every && Number(every[1]) > 0) return { kind: "every", minutes: Number(every[1]) };
+  const at = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(text);
+  if (at) return { kind: "at", hour: Number(at[1]), minute: Number(at[2]) };
+  const days = /^days:([a-z0-9,]+)@([01]?\d|2[0-3]):([0-5]\d)$/.exec(text);
+  if (!days) return null;
+  const clock = { hour: Number(days[2]), minute: Number(days[3]) };
+  const spec = days[1];
+  if (spec === "daily" || spec === "weekday") return { kind: spec, ...clock };
+  const step = /^(\d+)d$/.exec(spec);
+  if (step) return Number(step[1]) > 0 ? { kind: "step", days: Number(step[1]), ...clock } : null;
+  const picked = [...new Set(spec.split(",").filter(Boolean))];
+  if (!picked.length || !picked.every((d) => CAD_DAYS.includes(d))) return null;
+  return { kind: "pick", days: picked.map((d) => CAD_DAYS.indexOf(d)).sort((a, b) => a - b), ...clock };
+}
+
+function describeCadence(cadence, weekdaysOnly, t) {
+  const plan = parseCadence(cadence);
+  if (!plan) return String(cadence ?? "");
+  if (plan.kind === "every") {
+    const n = plan.minutes;
+    if (n % 1440 === 0) return t("cadence.everyDays", { n: n / 1440 });
+    if (n % 60 === 0) return t("cadence.hours", { n: n / 60 });
+    return t("cadence.minutes", { n });
+  }
+  const at = `${String(plan.hour).padStart(2, "0")}:${String(plan.minute).padStart(2, "0")}`;
+  if (plan.kind === "at") return t(weekdaysOnly ? "cadence.weekday" : "cadence.daily", { time: at });
+  if (plan.kind === "weekday") return t("cadence.weekday", { time: at });
+  if (plan.kind === "daily") return t("cadence.daily", { time: at });
+  if (plan.kind === "pick") return t("cadence.pick", { days: plan.days.map((d) => t(`cadence.day.${CAD_DAYS[d]}`)).join("·"), time: at });
+  if (plan.days === 1) return t("cadence.daily", { time: at });
+  if (plan.days === 2) return t("cadence.twoDays", { time: at });
+  return t("cadence.days", { n: plan.days, time: at });
+}
+
+function cadenceFields(cadence, weekdaysOnly = false) {
+  const plan = parseCadence(cadence) || { kind: "at", hour: 9, minute: 0 };
+  const at = plan.kind === "every" ? "09:00"
+    : `${String(plan.hour).padStart(2, "0")}:${String(plan.minute).padStart(2, "0")}`;
+  return {
+    repeat: plan.kind === "at" ? (weekdaysOnly ? "weekday" : "daily") : plan.kind,
+    at,
+    days: plan.kind === "pick" ? plan.days.map((d) => CAD_DAYS[d]) : [],
+    interval: plan.kind === "every" ? plan.minutes : plan.kind === "step" ? plan.days : 0
+  };
+}
+
+// the two controls the dialog draws, and the day buttons beside them
+const cadenceSaid = (s) => describeCadence(s.cadence, s.weekdaysOnly, T);
+const REPEATS = () => [["daily", T("cadence.repeat.daily")], ["weekday", T("cadence.repeat.weekday")],
+  ["pick", T("cadence.repeat.pick")], ["step", T("cadence.repeat.step")], ["every", T("cadence.repeat.every")]];
+const DAY_OPTIONS = () => CAD_DAYS.map((d) => [d, T(`cadence.day.${d}`)]);
+
+// the row the open dialog belongs to — the new-schedule dialog belongs to none
+function scheduleInDialog() {
+  if (state.dlg?.kind !== "schedule") return null;
+  return (state.data.schedules || []).find((x) => String(x.id) === String(state.dlg.id)) || null;
+}
+
+// what the schedule dialog is showing right now: the row it opened, with
+// whatever the user has since clicked on top
+function cadenceForm(s) {
+  const base = cadenceFields(s?.cadence ?? "09:00", s?.weekdaysOnly);
+  const held = state.schedule || {};
+  return {
+    repeat: held.repeat ?? base.repeat,
+    at: held.at ?? base.at,
+    days: held.days ?? base.days,
+    interval: held.interval ?? base.interval
+  };
+}
+
+// The repeat control decides which of the other two are worth drawing.
+function cadenceFieldsHtml(form) {
+  const rows = [{ label: T("cadence.field.repeat"), kind: "seg", act: "sched-repeat", value: form.repeat, options: REPEATS() }];
+  if (form.repeat === "pick") rows.push({ label: T("cadence.field.days"), kind: "segmulti", act: "sched-day", value: form.days, options: DAY_OPTIONS() });
+  if (form.repeat === "step" || form.repeat === "every") {
+    rows.push({ id: "s-interval", label: T("cadence.field.interval"), value: String(form.interval || (form.repeat === "step" ? 2 : 30)),
+      hint: T(form.repeat === "step" ? "cadence.hint.step" : "cadence.hint.every") });
+  }
+  if (form.repeat !== "every") rows.push({ id: "s-at", label: T("cadence.field.at"), value: form.at, hint: T("cadence.hint.at") });
+  return rows;
+}
+
 // One word, from the list text.js already keeps: idle · running · stalled ·
 // blocked · failed · unbound · no answer · limited. The same ladder the TUI
 // walks, so the two screens cannot disagree. What an agent is actually saying
@@ -1810,7 +1902,7 @@ views.schedules = () => {
       ${list.length ? list.map((s) => `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px 116px 52px" data-act="open-schedule" data-id="${s.id}">
         <span class="d-clip" style="font-size:var(--fs-body);color:${s.enabled ? "var(--text)" : "var(--text-3)"}">${esc(s.name)}</span>
         <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.agent)}</span>
-        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.cadence)}${s.weekdaysOnly ? " · weekdays" : ""}${s.onMiss === "skip" ? " · skip if missed" : ""}</span>
+        <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(cadenceSaid(s))}${s.onMiss === "skip" ? " · skip if missed" : ""}</span>
         <span class="d-m" style="font-size:12px;color:${s.enabled ? ACCT : "var(--text-3)"}">${esc(s.enabled ? when(s.nextRunAt) : "off")}</span>
         <span class="d-m" style="font-size:12px;color:${s.failCount ? ERR : "var(--text-3)"}">${esc(when(s.lastRunAt))}</span>
         <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
@@ -1826,7 +1918,7 @@ views.schedules = () => {
         ${jobs.map((s) => `<button class="d-plain d-tr d-rowbtn" style="grid-template-columns:minmax(0,1fr) 96px 232px 116px minmax(0,200px) 52px" data-act="open-schedule" data-id="${s.id}">
           <span class="d-clip" style="font-size:var(--fs-body);color:${s.enabled ? "var(--text)" : "var(--text-3)"}">${esc(SYSTEM_JOBS[s.name]?.[0] || s.name)}</span>
           <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)">watcher</span>
-          <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(s.cadence.replace(/^every:(\d+)$/, "every $1 min"))}</span>
+          <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(cadenceSaid(s))}</span>
           <span class="d-m" style="font-size:12px;color:var(--text-3)">${esc(when(s.lastRunAt))}</span>
           <span class="d-m d-clip" style="font-size:12px;color:${s.enabled ? jobResultColor(s.lastResult) : "var(--text-3)"}">${esc(s.enabled ? s.lastResult || "—" : "off")}</span>
           <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
@@ -2260,6 +2352,9 @@ function fieldHtml(f) {
       : f.kind === "seg"
         ? `<span class="d-seg" style="justify-self:start">${(f.options || []).map(([v, label, lock]) =>
             `<button class="d-segopt" aria-selected="${String(f.value) === String(v)}" aria-disabled="${Boolean(lock)}" data-act="${f.act}" data-value="${esc(v)}">${esc(label)}</button>`).join("")}</span>`
+      : f.kind === "segmulti"
+        ? `<span class="d-seg" style="justify-self:start">${(f.options || []).map(([v, label]) =>
+            `<button class="d-segopt" aria-selected="${(f.value || []).includes(v)}" data-act="${f.act}" data-value="${esc(v)}">${esc(label)}</button>`).join("")}</span>`
         : f.kind === "read"
           ? `<span style="display:flex;align-items:center;gap:9px;min-width:0">${f.mark || ""}<span class="d-m d-clip" style="font-size:var(--fs-small)">${esc(f.value || "")}</span></span>`
           : f.kind === "note"
@@ -2470,13 +2565,12 @@ DIALOGS.schedule = (d) => {
   const runs = String(state.runs.open) === String(s.id) ? state.runs.rows : [];
   return {
     title: esc(s.name),
-    sub: `${esc(s.cadence)} · to ${esc(s.agent)} · ${s.enabled ? "on" : "off"}`,
+    sub: `${esc(cadenceSaid(s))} · to ${esc(s.agent)} · ${s.enabled ? "on" : "off"}`,
     fields: [
       { id: "s-name", label: "name", value: s.name },
       { id: "s-agent", label: "to", kind: "select", value: s.toAgentId, options: targets.map((a) => [a.id, `${a.name} (${a.role})`]) },
-      { id: "s-cadence", label: "when", value: s.cadence, hint: "HH:MM in KST, or every:N minutes" },
+      ...cadenceFieldsHtml(cadenceForm(s)),
       { id: "s-request", label: "what to send", kind: "textarea", value: s.request },
-      { id: "s-weekdays", label: "weekdays only", kind: "switch", value: s.weekdaysOnly },
       { label: "if missed", kind: "seg", act: "sched-miss", value: state.schedule.onMiss ?? s.onMiss,
         options: [["run", "RUN"], ["skip", "SKIP"]], hint: "what to do when the machine was asleep at that hour" }
     ],
@@ -2502,9 +2596,8 @@ DIALOGS["new-schedule"] = () => {
     fields: [
       { id: "s-name", label: "name", value: f.name, place: "morning check" },
       { id: "s-agent", label: "to", kind: "select", value: f.toAgentId, options: targets.map((a) => [a.id, `${a.name} (${a.role})`]) },
-      { id: "s-cadence", label: "when", value: f.cadence, hint: "HH:MM in KST, or every:N minutes" },
+      ...cadenceFieldsHtml(cadenceForm(null)),
       { id: "s-request", label: "what to send", kind: "textarea", value: f.request },
-      { id: "s-weekdays", label: "weekdays only", kind: "switch", value: f.weekdaysOnly },
       { label: "if missed", kind: "seg", act: "sched-miss", value: f.onMiss, options: [["run", "RUN"], ["skip", "SKIP"]] }
     ],
     actions: [btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"), right("Create", "create-schedule", "", "gn-btn-brand")]
@@ -2618,13 +2711,19 @@ function keepDialogForm() {
     reviewer: $("f-reviewer") ? $("f-reviewer").checked : state.form.reviewer };
 }
 
-function readScheduleForm() {
+function readScheduleForm(s = null) {
+  const form = cadenceForm(s);
   return {
     name: $("s-name").value.trim(),
     toAgentId: $("s-agent").value,
-    cadence: $("s-cadence").value.trim(),
+    // the two controls, not the string: src/cadence.js writes that
+    when: {
+      repeat: form.repeat,
+      at: $("s-at") ? $("s-at").value.trim() : form.at,
+      days: form.days,
+      interval: $("s-interval") ? Number($("s-interval").value.trim()) : form.interval
+    },
     request: $("s-request").value.trim(),
-    weekdaysOnly: $("s-weekdays").checked,
     onMiss: state.schedule.onMiss || "run"
   };
 }
@@ -2709,9 +2808,28 @@ const actions = {
     toast("saved");
     await load();
   },
-  async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
+  async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null, repeat: null, at: null, days: null, interval: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
   async "new-schedule"() { state.dlg = { kind: "new-schedule" }; render(); },
   async "sched-miss"(el) { state.schedule = { ...state.schedule, onMiss: el.dataset.value }; render(); },
+  // The repeat control keeps whatever the other two are set to, so switching back
+  // and forth does not lose the hour that was typed.
+  async "sched-repeat"(el) {
+    const form = cadenceForm(scheduleInDialog());
+    const at = $("s-at") ? $("s-at").value.trim() : form.at;
+    const was = $("s-interval") ? Number($("s-interval").value.trim()) : form.interval;
+    // 45 minutes is not 45 days: the count only carries within its own kind
+    const repeat = el.dataset.value;
+    const interval = repeat === form.repeat ? was : repeat === "step" ? 2 : 30;
+    state.schedule = { ...state.schedule, repeat, at, days: form.days, interval };
+    render();
+  },
+  async "sched-day"(el) {
+    const form = cadenceForm(scheduleInDialog());
+    const day = el.dataset.value;
+    const days = form.days.includes(day) ? form.days.filter((d) => d !== day) : [...form.days, day];
+    state.schedule = { ...state.schedule, repeat: form.repeat, at: $("s-at") ? $("s-at").value.trim() : form.at, days, interval: form.interval };
+    render();
+  },
   async "save-job"(el) {
     await call("POST", `/api/schedules/${el.dataset.id}`, { cadence: $("s-cadence").value.trim() });
     state.dlg = null;
@@ -2719,7 +2837,7 @@ const actions = {
     await load();
   },
   async "save-schedule"(el) {
-    await call("POST", `/api/schedules/${el.dataset.id}`, readScheduleForm());
+    await call("POST", `/api/schedules/${el.dataset.id}`, readScheduleForm(scheduleInDialog()));
     state.dlg = null;
     toast("saved");
     await load();

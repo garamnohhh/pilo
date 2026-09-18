@@ -8,6 +8,7 @@ import { spoolDir, ensureSpool } from "./spool.js";
 import { CLI_COMMANDS } from "./commands.js";
 import { cols } from "./width.js";
 import { t } from "./text.js";
+import { describeCadence } from "./cadence.js";
 
 function resolveSocket() {
   if (process.env.PILO_SOCKET) return process.env.PILO_SOCKET;
@@ -130,7 +131,7 @@ const commands = {
     const rows = await call("GET", "/api/schedules");
     if (!rows.length) return out("no schedules");
     return out(rows.map((s) =>
-      `${s.id}\t${s.enabled ? "on " : "off"}\t${s.cadence}\t→ ${s.agent || "watcher"}\t${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}\t${s.name}`
+      `${s.id}\t${s.enabled ? "on " : "off"}\t${describeCadence(s.cadence, s.weekdaysOnly, t)}\t→ ${s.agent || "watcher"}\t${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}\t${s.name}`
     ).join("\n"));
   },
 
