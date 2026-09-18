@@ -6,6 +6,7 @@ import { t } from "./text.js";
 import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
 import { pickResults, withResults } from "./reply.js";
 import * as models from "./models.js";
+import { nextRun, composeCadence, usesWeekdayFlag } from "./cadence.js";
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -1204,18 +1205,15 @@ export async function setupState() {
 // an ordinary inbox row with an ordinary task, so history, waking and reporting
 // are the ones that already exist. Times are the server's own local time.
 
-// 'HH:MM' — the next time of day that has not passed yet; 'every:N' — N minutes
-// from now. Weekend slots roll to Monday when the schedule only wants weekdays.
-export function nextRun(cadence, weekdaysOnly, from = new Date()) {
-  const every = /^every:(\d+)$/.exec(String(cadence).trim());
-  if (every) return new Date(from.getTime() + Number(every[1]) * 60000);
-  const at = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(String(cadence).trim());
-  if (!at) throw Object.assign(new Error("cadence must be HH:MM or every:N"), { status: 400 });
-  const next = new Date(from);
-  next.setHours(Number(at[1]), Number(at[2]), 0, 0);
-  if (next <= from) next.setDate(next.getDate() + 1);
-  if (weekdaysOnly) while (next.getDay() === 0 || next.getDay() === 6) next.setDate(next.getDate() + 1);
-  return next;
+// When a job runs, and what that reads as, are src/cadence.js's to answer.
+export { nextRun, describeCadence, parseCadence, cadenceFields } from "./cadence.js";
+
+// The dialog sends its two controls; older callers — the CLI, anything posting by
+// hand — still send the string itself, and both end up as one.
+function cadenceFrom(input, fallback = "") {
+  if (input?.when && typeof input.when === "object") return composeCadence(input.when);
+  if (typeof input?.cadence === "string" && input.cadence.trim()) return input.cadence.trim();
+  return fallback;
 }
 
 const SCHEDULE_COLUMNS = `s.id, s.name, s.request, s.cadence, s.enabled, s.on_miss AS "onMiss",
@@ -1232,16 +1230,17 @@ export async function createSchedule(input) {
   const agent = await one("SELECT id, name FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
   if (!agent) throw Object.assign(new Error("target agent not found"), { status: 400 });
   if (!String(input.request || "").trim()) throw Object.assign(new Error("request is empty"), { status: 400 });
+  const cadence = cadenceFrom(input);
   const weekdaysOnly = input.weekdaysOnly !== false;
+  const next = nextRun(cadence, weekdaysOnly);
   const onMiss = input.onMiss === "skip" ? "skip" : "run";
-  const next = nextRun(input.cadence, weekdaysOnly);
   const row = await one(
     `INSERT INTO schedules (name, to_agent_id, request, cadence, weekdays_only, on_miss, next_run_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [input.name || input.request.slice(0, 40), agent.id, input.request, input.cadence, weekdaysOnly, onMiss, next]
+    [input.name || input.request.slice(0, 40), agent.id, input.request, cadence, weekdaysOnly, onMiss, next]
   );
   await logEvent({ type: "schedule_created", title: `schedule → ${agent.name}`, agentId: agent.id,
-    payload: { id: row.id, cadence: input.cadence, nextRunAt: next } });
+    payload: { id: row.id, cadence, nextRunAt: next } });
   return { id: row.id, nextRunAt: next };
 }
 
@@ -1251,7 +1250,7 @@ export async function setSchedule(id, input) {
   // A watcher job: its work is code, so only whether it runs and how often move.
   if (current.kind === "system") {
     const enabled = typeof input.enabled === "boolean" ? input.enabled : current.enabled;
-    const cadence = input.cadence ? String(input.cadence).trim() : current.cadence;
+    const cadence = cadenceFrom(input, current.cadence);
     if (!/^every:[1-9]\d*$/.test(cadence)) throw Object.assign(new Error("a system job runs every:N minutes"), { status: 400 });
     await query("UPDATE schedules SET enabled = $2, cadence = $3, updated_at = now() WHERE id = $1", [id, enabled, cadence]);
     return { id: String(id), name: current.name, kind: "system", cadence, enabled };
@@ -1260,7 +1259,7 @@ export async function setSchedule(id, input) {
   // used to be, so a name or a request edited on the Schedules screen was
   // dropped without a word.
   const enabled = typeof input.enabled === "boolean" ? input.enabled : current.enabled;
-  const cadence = input.cadence ? String(input.cadence).trim() : current.cadence;
+  const cadence = cadenceFrom(input, current.cadence);
   const weekdaysOnly = typeof input.weekdaysOnly === "boolean" ? input.weekdaysOnly : current.weekdays_only;
   const onMiss = input.onMiss === "run" || input.onMiss === "skip" ? input.onMiss : current.on_miss;
   const name = typeof input.name === "string" && input.name.trim() ? input.name.trim() : current.name;
@@ -1274,9 +1273,11 @@ export async function setSchedule(id, input) {
   }
   // The next run is worked out again only when what decides it changed: the
   // time, the weekday rule, or the schedule coming back on. Saving a new name
-  // leaves it where it was.
+  // leaves it where it was. next_run_at itself is not something to send: it is
+  // read off the cadence, and a cadence now carries the time of day that was the
+  // only reason to want to set it by hand.
   const retime = enabled && (!current.enabled || cadence !== current.cadence || weekdaysOnly !== current.weekdays_only);
-  const next = retime ? nextRun(cadence, weekdaysOnly) : current.next_run_at;
+  const next = retime ? nextRun(cadence, weekdaysOnly, new Date(), current.last_run_at) : current.next_run_at;
   await query(
     `UPDATE schedules SET name = $2, to_agent_id = $3, request = $4, cadence = $5, weekdays_only = $6,
        on_miss = $7, enabled = $8, next_run_at = $9,
@@ -1310,14 +1311,21 @@ export async function deleteSchedule(id) {
 // schedule: while its last task is unfinished the slot is passed over, because a
 // job that fires twice costs tokens twice and can undo its own work.
 export async function runSchedule(schedule) {
+  // A slot that is passed over steps from the slot it was, not from the moment it
+  // was passed over, or a job that skips a weekend comes back at a different hour.
   const advance = async (extra = "") => {
     await query("UPDATE schedules SET next_run_at = $2, updated_at = now() WHERE id = $1",
-      [schedule.id, nextRun(schedule.cadence, schedule.weekdaysOnly)]);
+      [schedule.id, nextRun(schedule.cadence, schedule.weekdaysOnly, new Date(), schedule.nextRunAt)]);
     return extra;
   };
   const now = new Date();
   const due = new Date(schedule.nextRunAt);
-  if (schedule.weekdaysOnly && (now.getDay() === 0 || now.getDay() === 6)) return advance("weekend");
+  // The weekdays switch has a say only over the older plain time; a cadence that
+  // names its own days — every other day included — is not asking to dodge a
+  // Saturday.
+  if (usesWeekdayFlag(schedule.cadence) && schedule.weekdaysOnly && (now.getDay() === 0 || now.getDay() === 6)) {
+    return advance("weekend");
+  }
   // Slept through it: a report that only matters at the hour is dropped, one that
   // matters whenever you next look is still worth running.
   const lateMinutes = (now - due) / 60000;
@@ -1336,7 +1344,7 @@ export async function runSchedule(schedule) {
     : await createTask(inbox.id, { toAgentId: schedule.toAgentId, title: schedule.name, request: schedule.request });
   await query(
     `UPDATE schedules SET last_task_id = $2, last_run_at = now(), next_run_at = $3, updated_at = now() WHERE id = $1`,
-    [schedule.id, task?.id || null, nextRun(schedule.cadence, schedule.weekdaysOnly)]
+    [schedule.id, task?.id || null, nextRun(schedule.cadence, schedule.weekdaysOnly, now, now)]
   );
   await logEvent({ type: "schedule_fired", title: `${schedule.name} → ${schedule.agent}`,
     agentId: schedule.toAgentId, inboxId: inbox.id, taskId: task?.id || null, payload: { scheduleId: schedule.id } });
