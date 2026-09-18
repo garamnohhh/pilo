@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quotaCell, quotaReport, STALE_MIN } from "./quota.js";
+import { quotaCell, quotaReport, STALE_MIN, limitReached } from "./quota.js";
 
 // Built in local time, so the clock the cell prints does not depend on where the
 // test runs.
@@ -55,4 +55,29 @@ test("the dashboard is sent the TUI's cell and a few numbers, nothing else", () 
   assert.deepEqual(report.codex, { text: "?", dim: true, percent: null, compact: "?", week: null, ageMin: 96 });
   assert.equal(JSON.stringify(report).includes("secret"), false);
   assert.deepEqual(quotaReport({}, now), {});
+});
+
+// Parking an agent on a reading: which window ran out, and when it comes back.
+const NOW = Date.UTC(2026, 8, 18, 3, 0, 0);
+const back = (minutes) => new Date(NOW + minutes * 60000).toISOString();
+
+test("a reading with room left parks nobody", () => {
+  assert.equal(limitReached({ percent: 27, week: 76, resetsAt: back(60), weekResetsAt: back(4000) }, NOW), null);
+  assert.equal(limitReached({ percent: 99, week: 99, resetsAt: back(60), weekResetsAt: back(4000) }, NOW), null);
+  assert.equal(limitReached(null, NOW), null);
+  assert.equal(limitReached(undefined, NOW), null);
+});
+
+test("either window can be the one that ran out, and the later reopening wins", () => {
+  assert.equal(limitReached({ percent: 100, week: 14, resetsAt: back(45), weekResetsAt: back(4000) }, NOW).toISOString(), back(45));
+  // a week spent while the five hours still had room — what parked a codex worker
+  assert.equal(limitReached({ percent: 20, week: 100, resetsAt: back(45), weekResetsAt: back(4000) }, NOW).toISOString(), back(4000));
+  assert.equal(limitReached({ percent: 100, week: 100, resetsAt: back(45), weekResetsAt: back(4000) }, NOW).toISOString(), back(4000),
+    "out on both: usable again only when the later one reopens");
+});
+
+test("a reading with no time to point at parks nobody", () => {
+  // otherwise a file nobody writes any more would re-park everyone every tick
+  assert.equal(limitReached({ percent: 100, week: 0, resetsAt: "", weekResetsAt: "" }, NOW), null);
+  assert.equal(limitReached({ percent: 100, week: 0, resetsAt: back(-60), weekResetsAt: "" }, NOW), null);
 });

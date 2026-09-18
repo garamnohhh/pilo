@@ -23,6 +23,7 @@ function claudeQuota() {
     percent: five.utilization,
     resetsAt: five.resets_at || "",
     week: u.utilization?.seven_day?.utilization ?? null,
+    weekResetsAt: u.utilization?.seven_day?.resets_at || "",
     ageMin
   };
 }
@@ -91,6 +92,7 @@ function codexQuota() {
       percent: Math.round(primary.used_percent),
       resetsAt: primary.resets_at ? new Date(primary.resets_at * 1000).toISOString() : "",
       week: limits.secondary ? Math.round(limits.secondary.used_percent) : null,
+      weekResetsAt: limits.secondary?.resets_at ? new Date(limits.secondary.resets_at * 1000).toISOString() : "",
       ageMin: Math.round((Date.now() - file.at) / 60000)
     };
   }
@@ -179,4 +181,26 @@ export function quotaCell(found, now = Date.now(), compact = false) {
   const clock = valid ? ` ↻${clockOf(at)}` : "";
   const age = stale ? ` ~${ageOf(Number(found.ageMin))}` : "";
   return { text: `${found.percent}%${clock}${age}`, dim: stale, percent: found.percent };
+}
+
+// A reading that says the account is out, and when it comes back. Either window
+// can be the one that ran out — a week's worth spent is what parked a codex
+// worker while its five hours still had room — so both are asked, and the one
+// that reopens later wins: the account is not usable until both are.
+//
+// This is the same figure the status line draws. The warning the session itself
+// prints says it sooner, but it says it in prose that differs by tool and by
+// version, and a regex written without a sample in hand is a guess.
+export function limitReached(reading, now = Date.now()) {
+  if (!reading) return null;
+  const hit = [];
+  if (Number(reading.percent) >= 100) hit.push(reading.resetsAt);
+  if (Number(reading.week) >= 100) hit.push(reading.weekResetsAt);
+  if (!hit.length) return null;
+  // No time to point at, or a time already gone by, means the reading is stale
+  // rather than that the account is out — parking on it would park everyone
+  // again every few seconds off a file nobody is writing any more.
+  const times = hit.map((at) => new Date(at || 0).getTime()).filter((ms) => ms > now);
+  if (!times.length) return null;
+  return new Date(Math.max(...times));
 }
