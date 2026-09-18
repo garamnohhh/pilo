@@ -9,6 +9,7 @@ import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
 import { agentState, stalled } from "./agentstate.js";
 import { describeCadence } from "./cadence.js";
+import { kst } from "./history.js";
 import { isPasteImage, takePasteKeys, flushCarry, unreadPasteKeys, isEscapeKey, chunkDecoder } from "./keys.js";
 import { appendFileSync } from "node:fs";
 import { readQuota, quotaCell } from "./quota.js";
@@ -431,6 +432,9 @@ function decisionCard(d, width) {
   });
 }
 
+// the hour a limit lifts, as the user reads it
+const kstClock = (value) => kst(value).slice(11);
+
 function waitingBlock(item, width) {
   const box = Math.max(24, width - 2);
   // Work finished and nobody wrote the answer. That is not progress, so it gets
@@ -453,8 +457,15 @@ function waitingBlock(item, width) {
   // so the line starts at the same column as any other card's text.
   const paint = { ...CARD.waiting, accent: pulseColour("working") };
   const text = Math.max(8, box - 5);
-  const said = item.progress || (item.routed ? t("card.waiting") : t("card.queued"));
-  const who = item.routed || "";
+  // A request whose remaining work cannot move says so, rather than sitting on
+  // the last progress note as though something were still happening.
+  const said = item.held
+    ? t(item.held.reason === "limited" ? "held.limited" : "held.unbound", {
+        done: item.doneCount ?? 0, total: item.taskCount ?? 0, who: item.held.agent,
+        until: item.held.until ? kstClock(item.held.until) : ""
+      })
+    : item.progress || (item.routed ? t("card.waiting") : t("card.queued"));
+  const who = item.held ? item.held.agent : item.routed || "";
   const room = text - cols(who) - 1;
   const words = cut(said, Math.max(6, room));
   const gap = Math.max(1, text - cols(words) - cols(who));

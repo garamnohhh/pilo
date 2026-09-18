@@ -538,6 +538,20 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
        (EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id)
         AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply",
+       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN ('done', 'failed')) AS "doneCount",
+       -- Work that has stopped for a reason the user is never told about: the
+       -- agent is past its provider's ceiling, or has no session at all. A
+       -- request used to sit at "dispatched" for hours with nothing to show but
+       -- a task count that never moved.
+       (SELECT json_build_object('agent', h.name, 'reason', h.reason, 'until', h.until, 'tasks', h.n)
+          FROM (SELECT a.name,
+                       CASE WHEN a.limited_until > now() THEN 'limited' ELSE 'unbound' END AS reason,
+                       a.limited_until AS until, count(*)::int AS n
+                  FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+                 WHERE t.inbox_id = i.id AND t.status IN ('queued', 'running')
+                   AND (a.limited_until > now() OR a.herdr_target = '')
+                 GROUP BY a.name, a.limited_until
+                 ORDER BY count(*) DESC, a.name LIMIT 1) h) AS held,
        -- the oldest decision still waiting on the user, in the desk's words when
        -- it has spoken and the PM's otherwise, and how many are waiting in all
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status = 'blocked') AS decisions,
