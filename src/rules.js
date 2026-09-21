@@ -40,7 +40,7 @@ pilo send <agentId> N "the request, in full"
 pilo reply N "what the user should read"
 pilo reply N "a short lead" --with-results   # the lead, with each PM's result under it
 pilo ask T "what the user needs to decide or do"   # speak to the user about blocked task T — not an answer
-pilo note "something they should know"             # speak first — no question above it, nothing waiting on it
+pilo api POST /api/notes '{"body":"something they should know"}'   # speak first — no question above it
 pilo blocked                     # every task still waiting on the user
 pilo history <words> [--since YYYY-MM-DD] [--agent name]   # past requests, answers, results
 \`\`\`
@@ -82,10 +82,15 @@ Run \`pilo agents\` if that list looks stale.
   Stopping is not the end of the request: if work lands afterwards you are woken with \`[pilo:followup]\` and answer
   that request again, with what changed. So "I will tell you when it lands" is a promise you can now keep — and one
   you are expected to keep.
-- **\`pilo note\` is for what the user should know without having asked**: a job that ran, a limit that landed, a
-  schedule that needs their eye. It opens a line of its own with no question above it and waits for nothing —
-  unlike \`pilo ask\`, which waits for their decision, and \`pilo reply\`, which answers something they typed.
-  Keep it for what they would want to know away from the screen. Progress belongs to a task, not here.
+- **A note is for what the user should know without having asked**: a job that ran, a limit that landed, a
+  schedule that needs their eye. There is no CLI verb for it — the user has no reason to speak to themselves — so
+  you post it:
+  \`\`\`bash
+  pilo api POST /api/notes '{"body":"what they should know, in their language"}'
+  \`\`\`
+  It opens a line of its own with no question above it and waits for nothing — unlike \`pilo ask\`, which waits for
+  their decision, and \`pilo reply\`, which answers something they typed. Keep it for what they would want to know
+  away from the screen; progress belongs to a task, not here.
 
 ### When a PM is waiting on the user
 
@@ -183,7 +188,7 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 - **PM에게 보고하는 worker에게는 절대 직접 task를 주지 않는다.** 그 PM에게 보내고, 위임은 PM이 한다.
   worker의 보고도 PM이 받아 자기 보고로 정리한다. 예외 없다. 보고 대상 칸이 자신을 가리키는 worker만 직접 지시한다.
 - 담당 PM이 없는 요청만 직접 답한다.
-- 화면에 남기는 것은 \`final_reply\` 와 \`pilo note\` 둘뿐이다. 진행 상황은 task 의 progress 로 두고 답으로 저장하지 않는다.
+- 화면에 남기는 것은 \`final_reply\` 와 알림(\`POST /api/notes\`) 둘뿐이다. 진행 상황은 task 의 progress 로 두고 답으로 저장하지 않는다.
 - PM이 실패로 보고하면 그 사실과 원인을 답변에 담는다.
 
 ### 답 쓰기
@@ -200,7 +205,11 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 - **\`pilo reply\` 뒤에는 멈춘다.** pane 에 마무리 문장을 쓰지 않는다 — 아무도 안 읽고, 그동안 붙잡혀 있다.
   멈추는 것이 그 요청의 끝은 아니다. 뒤늦게 일이 끝나면 \`[pilo:followup]\` 으로 다시 깨우니, 그때 그 요청에
   **이어서 한 번 더** 답한다(달라진 것만). 그러니 "끝나면 알려줄게" 는 이제 지킬 수 있는 약속이고, 지켜야 하는 약속이다.
-- **\`pilo note\` 는 사용자가 묻지 않았는데 알아야 할 것**에 쓴다 — 예약이 돈 결과, 한도가 걸린 일, 사용자가 봐야 할 상태 변화.
+- **알림은 사용자가 묻지 않았는데 알아야 할 것**에 쓴다 — 예약이 돈 결과, 한도가 걸린 일, 사용자가 봐야 할 상태 변화.
+  사용자가 자기 자신에게 말 걸 일은 없으니 CLI 명령은 없다. 네가 API 로 남긴다.
+  \`\`\`bash
+  pilo api POST /api/notes '{"body":"사용자가 알아야 할 것, 사용자 언어로"}'
+  \`\`\`
   질문 없이 새 줄로 열리고 아무것도 기다리지 않는다. 결정을 기다리는 \`pilo ask\`, 사용자가 쓴 것에 답하는 \`pilo reply\` 와 다르다.
   화면을 안 보고 있어도 알아야 할 것만 쓴다. 진행 상황 중계는 task 의 progress 지 여기가 아니다.
 

@@ -1366,9 +1366,8 @@ function feedMessages(item, detail) {
   // A note has no question above it — the desk spoke first — and a scheduled job
   // says so rather than posing as something the user typed.
   const msgs = item.source === "desk" ? [] : [{
-    who: item.source === "schedule"
-      ? `${T("feed.scheduled")} · ${hhmm(item.createdAt)}`
-      : `you · ${hhmm(item.createdAt)}`,
+    who: `${item.source === "schedule" ? "pilo" : "you"} · ${hhmm(item.createdAt)}`,
+    chip: item.source === "schedule" ? T("feed.scheduled") : "",
     kind: "you",
     text: item.userRequest || ""
   }];
@@ -1388,15 +1387,16 @@ function feedMessages(item, detail) {
   for (const [i, reply] of (full.replies || []).entries()) {
     // the bubble already says pilo; the word only has to say what kind of line it is
     const what = item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer";
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · ${what}`,
-      kind: "answer", text: reply.body || "", inbox: item.id });
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)}`, chip: item.source === "desk" ? what : i ? what : "",
+      kind: item.source === "desk" ? "note" : "answer", text: reply.body || "", inbox: item.id });
   }
   // The list row can carry the answers before a detail fetched earlier does.
   if (!(detail?.replies || []).length && item.finalReply) {
     const carried = item.replies?.length ? item.replies : [{ at: item.repliedAt, body: item.finalReply }];
     for (const [i, reply] of carried.entries()) {
-      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer"}`,
-        kind: "answer", text: reply.body, inbox: item.id });
+      msgs.push({ who: `pilo · ${hhmm(reply.at)}`,
+        chip: item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "",
+        kind: item.source === "desk" ? "note" : "answer", text: reply.body, inbox: item.id });
     }
   }
   // A decision is a red line with its own answer button until the user answers it,
@@ -1439,23 +1439,28 @@ function feedMessages(item, detail) {
 // and only .d-pad's 28px keeps the text off the edge.
 function bubble(m) {
   if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-    <span class="d-lbl">${esc(m.who)}</span>
+    <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${m.chip
+      ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2)">${esc(m.chip)}</span>` : ""}</span>
     <div style="border:var(--bw) solid var(--line);background:var(--bg-2);padding:12px 16px;width:100%">
       <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div></div></div>`;
   // The bar carries the state, out of the same colours the rest of the screen
   // uses: amber while something is still moving, red when it is waiting on you,
   // accent for the answer, and the plain rule for a result that is only history.
-  const bar = { answer: "var(--accent)", working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
+  // A note is not an answer to anything, and small type was all that said so.
+  const bar = { answer: "var(--accent)", note: INFO, working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
   // Only a line about work that is moving pulses. The TUI holds the red one
   // still on purpose — it is waiting on you, and nothing is happening — and a
   // finished line has nothing to claim.
   const live = m.kind === "working" || m.kind === "waiting";
-  const follow = m.kind === "answer" && m.inbox
+  const follow = (m.kind === "answer" || m.kind === "note") && m.inbox
     ? `<button class="d-plain d-followbtn" data-act="follow-request" data-id="${esc(m.inbox)}">↳ ${esc(T("desk.follow.ask"))}</button>`
     : m.kind === "decision" && m.task
       ? `<button class="d-plain d-followbtn" style="color:${ERR}" data-act="answer-decision" data-task="${esc(m.task)}" data-inbox="${esc(m.inbox)}" data-line="${esc(firstLine(m.text))}">↳ ${esc(T("desk.decision.answer"))}</button>` : "";
+  const chip = m.chip
+    ? `<span class="d-chip d-chip-sm" style="color:${m.kind === "note" ? INFO : "var(--text-2)"};background:${m.kind === "note" ? "var(--info-weak)" : "var(--bg-2)"}">${esc(m.chip)}</span>`
+    : "";
   return `<div style="display:flex;flex-direction:column;gap:6px">
-    <span style="display:flex;align-items:center;gap:14px"><span class="d-lbl">${esc(m.who)}</span>${follow}</span>
+    <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${chip}${follow ? `<span style="margin-left:6px">${follow}</span>` : ""}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
       <div class="md md-said" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div>

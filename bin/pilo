@@ -101,7 +101,7 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
   # Every CLI command in src/commands.js has to be named here or it never
   # reaches the dispatcher — the shell answers with the usage line instead.
   # cli.test.js reads this list and that one, and fails when they drift.
-  inbox|agents|send|reply|note|history|task|progress|done|block|blocked|ask|hold|resume|limited|answer|schedules|schedule|api)
+  inbox|agents|send|reply|history|task|progress|done|block|blocked|ask|hold|resume|limited|answer|schedules|schedule|api)
     # agent commands go over the unix socket, so they work with sandbox network off
     exec node "$ROOT/src/cli.js" "$@"
     ;;

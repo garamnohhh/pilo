@@ -86,7 +86,12 @@ const BADGE = {
   PILO: { fg: fg(88, 152, 123) },
   PM: { fg: fg(110, 144, 165) },
   WORKER: { fg: fg(123, 144, 135) },
-  FINAL_REPLY: { fg: fg(88, 152, 123) }
+  FINAL_REPLY: { fg: fg(88, 152, 123) },
+  FOLLOW_UP: { fg: fg(88, 152, 123) },
+  // The desk speaking first is not an answer to anything, and it was telling
+  // that apart from one by the size of the type. It wears the blue the tree
+  // already keeps for a line that is waiting to be read.
+  NOTE: { fg: fg(150, 178, 214) }
 };
 
 // The badge used to be small caps. No terminal font we ship against has those
@@ -176,9 +181,9 @@ function runtimeMark(runtime) {
 // No padding inside the badge: the fill hugs the letters, and the two spaces
 // before it do the separating.
 const badgeText = (tag) => (ASCII || COLOR === "none" ? `[${tag}]` : String(tag).toUpperCase());
-function badge(tag) {
+function badge(tag, word = tag) {
   const paint = BADGE[tag] || BADGE.WORKER;
-  return ASCII || COLOR === "none" ? `[${tag}]` : `${paint.fg}${badgeText(tag)}${c.reset}`;
+  return ASCII || COLOR === "none" ? `[${word}]` : `${paint.fg}${badgeText(word)}${c.reset}`;
 }
 
 // Card surfaces: a tint painted to the card's full width, and the accent bar that
@@ -202,7 +207,7 @@ const CARD_INDENT = "    ";
 const SEPARATOR = "|";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
-const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80) };
+const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80), note: fg(150, 178, 214) };
 // Work in flight pulses between that colour and a dimmer one; a finished or
 // stuck request holds still, because a blink is a claim that something is
 // happening right now.
@@ -397,6 +402,7 @@ const kstClock = (value) => (value ? kst(value).slice(11) : "");
 // the first answer rather than in place of it.
 function replyBlock(item, width, tagged, reply = null, index = 0) {
   const box = Math.max(24, width - 2);
+  const note = item.source === "desk";
   const body = reply ? reply.body : item.finalReply;
   const at = reply ? reply.at : item.repliedAt;
   const took = elapsed(item.createdAt, at);
@@ -407,13 +413,13 @@ function replyBlock(item, width, tagged, reply = null, index = 0) {
   const later = index > 0 ? ` ${c.faint}${t("card.replyAgain", { at: kstClock(at) })}${c.reset}` : "";
   return cardBlock({
     box,
-    title: `${badge(index > 0 ? "FOLLOW_UP" : "FINAL_REPLY")}${extra}${later}`,
+    title: `${note ? badge("NOTE", t("feed.note")) : badge(index > 0 ? "FOLLOW_UP" : "FINAL_REPLY")}${extra}${later}`,
     titleColor: "",
-    right: took && index === 0 ? `in-${item.id} · ${took}` : `in-${item.id}`,
+    right: took && index === 0 && !note ? `in-${item.id} · ${took}` : `in-${item.id}`,
     body: wrap(alignTables(body, box - 5), box - 5),
-    footer: t("card.replyFooter"),
+    footer: note ? t("card.noteFooter") : t("card.replyFooter"),
     surface: "reply",
-    state: "done"
+    state: note ? "note" : "done"
   });
 }
 
@@ -1006,11 +1012,11 @@ function render() {
       // Not every line in the feed is something the user typed. A note is the
       // desk speaking first and a scheduled job is an hour coming round, and
       // both used to be drawn as though the user had asked for them.
-      const spoke = item.source === "desk" ? t("feed.note") : item.source === "schedule" ? t("feed.scheduled") : "";
+      const spoke = item.source === "desk" ? badge("NOTE", t("feed.note")) : item.source === "schedule" ? `${c.faint}${badgeText(t("feed.scheduled"))}${c.reset}` : "";
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
-        const said = i === 0 && spoke ? `${c.faint}${spoke} ·${c.reset} ${c.fg}${x}${c.reset}` : `${c.fg}${x}${c.reset}`;
+        const said = i === 0 && spoke ? `${spoke} ${c.fg}${x}${c.reset}` : `${c.fg}${x}${c.reset}`;
         return `  ${mark} ${tag} ${said}`;
       });
       if (folded && lines.length > shownLines.length) {
