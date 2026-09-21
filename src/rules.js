@@ -39,6 +39,7 @@ pilo agents                      # id · name · role · project
 pilo send <agentId> N "the request, in full"
 pilo reply N "what the user should read"
 pilo reply N "a short lead" --with-results   # the lead, with each PM's result under it
+pilo send <agentId> N --file <path>    # long text from a file — no $(cat …), which the shell has to expand
 pilo ask T "what the user needs to decide or do"   # speak to the user about blocked task T — not an answer
 pilo api POST /api/notes '{"body":"something they should know"}'   # speak first — no question above it
 pilo blocked                     # every task still waiting on the user
@@ -127,6 +128,7 @@ pilo task N                      # the request in full, plus the user's own word
 pilo progress N "what you are doing, one line"   # as often as you like
 pilo done N "report, 20 lines or fewer" --log "what you checked" --in 12000 --out 3000
 pilo done N "why it failed" --status failed --error "SESSION_NOT_FOUND"
+pilo done N --file <path>        # a long report from a file: no "$(cat …)" for the shell to expand
 \`\`\`
 
 To leave a diff or a run log behind, send the whole thing:
@@ -240,6 +242,7 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 pilo task N
 pilo progress N "지금 무엇을 하는 중인지 한 줄"
 pilo done N "20줄 이하 보고" --log "확인한 것" --in 12000 --out 3000
+pilo done N --file <경로>        # 긴 보고는 파일로 — "$(cat …)" 치환을 쓰지 않는다
 \`\`\`
 
 ${roster}

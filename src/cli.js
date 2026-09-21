@@ -105,6 +105,18 @@ function flags(args) {
   return { rest, opts };
 }
 
+// Long text does not belong on a command line. An agent with a report to file
+// reaches for "$(cat …)", and a shell substitution is something no permission
+// rule can read ahead of time: the call then rests on whatever judges the
+// command text, which has turned down instructions that were only ever a row in
+// a local database. --file keeps the words in a file and the command short.
+function body(text, opts) {
+  if (!opts?.file) return text.join(" ");
+  const read = readFileSync(opts.file, "utf8").replace(/\s+$/, "");
+  if (!read) throw new Error(`${opts.file} is empty`);
+  return read;
+}
+
 // The catalogue in commands.js is the one list; this renders the CLI half of it.
 // Korean summaries mean the column has to be measured in display width.
 const signature = (x) => `pilo ${x.name}${x.args ? " " + x.args : ""}`;
@@ -155,11 +167,12 @@ const commands = {
   async send(args) {
     const { rest, opts } = flags(args);
     const [agentId, inboxId, ...text] = rest;
-    if (!agentId || !inboxId || !text.length) throw new Error("usage: pilo send <agentId> <inboxId> <request>");
+    if (!agentId || !inboxId || (!text.length && !opts.file)) throw new Error("usage: pilo send <agentId> <inboxId> <request> | --file <path>");
+    const request = body(text, opts);
     const res = await call("POST", `/api/inbox/${inboxId}/tasks`, {
       toAgentId: Number(agentId),
-      title: opts.title || text.join(" ").slice(0, 40),
-      request: text.join(" ")
+      title: opts.title || request.split("\n")[0].slice(0, 40),
+      request
     });
     return out(t("cli.taskSent", { id: res.id, agent: agentId }));
   },
@@ -167,9 +180,10 @@ const commands = {
   async reply(args) {
     // A switch with no value, so it may sit anywhere after the id.
     const attach = args.includes("--with-results");
-    const [inboxId, ...text] = args.filter((arg) => arg !== "--with-results");
-    if (!inboxId || (!text.length && !attach)) throw new Error("usage: pilo reply <inboxId> <text> [--with-results]");
-    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: text.join(" "), withResults: attach });
+    const { rest, opts } = flags(args.filter((arg) => arg !== "--with-results"));
+    const [inboxId, ...text] = rest;
+    if (!inboxId || (!text.length && !attach && !opts.file)) throw new Error("usage: pilo reply <inboxId> <text> [--with-results] | --file <path>");
+    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: body(text, opts), withResults: attach });
     const saved = t("cli.replySaved", { id: res.id, inbox: inboxId });
     return out(res.attached?.length ? saved + t("cli.replyAttached", { agents: res.attached.join(", ") }) : saved);
   },
@@ -206,9 +220,9 @@ const commands = {
   async done(args) {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
-    if (!taskId || !text.length) throw new Error("usage: pilo done <taskId> <report>");
+    if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo done <taskId> <report> | --file <path>");
     const res = await call("POST", `/api/tasks/${taskId}/result`, {
-      pmResult: text.join(" "),
+      pmResult: body(text, opts),
       status: opts.status || "done",
       error: opts.error || "",
       tokensIn: Number(opts.in || 0),
@@ -222,10 +236,11 @@ const commands = {
   async block(args) {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
-    if (!taskId || !text.length) throw new Error("usage: pilo block <taskId> <question>");
+    if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo block <taskId> <question> | --file <path>");
+    const question = body(text, opts);
     const res = await call("POST", `/api/tasks/${taskId}/result`, {
-      pmResult: opts.note || text.join(" "),
-      question: text.join(" "),
+      pmResult: opts.note || question,
+      question,
       status: "blocked",
       tokensIn: Number(opts.in || 0),
       tokensOut: Number(opts.out || 0)
@@ -262,22 +277,27 @@ const commands = {
 
   // the desk, to the user, about a task that waits on them — not the answer
   async ask(args) {
-    const [taskId, ...text] = args;
-    if (!taskId || !text.length) throw new Error('usage: pilo ask <taskId> "what the user needs to decide or do"');
-    const res = await call("POST", `/api/tasks/${taskId}/ask`, { body: text.join(" ") });
+    const { rest, opts } = flags(args);
+    const [taskId, ...text] = rest;
+    if (!taskId || (!text.length && !opts.file)) throw new Error('usage: pilo ask <taskId> "what the user needs to decide or do" | --file <path>');
+    const res = await call("POST", `/api/tasks/${taskId}/ask`, { body: body(text, opts) });
     return out(t("cli.asked", { id: res.taskId, inbox: res.inboxId }));
   },
 
   async answer(args) {
-    const [taskId, ...text] = args;
-    if (!taskId || !text.length) throw new Error("usage: pilo answer <taskId> <answer>");
-    const res = await call("POST", `/api/tasks/${taskId}/answer`, { body: text.join(" ") });
+    const { rest, opts } = flags(args);
+    const [taskId, ...text] = rest;
+    if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo answer <taskId> <answer> | --file <path>");
+    const res = await call("POST", `/api/tasks/${taskId}/answer`, { body: body(text, opts) });
     return out(t("cli.answered", { id: res.id, status: res.status }));
   },
 
-  async api([method, path, body]) {
-    if (!method || !path) throw new Error("usage: pilo api <METHOD> <path> [json]");
-    return out(await call(method.toUpperCase(), path, body ? JSON.parse(body) : undefined));
+  async api(args) {
+    const { rest, opts } = flags(args);
+    const [method, path, json] = rest;
+    if (!method || !path) throw new Error("usage: pilo api <METHOD> <path> [json] | --file <path.json>");
+    const payload = opts.file ? readFileSync(opts.file, "utf8") : json;
+    return out(await call(method.toUpperCase(), path, payload ? JSON.parse(payload) : undefined));
   }
 };
 
