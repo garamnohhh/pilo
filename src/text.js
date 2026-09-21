@@ -28,6 +28,8 @@ const EN = {
 
   // request cards
   "card.replyBadge": "FINAL_REPLY",
+  "feed.note": "pilo → you · note",
+  "feed.scheduled": "scheduled",
   "card.followUp": "follow-up",
   "card.replyAgain": "· follow-up · {at}",
   "card.replyFooter": "click to follow up · run log · changed files in :dash",
@@ -105,6 +107,7 @@ const EN = {
   "cli.inboxEmpty": "inbox is empty",
   "cli.noAgents": "no agents registered",
   "cli.taskSent": "task #{id} → agent {agent}",
+  "cli.noteSaved": "note saved · in-{id}",
   "cli.replySaved": "final_reply #{id} saved (in-{inbox})",
   "cli.progressSaved": "task #{id} progress: {text}",
   "cli.result": "task #{id} {status}",
@@ -316,6 +319,8 @@ const KO = {
   "tree.sessionGone": "세션 끊김",
 
   "card.replyBadge": "FINAL_REPLY",
+  "feed.note": "pilo → 너 · 알림",
+  "feed.scheduled": "예약",
   "card.followUp": "이어서",
   "card.replyAgain": "· 이어서 · {at}",
   "card.replyFooter": "클릭하면 이어 묻기 · 실행 로그·변경 파일은 :dash",
@@ -389,6 +394,7 @@ const KO = {
   "cli.inboxEmpty": "inbox 비어 있음",
   "cli.noAgents": "등록된 agent 없음",
   "cli.taskSent": "task #{id} → agent {agent}",
+  "cli.noteSaved": "알림 저장 · in-{id}",
   "cli.replySaved": "final_reply #{id} 저장됨 (in-{inbox})",
   "cli.progressSaved": "task #{id} 진행: {text}",
   "cli.result": "task #{id} {status}",

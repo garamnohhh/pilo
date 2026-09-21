@@ -518,7 +518,7 @@ const OPEN_ASK_TEXT = `COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.i
 
 export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
   const rows = await query(
-    `SELECT i.id, i.user_request AS "userRequest", i.status, i.created_at AS "createdAt",
+    `SELECT i.id, i.user_request AS "userRequest", i.status, i.source, i.created_at AS "createdAt",
        (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = i.id) AS routed,
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id) AS "taskCount",
        (SELECT string_agg(DISTINCT p.name, ', ') FROM tasks t
@@ -605,7 +605,7 @@ export async function countInbox(agent = "") {
 
 export async function inboxDetail(id) {
   const row = await one(
-    `SELECT id, user_request AS "userRequest", status, created_at AS "createdAt" FROM inbox WHERE id = $1`,
+    `SELECT id, user_request AS "userRequest", status, source, created_at AS "createdAt" FROM inbox WHERE id = $1`,
     [id]
   );
   if (!row) throw Object.assign(new Error("inbox item not found"), { status: 404 });
@@ -659,11 +659,38 @@ export async function inboxDetail(id) {
   return { ...row, tasks, replies, events, trace, decisions };
 }
 
-export async function createInbox(userRequest, cwd = "") {
+export async function createInbox(userRequest, cwd = "", source = "user") {
   if (!userRequest.trim()) throw Object.assign(new Error("empty request"), { status: 400 });
-  const row = await one("INSERT INTO inbox (user_request, cwd) VALUES ($1, $2) RETURNING id, created_at", [userRequest, cwd]);
-  await logEvent({ type: "inbox_created", title: userRequest.slice(0, 60), inboxId: row.id, payload: { cwd } });
+  const row = await one(
+    "INSERT INTO inbox (user_request, cwd, source) VALUES ($1, $2, $3) RETURNING id, created_at",
+    [userRequest, cwd, source === "schedule" || source === "desk" ? source : "user"]
+  );
+  await logEvent({ type: "inbox_created", title: userRequest.slice(0, 60), inboxId: row.id, payload: { cwd, source } });
   return { id: row.id, createdAt: row.created_at };
+}
+
+// The desk speaking first. Everything it can say today is an answer to something
+// the user typed, so news of its own — a job that ran, a limit that landed, work
+// that finished long after the request closed — had nowhere to go. A note is a
+// conversation with no question in it: one line saying what happened, written
+// straight into the screen as the desk's own.
+//
+// Not to be confused with pilo ask, which waits for the user to decide, or with a
+// progress note, which belongs to a task. Nothing waits on a note.
+export async function createNote(input) {
+  const body = String(input?.body || "").trim();
+  if (!body) throw Object.assign(new Error("empty note"), { status: 400 });
+  const title = String(input?.title || "").trim() || body.split("\n")[0].slice(0, 60);
+  const inbox = await createInbox(title, "", "desk");
+  await query("UPDATE inbox SET status = 'replied', updated_at = now() WHERE id = $1", [inbox.id]);
+  const pilo = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  await one(
+    "INSERT INTO final_replies (inbox_id, agent_id, body, elapsed_ms) VALUES ($1, $2, $3, 0) RETURNING id",
+    [inbox.id, pilo?.id || null, body]
+  );
+  await logEvent({ type: "desk_note", title: title, inboxId: inbox.id, agentId: pilo?.id || null, payload: {} });
+  await notifyRule("desk note", `Pilo · ${title}`, `in-${inbox.id}`).catch(() => {});
+  return { id: inbox.id };
 }
 
 export async function createTask(inboxId, input) {
@@ -1393,7 +1420,7 @@ export async function runSchedule(schedule) {
       [schedule.lastTaskId]);
     if (open) return advance("previous run still open");
   }
-  const inbox = await createInbox(schedule.request, "");
+  const inbox = await createInbox(schedule.request, "", "schedule");
   // A job aimed at the desk arrives the way anything from the user arrives — as a
   // request it routes or answers itself. Anyone else gets a task, as usual.
   const desk = await one("SELECT role FROM agents WHERE id = $1", [schedule.toAgentId]);

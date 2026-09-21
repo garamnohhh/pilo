@@ -1003,10 +1003,15 @@ function render() {
       const mood = item.finalReply ? "done" : item.needsReply || deciding ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
       const markColour = pulseColour(mood);
+      // Not every line in the feed is something the user typed. A note is the
+      // desk speaking first and a scheduled job is an hour coming round, and
+      // both used to be drawn as though the user had asked for them.
+      const spoke = item.source === "desk" ? t("feed.note") : item.source === "schedule" ? t("feed.scheduled") : "";
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
-        return `  ${mark} ${tag} ${c.fg}${x}${c.reset}`;
+        const said = i === 0 && spoke ? `${c.faint}${spoke} ·${c.reset} ${c.fg}${x}${c.reset}` : `${c.fg}${x}${c.reset}`;
+        return `  ${mark} ${tag} ${said}`;
       });
       if (folded && lines.length > shownLines.length) {
         question[question.length - 1] += `${c.faint} …${c.reset}`;
