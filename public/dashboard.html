@@ -1386,7 +1386,8 @@ function feedMessages(item, detail) {
     msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
   }
   for (const [i, reply] of (full.replies || []).entries()) {
-    const what = item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer";
+    // the bubble already says pilo; the word only has to say what kind of line it is
+    const what = item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer";
     msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · ${what}`,
       kind: "answer", text: reply.body || "", inbox: item.id });
   }
@@ -1394,7 +1395,7 @@ function feedMessages(item, detail) {
   if (!(detail?.replies || []).length && item.finalReply) {
     const carried = item.replies?.length ? item.replies : [{ at: item.repliedAt, body: item.finalReply }];
     for (const [i, reply] of carried.entries()) {
-      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer"}`,
+      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer"}`,
         kind: "answer", text: reply.body, inbox: item.id });
     }
   }
