@@ -1363,7 +1363,15 @@ const hhmm = (iso) => {
 function feedMessages(item, detail) {
   const full = detail || item;
   const state_ = convState(item, detail);
-  const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
+  // A note has no question above it — the desk spoke first — and a scheduled job
+  // says so rather than posing as something the user typed.
+  const msgs = item.source === "desk" ? [] : [{
+    who: item.source === "schedule"
+      ? `${T("feed.scheduled")} · ${hhmm(item.createdAt)}`
+      : `you · ${hhmm(item.createdAt)}`,
+    kind: "you",
+    text: item.userRequest || ""
+  }];
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
     // A note is news only while its task is still open. What the task finally
@@ -1385,7 +1393,7 @@ function feedMessages(item, detail) {
   if (!(detail?.replies || []).length && item.finalReply) {
     const carried = item.replies?.length ? item.replies : [{ at: item.repliedAt, body: item.finalReply }];
     for (const [i, reply] of carried.entries()) {
-      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${i ? T("card.followUp") : "answer"}`,
+      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer"}`,
         kind: "answer", text: reply.body, inbox: item.id });
     }
   }
