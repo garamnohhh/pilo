@@ -1,0 +1,292 @@
+<html lang="en" data-bilingual><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pilo — one desk for the agents you already run</title>
+<meta name="pirep:title-en" content="pilo — one desk for the agents you already run">
+<meta name="pirep:title-ko" content="pilo — 이미 띄워둔 에이전트를 한 자리에서">
+<link rel="icon" href="/garamnoh-system/assets/favicon-32.png" sizes="32x32">
+<link rel="icon" href="/garamnoh-system/assets/favicon-16.png" sizes="16x16">
+<script src="/garamnoh-system/boot.js"></script>
+<link rel="stylesheet" href="/garamnoh-system/tokens/fonts.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/colors.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/typography.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/spacing.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/radius.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/elevation.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/motion.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/base.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/zindex.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/density.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/deck.css">
+<link rel="stylesheet" href="/garamnoh-system/components/layout.css">
+<link rel="stylesheet" href="/garamnoh-system/components/components.css">
+<link rel="stylesheet" href="/garamnoh-system/components/wordmark.css">
+<link rel="stylesheet" href="/garamnoh-system/components/extended.css">
+<link rel="stylesheet" href="/garamnoh-system/components/product.css">
+<link rel="stylesheet" href="/garamnoh-system/products/pilo/brand.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/print.css">
+<style>
+html[data-lang="ko"] .l-en, html:not([data-lang="ko"]) .l-ko { display: none; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+a { color: var(--accent-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+[data-gn-opt-theme], [data-site-lang] { background: transparent; color: var(--text-3); font-weight: 400; }
+[data-gn-opt-theme][aria-selected="true"], [data-site-lang][data-active] { background: var(--bg-2); color: var(--accent-text); font-weight: 600; }
+[data-site-lang] { text-decoration: none; }
+</style>
+</head><body>
+
+  <div  style="position: sticky; top: 0px; z-index: 60; background: var(--bg); border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 8px 28px; min-height: 54px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <span  class="pilo-wordmark pilo-wordmark--md" data-product="pilo" style="flex: 0 0 auto;"><b>❯</b>pilo</span>
+      <div  style="flex: 1 1 0%; min-width: 0px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 13px; color: var(--text-2); white-space: nowrap;">GitHub</a>
+        <a  href="https://github.com/garamnohhh/pilo/releases" style="font-size: 13px; color: var(--text-2); white-space: nowrap;"><span class="l-en">Releases</span><span class="l-ko">릴리스</span></a>
+      </div>
+      <a  href="#install" style="height: 26px; display: flex; align-items: center; padding: 0px 12px; flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font-size: 12.5px;"><span class="l-en">Install · soon</span><span class="l-ko">설치 · 준비 중</span></a>
+      <div  style="display: flex; height: 26px; border: 1px solid var(--line); flex: 0 0 auto;">
+        <a href="../index.html" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-site-lang="ko">KO</a>
+        <a href="./index.html" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-site-lang="en" data-active>EN</a>
+      </div>
+      <div  style="display: flex; height: 26px; border: 1px solid var(--line); flex: 0 0 auto;" data-gn-toggle="theme">
+        <span style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-gn-opt-theme="light" role="tab" tabindex="0">LIGHT</span>
+        <span style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-gn-opt-theme="dark" role="tab" tabindex="0">DARK</span>
+      </div>
+    </div>
+  </div>
+
+  <div  id="top" style="border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">LOCAL AGENT DESK</span>
+      <h1  style="font-size: clamp(38px, 6.4vw, 66px); line-height: 1.06; letter-spacing: -0.03em; margin: 22px 0px 0px; max-width: 17ch; white-space: pre-line;"><span class="l-en">Many agents,
+one place to talk</span><span class="l-ko">여러 에이전트,
+한 곳에서 말해요</span></h1>
+      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 24px 0px 0px; max-width: 54ch; text-wrap: pretty;"><span class="l-en">pilo does not start agents. It gathers the ones already open in your terminal, so you say it once and the owners split the work.</span><span class="l-ko">pilo는 에이전트를 새로 만들지 않아요. 터미널에 이미 띄워둔 것들을 한 자리에 모아, 한 번만 말하면 담당들이 나눠서 해요.</span></p>
+      <div  style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 32px;">
+        <a  href="#install" style="height: 44px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; padding: 0px 20px; font-size: 15px; font-weight: 500;"><span class="l-en">How to install</span><span class="l-ko">설치 방법 보기</span></a>
+        <a  href="#how" style="height: 44px; border: 1px solid var(--line); background: var(--surface); color: var(--text); display: flex; align-items: center; padding: 0px 20px; font-size: 15px;"><span class="l-en">How it works</span><span class="l-ko">어떻게 동작하나요</span></a>
+        <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);"><span class="l-en">macOS · local only, no account</span><span class="l-ko">macOS · 계정 없이 로컬에서만</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div  id="screen" style="border-bottom: 1px solid var(--line); background: var(--bg-2);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 48px 28px;">
+      <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-work-light.png" alt="The pilo desk — the agent tree on the left, one conversation in the middle" style="width: 100%; height: auto;">
+      <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-work-dark.png" alt="The pilo desk — the agent tree on the left, one conversation in the middle" style="width: 100%; height: auto;">
+      <p  class="gn-mono" style="font-size: 11px; color: var(--text-3); margin: 12px 0px 0px;"><span class="l-en">the real screen, with a sample desk</span><span class="l-ko">실제 화면 · 데이터는 샘플이에요</span></p>
+    </div>
+  </div>
+
+  <div  id="how" style="border-bottom: 1px solid var(--line); background: var(--bg-2);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">ONE PLACE TO TALK</span>
+      <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 0px 0px 12px; max-width: 24ch; text-wrap: pretty;" style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px; max-width: 24ch;"><span class="l-en">You stop moving between tabs</span><span class="l-ko">탭을 옮겨 다니지 않아요</span></h2>
+      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 16px 0px 0px; max-width: 56ch; text-wrap: pretty;"><span class="l-en">Three agents open is three conversations cut in half. pilo puts one desk in front of them and gives each project an owner.</span><span class="l-ko">에이전트를 셋 띄우면 대화도 셋으로 끊겨요. pilo는 그 앞에 창구를 하나 두고, 프로젝트마다 담당을 정해요.</span></p>
+      <div  style="border-top: 1px solid var(--line); margin-top: 36px;">
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Desk agent</span><span class="l-ko">대표</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">The only one you talk to. It reads the request, decides whose work it is, and writes back one answer.</span><span class="l-ko">말을 거는 상대는 이 하나예요. 요청을 읽고 누가 할 일인지 정한 다음, 돌아온 걸 모아 한 번에 답해요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Owner</span><span class="l-ko">담당</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">One project, one owner. It reads only its own folder and reports back.</span><span class="l-ko">프로젝트 하나에 담당 하나예요. 자기 폴더만 보고 일한 뒤 대표에게 보고해요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Specialist</span><span class="l-ko">분야 담당</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Sits under an owner and covers one area. The name is the area.</span><span class="l-ko">담당 아래에서 한 분야만 맡아요. 이름이 곧 담당 분야예요.</span></span>
+          </div>
+      </div>
+      <div  style="margin-top: 36px;">
+      <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-agents-light.png" alt="The agents tab — the desk agent, its owners and their specialists" style="width: 100%; height: auto;">
+      <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-agents-dark.png" alt="The agents tab — the desk agent, its owners and their specialists" style="width: 100%; height: auto;">
+      </div>
+    </div>
+  </div>
+
+  <div  id="trail" style="border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">THE TRAIL</span>
+      <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px; max-width: 24ch; text-wrap: pretty;"><span class="l-en">You can see how far a request got</span><span class="l-ko">요청이 어디까지 갔는지 남아요</span></h2>
+      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 16px 0px 0px; max-width: 56ch; text-wrap: pretty;"><span class="l-en">Five stages are kept, from what you said to the answer that came back. The terminal shows the last one; the rest is there when you want it.</span><span class="l-ko">말한 내용부터 돌아온 답까지 다섯 단계가 남아요. 터미널에는 마지막 답만 보이고, 나머지는 필요할 때 열어보면 돼요.</span></p>
+      <div  style="border-top: 1px solid var(--line); margin-top: 36px;">
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">You do not repeat yourself</span><span class="l-ko">다시 설명하지 않아요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">What you asked yesterday is on record.</span><span class="l-ko">어제 무엇을 시켰는지 기록에 남아 있어요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">You see who did what</span><span class="l-ko">누가 했는지 보여요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Each request keeps which owner did which part.</span><span class="l-ko">요청마다 어느 담당이 무엇을 했는지 같이 남아요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">A failure is a record too</span><span class="l-ko">실패도 기록이에요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">A request that never landed because a session was down stays visible, and goes again once it is back.</span><span class="l-ko">세션이 꺼져 전달되지 못한 것도 그대로 남고, 세션을 켜면 다시 보내요.</span></span>
+          </div>
+      </div>
+      <div  style="margin-top: 36px;">
+      <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-requests-light.png" alt="The requests tab — what was asked, who is handling it, what came back" style="width: 100%; height: auto;">
+      <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-requests-dark.png" alt="The requests tab — what was asked, who is handling it, what came back" style="width: 100%; height: auto;">
+      </div>
+    </div>
+  </div>
+
+  <div  id="local" style="border-bottom: 1px solid var(--line); background: var(--bg-2);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">LOCAL ONLY</span>
+      <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 48px; align-items: start; margin-top: 8px;">
+        <div >
+          <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 0px 0px 12px; max-width: 22ch; text-wrap: pretty;"><span class="l-en">The record stays on your machine</span><span class="l-ko">기록은 내 컴퓨터에 있어요</span></h2>
+          <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px 0px 28px; max-width: 48ch; text-wrap: pretty;"><span class="l-en">pilo passes what you said to sessions that are already signed in. There is no API key to paste and nothing to send out.</span><span class="l-ko">pilo는 이미 켜져 있는 세션에 말을 전달해요. API 키를 넣지 않고, 대화 내용을 밖으로 보내지 않아요.</span></p>
+          <div  style="border-top: 1px solid var(--line);">
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">No API key</span><span class="l-ko">API 키가 없어요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">The agents are already signed in. pilo only speaks to their windows.</span><span class="l-ko">에이전트는 이미 로그인된 채로 켜져 있어요. pilo는 그 창에 말만 전달해요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Your files stay as they are</span><span class="l-ko">내 파일은 그대로예요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">It writes one marked block in each agent's AGENTS.md or CLAUDE.md, and nothing else.</span><span class="l-ko">각 에이전트의 AGENTS.md나 CLAUDE.md에 표시된 블록 하나만 써요. 다른 파일은 그대로 둬요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Removing it leaves the work</span><span class="l-ko">지워도 일한 건 남아요</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Delete pilo and the documents and repositories are still there.</span><span class="l-ko">pilo를 지워도 문서와 저장소는 그대로 남아요.</span></span>
+          </div>
+          </div>
+        </div>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">CONFIG</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;">~/.pilo/config.toml</span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">DB</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;">postgres · 127.0.0.1</span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">LOGS</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;">~/.pilo/logs/</span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">PORT</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text-3); text-align: right;"><span class="l-en">127.0.0.1 · not open outside</span><span class="l-ko">127.0.0.1 · 밖에서 안 열려요</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">CLOUD</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text-3); text-align: right;"><span class="l-en">none</span><span class="l-ko">없음</span></span>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div  id="place" style="border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">WHERE PILO SITS</span>
+      <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 40px; max-width: 22ch; text-wrap: pretty;"><span class="l-en">pilo is the desk</span><span class="l-ko">pilo는 창구예요</span></h2>
+      <div  style="border: 1px solid var(--line); background: var(--bg);">
+        <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px 20px; padding: 20px 24px; border-bottom: 1px solid var(--line-soft); align-items: baseline;">
+          <span  style="font-size: 15px; color: var(--text);">herdr</span>
+          <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">WORKSPACE</span>
+          <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Where the agents actually run. It opens the sessions and keeps them up.</span><span class="l-ko">에이전트가 실제로 도는 곳이에요. 세션을 띄우고 유지해요.</span></span>
+        </div>
+        <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px 20px; padding: 20px 24px; border-bottom: 1px solid var(--line-soft); align-items: baseline;">
+          <span  style="font-size: 15px; color: var(--text);">Claude Code · Codex</span>
+          <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">AGENT</span>
+          <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">The ones reading and changing code, each in its own folder.</span><span class="l-ko">코드를 읽고 고치는 쪽이에요. 각자 자기 폴더에서 일해요.</span></span>
+        </div>
+        <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 8px 20px; padding: 20px 24px; border-bottom: 1px solid var(--line-soft); align-items: baseline; border-left: 3px solid var(--accent); background: var(--accent-weak);">
+          <span  style="font-size: 15px; color: var(--text); font-weight: 600;">pilo</span>
+          <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent-text);">AGENT DESK</span>
+          <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Where you speak. It does not replace the agents; it decides where a request goes and gathers what comes back.</span><span class="l-ko">내가 말을 거는 곳이에요. 에이전트를 대신하지 않고, 어디로 보낼지 정하고 돌아온 걸 모아 답해요.</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div  id="install" style="border-bottom: 1px solid var(--line); background: var(--bg-2);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">INSTALL</span>
+      <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px; max-width: 22ch; text-wrap: pretty;"><span class="l-en">Not settled yet</span><span class="l-ko">아직 정하는 중이에요</span></h2>
+      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px 0px 28px; max-width: 52ch; text-wrap: pretty;"><span class="l-en">The repository is still private, and how you install pilo is decided when it opens. One line in a terminal is the plan. This spot is where it will be.</span><span class="l-ko">저장소가 아직 비공개예요. 설치 방법은 공개할 때 확정해요. 터미널 한 줄로 끝내는 쪽으로 보고 있고, 자리는 여기예요.</span></p>
+      <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; align-items: start;">
+        <div  style="border: 1px dashed var(--line); background: var(--surface); padding: 28px 20px; text-align: center;">
+          <span  class="gn-mono" style="font-size: 12.5px; color: var(--text-3);"><span class="l-en">the install line goes here — decided when the repo is public</span><span class="l-ko">설치 한 줄이 들어갈 자리 — 저장소 공개 때 확정</span></span>
+        </div>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">VERSION</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text-3); text-align: right;"><span class="l-en">0.1.0 · not released</span><span class="l-ko">0.1.0 · 공개 전</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">REQUIRES</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;"><span class="l-en">macOS · Node.js 20 or newer</span><span class="l-ko">macOS · Node.js 20 이상</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">DATABASE</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;"><span class="l-en">a Docker-compatible runtime</span><span class="l-ko">Docker 호환 런타임</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">AGENTS</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;">Claude Code · Codex</span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">TMUX</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text-3); text-align: right;"><span class="l-en">on the way</span><span class="l-ko">준비 중이에요</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">LINUX</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text-3); text-align: right;"><span class="l-en">on the way</span><span class="l-ko">준비 중이에요</span></span>
+            </div>
+            <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
+              <span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); width: 104px; flex: 0 0 auto;">LICENCE</span>
+              <span  class="gn-mono" style="flex: 1 1 0%; min-width: 0px; font-size: 12.5px; color: var(--text); text-align: right;"><span class="l-en">MIT · no account</span><span class="l-ko">MIT · 계정 없음</span></span>
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div  id="faq" style="border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 76px 28px;">
+      <span  class="gn-label" style="color: var(--text-3);">FAQ</span>
+      <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px; max-width: 24ch; text-wrap: pretty;"><span class="l-en">Asked often</span><span class="l-ko">자주 묻는 것</span></h2>
+      <div  style="border-top: 1px solid var(--line); margin-top: 28px;">
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Does pilo start the agents?</span><span class="l-ko">에이전트를 pilo가 만드나요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">No. You register sessions that are already open. If herdr is running, pilo can open a new window for you.</span><span class="l-ko">아니에요. 이미 켜둔 세션을 등록해서 써요. herdr가 떠 있으면 pilo가 새 창을 열어줄 수도 있어요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Where does my data go?</span><span class="l-ko">제 데이터는 어디로 가나요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Nowhere. It sits in a PostgreSQL container running on your own machine.</span><span class="l-ko">밖으로 나가지 않아요. 전부 내 컴퓨터에서 도는 PostgreSQL에 저장돼요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Do I need an API key?</span><span class="l-ko">API 키가 필요한가요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">No. pilo speaks to agent sessions that are already signed in.</span><span class="l-ko">필요하지 않아요. pilo는 이미 로그인된 세션에 말을 전달할 뿐이에요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Does it work with tmux?</span><span class="l-ko">tmux에서도 되나요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">Only herdr for now. You can also run the agents yourself and watch them directly.</span><span class="l-ko">지금은 herdr만 돼요. 멀티플렉서 없이 각 에이전트를 직접 보면서 써도 돼요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Does it change files in my repository?</span><span class="l-ko">제 저장소 파일을 고치나요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">One marked block in AGENTS.md or CLAUDE.md. Nothing else is touched.</span><span class="l-ko">AGENTS.md나 CLAUDE.md에 표시된 블록 하나만 써요. 다른 파일은 그대로 둬요.</span></span>
+          </div>
+          <div  style="padding: 20px 0px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 32px; align-items: baseline;">
+            <span  style="font-size: 15px; font-weight: 600; color: var(--text);"><span class="l-en">Can I see it on a phone?</span><span class="l-ko">폰에서도 볼 수 있나요?</span></span>
+            <span  style="font-size: 14px; line-height: 1.7; color: var(--text-2);"><span class="l-en">The dashboard folds to phone width, but it only listens on your own machine, so reaching it from outside takes a setup of your own.</span><span class="l-ko">대시보드는 폰 폭에 맞게 접혀요. 다만 내 컴퓨터에서만 열리니 밖에서 보려면 접속 설정을 따로 해야 해요.</span></span>
+          </div>
+      </div>
+    </div>
+  </div>
+
+  <div >
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 44px 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <span  class="pilo-wordmark" data-product="pilo" style="color: var(--text-2);"><b>❯</b>pilo</span>
+      <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);"><span class="l-en">2026 · made in Jeonju</span><span class="l-ko">2026 · 전주에서 만들었어요</span></span>
+      <div  style="margin-left: auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 12.5px; color: var(--text-2);">GitHub</a>
+        <span  class="gn-mono" style="font-size: 12.5px; color: var(--text-3);"><span class="l-en">MIT licence</span><span class="l-ko">MIT 라이선스</span></span>
+      </div>
+    </div>
+  </div>
+<script src="/garamnoh-system/deploy.js"></script>
+</body></html>
