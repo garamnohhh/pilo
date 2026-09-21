@@ -239,7 +239,7 @@ for (const [name, text] of Object.entries({
   marker: "before ⟦paste #1 · 3 lines · 742 chars⟧ after",
   newlines: "first line\nsecond line is quite long and wraps here\n\nlast",
   // the shape macOS hands over a file name in: one letter per jamo
-  decomposed: "/Users/garam/Downloads/랜딩 헤더 구현 지침 1B+2C.html".normalize("NFD")
+  decomposed: "/Users/you/Downloads/랜딩 헤더 구현 지침 1B+2C.html".normalize("NFD")
 })) {
   test(`the cursor is drawn where the next character lands — ${name}`, () => {
     for (const width of [16, 24, 37]) {

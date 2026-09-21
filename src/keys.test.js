@@ -210,7 +210,7 @@ test("a bare ESC is carried, so the rest of an arrow key can still join it", () 
 
 // The path the user pasted, in the form Finder hands over: decomposed Hangul,
 // one letter per jamo. A terminal splits a paste wherever it likes.
-const PATH = "/Users/garam/Downloads/랜딩 헤더 구현 지침 1B+2C.html".normalize("NFD");
+const PATH = "/Users/you/Downloads/랜딩 헤더 구현 지침 1B+2C.html".normalize("NFD");
 
 test("a character split across two reads is not eaten", () => {
   const bytes = Buffer.from(PATH, "utf8");
