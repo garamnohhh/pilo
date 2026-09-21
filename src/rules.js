@@ -30,6 +30,7 @@ Do not call HTTP (\`curl ${base}\`) from an agent session — the sandbox blocks
 | \`[pilo:inbox] request #N\` | \`pilo inbox N\` to read it, then create a task for the PM who owns that project |
 | \`[pilo:result] results in for #N\` | \`pilo inbox N\` to read every \`tasks[].pmResult\` in full, then \`pilo reply\` — see "Writing the answer" |
 | \`[pilo:blocked] task #T in request #N is waiting on the user\` | \`pilo inbox N\` to read the question, then \`pilo ask T "…"\` — see "When a PM is waiting on the user" |
+| \`[pilo:followup] in-N — #T finished after your answer\` | \`pilo inbox N\`, then \`pilo reply N "…"\` again — only what changed since the answer you already gave |
 
 \`\`\`bash
 pilo inbox                       # requests with no answer yet
@@ -39,6 +40,7 @@ pilo send <agentId> N "the request, in full"
 pilo reply N "what the user should read"
 pilo reply N "a short lead" --with-results   # the lead, with each PM's result under it
 pilo ask T "what the user needs to decide or do"   # speak to the user about blocked task T — not an answer
+pilo note "something they should know"             # speak first — no question above it, nothing waiting on it
 pilo blocked                     # every task still waiting on the user
 pilo history <words> [--since YYYY-MM-DD] [--agent name]   # past requests, answers, results
 \`\`\`
@@ -77,6 +79,13 @@ Run \`pilo agents\` if that list looks stale.
   - the request picks up an earlier one and the answer has to join them
 - A request no PM owns — the morning briefing among them — is answered in full, as before.
 - **After \`pilo reply\`, stop.** No closing words in the pane: nobody reads them, and they keep you busy.
+  Stopping is not the end of the request: if work lands afterwards you are woken with \`[pilo:followup]\` and answer
+  that request again, with what changed. So "I will tell you when it lands" is a promise you can now keep — and one
+  you are expected to keep.
+- **\`pilo note\` is for what the user should know without having asked**: a job that ran, a limit that landed, a
+  schedule that needs their eye. It opens a line of its own with no question above it and waits for nothing —
+  unlike \`pilo ask\`, which waits for their decision, and \`pilo reply\`, which answers something they typed.
+  Keep it for what they would want to know away from the screen. Progress belongs to a task, not here.
 
 ### When a PM is waiting on the user
 
@@ -159,6 +168,7 @@ HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 �
 | \`[pilo:inbox] request #N\` | \`pilo inbox N\` 으로 원문 확인 → 담당 PM에게 task 생성 |
 | \`[pilo:result] results in for #N\` | \`pilo inbox N\` 으로 모든 \`tasks[].pmResult\` 전문 확인 → 아래 "답 쓰기" 대로 \`pilo reply\` |
 | \`[pilo:blocked] 요청 #N 의 작업 #T 가 사용자 결정 대기\` | \`pilo inbox N\` 으로 질문 확인 → \`pilo ask T "…"\` — 아래 "PM 이 사용자 결정을 기다릴 때" |
+| \`[pilo:followup] in-N — #T finished after your answer\` | \`pilo inbox N\` 으로 결과 확인 → \`pilo reply N "…"\` 로 **이어서 한 번 더**. 이미 준 답 뒤로 달라진 것만 |
 
 ### 등록된 agent
 
@@ -173,7 +183,7 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 - **PM에게 보고하는 worker에게는 절대 직접 task를 주지 않는다.** 그 PM에게 보내고, 위임은 PM이 한다.
   worker의 보고도 PM이 받아 자기 보고로 정리한다. 예외 없다. 보고 대상 칸이 자신을 가리키는 worker만 직접 지시한다.
 - 담당 PM이 없는 요청만 직접 답한다.
-- 저장하는 것은 \`final_reply\` 하나뿐이다.
+- 화면에 남기는 것은 \`final_reply\` 와 \`pilo note\` 둘뿐이다. 진행 상황은 task 의 progress 로 두고 답으로 저장하지 않는다.
 - PM이 실패로 보고하면 그 사실과 원인을 답변에 담는다.
 
 ### 답 쓰기
@@ -188,6 +198,11 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
   - 이전 요청과 이어서 답해야 할 때
 - 담당 PM 이 없는 요청(아침 브리핑 등)은 지금처럼 전부 직접 쓴다.
 - **\`pilo reply\` 뒤에는 멈춘다.** pane 에 마무리 문장을 쓰지 않는다 — 아무도 안 읽고, 그동안 붙잡혀 있다.
+  멈추는 것이 그 요청의 끝은 아니다. 뒤늦게 일이 끝나면 \`[pilo:followup]\` 으로 다시 깨우니, 그때 그 요청에
+  **이어서 한 번 더** 답한다(달라진 것만). 그러니 "끝나면 알려줄게" 는 이제 지킬 수 있는 약속이고, 지켜야 하는 약속이다.
+- **\`pilo note\` 는 사용자가 묻지 않았는데 알아야 할 것**에 쓴다 — 예약이 돈 결과, 한도가 걸린 일, 사용자가 봐야 할 상태 변화.
+  질문 없이 새 줄로 열리고 아무것도 기다리지 않는다. 결정을 기다리는 \`pilo ask\`, 사용자가 쓴 것에 답하는 \`pilo reply\` 와 다르다.
+  화면을 안 보고 있어도 알아야 할 것만 쓴다. 진행 상황 중계는 task 의 progress 지 여기가 아니다.
 
 ### PM 이 사용자 결정을 기다릴 때
 
