@@ -27,7 +27,6 @@ export const CATALOGUE = [
   { scope: "cli", name: "agents", args: "", summary: "등록된 agent (id · name · role · project)", example: "pilo agents" },
   { scope: "cli", name: "send", args: "<agentId> <inboxId> <요청>", summary: "PM에게 task 생성", example: 'pilo send 3 42 "로그인 리다이렉트 고쳐줘"' },
   { scope: "cli", name: "reply", args: "<inboxId> <본문> [--with-results]", summary: "final_reply 저장 — --with-results 면 머리말 아래 PM 결과를 붙임", example: 'pilo reply 42 "고쳤음. 재시작 필요" --with-results' },
-  { scope: "cli", name: "note", args: "<본문>", summary: "데스크가 먼저 알림 — 질문 없이 사용자 화면에 한 줄 (결정 대기는 pilo ask)", example: 'pilo note "아침 브리핑 예약이 두 번 걸려 있어 하나 껐다"' },
   { scope: "cli", name: "history", args: "<단어…> [--since 날짜] [--agent 이름]", summary: "지난 요청·답·결과 찾기 — 최신순 조각", example: "pilo history 수덕사 --since 2026-09-01" },
   { scope: "cli", name: "task", args: "<id>", summary: "받은 작업의 요청 전문과 사용자 원문", example: "pilo task 301" },
   { scope: "cli", name: "progress", args: "<taskId> <한 줄>", summary: "진행 상황 — 최종 답변과 별개, 여러 번 가능", example: 'pilo progress 301 "스테이징에서 재현 중"' },
