@@ -40,9 +40,9 @@ test("one result sits under the lead with nothing between", () => {
 test("several results are named, and a failure says so with its reason", () => {
   const body = withResults("둘 다 끝남", [
     task({ pmResult: "A 끝" }),
-    task({ agentId: 4, agent: "fitxel", status: "failed", error: "SESSION_NOT_FOUND", pmResult: "못 함" })
+    task({ agentId: 4, agent: "beacon", status: "failed", error: "SESSION_NOT_FOUND", pmResult: "못 함" })
   ], "실패");
-  assert.equal(body, "둘 다 끝남\n\n---\n\n**atlas**\n\nA 끝\n\n---\n\n**fitxel** · 실패\n\nSESSION_NOT_FOUND\n\n못 함");
+  assert.equal(body, "둘 다 끝남\n\n---\n\n**atlas**\n\nA 끝\n\n---\n\n**beacon** · 실패\n\nSESSION_NOT_FOUND\n\n못 함");
 });
 
 test("no lead still saves the results", () => {
