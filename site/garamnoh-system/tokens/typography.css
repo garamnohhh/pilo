@@ -1,0 +1,22 @@
+/* typography — one scale for all four themes. No intermediate sizes. */
+:root {
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, Menlo, monospace;
+
+  --fs-micro: 10px;                     /* one step under the label: compact
+                                           chips and header controls only */
+  --fs-label: 11px;  --lh-label: 1.3;   --ls-label: 0.14em;
+  --fs-small: 13px;  --lh-small: 1.55;
+  --fs-body: 15px;   --lh-body: 1.62;
+  --fs-h2: 22px;     --lh-h2: 1.3;      --ls-h2: -0.02em;
+  --fs-h1: 34px;     --lh-h1: 1.18;     --ls-h1: -0.03em;
+  --fs-display: 66px;
+  /* landing only — a panel that fills the viewport needs type that scales with
+     it. Used by home and the system entry; documentation pages stay on
+     --fs-display. */
+  --fs-hero: clamp(52px, 8.4vw, 128px);--lh-display: 1.04;--ls-display: -0.045em; --ls-hero: -0.05em;
+
+  --w-regular: 400;
+  --numeric-tabular: "tnum" 1;
+  --measure: 660px;
+}

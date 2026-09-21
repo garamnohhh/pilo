@@ -1,0 +1,19 @@
+/* motion — three durations, one easing. */
+:root {
+  --dur-color: 120ms;
+  --dur-move: 180ms;
+  --dur-enter: 260ms;
+  --dur-blink: 550ms;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --transition-control: color var(--dur-color) var(--ease),
+                        background-color var(--dur-color) var(--ease),
+                        border-color var(--dur-color) var(--ease),
+                        box-shadow var(--dur-move) var(--ease);
+  --move-max: 4px;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-color: 0ms; --dur-move: 0ms; --dur-enter: 0ms;
+  }
+  * { animation: none !important; transition: none !important; }
+}

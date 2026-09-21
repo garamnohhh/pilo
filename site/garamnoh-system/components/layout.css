@@ -1,0 +1,418 @@
+/* layout — the grammar. Boxes, density, alignment, state chips, figures.
+   These are the rules that make two screens look like one system.
+   Everything here is theme-agnostic: values come from tokens only. */
+
+/* ---------------------------------------------------------------- BOX
+   Every content element is a box: surface + 1px line. No radius, no shadow.
+   Padding comes from ONE of three steps — never an ad-hoc value. */
+.gn-box { position: relative; background: var(--surface); border: var(--bw) solid var(--line); min-width: 0; }
+.gn-box-pad     { padding: var(--sp-4); }              /* 16 — dense / console */
+.gn-box-pad-md  { padding: var(--sp-6); }              /* 24 — default */
+.gn-box-pad-lg  { padding: var(--sp-8); }              /* 32 — page-level */
+.gn-box-flat    { background: none; }                  /* line only */
+.gn-box-deep    { background: var(--bg-2); }           /* one step in */
+/* one emphasis box per view. Accent border only — never a fill + border + bar. */
+.gn-box-lead    { border-color: var(--accent); }
+/* not yet built / not yet decided. Dashed = future, always. */
+.gn-box-future  { background: none; border-style: dashed; border-color: var(--text-3); }
+
+/* ---------------------------------------------------------------- ROWS
+   A list inside a box divides that box's height equally. Never stack with
+   fixed padding — that is what leaves dead space at the bottom. */
+/* NOTE: .gn-rows carries flex:1, which only acts if its PARENT is a flex
+   column. A block parent silently ignores it and the surplus collects as one
+   slab at the bottom — the most common way this grammar gets broken. */
+.gn-rows { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+/* Vertical padding, not a container gap: in a box with a resolved height the
+   flex:1 children already distribute and the padding is absorbed, while in an
+   AUTO-height box flex:1 collapses to content — the padding is then the only
+   thing separating the rows. One rule covers both cases. */
+.gn-rows > * { flex: 1; min-height: 0; align-items: center; gap: var(--sp-4);
+               padding: var(--sp-3) 0;
+               border-top: var(--hairline) solid var(--line-soft); }
+.gn-rows > *:first-child { padding-top: 0; }
+.gn-rows > *:where(:not([style*="grid"]):not([style*="block"])) { display: flex; }
+.gn-rows > *:first-child { border-top: 0; }
+.gn-rows-tight > * { gap: var(--sp-2); padding: var(--sp-2) 0; }
+.gn-rows-tight > *:first-child { padding-top: 0; }
+/* rows that must NOT stretch (a short stat pair pinned to the bottom) */
+.gn-rows-fixed { flex: none; }
+
+/* ------------------------------------------------------------ BOX SHAPES
+   Two ways a box uses its height. Pick one; mixing them is what looks amateur.
+   .gn-fill  — one stretching child (table, rows, nested box, figure)
+   .gn-card  — label / value / caption distributed, last child is a footer */
+.gn-fill { display: flex; flex-direction: column; }
+.gn-fill > table, .gn-fill > .gn-rows, .gn-fill > .gn-box, .gn-fill > .gn-figure-slot { flex: 1; min-height: 0; }
+.gn-card-dist { display: flex; flex-direction: column; justify-content: space-between; }
+.gn-card-dist > :last-child { padding-top: var(--sp-6); border-top: var(--hairline) solid var(--line-soft); }
+.gn-box-lead.gn-card-dist > :last-child { border-top-color: var(--accent); }
+
+/* --------------------------------------------------------------- BANDS
+   A full-width strip that closes a view: label column + one sentence.
+   Conclusion = solid. Next-up = dashed accent. */
+.gn-band { display: flex; align-items: center; gap: var(--sp-6);
+           padding: var(--sp-4) var(--sp-6);
+           background: var(--surface); border: var(--bw) solid var(--line); }
+.gn-band > :first-child { flex: 0 1 200px; min-width: 0; max-width: 32%; }
+.gn-band-future { background: none; border-style: dashed; border-color: var(--accent); }
+
+/* --------------------------------------------------------------- CHIPS
+   Status on a TIME axis, five steps. Anything with a before/after ordering
+   is a chip — never grey body text. One solid .gn-chip-now per view.
+     done  past, settled      → neutral solid
+     now   current / shipping → accent solid
+     near  next up            → accent outline
+     mid   classified, undated→ hairline outline
+     far   not yet            → dashed outline */
+.gn-chip { display: inline-flex; align-items: center; gap: var(--sp-2);
+           padding: 4px var(--sp-3); white-space: nowrap;
+           font-family: var(--font-mono); font-size: var(--fs-label);
+           letter-spacing: 0.08em; text-transform: uppercase; line-height: 1.4;
+           border: var(--bw) solid transparent; }
+.gn-chip-done { background: var(--text-2); color: var(--bg); }
+.gn-chip-now  { background: var(--accent);  color: var(--on-accent); }
+.gn-chip-near { border-color: var(--accent); color: var(--accent-text); }
+.gn-chip-mid  { border-color: var(--line);   color: var(--text-3); }
+.gn-chip-far  { border-style: dashed; border-color: var(--text-3); color: var(--text-3); }
+/* semantic status variants — same base, coloured by meaning rather than time.
+   Use these when the label names a machine state; use the five steps above
+   when it names a position on the roadmap. */
+.gn-chip-running { border-color: var(--warn); color: var(--warn); }
+.gn-chip-failed  { border-color: var(--err);  color: var(--err); }
+.gn-chip-queued  { border-color: var(--line); color: var(--text-3); }
+/* opt-in leading dot. Only .gn-chip-running animates it. */
+.gn-chip-dot::before { content: ""; width: 6px; height: 6px; flex: none;
+                       background: currentColor; display: block; }
+.gn-chip-running.gn-chip-dot::before { animation: gn-pulse 1.1s steps(1, end) infinite; }
+@keyframes gn-pulse { 0%, 100% { opacity: 1 } 50% { opacity: 0.25 } }
+@media (prefers-reduced-motion: reduce) { .gn-chip-dot::before { animation: none } }
+
+/* -xs: the compact size. A chip that sits inside a metadata line — a date
+   column, a page kicker — must not outweigh the text it annotates, so the box
+   tightens and the label drops to --fs-micro. The five steps and the semantic
+   variants all take it. */
+.gn-chip-xs { padding: 1px 6px; font-size: var(--fs-micro); letter-spacing: 0.06em; }
+.gn-chip-xs.gn-chip-dot::before { width: 5px; height: 5px; }
+
+/* a value that does not exist yet, inline in running text */
+.gn-tbu { display: inline-block; padding: 2px var(--sp-2);
+          border: var(--hairline) dashed var(--text-3);
+          font-family: var(--font-mono); font-size: var(--fs-label);
+          letter-spacing: 0.08em; color: var(--text-3); }
+
+/* ------------------------------------------------------------ ALIGNMENT
+   Sibling groups are laid out with gap, never with margins or source
+   whitespace. Grid columns are fixed counts — auto-fit leaves orphan cells. */
+.gn-grid   { display: grid; gap: var(--sp-4); grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); }
+.gn-grid-2 { --cols: 2; } .gn-grid-3 { --cols: 3; } .gn-grid-4 { --cols: 4; }
+.gn-grid-tight { gap: var(--hairline); background: var(--line); }
+.gn-grid-tight > * { background: var(--surface); }
+/* cells divided by lines instead of gaps: last cell drops its rule */
+.gn-split > * { border-right: var(--hairline) solid var(--line-soft); }
+.gn-split > :last-child { border-right: 0; }
+/* label + value pair, baseline aligned, value right */
+.gn-pair { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-4); }
+.gn-pair > :last-child { font-variant-numeric: tabular-nums; }
+/* a spec strip: equal columns between two rules, one row always */
+.gn-strip { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+            border-top: var(--bw) solid var(--line); border-bottom: var(--bw) solid var(--line); }
+.gn-strip > * { padding: var(--sp-4) var(--sp-6); border-left: var(--bw) solid var(--line-soft); }
+.gn-strip > :first-child { padding-left: 0; border-left: 0; }
+@media (max-width: 760px) {
+  .gn-strip { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gn-strip > * { border-left: 0; padding: var(--sp-3) var(--sp-4) var(--sp-3) 0; }
+}
+
+/* --------------------------------------------------------- IMAGE PLACEMENT
+   Three ratios only: 16/9 screenshots, 4/3 process, 1/1 portrait (b&w).
+   Never set text directly on an image — either put it beside the image,
+   or lay a fade under it (.gn-bleed-fade) and put the text on the fade. */
+.gn-ratio-wide     { aspect-ratio: 16 / 9; }
+.gn-ratio-standard { aspect-ratio: 4 / 3; }
+.gn-ratio-square   { aspect-ratio: 1 / 1; }
+.gn-portrait { aspect-ratio: 1 / 1; filter: grayscale(1); }
+.gn-bleed { position: relative; overflow: hidden; }
+.gn-bleed > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+/* the fade is the only surface text may sit on over an image */
+.gn-bleed-fade { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1;
+  height: var(--fade-h, 58%);
+  background: linear-gradient(to top,
+    rgb(from var(--bg) r g b / 0.94) 0%,
+    rgb(from var(--bg) r g b / 0.82) 34%,
+    rgb(from var(--bg) r g b / 0.42) 68%,
+    rgb(from var(--bg) r g b / 0) 100%); }
+.gn-bleed-text { position: relative; z-index: 2; }
+
+/* ------------------------------------------------------- THEMED SCREENSHOT
+   A product shot carries the theme it was captured in, so a single file
+   contradicts one of the two themes. Ship both and let the attribute choose.
+   Both images are in the DOM; only one is displayed, so there is no layout
+   shift when the theme flips. */
+.gn-shot { display: block; width: 100%; border: var(--bw) solid var(--line); }
+[data-theme="dark"] .gn-shot-light,
+[data-theme="light"] .gn-shot-dark { display: none; }
+
+/* ---------------------------------------------------------- TABLE IN A BOX
+   A table that owns its box divides the box height across its rows. */
+.gn-table-fill { height: 100%; }
+.gn-table-fill td { vertical-align: middle; }
+
+/* ------------------------------------------------------------- PAGE SHELL
+   Header carries identity and controls only. Section navigation belongs to
+   the body, where it can show scroll position and does not compete with the
+   path. Every documentation page uses this, so it lives here rather than in
+   any one page's <style> — a page cannot forget to include it. */
+/* Three widths, three names. They were one before, so a reading limit meant
+   for long prose was also clamping intros and whole boxes.
+     --container  the page shell, shared by every page
+     the content column, whatever the grid hands the main area
+     --measure    a READING limit, applied per element and only to long prose
+   A table, a code block, a folder tree, a callout or a figure shares the outer
+   alignment of its content column; it is not narrowed to --measure. */
+.gn-page { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 120px; }
+/* Opt in on the paragraph that needs it, never on a wrapper. */
+.gn-read { max-width: var(--measure); }
+.gn-read-wide { max-width: 78ch; }
+/* Everything that is not prose keeps the column's own edges. */
+.gn-page-main > table, .gn-page-main > pre,
+.gn-page-main > .gn-box, .gn-page-main > .gn-band,
+.gn-page-main > .gn-code, .gn-page-main > figure { max-width: none; }
+.gn-page-body { --pg-nav: 156px; --pg-gap: var(--sp-8);
+                /* --pg-top is the real sticky-bar height. A page whose top bar wraps
+                   onto two lines overrides it; the token is only the default. */
+                --pg-top: var(--topbar-h);
+                display: grid; grid-template-columns: var(--pg-nav) minmax(0, 1fr);
+                gap: var(--pg-gap); align-items: start; }
+/* An anchor target stops below the sticky bar instead of behind it. .gn-panel
+   has had this since the landing page; the document shell was missing it, so
+   every #section jump hid its own heading. */
+.gn-page-body [id] { scroll-margin-top: calc(var(--pg-top) + var(--sp-6)); }
+/* Pinned below the bar AND bounded by what is left of the screen, so a long
+   list scrolls itself. Without max-height the last entries sat below the fold
+   and could only be reached by scrolling the article — which moved the reader
+   away from the thing they were trying to navigate to. */
+.gn-page-nav { position: sticky; top: calc(var(--pg-top) + var(--sp-8));
+               max-height: calc(100vh - var(--pg-top) - var(--sp-12));
+               overflow-y: auto; overscroll-behavior: contain;
+               scrollbar-width: thin;
+               display: flex; flex-direction: column;
+               border-left: var(--bw) solid var(--line); }
+.gn-page-nav a { padding: 7px 0 7px 14px; margin-left: calc(var(--bw) * -1);
+                 border-left: 2px solid transparent;
+                 font-family: var(--font-code); font-size: var(--fs-label);
+                 letter-spacing: 0.08em; text-transform: uppercase;
+                 color: var(--text-3); text-decoration: none;
+                 transition: color var(--dur-color) var(--ease); }
+.gn-page-nav a:hover { color: var(--text); }
+/* colour alone is too quiet at 11px: the weight step carries the state, the
+   left bar keeps it from being colour-only */
+.gn-page-nav a[aria-current="true"] { color: var(--text); border-left-color: var(--accent);
+                                      font-weight: var(--w-strong); }
+@media (max-width: 900px) {
+  .gn-page-body { --pg-nav: 0px; --pg-gap: 0px; grid-template-columns: minmax(0, 1fr); }
+  /* One scrolling row rather than a wrapped block: a 30-entry list would
+     otherwise push the article off the first screen. */
+  .gn-page-nav { position: sticky; top: var(--pg-top); z-index: 20;
+                 max-height: none; flex-direction: row; flex-wrap: nowrap;
+                 overflow-x: auto; overflow-y: hidden;
+                 background: var(--bg);
+                 border-left: 0; border-bottom: var(--bw) solid var(--line);
+                 margin-bottom: var(--sp-2); }
+  .gn-page-nav a { flex: none; white-space: nowrap; }
+  .gn-page-nav a { border-left: 0; border-bottom: 2px solid transparent;
+                   margin: 0 var(--sp-3) 0 0; padding: 7px 0; }
+  .gn-page-nav a[aria-current="true"] { border-left-color: transparent;
+                   border-bottom-color: var(--accent); }
+}
+
+/* ----------------------------------------------------------------- PANELS
+   Landing furniture. A documentation page is a column you read top to bottom;
+   a landing is a sequence of full-height statements. Same tokens, different
+   rhythm — the impact comes from scale, colour fields and inversion, never
+   from gradients, shadows or imagery.
+
+   Snap is 'proximity', not 'mandatory': a panel that outgrows the viewport
+   must still scroll normally instead of trapping the reader. */
+/* the scroller is <html>, not the wrapper — a snap declared on a
+   non-scrolling element is silently inert */
+html:has(.gn-panels) { scroll-snap-type: y mandatory; }
+/* A panel scales with the viewport (min-height 100vh minus the bar, padding on
+   7vh), so it cannot outgrow the screen and the snap never needs relaxing.
+   Only a viewport too short for one line of hero type gets the loose fallback. */
+@media (max-height: 380px) { html:has(.gn-panels) { scroll-snap-type: y proximity; } }
+.gn-panel {
+  position: relative;
+  /* the panel rests at the very top, under the bar, and pads its own content
+     clear of it. Snapping to below the bar instead would leave the bar sitting
+     on the PREVIOUS panel's tail, so at rest the bar could not carry this
+     panel's ground. */
+  min-height: 100vh; min-height: 100svh;
+  scroll-snap-align: start;
+  display: flex; flex-direction: column; justify-content: center;
+  /* clamped to viewport height: a fixed 76px is what pushed a list panel past
+     a short screen, and an overflowing panel disables the magnetic snap */
+  padding: calc(var(--topbar-h) + clamp(var(--sp-6), 7vh, var(--sp-12))) 0
+           clamp(var(--sp-6), 7vh, var(--sp-12));
+  border-top: var(--bw) solid var(--line);
+}
+.gn-panel:first-of-type { border-top: 0; }
+/* content-height panel — for a closing block that should not be padded to a
+   full screen */
+.gn-panel-auto { min-height: 0; }
+/* accent field: the deck's colour-field slide, on the web. Ink is always
+   --on-accent, and the panel counts against the same 1-in-5 budget. */
+.gn-panel-field { background: var(--accent); color: var(--on-accent);
+                  border-top-color: var(--accent); }
+.gn-panel-field .gn-label,
+.gn-panel-field .gn-panel-num { color: rgb(from var(--on-accent) r g b / 0.62); }
+/* invert: the theme's ink becomes the surface */
+.gn-panel-invert { background: var(--text); color: var(--bg);
+                   border-top-color: var(--text); }
+.gn-panel-invert .gn-label,
+.gn-panel-invert .gn-panel-num { color: rgb(from var(--bg) r g b / 0.6); }
+/* the invert face is light in both themes, so accent cannot be legible as
+   text on it. The link takes the face's own ink and gains an accent fill on
+   hover — a shape, never an underline. */
+.gn-panel-invert a { color: currentColor; }
+.gn-panel-invert a:hover { background: var(--accent); color: var(--on-accent);
+                           box-shadow: 0 0 0 3px var(--accent); }
+/* one step of surface, not a new face (2C). Only one panel takes it: --bg and
+   --bg-2 are close enough that the ink does not change. */
+.gn-panel-deep { background: var(--bg-2); }
+
+/* the bar belongs to the ground it sits on (1B). The deck already works this
+   way — a colour-field slide's chrome takes that field's ink. panels.js writes
+   the face of whatever panel is under the bar onto .gn-panels[data-tone];
+   there is no selector that reaches from a sticky bar to the section passing
+   beneath it. background: inherit does not work here — it resolves against the
+   page wrapper, which never sees a panel. */
+/* The bar does not move: the panel passing under it does. So the bar paints the
+   panel's ground itself — two stops with the panel boundary between them, and
+   panels.js moves that boundary as the incoming panel rises through the bar.
+   A transparent bar would let the body TEXT show through; painting the same
+   grounds keeps only the colour. --gn-edge is the boundary's y inside the bar. */
+.gn-panels {
+  --tone-ink: var(--bg); --tone-deep: var(--bg-2);
+  --tone-field: var(--accent); --tone-invert: var(--text);
+  --gn-edge: 0px; --gn-bar-from: var(--bg); --gn-bar-to: var(--bg);
+}
+.gn-panels .gn-topbar {
+  background: linear-gradient(to bottom,
+    var(--gn-bar-from) calc(var(--gn-edge) - 1px),
+    var(--gn-bar-to)   calc(var(--gn-edge) + 1px));
+  transition: color var(--dur-color) linear;
+}
+/* ink follows the ground that holds most of the bar; panels.js flips [data-tone]
+   as the boundary passes the bar's middle. */
+.gn-panels[data-tone="field"] .gn-topbar {
+  color: var(--on-accent);
+  border-bottom-color: rgb(from var(--on-accent) r g b / 0.28); }
+.gn-panels[data-tone="invert"] .gn-topbar {
+  color: var(--bg);
+  border-bottom-color: rgb(from var(--bg) r g b / 0.28); }
+/* .gn-wordmark sets its own colour, so on a colour face it keeps the page ink
+   and disappears. Hand it back the bar's ink before the cursor reads it. */
+.gn-panels[data-tone="field"] .gn-topbar .gn-wordmark,
+.gn-panels[data-tone="invert"] .gn-topbar .gn-wordmark { color: inherit; }
+/* the cursor stays accent on every ground — it is the mark. The one exception
+   is the accent field itself, where accent on accent is invisible and the
+   cursor takes the face's ink. */
+.gn-panels[data-tone="field"] .gn-topbar .gn-wordmark-cursor { background: currentColor; }
+.gn-panels[data-tone="invert"] .gn-topbar .gn-wordmark-cursor { background: var(--accent); }
+/* secondary text in the bar dims with opacity, never with a colour built from
+   currentColor: inside `color`, currentColor is resolved against the inherited
+   value and never re-reads the ancestor's [data-tone], which made the crumbs
+   disappear on the accent and invert faces. */
+.gn-panels[data-tone="field"] .gn-topbar .gn-crumbs,
+.gn-panels[data-tone="invert"] .gn-topbar .gn-crumbs { color: inherit; opacity: 0.62; }
+/* .gn-crumbs > :last-child carries its own --text, which is the page ink, not
+   this face's. */
+.gn-panels[data-tone="field"] .gn-topbar .gn-crumbs > *,
+.gn-panels[data-tone="invert"] .gn-topbar .gn-crumbs > * { color: inherit; }
+.gn-panels[data-tone="field"] .gn-topbar .gn-seg,
+.gn-panels[data-tone="invert"] .gn-topbar .gn-seg { border-color: currentColor; }
+.gn-panels[data-tone="field"] .gn-topbar .gn-seg-opt,
+.gn-panels[data-tone="invert"] .gn-topbar .gn-seg-opt { color: currentColor; opacity: 0.56; }
+.gn-panels[data-tone="field"] .gn-topbar .gn-seg-opt[aria-selected="true"],
+.gn-panels[data-tone="invert"] .gn-topbar .gn-seg-opt[aria-selected="true"] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .gn-panels .gn-topbar { transition: none; } }
+
+/* position indicator — a fixed stack of marks beside the panels. Each mark is
+   a link, so it doubles as navigation. */
+.gn-panel-dots { position: fixed; z-index: 40; right: var(--sp-6); top: 50%;
+                 transform: translateY(-50%);
+                 display: flex; flex-direction: column; gap: var(--sp-2); }
+.gn-panel-dots a { width: 10px; height: 10px; display: block;
+                   border: var(--bw) solid var(--text-3); background: none;
+                   transition: background var(--dur-color) var(--ease),
+                               border-color var(--dur-color) var(--ease); }
+.gn-panel-dots a:hover { border-color: var(--accent); }
+.gn-panel-dots a[aria-current="true"] { background: var(--accent);
+                                        border-color: var(--accent); }
+/* on an accent or inverted panel the marks take that face's ink */
+.gn-panel-dots[data-on="field"] a { border-color: rgb(from var(--on-accent) r g b / 0.5); }
+.gn-panel-dots[data-on="field"] a[aria-current="true"] { background: var(--on-accent);
+                                        border-color: var(--on-accent); }
+.gn-panel-dots[data-on="invert"] a { border-color: rgb(from var(--bg) r g b / 0.5); }
+.gn-panel-dots[data-on="invert"] a[aria-current="true"] { background: var(--bg);
+                                        border-color: var(--bg); }
+/* trailing band: a thin mark, not a square — the shape says "this one is a
+   strip, not a screen" */
+.gn-panel-dots a[data-bar] { height: 3px; }
+@media (max-width: 900px) { .gn-panel-dots { display: none; } }
+/* the one oversized statement a panel is built around */
+.gn-hero { margin: 0; font-size: var(--fs-hero); line-height: 0.98;
+           font-weight: var(--w-strong); letter-spacing: var(--ls-hero); }
+.gn-hero-sub { max-width: var(--measure); margin: var(--sp-6) 0 0;
+               font-size: 19px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) { html:has(.gn-panels) { scroll-snap-type: none; } }
+
+/* -------------------------------------------------------------- PAGE HEAD
+   Every document page opens with the same four slots, so a reader can tell
+   which page they are on without reading a word. Level shows in the title
+   size ONLY — never by adding or dropping a slot.
+     kicker — the page's SCALE, as a figure. Never the title again.
+     title  — the page's NAME.
+     lead   — what this page decides. One paragraph.
+     strip  — four cells of hard numbers (.gn-strip).
+   .gn-pagehead-hub raises the title one step for the section index. The
+   landing page is not a document page: it uses .gn-hero inside a panel. */
+.gn-pagehead { padding: var(--sp-12) 0 var(--sp-8); }
+.gn-pagehead-kicker { display: flex; align-items: center; gap: var(--sp-3);
+                      font-family: var(--font-code); font-size: var(--fs-label);
+                      letter-spacing: var(--ls-label); text-transform: uppercase;
+                      color: var(--text-3); }
+.gn-pagehead-title { margin: var(--sp-4) 0 0; font-size: var(--fs-h1);
+                     line-height: 1.06; font-weight: var(--w-strong);
+                     letter-spacing: var(--ls-h1); }
+.gn-pagehead-hub .gn-pagehead-title { font-size: clamp(34px, 5vw, 56px);
+                     line-height: 1.04; letter-spacing: -0.04em; }
+.gn-pagehead-lead { max-width: var(--measure); margin: var(--sp-4) 0 0;
+                    font-size: 17px; line-height: 1.5; color: var(--text-2); }
+.gn-pagehead .gn-strip { margin: var(--sp-6) 0 0; }
+
+/* ------------------------------------------------------------------ FOOTER
+   Every page closed with its own hand-built row, so they drifted — different
+   inks, a missing link, an inverted wordmark left on a plain surface. One
+   pattern instead: mark and year on the left, links on the right, a rule
+   above. Put it last inside .gn-page or a .gn-panel-auto band. */
+.gn-footer {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-4);
+  margin-top: var(--sp-12); padding-top: var(--sp-6);
+  border-top: var(--bw) solid var(--line);
+  font-family: var(--font-code); font-size: var(--fs-label);
+  letter-spacing: 0.06em; color: var(--text-3);
+}
+.gn-footer-links { margin-left: auto; display: flex; gap: var(--sp-4); }
+.gn-footer a { color: var(--text-3); text-decoration: none; }
+.gn-footer a:hover { color: var(--accent-text); }
+/* Exception, and the only one: a fixed-height shell — the deck, with its stage
+   and thumbnail rail — has no page end to close, so it carries no footer. Its
+   crumb and language control sit in the top bar instead. Any page that scrolls
+   takes the footer. */
+/* On an inverted or accent plate the footer takes that plate's ink. */
+.gn-panel-invert .gn-footer, .gn-panel-field .gn-footer {
+  border-top-color: rgb(from currentColor r g b / 0.28);
+  color: rgb(from currentColor r g b / 0.62);
+}
