@@ -1,0 +1,368 @@
+<html lang="en" data-bilingual><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pilo — docs</title>
+<meta name="pirep:title-en" content="pilo — docs">
+<meta name="pirep:title-ko" content="pilo — 사용법">
+<link rel="icon" href="/garamnoh-system/assets/favicon-32.png" sizes="32x32">
+<link rel="icon" href="/garamnoh-system/assets/favicon-16.png" sizes="16x16">
+<script src="/garamnoh-system/boot.js"></script>
+<link rel="stylesheet" href="/garamnoh-system/tokens/fonts.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/colors.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/typography.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/spacing.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/radius.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/elevation.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/motion.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/base.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/zindex.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/density.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/deck.css">
+<link rel="stylesheet" href="/garamnoh-system/components/layout.css">
+<link rel="stylesheet" href="/garamnoh-system/components/components.css">
+<link rel="stylesheet" href="/garamnoh-system/components/wordmark.css">
+<link rel="stylesheet" href="/garamnoh-system/components/extended.css">
+<link rel="stylesheet" href="/garamnoh-system/components/product.css">
+<link rel="stylesheet" href="/garamnoh-system/products/pilo/brand.css">
+<link rel="stylesheet" href="/garamnoh-system/tokens/print.css">
+<style>
+html[data-lang="ko"] .l-en, html:not([data-lang="ko"]) .l-ko { display: none; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+a { color: var(--accent-text); text-decoration: none; }
+a:hover { text-decoration: underline; }
+[data-gn-opt-theme], [data-site-lang] { background: transparent; color: var(--text-3); font-weight: 400; }
+[data-gn-opt-theme][aria-selected="true"], [data-site-lang][data-active] { background: var(--bg-2); color: var(--accent-text); font-weight: 600; }
+[data-site-lang] { text-decoration: none; }
+</style>
+</head><body>
+<div  style="position: sticky; top: 0px; z-index: 60; background: var(--bg); border-bottom: 1px solid var(--line);">
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 8px 28px; min-height: 54px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <span  class="pilo-wordmark pilo-wordmark--md" data-product="pilo" style="flex: 0 0 auto;"><b>❯</b>pilo</span>
+      <div  style="flex: 1 1 0%; min-width: 0px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <a  href="./docs.html" style="font-size: 13px; color: var(--text-2); white-space: nowrap;"><span class="l-en">Docs</span><span class="l-ko">문서</span></a>
+        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 13px; color: var(--text-2); white-space: nowrap;">GitHub</a>
+        <a  href="https://github.com/garamnohhh/pilo/releases" style="font-size: 13px; color: var(--text-2); white-space: nowrap;"><span class="l-en">Releases</span><span class="l-ko">릴리스</span></a>
+      </div>
+      <a  href="#install" style="height: 26px; display: flex; align-items: center; padding: 0px 12px; flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font-size: 12.5px;"><span class="l-en">Install</span><span class="l-ko">설치</span></a>
+      <div  style="display: flex; height: 26px; border: 1px solid var(--line); flex: 0 0 auto;">
+        <a href="../index.html" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-site-lang="ko">KO</a>
+        <a href="./en/index.html" style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-site-lang="en" data-active>EN</a>
+      </div>
+      <div  style="display: flex; height: 26px; border: 1px solid var(--line); flex: 0 0 auto;" data-gn-toggle="theme">
+        <span style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-gn-opt-theme="light" role="tab" tabindex="0">LIGHT</span>
+        <span style="font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em; display: flex; align-items: center; padding: 0px 9px; cursor: pointer;" data-gn-opt-theme="dark" role="tab" tabindex="0">DARK</span>
+      </div>
+    </div>
+  </div>
+
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 0px 28px;">
+    <div  style="padding: 56px 0px 40px; border-bottom: 1px solid var(--line);">
+      <span  class="gn-label" style="color: var(--text-3);">DOCS</span>
+      <h1  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px;"><span class="l-en">Using pilo</span><span class="l-ko">pilo 사용법</span></h1>
+      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px; max-width: 54ch; text-wrap: pretty;"><span class="l-en">One desk in front of the agents you already run. This document explains what is on the screen and what happens underneath.</span><span class="l-ko">이미 띄워둔 에이전트 앞에 두는 창구 하나예요. 이 문서는 화면에 있는 것과 그 아래에서 일어나는 일을 설명해요.</span></p>
+    </div>
+    <div  class="gn-page-body" style="padding-top: 36px;">
+      <div  style="position: sticky; top: calc(var(--topbar-h) + var(--sp-6));">
+        <div  style="margin-bottom: 10px;"><span  class="gn-label" style="color: var(--text-3);">ON THIS PAGE</span></div>
+        <nav  class="gn-page-nav" style="position: static;">
+          <a href="#what" aria-current="true"><span class="l-en">What it is</span><span class="l-ko">무엇인가</span></a>
+          <a href="#roles" aria-current="false"><span class="l-en">Three kinds of agent</span><span class="l-ko">세 가지 역할</span></a>
+          <a href="#install" aria-current="false"><span class="l-en">Install</span><span class="l-ko">설치</span></a>
+          <a href="#first-run" aria-current="false"><span class="l-en">First run</span><span class="l-ko">첫 실행</span></a>
+          <a href="#register" aria-current="false"><span class="l-en">Register agents</span><span class="l-ko">에이전트 등록</span></a>
+          <a href="#ask" aria-current="false"><span class="l-en">Sending work</span><span class="l-ko">요청 보내기</span></a>
+          <a href="#trail" aria-current="false"><span class="l-en">Reading the trail</span><span class="l-ko">기록 읽기</span></a>
+          <a href="#ask-note" aria-current="false"><span class="l-en">Questions and notes</span><span class="l-ko">결정과 알림</span></a>
+          <a href="#schedules" aria-current="false"><span class="l-en">Schedules</span><span class="l-ko">예약</span></a>
+          <a href="#limits" aria-current="false"><span class="l-en">Limits</span><span class="l-ko">사용량 한도</span></a>
+          <a href="#data" aria-current="false"><span class="l-en">Where it keeps things</span><span class="l-ko">보관 위치</span></a>
+          <a href="#commands" aria-current="false"><span class="l-en">Commands</span><span class="l-ko">명령</span></a>
+          <a href="#second" aria-current="false"><span class="l-en">A second instance</span><span class="l-ko">두 번째 인스턴스</span></a>
+          <a href="#trouble" aria-current="false"><span class="l-en">When something is off</span><span class="l-ko">막힐 때</span></a>
+        </nav>
+      </div>
+      <div  style="min-width: 0px; padding: 0px 0px 76px; display: flex; flex-direction: column; gap: 56px; max-width: 660px;">
+      <div id="what">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">What pilo is</span><span class="l-ko">pilo가 무엇인가</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Three coding agents open is three conversations cut in half. You remember which window knows about the checkout code, you paste the same context into the second one, and by the afternoon the answer you wanted is in a pane you have already scrolled past.</span><span class="l-ko">코딩 에이전트를 셋 띄우면 대화도 셋으로 끊겨요. 어느 창이 결제 코드를 아는지 외우고, 같은 맥락을 두 번째 창에 다시 붙여 넣고, 오후가 되면 원하던 답은 이미 지나쳐 스크롤한 어딘가에 있어요.</span></p>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">pilo puts one desk in front of them. You talk to the desk; it decides whose work a request is, hands it on, and writes back one answer. pilo starts no agents and speaks to no provider — it finds the panes you already opened and wakes them.</span><span class="l-ko">pilo는 그 앞에 창구를 하나 둬요. 말을 거는 상대는 창구 하나고, 그쪽이 누구 일인지 정해 넘기고 돌아온 걸 모아 한 번에 답해요. pilo는 에이전트를 띄우지 않고 제공자와 직접 말하지도 않아요. 이미 열어둔 창을 찾아 깨울 뿐이에요.</span></p>
+        <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-work-light.png" alt="the pilo desk" style="width: 100%; height: auto;">
+        <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-work-dark.png" alt="the pilo desk" style="width: 100%; height: auto;">
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">The screens in this document are the real app against a demo desk — three projects that do not exist and requests that never happened.</span><span class="l-ko">이 문서의 화면은 실제 앱이고, 데이터는 시연용이에요. 있지도 않은 프로젝트 셋과 일어난 적 없는 요청들입니다.</span></p>
+      </div>
+      <div id="roles">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Three kinds of agent</span><span class="l-ko">에이전트는 세 종류예요</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">The split exists so that no one has to hold everything. The desk holds the conversation, an owner holds a project, a specialist holds one area of it.</span><span class="l-ko">아무도 전부를 들고 있지 않게 하려고 나눈 거예요. 대화는 대표가, 프로젝트는 담당이, 그 안의 한 분야는 분야 담당이 들어요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><b>Desk</b> · pilo</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">The only one you talk to. Reads the request, decides whose work it is, gathers what comes back and writes one answer.</span><span class="l-ko">말을 거는 상대는 이 하나예요. 요청을 읽고 누구 일인지 정하고, 돌아온 걸 모아 한 번에 답해요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><b>Owner</b> · pm</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">One project, one owner. Reads only its own folder, does the work, reports to the desk.</span><span class="l-ko">프로젝트 하나에 담당 하나예요. 자기 폴더만 보고 일한 뒤 대표에게 보고해요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><b>Specialist</b> · worker</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">Sits under an owner and covers one area — review, QA, a second runtime. Reports to its owner, never to you.</span><span class="l-ko">담당 아래에서 한 분야만 맡아요 — 검수·QA·다른 런타임. 담당에게 보고하고, 사용자에게 직접 말하지 않아요.</span></span>
+          </div>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 0px; text-wrap: pretty;"><span class="l-en">Underneath, pilo finds the panes with herdr, wakes one, and the agent answers by running pilo commands of its own. Everything crosses a unix socket on your machine.</span><span class="l-ko">안쪽에서는 herdr 로 창을 찾고 깨우면, 에이전트가 자기 쪽 pilo 명령으로 답을 보내요. 오가는 건 전부 내 컴퓨터의 유닉스 소켓을 지납니다.</span></p>
+      </div>
+      <div id="install">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Install</span><span class="l-ko">설치</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Nothing is compiled and nothing asks for sudo. pilo is a terminal tool, not an app bundle, so there is no security prompt to clear.</span><span class="l-ko">컴파일도 sudo도 없어요. pilo는 앱 번들이 아니라 터미널 도구라 열어야 할 보안 창도 없어요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>curl -fsSL https://raw.githubusercontent.com/garamnohhh/pilo/main/install.sh | sh</div></div>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">It clones the source into ~/.pilo/app, installs the two dependencies and links pilo into ~/.local/bin.</span><span class="l-ko">소스를 ~/.pilo/app 에 받고 의존성 두 개를 설치한 뒤 pilo 를 ~/.local/bin 에 연결해요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">Node.js 20+</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">runs the server, the terminal UI and the CLI</span><span class="l-ko">서버·터미널 UI·CLI 를 돌려요</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">herdr</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the terminal workspace pilo watches — brew install herdr</span><span class="l-ko">pilo 가 지켜보는 터미널 작업 공간 — brew install herdr</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;"><span class="l-en">one coding agent</span><span class="l-ko">코딩 에이전트 하나</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">Claude Code or Codex, opened by you in a herdr pane</span><span class="l-ko">herdr 창에 직접 띄운 Claude Code 나 Codex</span></span>
+          </div>
+        </div>
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">To remove it: rm -rf ~/.pilo/app ~/.local/bin/pilo — your requests and their history stay in ~/.pilo until you remove that too.</span><span class="l-ko">지울 때: rm -rf ~/.pilo/app ~/.local/bin/pilo — 요청과 기록은 ~/.pilo 를 지우기 전까지 남아요.</span></p>
+      </div>
+      <div id="first-run">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">First run</span><span class="l-ko">첫 실행</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">The first run creates the database under ~/.pilo/data, enables pgvector and applies the migrations. There is nothing to install first and no password to keep: the database is a directory only your account can read.</span><span class="l-ko">첫 실행에서 ~/.pilo/data 에 데이터베이스를 만들고 pgvector 를 켜고 마이그레이션을 적용해요. 먼저 깔 것도, 보관할 비밀번호도 없어요. 내 계정만 읽을 수 있는 폴더입니다.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo                  # start the services and enter the terminal UI
+<span style="color: var(--text-3);">$ </span>pilo dashboard        # the same desk in a browser
+<span style="color: var(--text-3);">$ </span>pilo status           # what is running
+<span style="color: var(--text-3);">$ </span>pilo doctor           # what is missing</div></div>
+        </div>
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">The terminal UI and the dashboard are the same desk. Whichever you type in, the other shows it.</span><span class="l-ko">터미널 UI 와 대시보드는 같은 데스크예요. 어느 쪽에 써도 다른 쪽에 보입니다.</span></p>
+      </div>
+      <div id="register">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Register the agents you already have open</span><span class="l-ko">이미 띄워둔 에이전트를 등록해요</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Open the Agents tab and press Add agent. pilo lists the herdr panes it can see; you say which project each one owns, and it writes the instruction block into that folder’s CLAUDE.md or AGENTS.md. The agent reads it on its next turn and knows how to report back.</span><span class="l-ko">에이전트 탭에서 Add agent 를 눌러요. pilo 가 herdr 창 목록을 보여주면 어느 프로젝트를 맡을지 정해 주고, 그 폴더의 CLAUDE.md 나 AGENTS.md 에 지시 블록을 씁니다. 에이전트는 다음 차례에 그걸 읽고 보고하는 법을 알게 돼요.</span></p>
+        <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-agents-light.png" alt="the agents tab" style="width: 100%; height: auto;">
+        <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-agents-dark.png" alt="the agents tab" style="width: 100%; height: auto;">
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft);">
+            <span  class="gn-mono" style="font-size: 13px; color: var(--accent-text); flex: 0 0 auto; width: 16px;">1</span>
+            <div  style="flex: 1 1 0%; min-width: 0px;">
+              <div  style="font-size: 14.5px; color: var(--text); margin-bottom: 4px;"><span class="l-en">Pick the pane</span><span class="l-ko">창 고르기</span></div>
+              <div  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2);"><span class="l-en">the list is what herdr reports; a pane with no agent in it is not offered</span><span class="l-ko">herdr 가 알려주는 목록이에요. 에이전트가 없는 창은 나오지 않아요</span></div>
+            </div>
+          </div>
+          <div  style="display: flex; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft);">
+            <span  class="gn-mono" style="font-size: 13px; color: var(--accent-text); flex: 0 0 auto; width: 16px;">2</span>
+            <div  style="flex: 1 1 0%; min-width: 0px;">
+              <div  style="font-size: 14.5px; color: var(--text); margin-bottom: 4px;"><span class="l-en">Give it a role</span><span class="l-ko">역할 주기</span></div>
+              <div  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2);"><span class="l-en">owner for a project, specialist under an owner. A specialist never reports to you.</span><span class="l-ko">프로젝트면 담당, 담당 아래면 분야 담당. 분야 담당은 사용자에게 직접 보고하지 않아요.</span></div>
+            </div>
+          </div>
+          <div  style="display: flex; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft);">
+            <span  class="gn-mono" style="font-size: 13px; color: var(--accent-text); flex: 0 0 auto; width: 16px;">3</span>
+            <div  style="flex: 1 1 0%; min-width: 0px;">
+              <div  style="font-size: 14.5px; color: var(--text); margin-bottom: 4px;"><span class="l-en">Point it at a folder</span><span class="l-ko">폴더 지정</span></div>
+              <div  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2);"><span class="l-en">that folder is all it reads, and where its instruction block is written</span><span class="l-ko">그 폴더만 읽고, 지시 블록도 거기 쓰여요</span></div>
+            </div>
+          </div>
+          <div  style="display: flex; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft);">
+            <span  class="gn-mono" style="font-size: 13px; color: var(--accent-text); flex: 0 0 auto; width: 16px;">4</span>
+            <div  style="flex: 1 1 0%; min-width: 0px;">
+              <div  style="font-size: 14.5px; color: var(--text); margin-bottom: 4px;"><span class="l-en">Pin the model</span><span class="l-ko">모델 고정</span></div>
+              <div  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2);"><span class="l-en">the same screen sets which model and effort each runtime uses, and says when a session has gone</span><span class="l-ko">같은 화면에서 런타임별 모델과 강도를 정하고, 세션이 끊긴 것도 알려 줘요</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ask">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Say what you want done</span><span class="l-ko">시킬 일을 말해요</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Type it at the prompt. You do not name an agent. The desk reads the request, splits it when it belongs to more than one project, and hands each part to the owner of that folder.</span><span class="l-ko">프롬프트에 그냥 쓰면 돼요. 누구에게 시킬지 고르지 않아요. 대표가 읽고, 여러 프로젝트에 걸치면 나눠서 각 폴더의 담당에게 넘깁니다.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">while it is out</span><span class="l-ko">일하는 동안</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the line under your request says who is holding it and what they last said about it</span><span class="l-ko">요청 아래 줄에 누가 들고 있고 마지막으로 뭐라 했는지 보여요</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">when it lands</span><span class="l-ko">끝나면</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">one answer, written in the language you asked in</span><span class="l-ko">답은 하나로, 물어본 언어로 와요</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">when something finishes late</span><span class="l-ko">늦게 끝나면</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the desk comes back and adds what changed underneath the answer, rather than leaving the promise unkept</span><span class="l-ko">대표가 다시 와서 바뀐 것을 답 아래에 붙여요. 약속을 흘리지 않아요.</span></span>
+          </div>
+        </div>
+      </div>
+      <div id="trail">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Read the trail when you want it</span><span class="l-ko">기록은 필요할 때 열어요</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Every request keeps its stages — what you said, who it went to, what each owner reported, what failed, and the answer that came back. The terminal shows the last one; the rest is there when you want it.</span><span class="l-ko">요청마다 단계가 남아요 — 말한 것, 누구에게 갔는지, 담당이 무엇을 보고했는지, 무엇이 실패했는지, 돌아온 답. 터미널에는 마지막 답만 보이고 나머지는 필요할 때 열어보면 돼요.</span></p>
+        <img  class="gn-shot gn-shot-light" width="1774" height="971" src="/assets/desk-requests-light.png" alt="the requests tab" style="width: 100%; height: auto;">
+        <img  class="gn-shot gn-shot-dark" width="1774" height="971" src="/assets/desk-requests-dark.png" alt="the requests tab" style="width: 100%; height: auto;">
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo inbox            # the requests
+<span style="color: var(--text-3);">$ </span>pilo inbox 1042       # one request in full
+<span style="color: var(--text-3);">$ </span>pilo history payment  # what was asked and answered before</div></div>
+        </div>
+      </div>
+      <div id="ask-note">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">A question is not a note</span><span class="l-ko">결정을 묻는 것과 알림은 달라요</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Two things arrive without you asking, and they are not the same thing. One is waiting on you; the other is not.</span><span class="l-ko">묻지 않아도 오는 것이 둘 있는데 성격이 달라요. 하나는 답을 기다리고, 하나는 기다리지 않아요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">Decision</span><span class="l-ko">결정</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">an owner needs you to decide something. The question arrives in that conversation and your answer goes back into the work — the task waits until it has one.</span><span class="l-ko">담당이 결정을 물어야 할 때예요. 그 대화에 질문이 오고, 답이 다시 일로 돌아갑니다. 답이 올 때까지 그 일은 멈춰 있어요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">Note</span><span class="l-ko">알림</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the desk speaking first — a job that ran, a limit that landed. A line of its own, with nothing waiting on it.</span><span class="l-ko">대표가 먼저 말하는 거예요 — 예약이 돌았다, 한도가 찼다. 그 줄로 끝이고 기다리는 것은 없어요.</span></span>
+          </div>
+        </div>
+      </div>
+      <div id="schedules">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Standing work on its own clock</span><span class="l-ko">정해진 시각에 도는 일</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">A schedule is work that repeats without being asked again. A job whose last run is still open passes its slot instead of stacking a second one.</span><span class="l-ko">예약은 다시 시키지 않아도 반복되는 일이에요. 지난 회차가 아직 안 끝났으면 그 차례를 건너뜁니다. 두 개가 겹쳐 돌지 않아요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">days:weekday@09:00</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">every weekday morning</span><span class="l-ko">평일 아침마다</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">days:2d@14:00</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">every second day at two</span><span class="l-ko">이틀에 한 번 오후 두 시</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">every:30</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">every thirty minutes</span><span class="l-ko">30분마다</span></span>
+          </div>
+        </div>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo schedules        # standing work</div></div>
+        </div>
+      </div>
+      <div id="limits">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">When a provider’s window runs out</span><span class="l-ko">제공자 한도가 찼을 때</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">pilo parks that runtime until it reopens, and hands the parked agent’s unopened queue to its owner. Work does not sit in a dead pane waiting for a window that is closed.</span><span class="l-ko">그 런타임을 세워 두고, 열리지 않은 대기열은 담당에게 넘겨요. 닫힌 창을 바라보며 일이 멈춰 있지 않게요.</span></p>
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">A limit also arrives as a note, so you find out without going to look.</span><span class="l-ko">한도가 찬 것도 알림으로 와요. 찾아보지 않아도 알게 됩니다.</span></p>
+      </div>
+      <div id="data">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Everything it keeps is under ~/.pilo</span><span class="l-ko">보관하는 건 전부 ~/.pilo 안에</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">The database is PGlite — PostgreSQL 18 compiled to WebAssembly, opened as a directory of files, with pgvector enabled. There is no container and no separate server.</span><span class="l-ko">데이터베이스는 PGlite 예요 — PostgreSQL 18 을 WebAssembly 로 컴파일한 것이고 폴더째 열립니다. 컨테이너도, 따로 띄우는 서버도 없어요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">~/.pilo/config.toml</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">settings</span><span class="l-ko">설정</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">~/.pilo/data/</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the database itself</span><span class="l-ko">데이터베이스</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">~/.pilo/logs/</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">logs</span><span class="l-ko">로그</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">~/.pilo/port</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the port the server settled on</span><span class="l-ko">서버가 잡은 포트</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">~/.pilo/db.lock</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">written while the database is open. A second server refuses to start rather than corrupt the files — PGlite has no lock of its own.</span><span class="l-ko">데이터베이스를 연 동안 쓰여요. 두 번째 서버는 파일을 망가뜨리는 대신 시작을 거부합니다. PGlite 에는 자체 잠금이 없어요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">127.0.0.1</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the only socket that listens, for the dashboard. No account, no telemetry, no outbound connection.</span><span class="l-ko">듣는 소켓은 이것 하나, 대시보드용이에요. 계정도 수집도 바깥 연결도 없습니다.</span></span>
+          </div>
+        </div>
+      </div>
+      <div id="commands">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Commands</span><span class="l-ko">명령</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">The ones you use:</span><span class="l-ko">쓰게 되는 것들:</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo                  # the terminal UI
+<span style="color: var(--text-3);">$ </span>pilo dashboard        # the browser desk
+<span style="color: var(--text-3);">$ </span>pilo inbox [id]       # requests, or one request in full
+<span style="color: var(--text-3);">$ </span>pilo agents           # id · name · role · project
+<span style="color: var(--text-3);">$ </span>pilo history <words>  # what was asked, answered and reported before
+<span style="color: var(--text-3);">$ </span>pilo schedules        # standing work
+<span style="color: var(--text-3);">$ </span>pilo doctor           # diagnostics</div></div>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Agents have their own set — pilo task, pilo progress, pilo done, pilo block, pilo reply — written into their instruction file when you register them. pilo help lists every one.</span><span class="l-ko">에이전트용은 따로 있어요 — pilo task·progress·done·block·reply. 등록할 때 지시 파일에 적힙니다. 전체 목록은 pilo help.</span></p>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 0px; text-wrap: pretty;"><span class="l-en">Inside the terminal UI, :help does the same. :dash, :project &lt;name&gt;, :follow, :fold, :cost and :icons are the ones worth knowing.</span><span class="l-ko">터미널 UI 안에서는 :help 가 같은 역할을 해요. :dash · :project &lt;이름&gt; · :follow · :fold · :cost · :icons 정도는 알아 둘 만합니다.</span></p>
+      </div>
+      <div id="second">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Running a second instance</span><span class="l-ko">두 번째 인스턴스 돌리기</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Every part of the layout moves, which is how a test instance runs beside a real one.</span><span class="l-ko">경로가 전부 움직여서, 시험용을 실제 것 옆에 나란히 돌릴 수 있어요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_HOME</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">where config, logs and the lock live</span><span class="l-ko">설정·로그·잠금이 있는 자리</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_DATA</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the database directory</span><span class="l-ko">데이터베이스 폴더</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_PORT</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the port to listen on</span><span class="l-ko">들을 포트</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_SOCKET</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the unix socket the CLI talks to</span><span class="l-ko">CLI 가 붙는 유닉스 소켓</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_SPOOL</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the file spool used when the socket is unavailable</span><span class="l-ko">소켓을 못 쓸 때 쓰는 파일 스풀</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">PILO_WATCHER=off</span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">start without the loop that wakes agents</span><span class="l-ko">에이전트를 깨우는 루프 없이 시작</span></span>
+          </div>
+        </div>
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">Move the socket and the spool together — the CLI falls back from one to the other, so changing only one leaves it talking to the instance you meant to leave alone.</span><span class="l-ko">소켓과 스풀은 같이 옮겨야 해요. CLI 가 둘 사이를 오가며 대체하기 때문에, 하나만 바꾸면 건드리지 않으려던 인스턴스에 말을 걸게 됩니다.</span></p>
+      </div>
+      <div id="trouble">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">When something is off</span><span class="l-ko">막힐 때</span></h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">pilo doctor says what is missing. The rest is usually one of these.</span><span class="l-ko">pilo doctor 가 무엇이 빠졌는지 알려줘요. 나머지는 대개 아래 중 하나예요.</span></p>
+        <div  style="border: 1px solid var(--line); background: var(--surface);">
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">The tree shows boxes</span><span class="l-ko">나무에 네모가 보여요</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the terminal font has no glyph for that runtime. :icons off switches to letters and keeps the answer; PILO_ICONS=off does it for a whole shell. No terminal can be asked whether its font carries a glyph.</span><span class="l-ko">터미널 글꼴에 그 런타임 글리프가 없어서예요. :icons off 로 글자로 바꾸면 다음 실행에도 남고, PILO_ICONS=off 는 셸 전체에 적용돼요. 글꼴이 글리프를 가졌는지 터미널에 물어볼 방법은 없어요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">Columns drift</span><span class="l-ko">열이 어긋나요</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">PILO_AMBIGUOUS_WIDTH forces the East Asian ambiguous width when the startup probe cannot run.</span><span class="l-ko">시작할 때 폭을 재는 검사가 안 되면 PILO_AMBIGUOUS_WIDTH 로 동아시아 문자 폭을 지정해요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">It refuses to start</span><span class="l-ko">시작을 거부해요</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">another server still holds ~/.pilo/db.lock. Close that one first.</span><span class="l-ko">다른 서버가 아직 ~/.pilo/db.lock 을 잡고 있어요. 그쪽을 먼저 닫아요.</span></span>
+          </div>
+          <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
+            <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 150px;"><span class="l-en">An agent never answers</span><span class="l-ko">에이전트가 답을 안 해요</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">its session is gone. The Agents tab says so, and the work goes back to its owner.</span><span class="l-ko">세션이 끊긴 거예요. 에이전트 탭에 그렇게 표시되고, 일은 담당에게 돌아갑니다.</span></span>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+<div >
+    <div  style="max-width: 1120px; margin: 0px auto; padding: 44px 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <span  class="pilo-wordmark" data-product="pilo" style="color: var(--text-2);"><b>❯</b>pilo</span>
+      <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);"><span class="l-en">2026 · made in Jeonju</span><span class="l-ko">2026 · 전주에서 만들었어요</span></span>
+      <div  style="margin-left: auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 12.5px; color: var(--text-2);">GitHub</a>
+        <span  class="gn-mono" style="font-size: 12.5px; color: var(--text-3);"><span class="l-en">Apache 2.0 licence</span><span class="l-ko">Apache 2.0 라이선스</span></span>
+      </div>
+    </div>
+  </div>
+<script src="/garamnoh-system/deploy.js"></script>
+</body></html>
