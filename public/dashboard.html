@@ -485,9 +485,22 @@ async function withReplies(rows) {
   const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
   for (let i = 0; i < missing.length; i += 100) {
     const got = await get(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`).catch(() => []);
-    for (const reply of got) replyBodies.set(String(reply.id), { at: reply.repliedAt, body: reply.finalReply });
+    // A request can hold more than one answer — a follow-up written after work
+    // landed — and they arrive oldest first.
+    const fetched = new Map();
+    for (const reply of got) {
+      const list = fetched.get(String(reply.id)) || [];
+      list.push({ at: reply.repliedAt, body: reply.finalReply });
+      fetched.set(String(reply.id), list);
+    }
+    for (const [id, list] of fetched) replyBodies.set(id, { at: list[list.length - 1].at, list });
   }
-  return rows.map((row) => (row.hasReply ? { ...row, finalReply: replyBodies.get(String(row.id))?.body ?? null } : row));
+  return rows.map((row) => {
+    if (!row.hasReply) return row;
+    const held = replyBodies.get(String(row.id));
+    const list = held?.list || [];
+    return { ...row, replies: list, finalReply: list.length ? list[list.length - 1].body : null };
+  });
 }
 
 async function feedPage(before) {
@@ -1350,7 +1363,15 @@ const hhmm = (iso) => {
 function feedMessages(item, detail) {
   const full = detail || item;
   const state_ = convState(item, detail);
-  const msgs = [{ who: `you · ${hhmm(item.createdAt)}`, kind: "you", text: item.userRequest || "" }];
+  // A note has no question above it — the desk spoke first — and a scheduled job
+  // says so rather than posing as something the user typed.
+  const msgs = item.source === "desk" ? [] : [{
+    who: item.source === "schedule"
+      ? `${T("feed.scheduled")} · ${hhmm(item.createdAt)}`
+      : `you · ${hhmm(item.createdAt)}`,
+    kind: "you",
+    text: item.userRequest || ""
+  }];
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
     // A note is news only while its task is still open. What the task finally
@@ -1364,12 +1385,18 @@ function feedMessages(item, detail) {
   if (!detail && item.progress && !state_.answered) {
     msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
   }
-  for (const reply of full.replies || []) {
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · answer`, kind: "answer", text: reply.body || "", inbox: item.id });
+  for (const [i, reply] of (full.replies || []).entries()) {
+    const what = item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer";
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · ${what}`,
+      kind: "answer", text: reply.body || "", inbox: item.id });
   }
-  // The list row can carry the answer before a detail fetched earlier does.
+  // The list row can carry the answers before a detail fetched earlier does.
   if (!(detail?.replies || []).length && item.finalReply) {
-    msgs.push({ who: `pilo · ${hhmm(item.repliedAt)} · answer`, kind: "answer", text: item.finalReply, inbox: item.id });
+    const carried = item.replies?.length ? item.replies : [{ at: item.repliedAt, body: item.finalReply }];
+    for (const [i, reply] of carried.entries()) {
+      msgs.push({ who: `pilo · ${hhmm(reply.at)} · ${item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer"}`,
+        kind: "answer", text: reply.body, inbox: item.id });
+    }
   }
   // A decision is a red line with its own answer button until the user answers it,
   // then a quiet one that keeps what was asked and what they said.
@@ -1831,7 +1858,8 @@ views.inbox = () => {
       <span style="display:flex;align-items:center;gap:10px;min-width:0">
         <span class="d-m" style="font-size:12px;color:var(--text-3);flex:none">${hhmm(i.createdAt)}</span>
         <span class="d-m d-clip" style="font-size:12px;color:var(--text-2);flex:none">${esc(inboxAgents(i)[0] || "pilo")}</span>
-        <span class="d-m" style="margin-left:auto;font-size:11px;color:${reqColor(i)};flex:none">${esc(reqState(i))}</span>
+        ${Number(i.replyCount) > 1 ? `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3);flex:none">${T("card.followUp")} ${i.replyCount - 1}</span>` : ""}
+        <span class="d-m" style="${Number(i.replyCount) > 1 ? "" : "margin-left:auto;"}font-size:11px;color:${reqColor(i)};flex:none">${esc(reqState(i))}</span>
       </span>
       <span class="d-clip" style="display:block;margin-top:4px;font-size:var(--fs-body)">${esc(firstLine(i.userRequest))}</span></button>`;
   }).join("");

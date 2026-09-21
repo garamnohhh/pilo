@@ -313,11 +313,22 @@ async function withReplies(rows) {
   if (!Array.isArray(rows) || !rows.some((row) => "hasReply" in row)) return rows;
   const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
   for (let i = 0; i < missing.length; i += 100) {
-    for (const reply of await api(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`, [])) {
-      replyBodies.set(String(reply.id), { at: reply.repliedAt, body: reply.finalReply });
+    const got = await api(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`, []);
+    // A request can be answered more than once — the desk comes back when work
+    // lands after its first answer — and they arrive oldest first.
+    const fetched = new Map();
+    for (const reply of got) {
+      const list = fetched.get(String(reply.id)) || [];
+      list.push({ at: reply.repliedAt, body: reply.finalReply });
+      fetched.set(String(reply.id), list);
     }
+    for (const [id, list] of fetched) replyBodies.set(id, { at: list[list.length - 1].at, list });
   }
-  return rows.map((row) => (row.hasReply ? { ...row, finalReply: replyBodies.get(String(row.id))?.body ?? null } : row));
+  return rows.map((row) => {
+    if (!row.hasReply) return row;
+    const held = replyBodies.get(String(row.id));
+    return { ...row, replies: held?.list || [], finalReply: held?.list.at(-1)?.body ?? null };
+  });
 }
 
 function wrap(text, width) {
@@ -378,19 +389,28 @@ function cardBlock({ box, title, titleColor, right, body, footer, surface, state
   return rows;
 }
 
-function replyBlock(item, width, tagged) {
+// the hour something happened, as the user reads it
+const kstClock = (value) => (value ? kst(value).slice(11) : "");
+
+// One card per answer. A request can carry more than one: the desk comes back
+// when work lands after it has already answered, and that follow-up belongs under
+// the first answer rather than in place of it.
+function replyBlock(item, width, tagged, reply = null, index = 0) {
   const box = Math.max(24, width - 2);
-  const took = elapsed(item.createdAt, item.repliedAt);
+  const body = reply ? reply.body : item.finalReply;
+  const at = reply ? reply.at : item.repliedAt;
+  const took = elapsed(item.createdAt, at);
   // The question above already names who answered, one badge each. The header
   // adds the names only when the badges had to collapse them into a count.
   const who = item.routed || "";
-  const extra = who && tagged?.hidden ? ` ${c.green}${who}${c.reset}` : "";
+  const extra = who && tagged?.hidden && index === 0 ? ` ${c.green}${who}${c.reset}` : "";
+  const later = index > 0 ? ` ${c.faint}${t("card.replyAgain", { at: kstClock(at) })}${c.reset}` : "";
   return cardBlock({
     box,
-    title: `${badge("FINAL_REPLY")}${extra}`,
+    title: `${badge(index > 0 ? "FOLLOW_UP" : "FINAL_REPLY")}${extra}${later}`,
     titleColor: "",
-    right: took ? `in-${item.id} · ${took}` : `in-${item.id}`,
-    body: wrap(alignTables(item.finalReply, box - 5), box - 5),
+    right: took && index === 0 ? `in-${item.id} · ${took}` : `in-${item.id}`,
+    body: wrap(alignTables(body, box - 5), box - 5),
     footer: t("card.replyFooter"),
     surface: "reply",
     state: "done"
@@ -433,8 +453,6 @@ function decisionCard(d, width) {
 }
 
 // the hour a limit lifts, as the user reads it
-const kstClock = (value) => kst(value).slice(11);
-
 function waitingBlock(item, width) {
   const box = Math.max(24, width - 2);
   // Work finished and nobody wrote the answer. That is not progress, so it gets
@@ -985,10 +1003,15 @@ function render() {
       const mood = item.finalReply ? "done" : item.needsReply || deciding ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
       const markColour = pulseColour(mood);
+      // Not every line in the feed is something the user typed. A note is the
+      // desk speaking first and a scheduled job is an hour coming round, and
+      // both used to be drawn as though the user had asked for them.
+      const spoke = item.source === "desk" ? t("feed.note") : item.source === "schedule" ? t("feed.scheduled") : "";
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;
-        return `  ${mark} ${tag} ${c.fg}${x}${c.reset}`;
+        const said = i === 0 && spoke ? `${c.faint}${spoke} ·${c.reset} ${c.fg}${x}${c.reset}` : `${c.fg}${x}${c.reset}`;
+        return `  ${mark} ${tag} ${said}`;
       });
       if (folded && lines.length > shownLines.length) {
         question[question.length - 1] += `${c.faint} …${c.reset}`;
@@ -1007,7 +1030,12 @@ function render() {
         // card used to stop four short of the pane edge, which read as a ragged
         // right against the header above it.
         const room = mainWidth - CARD_INDENT.length;
-        const block = (item.finalReply ? replyBlock(item, room + 2, tagged)
+        // every answer this request has, in the order they were written
+        const answers = item.finalReply
+          ? (item.replies?.length ? item.replies : [{ body: item.finalReply, at: item.repliedAt }])
+          : [];
+        const block = (answers.length
+          ? answers.flatMap((reply, i) => (i ? [""] : []).concat(replyBlock(item, room + 2, tagged, reply, i)))
           : deciding ? decisionBlock(item, room + 2) : waitingBlock(item, room + 2)).map((r) => CARD_INDENT + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing;

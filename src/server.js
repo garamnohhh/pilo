@@ -91,6 +91,7 @@ const routes = [
   ["GET", /^\/api\/history$/, (_m, _b, q) => api.searchHistory({ q: q.get("q") || "", since: q.get("since") || null, agent: q.get("agent") || "", limit: q.get("limit") })],
   ["GET", /^\/api\/inbox\/count$/, (_m, _b, q) => api.countInbox(q.get("agent") || "")],
   ["POST", /^\/api\/inbox$/, (_m, body) => api.createInbox(body.userRequest || body.text || "", body.cwd || "")],
+  ["POST", /^\/api\/notes$/, (_m, body) => api.createNote(body)],
   ["GET", /^\/api\/inbox\/(\d+)$/, (m) => api.inboxDetail(Number(m[1]))],
   ["POST", /^\/api\/inbox\/(\d+)\/tasks$/, (m, body) => api.createTask(Number(m[1]), body)],
   ["POST", /^\/api\/inbox\/(\d+)\/reply$/, (m, body) => api.saveFinalReply(Number(m[1]), body)],

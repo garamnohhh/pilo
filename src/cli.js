@@ -164,6 +164,14 @@ const commands = {
     return out(t("cli.taskSent", { id: res.id, agent: agentId }));
   },
 
+  // The desk speaking first: no question above it, nothing waiting on it.
+  async note(args) {
+    const text = args.join(" ").trim();
+    if (!text) throw new Error('usage: pilo note "what the user should know"');
+    const res = await call("POST", "/api/notes", { body: text });
+    return out(t("cli.noteSaved", { id: res.id }));
+  },
+
   async reply(args) {
     // A switch with no value, so it may sit anywhere after the id.
     const attach = args.includes("--with-results");
