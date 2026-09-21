@@ -15,6 +15,26 @@ your own machine — Pilo opens no port to the outside and sends nothing anywher
 Pilo does not start your agents. You open them yourself in herdr panes; Pilo
 finds them with `herdr agent list` and wakes them with `herdr agent prompt`.
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/garamnohhh/pilo/main/install.sh | sh
+```
+
+It clones the source into `~/.pilo/app`, installs the two dependencies and links
+`pilo` into `~/.local/bin`. Nothing is built, nothing asks for sudo, and there is
+no app bundle — Pilo is a terminal tool, so macOS Gatekeeper and notarisation
+never come into it.
+
+Or take the source yourself:
+
+```bash
+git clone https://github.com/garamnohhh/pilo.git && cd pilo && npm install && ./bin/pilo
+```
+
+To remove it: `rm -rf ~/.pilo/app ~/.local/bin/pilo`. Your requests and their
+history stay in `~/.pilo` until you remove that too.
+
 ## Run
 
 ```bash
@@ -110,3 +130,10 @@ probe cannot run.
 The dashboard and TUI must match `design/Pilo.dc.html`.
 
 Do not redesign during implementation. If exact reproduction is blocked, update the design file first.
+
+## Pushing
+
+Push one branch at a time — `git push origin main`. Not `--all`, and not
+`--mirror`: a working copy can pick up refs that are nobody's business in a
+public repository (editor checkpoints under `refs/claude/`, for one), and those
+two flags publish everything the local clone happens to hold.
