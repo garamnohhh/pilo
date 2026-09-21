@@ -34,13 +34,10 @@ Three kinds of agent, and pilo starts none of them:
 
 Underneath, three things share the machine:
 
-```
-you ──▶ pilo ───────────────▶ herdr ───────▶ the sessions you opened
-         │   server, TUI,      finds panes,   Claude Code, Codex —
-         │   dashboard, DB     types into     your own subscriptions
-         │                     them
-         └──▶ ~/.pilo — requests, tasks, answers, events
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.png">
+  <img alt="You ask pilo. pilo keeps the request in ~/.pilo, wakes the right session through herdr, and the owners running in your terminal — shop, notes, atlas — report back to pilo." src="docs/diagrams/architecture-light.png">
+</picture>
 
 pilo never launches an agent and never speaks to a provider. It finds the panes
 with `herdr agent list`, wakes one with `herdr agent prompt`, and the agent

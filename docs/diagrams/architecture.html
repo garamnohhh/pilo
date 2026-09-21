@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>pilo — what talks to what</title>
+  <style>
+    @font-face { font-family: 'Pretendard Variable'; src: url('../../public/fonts/PretendardVariable.woff2') format('woff2-variations'); font-weight: 100 900; font-display: swap; }
+    @font-face { font-family: 'JetBrains Mono'; src: url('../../public/fonts/JetBrainsMono-latin.woff2') format('woff2'); font-weight: 400 600; font-display: swap; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper: #F4F6F4;
+      --color-ink: #101413;
+      --color-muted: #59635C;
+      --color-accent: #0B6B4A;
+      --font-sans: 'Pretendard Variable', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1200px; width: 100%; }
+    .eyebrow {
+      font-family: var(--font-mono); font-size: 0.66rem; font-weight: 500;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--color-muted); margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-sans); font-size: 1.75rem; font-weight: 600;
+      letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 1.5rem;
+    }
+    svg { width: 100%; min-width: 900px; display: block; }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Architecture · pilo</p>
+    <h1>What talks to what</h1>
+    <svg viewBox="0 0 1000 560" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="pilo-architecture-title pilo-architecture-desc">
+      <title id="pilo-architecture-title">pilo — what talks to what</title>
+      <desc id="pilo-architecture-desc">You ask pilo; pilo keeps the request in its own database, wakes the right session through herdr, and the owner agents running in your terminal report back to pilo. pilo never starts an agent and never calls a provider.</desc>
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#59635C"/></marker>
+        <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0B6B4A"/></marker>
+        <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2A5F7D"/></marker>
+      </defs>
+
+      <rect width="100%" height="100%" fill="#F4F6F4"/>
+
+      <!-- zone: the terminal the user opened themselves -->
+      <rect x="716" y="88" width="244" height="368" rx="8" fill="rgba(16,20,19,0.02)" stroke="rgba(16,20,19,0.10)" stroke-width="0.8"/>
+      <rect x="748" y="92" width="120" height="12" rx="2" fill="#F4F6F4"/>
+      <text x="808" y="101" fill="rgba(16,20,19,0.40)" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.14em">YOUR TERMINAL</text>
+
+      <!-- arrows first, boxes after -->
+      <line x1="160" y1="272" x2="236" y2="272" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="170" y="240" width="52" height="12" rx="2" fill="#F4F6F4"/>
+      <text x="196" y="249" fill="#6E7A72" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ASKS</text>
+
+      <line x1="308" y1="320" x2="308" y2="396" stroke="#0B6B4A" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+      <rect x="316" y="346" width="52" height="12" rx="2" fill="#F4F6F4"/>
+      <text x="320" y="355" fill="#6E7A72" font-size="8" font-family="'JetBrains Mono', monospace" letter-spacing="0.06em">KEEPS</text>
+
+      <line x1="440" y1="272" x2="516" y2="272" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <rect x="452" y="240" width="52" height="12" rx="2" fill="#F4F6F4"/>
+      <text x="478" y="249" fill="#6E7A72" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.06em">WAKES</text>
+
+      <path d="M660,256 H684 Q692,256 692,248 V160 Q692,152 700,152 H740" fill="none" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <line x1="660" y1="272" x2="740" y2="272" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+      <path d="M660,288 H696 Q704,288 704,296 V384 Q704,392 712,392 H740" fill="none" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+      <path d="M716,424 H408 Q400,424 400,416 V324" fill="none" stroke="#0B6B4A" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+      <rect x="500" y="402" width="64" height="12" rx="2" fill="#F4F6F4"/>
+      <text x="532" y="411" fill="#6E7A72" font-size="8" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.06em">REPORTS</text>
+
+      <!-- you -->
+      <rect x="40" y="240" width="120" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="40" y="240" width="120" height="64" rx="6" fill="rgba(89,99,92,0.10)" stroke="#6E7A72" stroke-width="1"/>
+      <text x="100" y="278" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">You</text>
+
+      <!-- pilo: the only focal node -->
+      <rect x="240" y="224" width="200" height="96" rx="6" fill="#F4F6F4"/>
+      <rect x="240" y="224" width="200" height="96" rx="6" fill="#DCF2E8" stroke="#0B6B4A" stroke-width="1"/>
+      <rect x="248" y="232" width="36" height="12" rx="2" fill="transparent" stroke="rgba(11,107,74,0.40)" stroke-width="0.8"/>
+      <text x="266" y="241" fill="rgba(11,107,74,0.80)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DESK</text>
+      <text x="340" y="276" fill="#101413" font-size="16" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">pilo</text>
+      <text x="340" y="300" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">server · tui · dashboard</text>
+
+      <!-- the database it keeps -->
+      <rect x="232" y="400" width="152" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="232" y="400" width="152" height="64" rx="6" fill="rgba(16,20,19,0.05)" stroke="#59635C" stroke-width="1"/>
+      <rect x="240" y="408" width="24" height="12" rx="2" fill="transparent" stroke="rgba(89,99,92,0.40)" stroke-width="0.8"/>
+      <text x="252" y="417" fill="rgba(89,99,92,0.80)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DB</text>
+      <text x="308" y="440" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">~/.pilo</text>
+      <text x="308" y="456" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">requests · answers</text>
+
+      <!-- herdr -->
+      <rect x="520" y="240" width="140" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="520" y="240" width="140" height="64" rx="6" fill="rgba(16,20,19,0.03)" stroke="rgba(16,20,19,0.30)" stroke-width="1"/>
+      <rect x="528" y="248" width="28" height="12" rx="2" fill="transparent" stroke="rgba(16,20,19,0.30)" stroke-width="0.8"/>
+      <text x="542" y="257" fill="rgba(16,20,19,0.60)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">CLI</text>
+      <text x="590" y="280" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">herdr</text>
+      <text x="590" y="296" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">agent prompt</text>
+
+      <!-- the sessions you opened -->
+      <rect x="744" y="120" width="192" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="744" y="120" width="192" height="64" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+      <rect x="752" y="128" width="24" height="12" rx="2" fill="transparent" stroke="rgba(16,20,19,0.40)" stroke-width="0.8"/>
+      <text x="764" y="137" fill="rgba(16,20,19,0.80)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PM</text>
+      <text x="840" y="158" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">shop</text>
+      <text x="840" y="174" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">claude code</text>
+
+      <rect x="744" y="240" width="192" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="744" y="240" width="192" height="64" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+      <rect x="752" y="248" width="24" height="12" rx="2" fill="transparent" stroke="rgba(16,20,19,0.40)" stroke-width="0.8"/>
+      <text x="764" y="257" fill="rgba(16,20,19,0.80)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PM</text>
+      <text x="840" y="278" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">notes</text>
+      <text x="840" y="294" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">codex</text>
+
+      <rect x="744" y="360" width="192" height="64" rx="6" fill="#F4F6F4"/>
+      <rect x="744" y="360" width="192" height="64" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+      <rect x="752" y="368" width="24" height="12" rx="2" fill="transparent" stroke="rgba(16,20,19,0.40)" stroke-width="0.8"/>
+      <text x="764" y="377" fill="rgba(16,20,19,0.80)" font-size="7" font-family="'JetBrains Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PM</text>
+      <text x="840" y="398" fill="#101413" font-size="12" font-weight="600" font-family="'Pretendard Variable', sans-serif" text-anchor="middle">atlas</text>
+      <text x="840" y="414" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace" text-anchor="middle">claude code</text>
+
+      <!-- legend -->
+      <line x1="40" y1="500" x2="960" y2="500" stroke="rgba(16,20,19,0.10)" stroke-width="0.8"/>
+      <text x="40" y="520" fill="#59635C" font-size="8" font-family="'JetBrains Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+      <line x1="144" y1="516" x2="180" y2="516" stroke="#0B6B4A" stroke-width="1.2"/>
+      <text x="188" y="520" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace">pilo's own</text>
+      <line x1="320" y1="516" x2="356" y2="516" stroke="#59635C" stroke-width="1.2"/>
+      <text x="364" y="520" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace">local call</text>
+      <line x1="496" y1="516" x2="532" y2="516" stroke="#0B6B4A" stroke-width="1" stroke-dasharray="4,3"/>
+      <text x="540" y="520" fill="#59635C" font-size="9" font-family="'JetBrains Mono', monospace">report back</text>
+      <text x="716" y="520" fill="#6E7A72" font-size="9" font-family="'JetBrains Mono', monospace">no provider call leaves this machine</text>
+    </svg>
+  </div>
+</body>
+</html>
