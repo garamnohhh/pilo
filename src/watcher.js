@@ -383,6 +383,52 @@ export function reminderDue(blockedAt, rounds, now = Date.now(), steps = REMIND_
   return now - new Date(blockedAt).getTime() >= steps[rounds] * 60000;
 }
 
+// What comes in after the answer has gone out. The desk used to be woken for a
+// request exactly once — pumpResults skips anything that already has an answer —
+// so "I have asked the PM; I will tell you when it lands" was a promise it had no
+// way to keep. A task that finishes after the last answer was written is news the
+// user has not been told, and the desk is woken to say it.
+const FOLLOWUP_WINDOW_HOURS = Number(process.env.PILO_FOLLOWUP_WINDOW_HOURS || 24);
+
+async function pumpFollowups() {
+  const pilo = await one(
+    `SELECT id, name, herdr_target, runtime FROM agents
+      WHERE role = 'pilo' AND archived_at IS NULL AND (limited_until IS NULL OR limited_until < now())`
+  );
+  // A parked desk cannot be told anything, and asking every three seconds would
+  // only fill the log: the news keeps until the park lifts.
+  if (!pilo?.herdr_target) return;
+  const late = await query(
+    `SELECT t.id, t.inbox_id AS "inboxId", a.name AS agent
+       FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+      WHERE t.status IN ('done', 'failed') AND t.done_at IS NOT NULL
+        -- news, not history: a result from last week is not worth a message, and
+        -- without this the first tick after an upgrade would work through months
+        -- of finished work
+        AND t.done_at > now() - ($1 || ' hours')::interval
+        AND (SELECT max(f.created_at) FROM final_replies f WHERE f.inbox_id = t.inbox_id) < t.done_at
+        AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'followup_woken')
+      ORDER BY t.done_at LIMIT 5`,
+    [String(FOLLOWUP_WINDOW_HOURS)]
+  );
+  for (const task of late) {
+    const sent = await wake(pilo, t("wake.followup", { id: task.inboxId, task: task.id, agent: task.agent || "agent" }),
+      { taskId: task.id, inboxId: task.inboxId });
+    if (!sent) continue;
+    // Two guards, and the second is the one that keeps a busy day quiet: the
+    // moment the desk writes the follow-up, every task that finished before it
+    // drops out of the query above. This one only says "asked once per task".
+    await logEvent({
+      type: "followup_woken",
+      title: t("event.followup", { id: task.inboxId, task: task.id }),
+      taskId: task.id,
+      inboxId: task.inboxId,
+      agentId: pilo.id,
+      payload: { agent: task.agent || "agent" }
+    });
+  }
+}
+
 // The account runs out, not the agent: everything of that runtime is out at the
 // same moment. The figure is the one the status line already reads — Claude's
 // own /usage answer, refreshed by the usage-probe, and the rate_limits Codex
@@ -681,6 +727,7 @@ export const tick = serialize(async () => {
     await pumpInbox();
     await pumpTasks();
     await pumpResults();
+    await pumpFollowups();
     await pumpStalled();
     await pumpDecisions();
     await pumpLimits();
