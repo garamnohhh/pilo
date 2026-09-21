@@ -526,6 +526,7 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
         WHERE t.inbox_id = i.id) AS project,
        (SELECT body FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "finalReply",
        (SELECT f.created_at FROM final_replies f WHERE f.inbox_id = i.id ORDER BY f.created_at DESC LIMIT 1) AS "repliedAt",
+       (SELECT count(*)::int FROM final_replies f WHERE f.inbox_id = i.id) AS "replyCount",
        -- only while the work is open: a note left by a task that has since
        -- finished is history, not what is happening now
        (SELECT t.progress FROM tasks t WHERE t.inbox_id = i.id AND t.progress <> ''
@@ -576,9 +577,14 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
 export async function replyBodies(ids) {
   const list = String(ids).split(",").map((x) => Number(x)).filter((x) => Number.isInteger(x) && x > 0).slice(0, 100);
   if (!list.length) return [];
+  // Every answer a request has, oldest first. It used to be the newest one only,
+  // which meant a follow-up written after the first answer quietly replaced it on
+  // the screens instead of being added under it. The order matters twice: the
+  // screens draw them in it, and a client that only keeps the last row it reads
+  // ends up with the newest, which is what it used to get.
   return query(
-    `SELECT DISTINCT ON (f.inbox_id) f.inbox_id AS id, f.body AS "finalReply", f.created_at AS "repliedAt"
-     FROM final_replies f WHERE f.inbox_id = ANY($1::bigint[]) ORDER BY f.inbox_id, f.created_at DESC`,
+    `SELECT f.inbox_id AS id, f.body AS "finalReply", f.created_at AS "repliedAt"
+     FROM final_replies f WHERE f.inbox_id = ANY($1::bigint[]) ORDER BY f.inbox_id, f.created_at`,
     [list]
   );
 }

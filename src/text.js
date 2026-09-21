@@ -28,6 +28,8 @@ const EN = {
 
   // request cards
   "card.replyBadge": "FINAL_REPLY",
+  "card.followUp": "follow-up",
+  "card.replyAgain": "· follow-up · {at}",
   "card.replyFooter": "click to follow up · run log · changed files in :dash",
   "tui.follow.cancel": "esc cancels",
   "tui.follow.on": "following up in-{id} — your next line starts with it",
@@ -314,6 +316,8 @@ const KO = {
   "tree.sessionGone": "세션 끊김",
 
   "card.replyBadge": "FINAL_REPLY",
+  "card.followUp": "이어서",
+  "card.replyAgain": "· 이어서 · {at}",
   "card.replyFooter": "클릭하면 이어 묻기 · 실행 로그·변경 파일은 :dash",
   "tui.follow.cancel": "esc 취소",
   "tui.follow.on": "in-{id} 에 이어 묻기 — 다음 말 앞에 붙음",
