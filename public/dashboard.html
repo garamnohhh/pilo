@@ -1386,7 +1386,8 @@ function feedMessages(item, detail) {
     msgs.push({ who: `${item.progressBy || "agent"} · working`, kind: "working", text: item.progress });
   }
   for (const [i, reply] of (full.replies || []).entries()) {
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · ${i ? T("card.followUp") : "answer"}`,
+    const what = item.source === "desk" ? T("feed.note") : i ? T("card.followUp") : "answer";
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)} · ${what}`,
       kind: "answer", text: reply.body || "", inbox: item.id });
   }
   // The list row can carry the answers before a detail fetched earlier does.
