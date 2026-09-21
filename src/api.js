@@ -11,7 +11,7 @@ import { nextRun, composeCadence, usesWeekdayFlag } from "./cadence.js";
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
-  -- Giving up is the wake giving up, not the work failing: on 2026-09-15 hoban
+  -- Giving up is the wake giving up, not the work failing: on 2026-09-15 atlas
   -- stopped being nudged for #1553 at 19:26 and delivered it at 20:45. Counting
   -- every give-up of the last day left a red "!" on an agent that had answered
   -- hours ago, so it counts only while the work it gave up on is still waiting.

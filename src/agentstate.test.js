@@ -9,12 +9,12 @@ const now = Date.now();
 const ago = (min) => new Date(now - min * 60000).toISOString();
 const later = (min) => new Date(now + min * 60000).toISOString();
 
-// One row per rung, plus the pair that started this: hoban, whose wake gave up
+// One row per rung, plus the pair that started this: atlas, whose wake gave up
 // yesterday on work it then delivered.
 const AGENTS = {
   idle: { status: "idle", gaveUp: 0 },
-  "hoban, done answering": { status: "idle", gaveUp: 0, sessionStatus: "done" },
-  "hoban, still not answering": { status: "idle", gaveUp: 1, sessionStatus: "done" },
+  "atlas, done answering": { status: "idle", gaveUp: 0, sessionStatus: "done" },
+  "atlas, still not answering": { status: "idle", gaveUp: 1, sessionStatus: "done" },
   running: { status: "running", gaveUp: 0, lastSignal: ago(2) },
   "running, silent for an hour": { status: "running", gaveUp: 0, lastSignal: ago(60), sessionStatus: "idle" },
   "running, silent but the pane is busy": { status: "running", gaveUp: 0, lastSignal: ago(60), sessionStatus: "working" },
@@ -33,8 +33,8 @@ test("every agent lands on one rung", () => {
   assert.equal(agentState(AGENTS.idle, now), "idle");
   // an agent that answered in the end is not still "no answer": the server stops
   // counting the give-up once the work it gave up on is finished
-  assert.equal(agentState(AGENTS["hoban, done answering"], now), "idle");
-  assert.equal(agentState(AGENTS["hoban, still not answering"], now), "gaveUp");
+  assert.equal(agentState(AGENTS["atlas, done answering"], now), "idle");
+  assert.equal(agentState(AGENTS["atlas, still not answering"], now), "gaveUp");
   assert.equal(agentState(AGENTS.running, now), "running");
   assert.equal(agentState(AGENTS["running, silent for an hour"], now), "stalled");
   assert.equal(agentState(AGENTS["running, silent but the pane is busy"], now), "running");

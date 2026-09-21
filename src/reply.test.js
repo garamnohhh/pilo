@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 
 import { pickResults, withResults } from "./reply.js";
 
-const task = (over) => ({ status: "done", pmResult: "", error: "", agentId: 7, agent: "hoban", role: "pm", parentId: 1, parentRole: "pilo", ...over });
+const task = (over) => ({ status: "done", pmResult: "", error: "", agentId: 7, agent: "atlas", role: "pm", parentId: 1, parentRole: "pilo", ...over });
 
 test("a worker under a PM on the same request is left to its PM", () => {
   const tasks = [
-    task({ pmResult: "hoban's gathered report" }),
+    task({ pmResult: "atlas's gathered report" }),
     task({ agentId: 2, agent: "chatbot", role: "worker", parentId: 7, parentRole: "pm", pmResult: "chatbot's own" })
   ];
-  assert.deepEqual(pickResults(tasks).map((t) => t.agent), ["hoban"]);
+  assert.deepEqual(pickResults(tasks).map((t) => t.agent), ["atlas"]);
 });
 
 test("a worker the desk owns, or one whose PM holds nothing here, is attached", () => {
@@ -42,7 +42,7 @@ test("several results are named, and a failure says so with its reason", () => {
     task({ pmResult: "A 끝" }),
     task({ agentId: 4, agent: "fitxel", status: "failed", error: "SESSION_NOT_FOUND", pmResult: "못 함" })
   ], "실패");
-  assert.equal(body, "둘 다 끝남\n\n---\n\n**hoban**\n\nA 끝\n\n---\n\n**fitxel** · 실패\n\nSESSION_NOT_FOUND\n\n못 함");
+  assert.equal(body, "둘 다 끝남\n\n---\n\n**atlas**\n\nA 끝\n\n---\n\n**fitxel** · 실패\n\nSESSION_NOT_FOUND\n\n못 함");
 });
 
 test("no lead still saves the results", () => {
