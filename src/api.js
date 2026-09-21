@@ -678,7 +678,9 @@ export async function createInbox(userRequest, cwd = "", source = "user") {
 // Not to be confused with pilo ask, which waits for the user to decide, or with a
 // progress note, which belongs to a task. Nothing waits on a note.
 export async function createNote(input) {
-  const body = String(input?.body || "").trim();
+  // `body` is the field, but the inbox route next door takes `text` as well and
+  // the first caller to post one by hand reached for that — so both are read.
+  const body = String(input?.body || input?.text || "").trim();
   if (!body) throw Object.assign(new Error("empty note"), { status: 400 });
   const title = String(input?.title || "").trim() || body.split("\n")[0].slice(0, 60);
   const inbox = await createInbox(title, "", "desk");
