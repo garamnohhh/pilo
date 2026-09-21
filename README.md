@@ -204,5 +204,6 @@ picks up refs that are nobody's business in a public repository.
 
 ## License
 
-MIT © 2026 [garamnoh](https://github.com/garamnohhh) · homepage pilo.pages.dev
+[Apache License 2.0](LICENSE) · Copyright 2026
+[garamnoh](https://github.com/garamnohhh) · homepage pilo.pages.dev
 *(in preparation)*
