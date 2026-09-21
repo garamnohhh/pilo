@@ -51,6 +51,6 @@ test("a decomposed Hangul syllable is as wide as the one it came from", () => {
   assert.equal(charWidth("\u1112"), 2, "the lead consonant carries the width");
   assert.equal(charWidth("\u1167"), 0, "the vowel rides along");
   assert.equal(charWidth("\u11ab"), 0, "so does the final consonant");
-  const path = "/Users/garam/Downloads/랜딩 헤더 구현 지침 1B+2C.html";
+  const path = "/Users/you/Downloads/랜딩 헤더 구현 지침 1B+2C.html";
   assert.equal(cols(path.normalize("NFD")), cols(path), "the pasted path measures the same either way");
 });

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { workerRules } from "./rules.js";
 import { settleReviewer } from "./api.js";
 
-const pm = { id: 7, name: "hoban", role: "pm" };
+const pm = { id: 7, name: "atlas", role: "pm" };
 const worker = (id, name, reviewer = false) => ({ id, name, role: "worker", reviewer, specialty: "x" });
 
 test("only a worker can carry the reviewer mark", () => {
@@ -17,15 +17,15 @@ test("only a worker can carry the reviewer mark", () => {
 });
 
 test("the PM's workers table says who reviews", () => {
-  const out = workerRules(pm, "", [worker(2, "chatbot"), worker(57, "hoban-qa", true)]);
+  const out = workerRules(pm, "", [worker(2, "chatbot"), worker(57, "atlas-qa", true)]);
   assert.match(out, /\| id \| name \| reviewer \| specialty \|/);
-  assert.match(out, /\| 57 \| hoban-qa \| yes \|/);
+  assert.match(out, /\| 57 \| atlas-qa \| yes \|/);
   assert.match(out, /\| 2 \| chatbot \| — \|/);
 });
 
 test("every PM carries the same review gate, with or without a reviewer", () => {
   const gate = (text) => text.slice(text.indexOf("### Review before done"));
-  const withOne = workerRules(pm, "", [worker(57, "hoban-qa", true)]);
+  const withOne = workerRules(pm, "", [worker(57, "atlas-qa", true)]);
   const without = workerRules({ id: 5, name: "markly", role: "pm" }, "", []);
   assert.ok(gate(withOne).length > 200);
   assert.equal(gate(withOne), gate(without));
@@ -33,8 +33,8 @@ test("every PM carries the same review gate, with or without a reviewer", () => 
 
 test("the mark decides, not the name", () => {
   const as = (name) => workerRules(pm, "", [worker(57, name, true)]).replaceAll(name, "NAME");
-  assert.equal(as("hoban-qa"), as("마이클"));
-  assert.equal(as("hoban-qa"), as("tester"));
+  assert.equal(as("atlas-qa"), as("마이클"));
+  assert.equal(as("atlas-qa"), as("tester"));
 });
 
 test("several reviewers are all marked, and the gate says to use one per check", () => {
@@ -71,6 +71,6 @@ test("the desk is told what a blocked wake means and how to speak to the user", 
 });
 
 test("PMs and workers block only for what the user must decide", () => {
-  const out = workerRules({ id: 7, name: "hoban", role: "pm" }, "", []);
+  const out = workerRules({ id: 7, name: "atlas", role: "pm" }, "", []);
   assert.match(out, /pilo block` only for what the user must decide/);
 });

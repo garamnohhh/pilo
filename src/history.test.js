@@ -35,12 +35,12 @@ test("pieces come from the fields that match, a few at most", () => {
   const fields = [
     { field: "request", text: "요청에는 없음" },
     { field: "reply", text: "답에 수덕사" },
-    { field: "result", agent: "hoban", text: "결과에 수덕사" },
+    { field: "result", agent: "atlas", text: "결과에 수덕사" },
     { field: "result", agent: "chatbot", text: "여기도 수덕사" },
-    { field: "instruction", agent: "hoban", text: "지시에도 수덕사" }
+    { field: "instruction", agent: "atlas", text: "지시에도 수덕사" }
   ];
   const found = pieces(fields, ["수덕사"]);
-  assert.deepEqual(found.map((f) => f.field + (f.agent ? `:${f.agent}` : "")), ["reply", "result:hoban", "result:chatbot"]);
+  assert.deepEqual(found.map((f) => f.field + (f.agent ? `:${f.agent}` : "")), ["reply", "result:atlas", "result:chatbot"]);
   assert.deepEqual(pieces(fields, ["없는말"]), []);
 });
 
