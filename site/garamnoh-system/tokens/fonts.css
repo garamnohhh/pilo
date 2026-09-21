@@ -1,0 +1,42 @@
+/* fonts — Pretendard for body copy, JetBrains Mono for labels and code.
+   Self-hosted: no request leaves this origin. Both are SIL OFL 1.1;
+   the licences ship next to the files in ../fonts/.
+
+   Pretendard is subset to Latin-1 + the 2350 KS X 1001 Hangul syllables
+   (2.1MB -> 459KB). A syllable outside that set falls back to the stack in
+   typography.css. Rebuild the subset if the copy ever needs one. */
+@font-face {
+  font-family: "Pretendard Variable";
+  font-style: normal;
+  font-weight: 45 920;
+  font-display: swap;
+  src: url("../fonts/PretendardVariable.subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("../fonts/JetBrainsMono-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("../fonts/JetBrainsMono-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* JetBrains Mono Nerd Font — 글리프(아이콘 문자)가 필요한 화면에서만 쓴다.
+   v2.304 · Nerd Fonts 3.5.0 패치본. 본문·라벨은 위의 JetBrains Mono 를 쓰고,
+   이 패밀리는 글리프를 직접 찍을 때만 부른다:  font-family: "JetBrainsMonoNF", monospace
+   라이선스는 원본과 같은 SIL OFL 1.1 — ../fonts/OFL-JetBrainsMono.txt */
+@font-face {
+  font-family: "JetBrainsMonoNF";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("../fonts/JetBrainsMonoNerdFont-Regular.ttf") format("truetype");
+}

@@ -1,0 +1,46 @@
+/* product — the slots a product fills, and nothing else.
+   This file never grows when a product is added: a product ships its own
+   products/<name>/brand.css that sets these, and the system stays fixed.
+
+   The rule the slots enforce: a product is distinguished by its MARK, not by
+   its colour. --product-accent defaults to --accent so the discipline holds
+   until a product has a real reason to break it — then it is one line, in the
+   product's own file, and visible in a diff. */
+/* The aliases are declared on the SAME selector list the theme blocks use, not
+   on :root alone. A custom property substitutes its var() at the element that
+   declares it, so an alias declared only at :root resolves against <html>'s
+   theme and inherits that resolved value down — a section or page that
+   redeclares the theme for itself could never be followed. --product-accent
+   escaped this only because --accent happens to be identical in both themes;
+   --product-accent-text did not, and a dark scene inside a light document got
+   the light-mode chevron. */
+:root, [data-theme="dark"], [data-theme="light"] {
+  --product-accent: var(--accent);
+  --product-accent-text: var(--accent-text);
+}
+:root {
+  --product-name: "";
+  /* the inline floor for a typeset product mark; a product may raise it */
+  --product-mark-min: 15px;
+}
+
+/* A product mark is the one thing a product draws itself: the system's
+   .gn-wordmark is fixed to "garamnoh". Products follow its grammar — a name
+   typeset in mono plus one square accent glyph, never an image, never a
+   symbol — and declare their own geometry in their brand.css. */
+.gn-product-mark {
+  font-family: var(--font-code);
+  font-weight: var(--w-regular);
+  line-height: 1;
+  color: inherit;
+  position: relative;
+  display: inline-block;
+}
+.gn-product-mark > i {
+  position: absolute;
+  background: var(--product-accent);
+}
+/* One blinking glyph per page — the same budget as the garamnoh cursor. */
+@media (prefers-reduced-motion: reduce) {
+  .gn-product-mark--live > i { animation: none; }
+}

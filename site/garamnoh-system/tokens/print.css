@@ -1,0 +1,25 @@
+/* print — dark never prints. Ink is the light theme, chrome is dropped. */
+@media print {
+  :root, [data-theme="dark"], [data-theme="light"] {
+    color-scheme: light;
+  --bg: #F4F6F4; --bg-2: #E8EBE8; --surface: #FFFFFF;
+  --text: #101413; --text-2: #59635C; --text-3: #6E7A72;
+  --line: #D3DAD4; --line-soft: #E4E9E5;
+  --accent: #3ED49C;        /* fill only, identical in both themes */
+  --accent-text: #0B6B4A;   /* text and hairlines step down */
+  --accent-weak: #DCF2E8; --accent-deep: #2BC189; --on-accent: #08090A;
+  --ok: #0B6B4A; --warn: #8A6410; --err: #B03A30; --info: #2A5F7D;
+  --ok-weak: #DCF2E8; --warn-weak: #F5E9CC; --err-weak: #F6DCD8; --info-weak: #DDE9F0;
+  --chart-1: #12805A; --chart-2: #0B6B4A; --chart-3: #8A6410; --chart-4: #2A5F7D; --chart-5: #B03A30;
+    --accent: #FFFFFF;      /* an accent fill prints as white + a 1px line */
+    --on-accent: #101413;
+  }
+  body { background: #FFFFFF; }
+  .gn-topbar, .gn-sidenav, .gn-toaster, .gn-overlay, .gn-drawer, .gn-cmdk-overlay,
+  .gn-tip, .gn-pop, .gn-skip, [data-print="hide"] { display: none !important; }
+  .gn-card, .gn-table, .gn-code, .gn-callout, .gn-log { break-inside: avoid; }
+  .gn-btn-brand { border-color: #101413 !important; }
+  a[href]::after { content: " (" attr(href) ")"; font-family: var(--font-mono); font-size: 10px; color: #59635C; }
+  a[href^="#"]::after { content: ""; }
+  @page { margin: 16mm; }
+}

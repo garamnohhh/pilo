@@ -1,0 +1,105 @@
+/* Pilo — brand.css
+   The single source for this mark is the product's own identity document
+   (Pilo Wordmark.dc.html); the CSS below is that spec, re-expressed on the
+   system's .gn-product-mark slots.
+
+   The mark is the prompt glyph followed by the name. garamnoh's mark is a
+   name plus a CURSOR — still being written. Pilo's is a name plus a PROMPT —
+   waiting for an instruction. Same terminal vocabulary, different moment. */
+
+[data-product="pilo"] {
+  --product-name: "pilo";
+  /* Pilo inherits the system accent. A tool does not need its own colour. */
+}
+
+/* ---------------------------------------------------------- 1. wordmark
+   Baseline-aligned, not centred: the glyph and the name sit on one line the
+   way they do in a shell. Gap 0.34em — wide enough to read as a prompt,
+   tight enough to read as one mark. */
+.pilo-wordmark {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.34em;
+  font-family: var(--font-code);
+  /* 400, as garamnoh and markly are: a mark set heavier than its siblings
+     reads as emphasis the system does not intend (§3 — size and brightness,
+     never weight). What marks this one as the CLI is the chevron. */
+  font-weight: var(--w-regular, 400);
+  font-size: var(--product-mark-min);   /* inline floor: 15px */
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+  color: inherit;
+}
+/* The glyph is the only accent, and it is the one product mark that is TYPE
+   rather than a fill — the cursor and Markly's dot are empty elements with a
+   background. It still reads --product-accent-text, which names that role;
+   both accent tokens now resolve to the same #3ED49C in both themes, so the
+   chevron is the same green wherever the mark appears. */
+.pilo-wordmark > b {
+  color: var(--product-accent-text);
+  /* ❯ 는 본문용 JetBrains Mono 서브셋에 없다. 그대로 두면 기계마다 다른 폰트가 그 자리를
+     메우고, 마크가 사람마다 달라진다. 이 글자만 Nerd Font 쪽으로 고정한다. */
+  font-family: "JetBrainsMonoNF", var(--font-code);
+}
+
+/* Size ladder. The name never sets below 13px; under that only the glyph
+   survives, and that is the icon, not the wordmark. */
+.pilo-wordmark--xl { font-size: 76px; }
+.pilo-wordmark--lg { font-size: 40px; }
+.pilo-wordmark--md { font-size: 22px; }
+
+/* On an inverted plate the glyph drops to the deep accent so it does not
+   glow against the ink. On an accent plate everything is --on-accent. */
+.pilo-wordmark--invert { color: var(--bg); }
+.pilo-wordmark--invert > b { color: var(--accent-deep); }
+.pilo-wordmark--on-accent,
+.pilo-wordmark--on-accent > b { color: var(--on-accent); }
+
+/* ------------------------------------------------------------- 2. icon
+   Where the name will not fit, the glyph alone on an accent square.
+   padding-top optically centres it — the glyph's ink sits high in its box. */
+.pilo-icon {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  width: 64px; height: 64px;
+  padding-top: 19px;                    /* 64 × 0.29 */
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-code);
+  font-weight: var(--w-strong);
+  font-size: 30px;                      /* 64 × 0.47 */
+  line-height: 1;
+}
+.pilo-icon--32 { width: 32px; height: 32px; padding-top: 9px; font-size: 15px; }
+.pilo-icon--16 { width: 16px; height: 16px; padding-top: 5px; font-size: 8px; }
+
+/* ----------------------------------------------------------- 3. lockup
+   Name, hairline, descriptor. The descriptor is a system label, not part of
+   the mark — it may be dropped, the mark may not. */
+.pilo-lockup { display: flex; align-items: center; gap: var(--sp-3); }
+.pilo-lockup > hr {
+  width: var(--hairline); height: 22px; margin: 0;
+  border: 0; background: var(--line);
+}
+.pilo-lockup > span {
+  font-family: var(--font-code);
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* --------------------------------------------------------------- 4. never
+   - Not capitalised. `Pilo` and `PILO` are both wrong.
+   - The glyph is ❯ (U+276F). Not >, not ›, not an arrow.
+   - Nothing between the glyph and the name but the gap.
+   - The glyph never blinks. That is garamnoh's cursor, not this.
+   - The name is never accent-coloured. Only the glyph is.
+   - No italics, no shadow, no gradient, no rounded corner.
+   - 웹에서는 규격 클래스로만 쓴다. 숫자를 인라인 style 에 옮겨 적지 않는다 — 옮겨 적는 순간
+     규격과 갈라진다. tools/check-marks.sh 가 그런 자리를 찾아낸다.
+   - CSS 를 못 쓰는 자리(README·OG 이미지·프레스킷·인쇄)에서만 assets/wordmarks/ 의 배포용
+     파일을 쓴다. 그 파일도 규격에서 만든 것이고, 손으로 다시 그리지 않는다.
+   - Clear space is 0.7× the cap height on every side. */
