@@ -1,0 +1,14 @@
+{
+  // 이 사이트는 정적 파일 뭉치뿐이라 Worker 스크립트가 없다("main" 없음).
+  // Cloudflare 는 이런 자산만 있는 워커를 정식으로 지원한다.
+  //
+  // name 은 대시보드의 Worker 이름과 글자 하나까지 같아야 한다. 다르면 빌드가 실패한다.
+  // 이 이름이 그대로 주소가 된다 — pilo.<계정 서브도메인>.workers.dev
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pilo",
+  "compatibility_date": "2026-09-22",
+  "assets": {
+    // site/_headers 도 같이 올라간다. /install.sh 를 text/plain 으로 내리는 규칙이 거기 있다.
+    "directory": "./site"
+  }
+}
