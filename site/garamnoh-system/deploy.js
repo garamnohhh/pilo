@@ -230,23 +230,29 @@
     document.addEventListener("DOMContentLoaded", start);
   } else start();
 
-  /* The language control is a pair of links so it still works without
-     scripting and so each language has a real address. With scripting it never
-     navigates: the document carries both languages, so the click swaps one
-     attribute and rewrites the address in place. Nothing reloads, nothing
-     moves — the same deal as the theme toggle. */
+
+  /* 언어 전환. 이 페이지가 두 언어를 다 담고 있으면 문서를 떠나지 않는다 —
+     속성 하나를 바꾸고 주소만 고쳐 쓴다. 테마 토글과 같은 조건이다.
+     두 언어가 없는 페이지에서는 링크를 링크로 둔다. */
+  function setLang(want) {
+    root.setAttribute("data-lang", want);
+    root.setAttribute("lang", want === "ko" ? "ko" : "en");
+    var m = document.querySelector('meta[name="pirep:title-' + want + '"]');
+    if (m) document.title = m.getAttribute("content");
+    each("[data-site-lang]", function (a) {
+      if (a.getAttribute("data-site-lang") === want) a.setAttribute("data-active", "");
+      else a.removeAttribute("data-active");
+      a.setAttribute("aria-current", a.getAttribute("data-site-lang") === want ? "true" : "false");
+    });
+  }
   each("[data-site-lang]", function (el) {
     el.addEventListener("click", function (ev) {
       var want = el.getAttribute("data-site-lang");
       if (ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.button) return;
-      /* Only the pages that carry both languages can swap in place. The rest
-         still have a twin to walk to, so let the link be a link. */
       if (!document.querySelector(".l-ko")) return;
       ev.preventDefault();
-      /* The two languages do not set to the same height, so holding the scroll
-         offset would let the text slide under the reader. Hold the thing being
-         looked at instead: the section at the top edge keeps its place, and the
-         swap is one synchronous paint, so nothing is seen to move. */
+      /* 두 언어의 글 높이가 달라서 스크롤 값을 붙잡으면 글이 눈 밑으로 밀린다.
+         화면 맨 위에 걸린 섹션을 잡아 두고, 바꾼 뒤 그 자리에 오게 맞춘다. */
       var mark = null, best = -1e9;
       each("[id]", function (sec) {
         var top = sec.getBoundingClientRect().top;
@@ -257,24 +263,63 @@
         var now = mark.getBoundingClientRect().top;
         if (Math.round(now - best)) window.scrollBy(0, now - best);
       }
-      /* The address is worked out from the one in the bar, not from the
-         link: after a swap the page is no longer where the link was written. */
+      /* 주소는 지금 열려 있는 주소에서 만든다 — 링크에 적힌 값이 아니라. */
       var path = location.pathname.replace(/(^|\/)en\//, "$1");
       if (want === "en") path = path.replace(/[^/]*$/, "en/$&").replace(/\/en\/$/, "/en/index.html");
       try { history.replaceState(null, "", path + location.search + location.hash); } catch (e) {}
       try { localStorage.setItem("garamnoh-system-lang", want); } catch (e) {}
     });
   });
-
-  function setLang(want) {
-    root.setAttribute("data-lang", want);
-    root.setAttribute("lang", want === "ko" ? "ko" : "en");
-    var m = document.querySelector('meta[name="pirep:title-' + want + '"]');
-    if (m) document.title = m.getAttribute("content");
-    each("[data-site-lang]", function (a) {
-      if (a.getAttribute("data-site-lang") === want) a.setAttribute("data-active", "");
-      else a.removeAttribute("data-active");
-    });
-  }
   setLang(root.getAttribute("data-lang") === "ko" ? "ko" : "en");
+
+  /* 페이지 안 목차. 지금 읽고 있는 절을 표시한다.
+     스크롤마다 계산하지 않고, 화면 위쪽 띠에 들어온 절만 관찰자가 알려준다.
+     주소의 해시로 바로 들어온 경우도 첫 계산에서 맞는 항목이 잡힌다. */
+  (function () {
+    var nav = document.querySelector(".gn-page-nav");
+    if (!nav || !window.IntersectionObserver) return;
+    var links = [].slice.call(nav.querySelectorAll('a[href^="#"]'));
+    if (!links.length) return;
+    var byId = {}, seen = {};
+    var targets = [];
+    links.forEach(function (a) {
+      var el = document.getElementById(a.getAttribute("href").slice(1));
+      if (!el) return;
+      byId[el.id] = a;
+      targets.push(el);
+    });
+    function mark(id) {
+      links.forEach(function (a) {
+        a.setAttribute("aria-current", a.getAttribute("href") === "#" + id ? "true" : "false");
+      });
+    }
+    function current() {
+      /* 화면 위쪽에 가장 가까운, 이미 지나간 절 */
+      var best = null, bestTop = -Infinity;
+      var line = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 54) + 24;
+      for (var i = 0; i < targets.length; i++) {
+        var top = targets[i].getBoundingClientRect().top - line;
+        if (top <= 0 && top > bestTop) { bestTop = top; best = targets[i]; }
+      }
+      if (!best) best = targets[0];
+      /* 페이지 끝에 닿으면 마지막 절을 잡는다 — 짧은 절이 위쪽 띠에 못 들어오는 경우 */
+      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) best = targets[targets.length - 1];
+      return best.id;
+    }
+    var ticking = false;
+    function update() {
+      ticking = false;
+      var id = current();
+      if (seen.id !== id) { seen.id = id; mark(id); }
+    }
+    var io = new IntersectionObserver(function () {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }, { rootMargin: "-20% 0px -70% 0px", threshold: [0, 1] });
+    targets.forEach(function (t) { io.observe(t); });
+    window.addEventListener("scroll", function () {
+      if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }, { passive: true });
+    update();
+    window.__gnSpy = { targets: targets.length };
+  })();
 })();

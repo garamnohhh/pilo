@@ -51,6 +51,11 @@ table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
      pre and .gn-code-body declare their own whitespace. */
   white-space: nowrap;
 }
+/* nowrap above is for LABELS — a version, a key, a path in a cell, which must
+   not break mid-token. A paragraph is never a label: set as mono it would run
+   off the page instead of wrapping, and nothing in the layout would say so.
+   Found on two docs pages before this rule existed. */
+p.gn-mono { white-space: normal; }
 
 .gn-label {
   font-family: var(--font-mono);

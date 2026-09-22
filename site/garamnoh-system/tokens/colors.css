@@ -4,6 +4,15 @@
   --bg: #08090A; --bg-2: #131917; --surface: #0B0E0D;
   --text: #E6EBE6; --text-2: #8B968E; --text-3: #6B776F;
   --line: #1E2422; --line-soft: #161B19;
+  /* --sep is the SEPARATOR between two things on one line — the hairline in a
+     header, the rule in a lockup. It is not a border. A border encloses a
+     surface and can sit at --line; a separator has to survive alone on the
+     ground, and on this theme a 1px light line on near-black disappears at
+     --line (1.26:1 on --bg, the same number that reads fine as a dark line on
+     the light theme). It steps up to --text-3 here — 4.26:1, measured — and
+     stays at --line on the light theme, where nothing is wrong. Same name,
+     two values, one job. */
+  --sep: var(--text-3);
   --accent: #3ED49C; --accent-text: #3ED49C;
   --accent-weak: #12281F; --accent-deep: #7CE7BD; --on-accent: #08090A;
   --ok: #3ED49C; --warn: #E0B64A; --err: #E0685F; --info: #7FB8D9;
@@ -14,6 +23,7 @@
   --bg: #F4F6F4; --bg-2: #E8EBE8; --surface: #FFFFFF;
   --text: #101413; --text-2: #59635C; --text-3: #6E7A72;
   --line: #D3DAD4; --line-soft: #E4E9E5;
+  --sep: var(--line);            /* 1.31:1 on --bg — a dark line on light ground holds */
   /* one accent, both themes. --accent-text used to be a darkened pair so the
      green would clear 3:1 as text on white; it now resolves to the same
      #3ED49C, because a mark that changes colour between themes stops being

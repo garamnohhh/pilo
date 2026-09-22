@@ -49,6 +49,11 @@
 .pilo-wordmark--lg { font-size: 40px; }
 .pilo-wordmark--md { font-size: 22px; }
 
+/* --inline — the mark used INSIDE a sentence. Takes the sentence's size and
+   the body ink, for the same reason pirep's does; see that file. Nothing
+   follows the name here, so there is no trailing space to hold. */
+.pilo-wordmark--inline { font-size: inherit; letter-spacing: -0.02em; color: var(--text); }
+
 /* On an inverted plate the glyph drops to the deep accent so it does not
    glow against the ink. On an accent plate everything is --on-accent. */
 .pilo-wordmark--invert { color: var(--bg); }

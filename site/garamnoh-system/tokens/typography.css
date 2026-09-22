@@ -19,4 +19,13 @@
   --w-regular: 400;
   --numeric-tabular: "tnum" 1;
   --measure: 660px;
+  /* --measure-lead is the OTHER reading width, and it is narrower on purpose.
+     --measure is for a document: paragraph after paragraph, read straight
+     through. A lead is the one paragraph under a heading that has to be taken
+     in at a glance, so it stops earlier. 54ch is what the product sites had
+     already settled on by hand in 16 places; naming it changed nothing on
+     screen. At the 15px body size it measures 482px, against --measure's 660 —
+     the two are not interchangeable, and a lead set to --measure reads as a
+     block of copy rather than a subtitle. */
+  --measure-lead: 54ch;
 }

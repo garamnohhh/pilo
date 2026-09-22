@@ -47,7 +47,7 @@ on your own machine.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/garamnohhh/pilo/main/install.sh | sh
+curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
 ```
 
 It clones the source into `~/.pilo/app`, installs the two dependencies and links
