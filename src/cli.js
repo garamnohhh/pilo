@@ -1,9 +1,9 @@
 // Agent-facing CLI. Talks to the Pilo API over the unix socket so it works with
 // sandbox network access turned off.
 import { request } from "node:http";
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { socketPath, socketFile } from "./paths.js";
+import { socketPath, socketFile, home } from "./paths.js";
 import { spoolDir, ensureSpool } from "./spool.js";
 import { CLI_COMMANDS } from "./commands.js";
 import { cols } from "./width.js";
@@ -81,7 +81,11 @@ function viaSocket(method, path, body) {
   });
 }
 
-const BLOCKED = new Set(["EPERM", "EACCES", "ENOENT", "ECONNREFUSED"]);
+// EINVAL is what a socket path longer than the platform's limit answers with —
+// a sandbox temp directory reaches that on its own — and ENAMETOOLONG says the
+// same thing outright. Both mean the socket cannot be used, not that the call
+// should die on an errno.
+const BLOCKED = new Set(["EPERM", "EACCES", "ENOENT", "ECONNREFUSED", "EINVAL", "ENAMETOOLONG"]);
 
 async function call(method, path, body) {
   try {
@@ -115,6 +119,24 @@ function body(text, opts) {
   const read = readFileSync(opts.file, "utf8").replace(/\s+$/, "");
   if (!read) throw new Error(`${opts.file} is empty`);
   return read;
+}
+
+// A report the server will not take is work already done. dial wrote its #1975
+// report four times into a server that had no such task and each attempt ended
+// at "task not found" with the text gone. The report is written to disk first
+// and the failure says how to file it again, so nothing has to be retyped.
+async function file(taskId, payload) {
+  try {
+    return await call("POST", `/api/tasks/${taskId}/result`, payload);
+  } catch (err) {
+    const dir = join(home, "unsent");
+    mkdirSync(dir, { recursive: true });
+    const path = join(dir, `task-${taskId}-${Date.now()}.json`);
+    writeFileSync(path, JSON.stringify(payload, null, 2));
+    throw new Error(
+      `${err.message}\n\nyour report is kept: ${path}\nfile it again with: pilo api POST /api/tasks/${taskId}/result --file ${path}`
+    );
+  }
 }
 
 // The catalogue in commands.js is the one list; this renders the CLI half of it.
@@ -221,7 +243,7 @@ const commands = {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
     if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo done <taskId> <report> | --file <path>");
-    const res = await call("POST", `/api/tasks/${taskId}/result`, {
+    const res = await file(taskId, {
       pmResult: body(text, opts),
       status: opts.status || "done",
       error: opts.error || "",
@@ -238,7 +260,7 @@ const commands = {
     const [taskId, ...text] = rest;
     if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo block <taskId> <question> | --file <path> [--for <taskId>]");
     const question = body(text, opts);
-    const res = await call("POST", `/api/tasks/${taskId}/result`, {
+    const res = await file(taskId, {
       pmResult: opts.note || question,
       question,
       // --for: this block carries that one's question up, so the user is asked once

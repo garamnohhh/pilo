@@ -1,13 +1,33 @@
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
-import { paths, readPort } from "./paths.js";
+import { paths, readPort, dataDir } from "./paths.js";
+import { spoolDir } from "./spool.js";
 import { t } from "./text.js";
 import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
 import { pickResults, withResults } from "./reply.js";
 import * as models from "./models.js";
 import { nextRun, composeCadence, usesWeekdayFlag } from "./cadence.js";
 import { groupDecisions, sameQuestion } from "./decisions.js";
+
+// A task is looked up by id alone, so "not found" can only mean the server that
+// answered has a different database — which is what happened to dial on
+// 2026-09-22: a leftover demo instance shared the file spool and swallowed
+// `pilo task 1975`, and a bare "task not found" told it nothing. The reply now
+// names the instance that answered and the ids it does hold, so the agent can
+// see it is looking at the wrong Pilo rather than at a task that vanished.
+export async function missingTask(id) {
+  const span = await one("SELECT min(id)::int AS lo, max(id)::int AS hi, count(*)::int AS n FROM tasks");
+  const holds = span?.n ? `it holds #${span.lo}–#${span.hi}` : "it holds no tasks at all";
+  return Object.assign(
+    new Error(
+      `task #${id} is not in this Pilo — ${holds} (db ${dataDir()}, pid ${process.pid}, port ${readPort()}, spool ${spoolDir}). ` +
+      "if the id is right, another instance answered: PILO_HOME, PILO_DATA, PILO_SOCKET and PILO_SPOOL in your shell decide which one. " +
+      "nothing was saved, so keep your report and file it again once you reach the right instance."
+    ),
+    { status: 404 }
+  );
+}
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -725,7 +745,7 @@ export async function createTask(inboxId, input) {
 
 export async function saveTaskResult(id, input) {
   const task = await one("SELECT t.id, t.inbox_id, t.to_agent_id, a.name AS agent FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1", [id]);
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   const status = input.status || "done";
   // relayOf: this block carries a worker's block on the same request. The user is
   // then asked once, by the carrier, and one answer releases both.
@@ -817,7 +837,7 @@ export async function answerTask(id, body) {
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1`,
     [id]
   );
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   if (task.status !== "blocked") throw Object.assign(new Error(`task #${id} is ${task.status}, not blocked`), { status: 400 });
   if (!String(body || "").trim()) throw Object.assign(new Error("answer is empty"), { status: 400 });
 
@@ -862,7 +882,7 @@ export async function askUser(id, body) {
   const text = String(body || "").trim();
   if (!text) throw Object.assign(new Error("say something to the user"), { status: 400 });
   const task = await one("SELECT id, status, inbox_id FROM tasks WHERE id = $1", [id]);
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   if (task.status !== "blocked") throw Object.assign(new Error(`task #${id} is ${task.status}, not waiting on the user`), { status: 400 });
   const desk = await one("SELECT id FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const row = await one("INSERT INTO asks (task_id, inbox_id, body) VALUES ($1, $2, $3) RETURNING id", [id, task.inbox_id, text]);
@@ -881,7 +901,7 @@ export async function noteProgress(id, text) {
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1`,
     [id]
   );
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   if (["done", "failed"].includes(task.status)) {
     throw Object.assign(new Error(`task #${id} is already ${task.status}`), { status: 400 });
   }
@@ -1054,7 +1074,7 @@ async function noteOpened(task) {
 // stall sweep, and the screens read "holding" instead of "stuck".
 export async function holdTask(id, note) {
   const task = await one("SELECT id, inbox_id, to_agent_id, status FROM tasks WHERE id = $1", [id]);
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   if (!["queued", "running", "holding"].includes(task.status)) {
     throw Object.assign(new Error(`task is ${task.status}`), { status: 400 });
   }
@@ -1066,7 +1086,7 @@ export async function holdTask(id, note) {
 
 export async function resumeTask(id) {
   const task = await one("SELECT id, inbox_id, to_agent_id, status FROM tasks WHERE id = $1", [id]);
-  if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!task) throw await missingTask(id);
   await query("UPDATE tasks SET status = 'queued', hold_note = '', updated_at = now() WHERE id = $1", [id]);
   await logEvent({ type: "task_resumed", title: t("event.resumed", { id }), agentId: task.to_agent_id,
     taskId: id, inboxId: task.inbox_id, payload: {} });
@@ -1144,7 +1164,7 @@ export async function taskDetail(id) {
      WHERE t.id = $1`,
     [id]
   );
-  if (!row) throw Object.assign(new Error("task not found"), { status: 404 });
+  if (!row) throw await missingTask(id);
   const progress = await query(
     `SELECT payload->>'text' AS text, created_at AS "at" FROM events
      WHERE task_id = $1 AND type = 'task_progress' ORDER BY created_at`,
