@@ -568,8 +568,17 @@ async function loadOlder() {
   }
 }
 
-// A conversation the reader opened needs its tasks and its answer; one that is
-// finished never changes again, so it is fetched once and kept.
+// A conversation the reader opened needs its tasks and its answer. An answered
+// one was treated as finished and never read again — but an answer is not the
+// end: work that lands afterwards is answered a second time, and that follow-up
+// stayed invisible until the page was reloaded. The list row carries the time of
+// the newest answer, so a held detail is kept only while it still matches.
+const newestReply = (detail) => {
+  const list = detail?.replies || [];
+  const last = list[list.length - 1];
+  return last ? String(last.createdAt || last.at || "") : "";
+};
+
 async function loadOpenDetails() {
   const f = state.feed;
   const refreshed = new Set((state.data.inbox || []).map((row) => String(row.id)));
@@ -577,9 +586,8 @@ async function loadOpenDetails() {
     !folded(row.id, i) || (!refreshed.has(String(row.id)) && !convState(row, f.detail[row.id]).answered));
   for (const row of wanted) {
     const held = f.detail[row.id];
-    // Kept only once the detail itself says it is over; the row saying so is
-    // exactly when the detail needs fetching again.
-    if (held && held.status === "replied" && (held.replies || []).length) continue;
+    const upToDate = row.repliedAt && newestReply(held) === String(row.repliedAt);
+    if (held && held.status === "replied" && (held.replies || []).length && upToDate) continue;
     try {
       f.detail[row.id] = await get(`/api/inbox/${row.id}`);
     } catch (err) { /* it may have gone; the summary still reads */ }
