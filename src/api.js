@@ -1276,6 +1276,11 @@ export async function setupState() {
   const sessions = await herdr.sessions();
   const pilos = await query("SELECT id, name, cwd, runtime, created_at AS \"createdAt\" FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const pms = await one("SELECT count(*)::int AS n FROM agents WHERE role = 'pm' AND archived_at IS NULL");
+  // The panes nothing is registered against yet. The setup screen prints the
+  // command to register the desk, and with one of these it can print the real
+  // folder rather than a placeholder to be filled in.
+  const taken = await query("SELECT herdr_target AS target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''");
+  const held = new Set(taken.map((row) => row.target));
   return {
     herdr: sessions.length > 0,
     sessions: sessions.length,
@@ -1283,7 +1288,9 @@ export async function setupState() {
     piloAgents: pilos,
     duplicatePilo: pilos.length > 1,
     needsSetup: pilos.length !== 1,
-    pmCount: pms.n
+    pmCount: pms.n,
+    free: sessions.filter((x) => !held.has(x.target))
+      .map((x) => ({ target: x.target, cwd: x.cwd, runtime: x.runtime }))
   };
 }
 
