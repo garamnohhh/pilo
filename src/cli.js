@@ -236,11 +236,13 @@ const commands = {
   async block(args) {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
-    if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo block <taskId> <question> | --file <path>");
+    if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo block <taskId> <question> | --file <path> [--for <taskId>]");
     const question = body(text, opts);
     const res = await call("POST", `/api/tasks/${taskId}/result`, {
       pmResult: opts.note || question,
       question,
+      // --for: this block carries that one's question up, so the user is asked once
+      relayOf: opts.for ? Number(opts.for) : undefined,
       status: "blocked",
       tokensIn: Number(opts.in || 0),
       tokensOut: Number(opts.out || 0)

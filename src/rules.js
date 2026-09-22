@@ -149,6 +149,9 @@ ${roster}
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
 - **\`pilo block\` only for what the user must decide.** The desk tells them for you. For a step only they can take — a
   restart, a permission — write exactly what is needed and what you do once it is done, so one answer is enough.
+  When you are carrying a worker's question up, say which one: \`pilo block <your task> "…" --for <its task>\`. The
+  user is then asked once, by you, and their answer releases both. Without it they are shown two lines for one
+  choice and can only answer one of them.
 - Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
 - **Write \`pmResult\` so it can be read as it stands**: the conclusion first, then what changed, what is left and
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
@@ -252,6 +255,8 @@ ${roster}
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
 - **\`pilo block\` 은 사용자가 정해야 하는 것만.** 사용자에게는 데스크가 대신 말한다. 사용자만 할 수 있는 절차(재시작·권한 등)는
   무엇이 필요한지와 끝나면 무엇을 할지를 분명히 적어 답 한 번으로 이어지게 한다.
+  worker 의 질문을 올려 보내는 경우에는 어느 것인지 밝힌다: \`pilo block <내 task> "…" --for <그 task>\`.
+  그러면 사용자는 네 줄 하나만 보고, 그 답이 둘 다 풀어 준다. 밝히지 않으면 한 결정에 두 줄이 뜨고 한쪽만 답할 수 있다.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다.
 - **\`pmResult\` 는 그대로 읽힐 글로 쓴다**: 결론 먼저, 그다음 바뀐 것·남은 것·결정할 것. 짧고 담백하게, 20줄 이하, 인사말 없이.
 - 확인한 파일·실행한 명령·읽은 것은 보고가 아니라 로그로: \`pilo done\` 의 \`--log "…"\`, 또는 \`runLog\`. 변경한 파일은 \`artifacts\`.

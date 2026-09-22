@@ -7,6 +7,7 @@ import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } 
 import { pickResults, withResults } from "./reply.js";
 import * as models from "./models.js";
 import { nextRun, composeCadence, usesWeekdayFlag } from "./cadence.js";
+import { groupDecisions, sameQuestion } from "./decisions.js";
 
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
@@ -516,6 +517,13 @@ export async function archiveProject(id) {
 const OPEN_ASK_TEXT = `COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL
     ORDER BY k.created_at DESC LIMIT 1), NULLIF(t.blocked_question, ''), t.pm_result)`;
 
+// True when another blocked task on the same request was filed for this one — a
+// PM carrying its worker's question up. The user is asked by the carrier, so the
+// one being carried is not a line of its own. See groupDecisions in
+// src/decisions.js, which folds the same pair out of the lists.
+const CARRIED_UP = `EXISTS (SELECT 1 FROM tasks ct
+    WHERE ct.inbox_id = t.inbox_id AND ct.status = 'blocked' AND ct.relay_of = t.id)`;
+
 export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
   const rows = await query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.source, i.created_at AS "createdAt",
@@ -555,10 +563,14 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
                  ORDER BY count(*) DESC, a.name LIMIT 1) h) AS held,
        -- the oldest decision still waiting on the user, in the desk's words when
        -- it has spoken and the PM's otherwise, and how many are waiting in all
-       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status = 'blocked') AS decisions,
+       -- A worker's question is its PM's to carry: while both sit blocked on one
+       -- request the user is asked once, so only the PM's is counted and shown.
+       (SELECT count(*)::int FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+         WHERE t.inbox_id = i.id AND t.status = 'blocked' AND NOT ${CARRIED_UP}) AS decisions,
        (SELECT json_build_object('taskId', t.id, 'agent', a.name, 'text', ${OPEN_ASK_TEXT})
-          FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
-         WHERE t.inbox_id = i.id AND t.status = 'blocked' ORDER BY t.updated_at LIMIT 1) AS decision
+          FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+         WHERE t.inbox_id = i.id AND t.status = 'blocked' AND NOT ${CARRIED_UP}
+         ORDER BY t.updated_at LIMIT 1) AS decision
      FROM inbox i
      WHERE ($2::bigint IS NULL OR i.id < $2)
        AND ($3::text = '' OR EXISTS (
@@ -632,12 +644,13 @@ export async function inboxDetail(id) {
   );
   // Open ones first-hand from the tasks; answered ones from the answer events, which
   // keep the question and the answer whichever way the user replied.
-  const open = await query(
-    `SELECT t.id AS "taskId", a.name AS agent, ${OPEN_ASK_TEXT} AS text, t.updated_at AS at
+  const open = groupDecisions(await query(
+    `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", a.name AS agent, t.relay_of AS "relayOf",
+       a.id AS "agentId", a.parent_agent_id AS "parentAgentId", ${OPEN_ASK_TEXT} AS text, t.updated_at AS at
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
      WHERE t.inbox_id = $1 AND t.status = 'blocked' ORDER BY t.updated_at`,
     [id]
-  );
+  ));
   const answered = await query(
     `SELECT e.task_id AS "taskId", a.name AS agent, e.payload->>'question' AS text, e.payload->>'answer' AS answer,
        e.created_at AS at
@@ -714,15 +727,25 @@ export async function saveTaskResult(id, input) {
   const task = await one("SELECT t.id, t.inbox_id, t.to_agent_id, a.name AS agent FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1", [id]);
   if (!task) throw Object.assign(new Error("task not found"), { status: 404 });
   const status = input.status || "done";
+  // relayOf: this block carries a worker's block on the same request. The user is
+  // then asked once, by the carrier, and one answer releases both.
+  const relayOf = status === "blocked" && input.relayOf ? await one(
+    "SELECT id FROM tasks WHERE id = $1 AND inbox_id = $2 AND id <> $3",
+    [Number(input.relayOf), task.inbox_id, id]
+  ) : null;
+  if (status === "blocked" && input.relayOf && !relayOf) {
+    throw Object.assign(new Error(`#${input.relayOf} is not another task on this request`), { status: 400 });
+  }
   await query(
     `UPDATE tasks SET pm_result = $2, status = $3, error = $4, tokens_in = $5, tokens_out = $6,
-       blocked_question = $7,
+       blocked_question = $7, relay_of = $8,
        done_at = CASE WHEN $3 IN ('done', 'failed') THEN now() ELSE done_at END, updated_at = now()
      WHERE id = $1`,
     [
       id, input.pmResult || "", status, input.error || "",
       Number(input.tokensIn || 0), Number(input.tokensOut || 0),
-      status === "blocked" ? input.question || input.pmResult || "" : ""
+      status === "blocked" ? input.question || input.pmResult || "" : "",
+      relayOf?.id ?? null
     ]
   );
 
@@ -789,7 +812,8 @@ export async function saveTaskResult(id, input) {
 // wakes the agent again with the answer attached.
 export async function answerTask(id, body) {
   const task = await one(
-    `SELECT t.id, t.status, t.inbox_id, t.blocked_question, a.name AS agent, a.id AS agent_id
+    `SELECT t.id AS "taskId", t.status, t.inbox_id AS "inboxId", t.blocked_question, a.name AS agent,
+       t.relay_of AS "relayOf", a.id AS "agentId", a.parent_agent_id AS "parentAgentId", ${OPEN_ASK_TEXT} AS text
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.id = $1`,
     [id]
   );
@@ -797,20 +821,38 @@ export async function answerTask(id, body) {
   if (task.status !== "blocked") throw Object.assign(new Error(`task #${id} is ${task.status}, not blocked`), { status: 400 });
   if (!String(body || "").trim()) throw Object.assign(new Error("answer is empty"), { status: 400 });
 
-  await query(
-    "UPDATE tasks SET answer = $2, status = 'queued', updated_at = now() WHERE id = $1",
-    [id, body]
+  // The user was asked once; everyone who asked that one question gets the
+  // answer. Without this the line went away and the worker behind it stayed
+  // blocked with nobody looking at it.
+  const others = await query(
+    `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", t.blocked_question, a.name AS agent,
+       t.relay_of AS "relayOf", a.id AS "agentId", a.parent_agent_id AS "parentAgentId", ${OPEN_ASK_TEXT} AS text
+     FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.inbox_id = $1 AND t.status = 'blocked' AND t.id <> $2`,
+    [task.inboxId, id]
   );
-  await query("UPDATE asks SET answered_at = now() WHERE task_id = $1 AND answered_at IS NULL", [id]);
-  await logEvent({
-    type: "task_answered",
-    title: t("event.answered", { agent: task.agent || "agent", id }),
-    taskId: id,
-    inboxId: task.inbox_id,
-    agentId: task.agent_id,
-    payload: { question: task.blocked_question, answer: body }
-  });
-  return { id, status: "queued" };
+  const group = [task, ...others.filter((row) => sameQuestion(task, row))];
+
+  for (const row of group) {
+    await query(
+      "UPDATE tasks SET answer = $2, status = 'queued', updated_at = now() WHERE id = $1",
+      [row.taskId, body]
+    );
+    await query("UPDATE asks SET answered_at = now() WHERE task_id = $1 AND answered_at IS NULL", [row.taskId]);
+    await logEvent({
+      type: "task_answered",
+      title: t("event.answered", { agent: row.agent || "agent", id: row.taskId }),
+      taskId: row.taskId,
+      inboxId: row.inboxId,
+      agentId: row.agentId,
+      payload: {
+        question: row.blocked_question,
+        answer: body,
+        ...(String(row.taskId) === String(id) ? {} : { answeredWith: String(id) })
+      }
+    });
+  }
+  return { id, status: "queued", alsoAnswered: group.slice(1).map((row) => String(row.taskId)) };
 }
 
 // The desk speaking to the user about a task that waits on them. It is not the
@@ -1228,13 +1270,14 @@ export async function overview() {
   // What waits on the user, whole: every decision still open (in the desk's words
   // once it has spoken), the failures nobody has dealt with, and agents whose
   // session is gone. The screens count this one number and list these rows.
-  const decisions = await query(
-    `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", a.name AS agent, ${OPEN_ASK_TEXT} AS text,
+  const decisions = groupDecisions(await query(
+    `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", a.name AS agent, t.relay_of AS "relayOf",
+       a.id AS "agentId", a.parent_agent_id AS "parentAgentId", ${OPEN_ASK_TEXT} AS text,
        split_part(i.user_request, E'\n', 1) AS request,
        COALESCE((SELECT max(k.created_at) FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL), t.updated_at) AS at
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN inbox i ON i.id = t.inbox_id
      WHERE t.status = 'blocked' ORDER BY at LIMIT 20`
-  );
+  ));
   // Answered ones are not sent: the line at the bottom of the chat is what still
   // waits on the user, and it goes the moment they answer. What was asked and what
   // they said stays in that request's own conversation.
