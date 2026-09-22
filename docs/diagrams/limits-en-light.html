@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>What happens when a limit lands</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#F4F6F4;color:#101413;font-family:'Geist', sans-serif;padding:40px}
+.eyebrow{font-family:'Geist Mono', monospace;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#6E7A72;margin:0 0 8px}
+h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;margin:0 0 24px}
+svg{max-width:980px;width:100%;height:auto}</style></head><body>
+<p class="eyebrow">pilo</p><h1>When a limit lands</h1>
+<svg viewBox="4 90 972 465" role="img" aria-labelledby="limits-light-title limits-light-desc" xmlns="http://www.w3.org/2000/svg">
+    <title id="limits-light-title">What happens when a limit lands</title>
+    <desc id="limits-light-desc">A runtime that hits a provider limit is parked until the window reopens, and the work it had not started goes to its owner instead.</desc>
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#59635C"/></marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0B6B4A"/></marker>
+    </defs>
+    <rect x="4" y="90" width="972" height="465" fill="#F4F6F4"/>
+    <rect x="80" y="180" width="220" height="70" rx="6" fill="#F4F6F4"/>
+    <rect x="80" y="180" width="220" height="70" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <rect x="88" y="188" width="42" height="12" rx="2" fill="none" stroke="#101413" stroke-opacity="0.4" stroke-width="0.8"/>
+    <text x="109" y="197" fill="#101413" fill-opacity="0.8" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">AGENT</text>
+    <text x="190" y="211" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">checkout</text>
+    <text x="190" y="229" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">a runtime at work</text>
+    <rect x="400" y="180" width="220" height="70" rx="6" fill="#F4F6F4"/>
+    <rect x="400" y="180" width="220" height="70" rx="6" fill="#DCF2E8" stroke="#0B6B4A" stroke-width="1"/>
+    <rect x="408" y="188" width="42" height="12" rx="2" fill="none" stroke="#0B6B4A" stroke-opacity="0.4" stroke-width="0.8"/>
+    <text x="429" y="197" fill="#0B6B4A" fill-opacity="0.8" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LIMIT</text>
+    <text x="510" y="211" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">window runs out</text>
+    <text x="510" y="229" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">provider limit</text>
+    <rect x="720" y="120" width="200" height="64" rx="6" fill="#F4F6F4"/>
+    <rect x="720" y="120" width="200" height="64" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1" stroke-dasharray="4,3"/>
+    <rect x="728" y="128" width="42" height="12" rx="2" fill="none" stroke="#101413" stroke-opacity="0.4" stroke-width="0.8"/>
+    <text x="749" y="137" fill="#101413" fill-opacity="0.8" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">STATE</text>
+    <text x="820" y="148" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">parked</text>
+    <text x="820" y="166" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">until it reopens</text>
+    <rect x="720" y="260" width="200" height="64" rx="6" fill="#F4F6F4"/>
+    <rect x="720" y="260" width="200" height="64" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <rect x="728" y="268" width="24" height="12" rx="2" fill="none" stroke="#101413" stroke-opacity="0.4" stroke-width="0.8"/>
+    <text x="740" y="277" fill="#101413" fill-opacity="0.8" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PM</text>
+    <text x="820" y="288" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">shop</text>
+    <text x="820" y="306" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">the owner</text>
+    <rect x="400" y="380" width="220" height="70" rx="6" fill="#F4F6F4"/>
+    <rect x="400" y="380" width="220" height="70" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <rect x="408" y="388" width="42" height="12" rx="2" fill="none" stroke="#101413" stroke-opacity="0.4" stroke-width="0.8"/>
+    <text x="429" y="397" fill="#101413" fill-opacity="0.8" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">QUEUE</text>
+    <text x="510" y="411" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">unopened queue</text>
+    <text x="510" y="429" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">work not started yet</text>
+    <line x1="308" y1="215" x2="392" y2="215" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="328" y="185" width="44" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="350" y="195" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HITS</text>
+    <path d="M 620 205 L 680 205 A 8 8 0 0 0 688 197 L 688 160 A 8 8 0 0 1 696 152 L 712 152" fill="none" stroke="#59635C" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="600" y="118" width="86" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="643" y="128" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PARKED</text>
+    <line x1="510" y1="254" x2="510" y2="372" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="522" y="306" width="79" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="561" y="316" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ITS QUEUE</text>
+    <path d="M 620 415 L 680 415 A 8 8 0 0 0 688 407 L 688 300 A 8 8 0 0 1 696 292 L 712 292" fill="none" stroke="#0B6B4A" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+    <rect x="600" y="336" width="112" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="656" y="346" fill="#0B6B4A" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">GOES TO OWNER</text>
+    <line x1="32" y1="504" x2="948" y2="504" stroke="rgba(16,20,19,0.12)" stroke-width="0.8"/>
+    <text x="32" y="524" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+    <line x1="132" y1="520" x2="160" y2="520" stroke="#0B6B4A" stroke-width="1.2"/>
+    <text x="168" y="524" fill="#59635C" font-size="9" font-family="'Geist', sans-serif">work keeps moving</text>
+    <line x1="341" y1="520" x2="369" y2="520" stroke="#59635C" stroke-width="1.2" stroke-dasharray="5,4"/>
+    <text x="377" y="524" fill="#59635C" font-size="9" font-family="'Geist', sans-serif">waits for the window</text>
+</svg>
+</body></html>

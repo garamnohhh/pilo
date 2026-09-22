@@ -361,3 +361,34 @@
   position: absolute; right: 4.4%; bottom: 4.4%;
   font-family: var(--font-mono); font-size: clamp(11px, 1.25cqw, 24px); color: var(--text-3);
 }
+
+/* 남의 브랜드 마크. 우리 아이콘 규칙('자체 세트 없음 · 유니코드 글리프')의 예외다 —
+   GitHub 같은 곳으로 나가는 링크는 그쪽 공식 마크를 원형 그대로 쓴다. 고치거나 다시 그리지 않는다.
+   출처: GitHub Octicons(mark-github, MIT). 링크를 가리키는 용도로만 쓰고, 색은 currentColor 로 지면을 따른다. */
+.gn-brandmark { display: inline-flex; align-items: center; gap: 6px; }
+.gn-brandmark svg { fill: currentColor; display: block; }
+
+/* ------------------------------------------------------------- separator
+   A vertical hairline between two groups on one line. Uses --sep, not --line:
+   see tokens/colors.css for why a separator and a border are not the same
+   colour on the dark theme. */
+.gn-sep { width: var(--bw); height: 14px; background: var(--sep); flex: 0 0 auto; }
+
+/* --------------------------------------------------------------- navlink
+   A text link in a header or footer: quiet at rest, accent on hover. The
+   colour is the whole affordance — there is no underline anywhere in this
+   system (tokens/base.css).
+
+   EXCEPTION, recorded 2026-09-22: on the light theme --accent-text is 1.74:1
+   on --bg, under the 4.5:1 body minimum. It is allowed HERE and only here
+   because this is a hover state — a moment, not a reading state. The resting
+   colour is --text-2 (5.75:1 light, 6.50:1 dark) and carries the reading. No
+   sentence, label or body run may take this exception. */
+.gn-navlink { color: var(--text-2); }
+.gn-navlink:hover { color: var(--accent-text); }
+
+/* Breadcrumb link — the quiet half of .gn-crumbs. Same hover as .gn-navlink,
+   one step quieter at rest because a crumb is where you came from, not where
+   you are. */
+.gn-crumb-link { color: var(--text-3); }
+.gn-crumb-link:hover { color: var(--accent-text); }

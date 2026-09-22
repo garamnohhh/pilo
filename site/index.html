@@ -6,7 +6,7 @@
 <meta name="pirep:title-ko" content="pilo — 이미 띄워둔 에이전트를 한 자리에서">
 <link rel="icon" href="/garamnoh-system/assets/favicon-32.png" sizes="32x32">
 <link rel="icon" href="/garamnoh-system/assets/favicon-16.png" sizes="16x16">
-<script src="/garamnoh-system/boot.js"></script>
+<script src="/garamnoh-system/boot.js?v=3"></script>
 <link rel="stylesheet" href="/garamnoh-system/tokens/fonts.css">
 <link rel="stylesheet" href="/garamnoh-system/tokens/colors.css">
 <link rel="stylesheet" href="/garamnoh-system/tokens/typography.css">
@@ -29,7 +29,7 @@
 html[data-lang="ko"] .l-en, html:not([data-lang="ko"]) .l-ko { display: none; }
 body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
 a { color: var(--accent-text); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a:hover { color: var(--accent); }
 [data-gn-opt-theme], [data-site-lang] { background: transparent; color: var(--text-3); font-weight: 400; }
 [data-gn-opt-theme][aria-selected="true"], [data-site-lang][data-active] { background: var(--bg-2); color: var(--accent-text); font-weight: 600; }
 [data-site-lang] { text-decoration: none; }
@@ -38,11 +38,13 @@ a:hover { text-decoration: underline; }
 
   <div  style="position: sticky; top: 0px; z-index: 60; background: var(--bg); border-bottom: 1px solid var(--line);">
     <div  style="max-width: 1120px; margin: 0px auto; padding: 8px 28px; min-height: 54px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-      <span  class="pilo-wordmark pilo-wordmark--md" data-product="pilo" style="flex: 0 0 auto;"><b>❯</b>pilo</span>
+      <a  href="./index.html" class="pilo-wordmark pilo-wordmark--md" data-product="pilo" style="flex: 0 0 auto; text-decoration: none; color: inherit;"><b>❯</b>pilo</a>
       <div  style="flex: 1 1 0%; min-width: 0px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-        <a  href="./docs.html" style="font-size: 13px; color: var(--text-2); white-space: nowrap;"><span class="l-en">Docs</span><span class="l-ko">문서</span></a>
-        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 13px; color: var(--text-2); white-space: nowrap;">GitHub</a>
-        <a  href="https://github.com/garamnohhh/pilo/releases" style="font-size: 13px; color: var(--text-2); white-space: nowrap;"><span class="l-en">Releases</span><span class="l-ko">릴리스</span></a>
+        <a href="./docs.html#getting-started" class="gn-navlink" style="font-size: 13px; white-space: nowrap;"><span class="l-en">Getting started</span><span class="l-ko">시작하기</span></a>
+        <a  href="./docs.html" class="gn-navlink" style="font-size: 13px; white-space: nowrap;"><span class="l-en">Docs</span><span class="l-ko">문서</span></a>
+        <a  href="./changelog.html" class="gn-navlink" style="font-size: 13px; white-space: nowrap;"><span class="l-en">Changelog</span><span class="l-ko">업데이트 기록</span></a>
+        <span  class="gn-sep"></span>
+        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 13px; color: var(--text-3); white-space: nowrap; display: inline-flex; align-items: center; gap: 4px;"><span  style="display: inline-flex; align-items: center; gap: 6px;"><svg viewBox="0 0 16 16" width="15" height="15" role="img" aria-label="GitHub" focusable="false" style="fill: currentColor; display: block;"><title>GitHub</title><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span></a>
       </div>
       <a  href="#install" style="height: 26px; display: flex; align-items: center; padding: 0px 12px; flex: 0 0 auto; border: 1px solid var(--line); background: var(--surface); color: var(--text-2); font-size: 12.5px;"><span class="l-en">Install</span><span class="l-ko">설치</span></a>
       <div  style="display: flex; height: 26px; border: 1px solid var(--line); flex: 0 0 auto;">
@@ -62,7 +64,7 @@ a:hover { text-decoration: underline; }
       <h1  style="font-size: clamp(38px, 6.4vw, 66px); line-height: 1.06; letter-spacing: -0.03em; margin: 22px 0px 0px; max-width: 17ch; white-space: pre-line;"><span class="l-en">Many agents,
 one place to talk</span><span class="l-ko">여러 에이전트,
 한 곳에서 말해요</span></h1>
-      <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 24px 0px 0px; max-width: 54ch; text-wrap: pretty;"><span class="l-en">pilo does not start agents. It gathers the ones already open in your terminal, so you say it once and the owners split the work.</span><span class="l-ko">pilo는 에이전트를 새로 만들지 않아요. 터미널에 이미 띄워둔 것들을 한 자리에 모아, 한 번만 말하면 담당들이 나눠서 해요.</span></p>
+      <p class="gn-lead"  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 24px 0px 0px; text-wrap: pretty;"><span class="l-en">pilo does not start agents. It gathers the ones already open in your terminal, so you say it once and the owners split the work.</span><span class="l-ko">pilo는 에이전트를 새로 만들지 않아요. 터미널에 이미 띄워둔 것들을 한 자리에 모아, 한 번만 말하면 담당들이 나눠서 해요.</span></p>
       <div  style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 32px;">
         <a  href="#install" style="height: 44px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; padding: 0px 20px; font-size: 15px; font-weight: 500;"><span class="l-en">How to install</span><span class="l-ko">설치 방법 보기</span></a>
         <a  href="#how" style="height: 44px; border: 1px solid var(--line); background: var(--surface); color: var(--text); display: flex; align-items: center; padding: 0px 20px; font-size: 15px;"><span class="l-en">How it works</span><span class="l-ko">어떻게 동작하나요</span></a>
@@ -208,10 +210,11 @@ one place to talk</span><span class="l-ko">여러 에이전트,
       <span  class="gn-label" style="color: var(--text-3);">INSTALL</span>
       <h2  style="font-size: 34px; letter-spacing: -0.02em; margin: 16px 0px 12px; max-width: 22ch; text-wrap: pretty;"><span class="l-en">One line and it is installed</span><span class="l-ko">한 줄이면 설치돼요</span></h2>
       <p  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px 0px 28px; max-width: 52ch; text-wrap: pretty;"><span class="l-en">Nothing is compiled and nothing asks for sudo. It needs Node 20 or newer, herdr, and one coding agent you have already opened.</span><span class="l-ko">컴파일도 sudo도 없어요. Node 20 이상과 herdr, 그리고 이미 띄워둔 코딩 에이전트 하나가 필요해요.</span></p>
+      <p style="font-size: 13.5px; margin: 0px 0px 28px;"><a href="./docs.html#getting-started" class="gn-navlink"><span class="l-en">Step by step, from install to your first result →</span><span class="l-ko">설치부터 첫 결과까지 단계별로 보기 →</span></a></p>
       <div  style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; align-items: start;">
         <div  style="border: 1px solid var(--line); background: var(--surface);">
           <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
-          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.8; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>curl -fsSL https://raw.githubusercontent.com/garamnohhh/pilo/main/install.sh | sh</div></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.8; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh</div></div>
         </div>
         <div  style="border: 1px solid var(--line); background: var(--surface);">
             <div  style="display: flex; align-items: baseline; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft);">
@@ -280,15 +283,20 @@ one place to talk</span><span class="l-ko">여러 에이전트,
     </div>
   </div>
 
-  <div >
-    <div  style="max-width: 1120px; margin: 0px auto; padding: 44px 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
-      <span  class="pilo-wordmark" data-product="pilo" style="color: var(--text-2);"><b>❯</b>pilo</span>
-      <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);"><span class="l-en">2026 · made in Jeonju</span><span class="l-ko">2026 · 전주에서 만들었어요</span></span>
-      <div  style="margin-left: auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
-        <a  href="https://github.com/garamnohhh/pilo" style="font-size: 12.5px; color: var(--text-2);">GitHub</a>
-        <span  class="gn-mono" style="font-size: 12.5px; color: var(--text-3);"><span class="l-en">Apache 2.0 licence</span><span class="l-ko">Apache 2.0 라이선스</span></span>
+  <!-- gn-footer:start -->
+  <div style="border-top: 1px solid var(--line);">
+    <div style="max-width: 1120px; margin: 0px auto; padding: 44px 28px; display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+      <a href="./index.html" class="pilo-wordmark" data-product="pilo" style="color: var(--text-2);"><b>❯</b>pilo</a>
+      <span class="gn-mono" style="font-size: 11px; color: var(--text-3);"><span class="l-en">2026 · made in Jeonju</span><span class="l-ko">2026 · 전주에서 만들었어요</span></span>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 18px; flex-wrap: wrap;">
+        <a href="./index.html#install" style="font-size: 12.5px;" class="gn-navlink"><span class="l-en">Install</span><span class="l-ko">설치</span></a>
+        <a href="./docs.html" style="font-size: 12.5px;" class="gn-navlink"><span class="l-en">Docs</span><span class="l-ko">문서</span></a>
+        <a href="./changelog.html" style="font-size: 12.5px;" class="gn-navlink"><span class="l-en">Release notes</span><span class="l-ko">업데이트 기록</span></a>
+        <a href="https://github.com/garamnohhh/pilo" style="font-size: 12.5px;" class="gn-navlink"><span style="display: inline-flex; align-items: center; gap: 6px;"><svg viewBox="0 0 16 16" width="15" height="15" role="img" aria-label="GitHub" focusable="false" style="fill: currentColor; display: block;"><title>GitHub</title><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></span></a>
+        <a href="https://github.com/garamnohhh/pilo/blob/main/LICENSE" style="font-size: 12.5px;" class="gn-crumb-link"><span class="l-en">Apache 2.0 licence</span><span class="l-ko">Apache 2.0 라이선스</span></a>
       </div>
     </div>
   </div>
-<script src="/garamnoh-system/deploy.js"></script>
+<!-- gn-footer:end -->
+<script src="/garamnoh-system/deploy.js?v=3"></script>
 </body></html>

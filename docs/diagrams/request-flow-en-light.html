@@ -1,0 +1,79 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<title>How one request moves</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#F4F6F4;color:#101413;font-family:'Geist',sans-serif;padding:40px}
+.eyebrow{font-family:'Geist Mono',monospace;font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:#6E7A72;margin:0 0 8px}
+h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:28px;margin:0 0 24px}
+svg{max-width:960px;width:100%;height:auto}</style></head><body>
+<p class="eyebrow">pilo</p><h1>How one request moves</h1>
+<svg viewBox="4 92 952 583" role="img" aria-labelledby="request-flow-light-title request-flow-light-desc" xmlns="http://www.w3.org/2000/svg">
+    <title id="request-flow-light-title">How one request moves through pilo</title>
+    <desc id="request-flow-light-desc">A request goes from you to the desk agent, which hands it to the owner of each project and on to a specialist; reports come back up and the desk writes one answer.</desc>
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#59635C"/></marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#0B6B4A"/></marker>
+    </defs>
+    <rect x="4" y="92" width="952" height="583" fill="#F4F6F4"/>
+    <line x1="120" y1="180" x2="120" y2="600" stroke="#D3DAD4" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="360" y1="180" x2="360" y2="600" stroke="#D3DAD4" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="600" y1="180" x2="600" y2="600" stroke="#D3DAD4" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="840" y1="180" x2="840" y2="600" stroke="#D3DAD4" stroke-width="1" stroke-dasharray="4,4"/>
+    <rect x="356" y="260" width="8" height="300" fill="#E8EBE8" stroke="rgba(16,20,19,0.12)" stroke-width="0.8"/>
+    <rect x="596" y="320" width="8" height="180" fill="#E8EBE8" stroke="rgba(16,20,19,0.12)" stroke-width="0.8"/>
+    <rect x="836" y="380" width="8" height="60" fill="#E8EBE8" stroke="rgba(16,20,19,0.12)" stroke-width="0.8"/>
+    <line x1="124" y1="260" x2="356" y2="260" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="216" y="228" width="48" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="240" y="238" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ASK</text>
+    <rect x="127" y="268" width="226" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="240" y="278" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">Group the payment failures by cause</text>
+    <line x1="364" y1="320" x2="596" y2="320" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="444" y="288" width="72" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="480" y="298" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">HAND OFF</text>
+    <rect x="379" y="328" width="202" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="480" y="338" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">shop, and notes for the tickets</text>
+    <line x1="604" y1="380" x2="836" y2="380" stroke="#59635C" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="684" y="348" width="72" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="720" y="358" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">DELEGATE</text>
+    <rect x="670" y="388" width="100" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="720" y="398" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">one area of it</text>
+    <line x1="836" y1="440" x2="604" y2="440" stroke="#59635C" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="691" y="408" width="58" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="720" y="418" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REPORT</text>
+    <rect x="661" y="448" width="118" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="720" y="458" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">38 split by cause</text>
+    <line x1="596" y1="500" x2="364" y2="500" stroke="#59635C" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="451" y="468" width="58" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="480" y="478" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">REPORT</text>
+    <rect x="412" y="508" width="136" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="480" y="518" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">with what it decided</text>
+    <line x1="356" y1="560" x2="124" y2="560" stroke="#0B6B4A" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+    <rect x="211" y="528" width="58" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="240" y="538" fill="#0B6B4A" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">ANSWER</text>
+    <rect x="148" y="568" width="184" height="14" rx="2" fill="#F4F6F4"/>
+    <text x="240" y="578" fill="#6E7A72" font-size="9" font-family="'Geist', sans-serif" text-anchor="middle">one answer, in your language</text>
+    <rect x="32" y="120" width="176" height="56" rx="6" fill="#F4F6F4"/>
+    <rect x="32" y="120" width="176" height="56" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <text x="120" y="145" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">You</text>
+    <text x="120" y="163" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">요청하는 사람</text>
+    <rect x="272" y="120" width="176" height="56" rx="6" fill="#F4F6F4"/>
+    <rect x="272" y="120" width="176" height="56" rx="6" fill="#DCF2E8" stroke="#0B6B4A" stroke-width="1"/>
+    <text x="360" y="145" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Desk</text>
+    <text x="360" y="163" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">pilo</text>
+    <rect x="512" y="120" width="176" height="56" rx="6" fill="#F4F6F4"/>
+    <rect x="512" y="120" width="176" height="56" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <text x="600" y="145" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Owner</text>
+    <text x="600" y="163" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">shop · notes</text>
+    <rect x="752" y="120" width="176" height="56" rx="6" fill="#F4F6F4"/>
+    <rect x="752" y="120" width="176" height="56" rx="6" fill="#FFFFFF" stroke="#101413" stroke-width="1"/>
+    <text x="840" y="145" fill="#101413" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Specialist</text>
+    <text x="840" y="163" fill="#59635C" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">checkout</text>
+    <line x1="32" y1="624" x2="928" y2="624" stroke="rgba(16,20,19,0.12)" stroke-width="0.8"/>
+    <text x="32" y="644" fill="#59635C" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+    <line x1="132" y1="640" x2="160" y2="640" stroke="#59635C" stroke-width="1.2"/>
+    <text x="168" y="644" fill="#59635C" font-size="9" font-family="'Geist', sans-serif">request</text>
+    <line x1="300" y1="640" x2="328" y2="640" stroke="#59635C" stroke-width="1.2" stroke-dasharray="5,4"/>
+    <text x="336" y="644" fill="#59635C" font-size="9" font-family="'Geist', sans-serif">report back</text>
+    <line x1="492" y1="640" x2="520" y2="640" stroke="#0B6B4A" stroke-width="1.2"/>
+    <text x="528" y="644" fill="#59635C" font-size="9" font-family="'Geist', sans-serif">the answer</text>
+</svg>
+</body></html>

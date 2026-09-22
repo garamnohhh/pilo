@@ -173,6 +173,9 @@
 .gn-page { max-width: var(--container); margin: 0 auto; padding: 0 var(--gutter) 120px; }
 /* Opt in on the paragraph that needs it, never on a wrapper. */
 .gn-read { max-width: var(--measure); }
+/* The lead paragraph under a page or section heading. Narrower than .gn-read;
+   see tokens/typography.css for why the two widths are different jobs. */
+.gn-lead { max-width: var(--measure-lead); }
 .gn-read-wide { max-width: 78ch; }
 /* Everything that is not prose keeps the column's own edges. */
 .gn-page-main > table, .gn-page-main > pre,
