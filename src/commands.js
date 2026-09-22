@@ -31,7 +31,7 @@ export const CATALOGUE = [
   { scope: "cli", name: "task", args: "<id>", summary: "받은 작업의 요청 전문과 사용자 원문", example: "pilo task 301" },
   { scope: "cli", name: "progress", args: "<taskId> <한 줄>", summary: "진행 상황 — 최종 답변과 별개, 여러 번 가능", example: 'pilo progress 301 "스테이징에서 재현 중"' },
   { scope: "cli", name: "done", args: "<taskId> <보고>|--file <경로> [--log 확인한 것]", summary: "작업 결과 보고 — 확인·명령 기록은 --log 로", example: 'pilo done 301 "완료" --log "테스트 42개 통과" --in 12000 --out 3000' },
-  { scope: "cli", name: "block", args: "<taskId> <질문>", summary: "사용자 결정 대기로 표시", example: 'pilo block 301 "가격 페이지 오늘 공개할까요?"' },
+  { scope: "cli", name: "block", args: "<taskId> <질문> [--for <taskId>]", summary: "사용자 결정 대기로 표시", example: 'pilo block 301 "가격 페이지 오늘 공개할까요?"' },
   { scope: "cli", name: "blocked", args: "", summary: "결정 대기 중인 작업 목록", example: "pilo blocked" },
   { scope: "cli", name: "ask", args: "<taskId> <사용자에게 할 말>", summary: "데스크 → 사용자: 결정 대기 작업을 그 대화 안에 빨간 줄로 — 답이 아님", example: 'pilo ask 301 "가격 페이지를 오늘 공개할지 정해 주세요. 네/아니오로 답하면 PM 이 이어갑니다"' },
   { scope: "cli", name: "hold", args: "<taskId> <what you wait on>", summary: "waiting on something outside Pilo", example: 'pilo hold 812 "waiting on CI"' },
