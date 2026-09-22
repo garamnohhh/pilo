@@ -2576,17 +2576,27 @@ DIALOGS["add-agent"] = () => {
   const projectId = f.projectId || projects[0]?.id || "";
   const pms = state.data.tree?.pms || [];
   const pmHere = pms.find((p) => String(p.projectId) === String(projectId));
-  const role = f.role || (pmHere ? "worker" : "pm");
+  // The desk has to be registered before anything else can hang off it, and this
+  // was the only screen the setup checklist pointed at — with no way to make one.
+  // The choice appears while there is no desk and goes once there is: a second
+  // one is refused by the server anyway.
+  const noDesk = !state.data.tree?.pilo;
+  const role = f.role || (noDesk ? "pilo" : pmHere ? "worker" : "pm");
   const chosen = free.find((x) => x.target === f.target) || free[0];
   return {
     title: "Add agent",
-    sub: free.length ? "pick a pane herdr already has open" : "no free herdr session — open one and refresh",
+    sub: noDesk
+      ? "no desk agent yet — this is the one you talk to"
+      : free.length ? "pick a pane herdr already has open" : "no free herdr session — open one and refresh",
     fields: [
       { id: "f-project", label: "project", kind: "select", value: projectId,
         options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
       { label: "role", kind: "seg", act: "form-role", value: role,
-        options: [["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
-        hint: pmHere ? `this project's PM is ${pmHere.name} — a new agent here is a worker` : "no PM on this project yet" },
+        options: noDesk
+          ? [["pilo", "PILO"], ["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]]
+          : [["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
+        hint: noDesk ? "the desk reads every request and answers you — register it first, one only"
+          : pmHere ? `this project's PM is ${pmHere.name} — a new agent here is a worker` : "no PM on this project yet" },
       { id: "f-target", label: "session", kind: "select", value: chosen?.target || "",
         options: free.length ? free.map((x) => [x.target, `${x.target} · ${x.runtime} · ${x.cwdShort}`]) : [["", "none free"]] },
       { id: "f-name", label: "name", value: f.name || chosen?.suggestedName || "" },
@@ -3113,14 +3123,14 @@ const actions = {
     const chosen = sessions.find((x) => x.target === f.target) || sessions.find((x) => !x.boundAgent);
     const pms = state.data.tree?.pms || [];
     const pmHere = pms.find((p) => String(p.projectId) === String(f.projectId));
-    const role = f.role || (pmHere ? "worker" : "pm");
     const pilo = state.data.tree?.pilo;
-    const parentAgentId = role === "worker" ? pmHere?.id || "" : pilo?.id || "";
+    const role = f.role || (pilo ? (pmHere ? "worker" : "pm") : "pilo");
+    const parentAgentId = role === "pilo" ? "" : role === "worker" ? pmHere?.id || "" : pilo?.id || "";
     const form = {
       name: f.name || chosen?.suggestedName || "",
       role,
       parentAgentId: parentAgentId || null,
-      projectId: f.projectId || null,
+      projectId: role === "pilo" ? null : f.projectId || null,
       cwd: f.cwd || chosen?.cwd || "",
       specialty: f.specialty || "",
       aliases: "", note: "", model: "",

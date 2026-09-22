@@ -551,11 +551,22 @@ function rolePaint(name, tree) {
   return BADGE.PM;
 }
 
+// The one command that registers the desk agent, with a real folder in it when
+// herdr has exactly one free pane — otherwise a placeholder to fill in.
+function deskCommand(setup) {
+  const free = setup.free || [];
+  // A folder from an open pane, so the line can be copied as it stands; the
+  // runtime is read off that pane, so it is not asked for here.
+  const pick = free.find((x) => x.runtime === "claude") || free[0];
+  const cwd = pick?.cwd || "<the folder of the session you talk to>";
+  return `pilo api POST /api/agents '{"name":"pilo","role":"pilo","cwd":"${cwd}","writeRules":true}'`;
+}
+
 function setupScreen(setup, width) {
   const rows = [];
   rows.push(`${c.amber}●${c.reset} ${c.strong}${t("setup.title")}${c.reset}`);
   rows.push("");
-  rows.push(`${c.muted}${t("setup.lead")}${c.reset}`);
+  for (const line of wrap(t("setup.lead"), width - 2)) rows.push(`${c.muted}${line}${c.reset}`);
   rows.push("");
   if (setup.duplicatePilo) {
     rows.push(`${c.red}●${c.reset} ${c.strong}${t("setup.duplicate", { count: setup.piloAgents.length })}${c.reset}`);
@@ -566,13 +577,16 @@ function setupScreen(setup, width) {
   const steps = [
     [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t("setup.herdrHint")],
     [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo up"],
-    [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.register")],
+    [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.deskHow"), deskCommand(setup)],
     [t("setup.pm"), setup.pmCount > 0, t("setup.pmOk"), t("setup.register")]
   ];
-  for (const [title, ok, desc, cmd] of steps) {
+  for (const [title, ok, desc, cmd, command] of steps) {
     const mark = ok ? `${c.green}✓${c.reset}` : `${c.faint}○${c.reset}`;
     rows.push(`${mark} ${ok ? c.muted : c.strong}${title}${c.reset}`);
     rows.push(`  ${c.faint}${cut(ok ? desc : cmd || desc, width - 4)}${c.reset}`);
+    // A step whose way through is a command prints it in full, to be copied. The
+    // checklist used to point at a screen that had no way to make a desk agent.
+    if (!ok && command) for (const line of wrap(command, width - 6)) rows.push(`  ${c.fg}${line}${c.reset}`);
   }
   rows.push("");
   rows.push(`${c.faint}${t("setup.open")}${c.reset}`);
@@ -973,7 +987,9 @@ function render() {
   let waiting = 0;
 
   if (setup.needsSetup) {
-    rows = setupScreen(setup, outWidth).map((r) => "  " + r);
+    // The screen is drawn inside the chat pane, so it is measured by that pane —
+    // it used to be handed the whole width and have its longest lines cut off.
+    rows = setupScreen(setup, mainWidth).map((r) => "  " + r);
   } else {
     const feed = [];
     const actions = [];

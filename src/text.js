@@ -102,7 +102,8 @@ const EN = {
   "setup.deskOk": "one agent to talk to",
   "setup.pm": "PM agents (optional)",
   "setup.pmOk": "Pilo works with the desk agent alone",
-  "setup.register": "dashboard → Agents → register agent",
+  "setup.deskHow": "register it with this, then this line turns green:",
+  "setup.register": "dashboard → Agents → Add agent",
   "setup.open": "open the dashboard with :dash to register.",
 
   // CLI
@@ -391,7 +392,8 @@ const KO = {
   "setup.deskOk": "사용자와 대화할 agent 1개",
   "setup.pm": "PM agent 등록 (선택)",
   "setup.pmOk": "PM이 없어도 대표 agent와 대화는 가능합니다",
-  "setup.register": "dashboard → Agents → register agent",
+  "setup.deskHow": "아래 명령으로 등록하면 이 줄이 초록으로 바뀝니다:",
+  "setup.register": "dashboard → Agents → Add agent",
   "setup.open": ":dash 로 대시보드를 열어 등록하세요.",
 
   "cli.inboxEmpty": "inbox 비어 있음",
