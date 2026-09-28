@@ -13,6 +13,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   /* The supplied marks had the dark theme's own #0B0E0D baked in as an
      opaque plate. marks/ holds keyed-out copies; codex needs a dark
      repaint for light grounds because its glyph is near-white. */
+  /* Runtime colours: the ones the marks are drawn in (claude.png #D97757,
+     codex.png #E7ECE6, codex-light.png #0D0D0D; the TUI uses the same orange).
+     On the light ground #D97757 is 2.87:1 — under the 3:1 a bar needs — so
+     light takes a deeper orange of the same hue, the way codex takes its dark
+     repaint. */
+  :root { --rt-claude: #D97757; --rt-codex: #E7ECE6 }
+  [data-theme="light"] { --rt-claude: #B85C3E; --rt-codex: #0D0D0D }
   .d-rt { width: 15px; height: 15px; display: block; flex: none }
   .d-rt-l { display: none }
   [data-theme="light"] .d-rt-d { display: none }
