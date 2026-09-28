@@ -30,6 +30,14 @@ export async function missingTask(id) {
   );
 }
 
+// A PM that handed its work down and ended its turn is waiting, not stuck: its
+// worker holds the request and is watched on its own. Without this the stall
+// sweep nudged pm ten minutes after it handed #2109 down, pm parked #2108
+// as holding, and the worker's result then woke nobody.
+export const WAITS_ON_WORKER = (task, agent) => `EXISTS (SELECT 1 FROM tasks wt JOIN agents w ON w.id = wt.to_agent_id
+  WHERE w.parent_agent_id = ${agent}.id AND wt.inbox_id = ${task}.inbox_id
+    AND wt.status IN ('queued', 'running', 'holding') AND wt.created_at >= ${task}.created_at)`;
+
 // agents.status was never written to, so an agent looked idle forever. Derive it
 // from the work it actually holds.
 const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", a.project_id AS "projectId",
@@ -55,7 +63,8 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   -- status change, or the moment it was handed over. Silence is how a task that
   -- died without reporting is told apart from one still being worked on.
   (SELECT max(GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at))
-     FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "lastSignal",
+     FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')
+       AND NOT ${WAITS_ON_WORKER("t", "a")}) AS "lastSignal",
   -- what herdr last said the bound session was doing, kept by the watcher
   s.status AS "sessionStatus", s.since AS "sessionSince",
   CASE

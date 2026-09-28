@@ -2,7 +2,7 @@ import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart } from "./api.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
@@ -232,6 +232,8 @@ async function pumpStalled() {
        -- query asked for status = 'queued' AND progress_at IS NULL, so the
        -- moment an agent said anything the task could sit running forever.
        AND GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) < now() - ($1 || ' minutes')::interval
+       -- a PM whose worker still holds the request is waiting; the worker is swept on its own
+       AND NOT ${WAITS_ON_WORKER("t", "a")}
        AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled'
                          AND e2.created_at > now() - ($2 || ' minutes')::interval)
      ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5`,
@@ -366,7 +368,8 @@ async function pumpNotice() {
          WHERE a.archived_at IS NULL AND a.herdr_target <> '' AND coalesce(s.status, '') <> 'working'
            AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked')
            AND (SELECT max(GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at)) FROM tasks t
-                 WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) < now() - interval '10 minutes'
+                 WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')
+                   AND NOT ${WAITS_ON_WORKER("t", "a")}) < now() - interval '10 minutes'
        ) AS stalled`
   );
   // Read past the minute-long cache (about a millisecond), which also leaves the
@@ -446,8 +449,9 @@ async function pumpWorkerResults() {
   const done = await query(
     `SELECT t.id AS task, t.status, t.inbox_id AS "inboxId", w.name AS worker,
             p.id AS "pmId", p.name AS pm, p.herdr_target, p.runtime,
+            -- holding counts: a PM parked "waiting on the worker" is exactly the one to wake
             (SELECT pt.id FROM tasks pt
-              WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running')
+              WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running', 'holding')
                 AND pt.created_at <= t.done_at
               ORDER BY pt.created_at DESC LIMIT 1) AS parent
        FROM tasks t
@@ -468,6 +472,8 @@ async function pumpWorkerResults() {
     const vars = { task: row.task, worker: row.worker, status: t(row.status === "failed" ? "worker.failed" : "worker.done"), parent: row.parent, pm: row.pm };
     const sent = await wake(pm, t("wake.workerResult", vars), { taskId: row.parent, inboxId: row.inboxId });
     if (!sent) continue;
+    // what it was holding for has arrived: back to work, off the "holding" line
+    await query("UPDATE tasks SET status = 'running', hold_note = '', updated_at = now() WHERE id = $1 AND status = 'holding'", [row.parent]);
     await logEvent({ type: "worker_result_woken", title: t("event.workerResult", vars), taskId: vars.task, inboxId: row.inboxId,
       agentId: pm.id, payload: { parent: row.parent, worker: row.worker } });
   }
