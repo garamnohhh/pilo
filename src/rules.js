@@ -366,6 +366,10 @@ export function workerRules(agent, base, children = [], parent = null) {
   address them, so anything of theirs that needs doing is yours to hand down:
   \`pilo send <workerId> <inboxId> "the request"\`. The worker holds the codebase between jobs, you
   hold the thread with the user.
+- **After \`pilo send\`, end your turn.** Do not wait for the worker: no \`sleep\`, no loop polling
+  \`pilo task\`, no background watcher — they are refused or burn your turn. When the worker reports, Pilo
+  wakes you with \`[pilo:worker] task #W (…) finished — for your #T\`; then read it with \`pilo task W\`,
+  gather, and \`pilo done T\`. Leave \`pilo progress T\` saying what you handed down before you stop.
 - Read their reports and fold them into one \`pmResult\` of your own. Passing a worker's text through
   untouched is not gathering — say what it means for the request you were given.
 - Your \`pmResult\` usually reaches the user as you wrote it, under a short lead from the desk. Write it for them.`

@@ -74,3 +74,14 @@ test("PMs and workers block only for what the user must decide", () => {
   const out = workerRules({ id: 7, name: "atlas", role: "pm" }, "", []);
   assert.match(out, /pilo block` only for what the user must decide/);
 });
+
+// A PM that waits for its worker inside its own turn is refused by auto mode and
+// stops there. The rule says to stop, and Pilo wakes it when the worker reports.
+test("a PM with workers is told to end its turn after handing down, not to wait", async () => {
+  const { workerRules } = await import("./rules.js");
+  const withWorkers = workerRules({ id: 7, name: "pm", role: "pm" }, "http://x", [{ id: 2, name: "chatbot" }]);
+  assert.match(withWorkers, /After `pilo send`, end your turn/);
+  assert.match(withWorkers, /\[pilo:worker\]/);
+  const alone = workerRules({ id: 6, name: "solo", role: "pm" }, "http://x", []);
+  assert.doesNotMatch(alone, /\[pilo:worker\]/, "a PM with no workers is not told about worker wakes");
+});

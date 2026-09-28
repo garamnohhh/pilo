@@ -436,6 +436,43 @@ async function pumpFollowups() {
   }
 }
 
+// A worker's result is its PM's to gather, and nothing used to tell the PM it
+// had landed. The PM had to wait inside its own turn — a sleep-and-poll loop —
+// which Claude Code's auto mode refuses: pm handed #2072 down, wrote "I cannot
+// wait for the worker, I will check when woken", and nobody woke it until the
+// stall sweep. Now a finished worker task wakes the PM whose task on the same
+// request is still open, once per worker task.
+async function pumpWorkerResults() {
+  const done = await query(
+    `SELECT t.id AS task, t.status, t.inbox_id AS "inboxId", w.name AS worker,
+            p.id AS "pmId", p.name AS pm, p.herdr_target, p.runtime,
+            (SELECT pt.id FROM tasks pt
+              WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running')
+                AND pt.created_at <= t.done_at
+              ORDER BY pt.created_at DESC LIMIT 1) AS parent
+       FROM tasks t
+       JOIN agents w ON w.id = t.to_agent_id
+       JOIN agents p ON p.id = w.parent_agent_id
+       LEFT JOIN agent_sessions s ON s.agent_id = p.id
+      WHERE t.status IN ('done', 'failed') AND t.done_at > now() - interval '24 hours'
+        AND w.role = 'worker' AND p.archived_at IS NULL AND p.herdr_target <> ''
+        AND coalesce(s.status, '') <> 'gone'
+        AND (p.limited_until IS NULL OR p.limited_until < now())
+        AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'worker_result_woken')
+      ORDER BY t.done_at LIMIT 5`
+  );
+  for (const row of done) {
+    // the PM already reported, or never held anything on that request
+    if (!row.parent) continue;
+    const pm = { id: row.pmId, name: row.pm, herdr_target: row.herdr_target, runtime: row.runtime };
+    const vars = { task: row.task, worker: row.worker, status: t(row.status === "failed" ? "worker.failed" : "worker.done"), parent: row.parent, pm: row.pm };
+    const sent = await wake(pm, t("wake.workerResult", vars), { taskId: row.parent, inboxId: row.inboxId });
+    if (!sent) continue;
+    await logEvent({ type: "worker_result_woken", title: t("event.workerResult", vars), taskId: vars.task, inboxId: row.inboxId,
+      agentId: pm.id, payload: { parent: row.parent, worker: row.worker } });
+  }
+}
+
 // The account runs out, not the agent: everything of that runtime is out at the
 // same moment. The figure is the one the status line already reads — Claude's
 // own /usage answer, refreshed by the usage-probe, and the rate_limits Codex
@@ -786,6 +823,7 @@ export const tick = serialize(async () => {
     await pumpTasks();
     await pumpResults();
     await pumpFollowups();
+    await pumpWorkerResults();
     await pumpStalled();
     await pumpDecisions();
     await pumpLimits();
