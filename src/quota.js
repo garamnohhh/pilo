@@ -70,34 +70,74 @@ function newestRollouts(dir, limit) {
   return out.sort((a, b) => b.at - a.at).slice(0, limit);
 }
 
-function codexQuota() {
-  const home = join(homedir(), ".codex");
-  const files = [...newestRollouts(join(home, "sessions"), 3), ...newestRollouts(join(home, "archived_sessions"), 3)]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 3);
-  for (const file of files) {
-    const text = tail(file.full);
-    const at = text.lastIndexOf('"rate_limits"');
-    if (at < 0) continue;
-    const line = text.slice(text.lastIndexOf("\n", at) + 1, (text.indexOf("\n", at) + 1 || text.length) - 1);
-    let limits;
+// Every rate_limits line in the tail of a transcript that carries a figure,
+// with the time the line was written. Codex also writes rate_limits blocks with
+// nothing in them; the old reader took the last block of a file, found it empty
+// and skipped the whole file — so the dashboard showed a figure from 9/15 on a
+// day with a fresh one every few seconds.
+export function codexReadings(file, bytes = 200000) {
+  const out = [];
+  for (const line of tail(file, bytes).split("\n")) {
+    if (!line.includes('"rate_limits"')) continue;
+    let row;
     try {
-      limits = JSON.parse(line)?.payload?.rate_limits;
+      row = JSON.parse(line); // the first line of a tail is usually cut short
     } catch {
       continue;
     }
-    const primary = limits?.primary;
-    if (!primary || typeof primary.used_percent !== "number") continue;
-    return {
-      percent: Math.round(primary.used_percent),
-      resetsAt: primary.resets_at ? new Date(primary.resets_at * 1000).toISOString() : "",
-      week: limits.secondary ? Math.round(limits.secondary.used_percent) : null,
-      weekResetsAt: limits.secondary?.resets_at ? new Date(limits.secondary.resets_at * 1000).toISOString() : "",
-      plan: typeof limits.plan_type === "string" ? limits.plan_type : null,
-      ageMin: Math.round((Date.now() - file.at) / 60000)
-    };
+    const limits = row?.payload?.rate_limits;
+    const at = Date.parse(row?.timestamp);
+    if (typeof limits?.primary?.used_percent !== "number" || Number.isNaN(at)) continue;
+    out.push({ at, limits });
   }
-  return null;
+  return out;
+}
+
+const codexFiles = (limit) => {
+  const home = join(homedir(), ".codex");
+  return [...newestRollouts(join(home, "sessions"), limit), ...newestRollouts(join(home, "archived_sessions"), limit)]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, limit);
+};
+
+function codexQuota() {
+  let best = null;
+  for (const file of codexFiles(5)) {
+    for (const r of codexReadings(file.full)) if (!best || r.at > best.at) best = r;
+  }
+  if (!best) return null;
+  const { limits } = best;
+  return {
+    percent: Math.round(limits.primary.used_percent),
+    resetsAt: limits.primary.resets_at ? new Date(limits.primary.resets_at * 1000).toISOString() : "",
+    week: typeof limits.secondary?.used_percent === "number" ? Math.round(limits.secondary.used_percent) : null,
+    weekResetsAt: limits.secondary?.resets_at ? new Date(limits.secondary.resets_at * 1000).toISOString() : "",
+    plan: typeof limits.plan_type === "string" ? limits.plan_type : null,
+    // the age of the figure, not of the file it sits in
+    ageMin: Math.round((Date.now() - best.at) / 60000)
+  };
+}
+
+// The last day of Codex's five-hour and weekly figures, from every transcript
+// written to in that day, one point per five minutes (the last in each).
+// ponytail: reads at most the last 4 MB of each file — a session that writes
+// more than that in a day loses the start of its window; read in chunks if so.
+export function codexTrend(now = Date.now(), hours = 24) {
+  const since = now - hours * 3600e3;
+  const buckets = new Map();
+  for (const file of codexFiles(60).filter((f) => f.at >= since)) {
+    for (const r of codexReadings(file.full, 4 * 1024 * 1024)) {
+      if (r.at < since) continue;
+      const key = Math.floor(r.at / 300000);
+      const held = buckets.get(key);
+      if (!held || r.at > held.at) buckets.set(key, r);
+    }
+  }
+  return [...buckets.values()].sort((a, b) => a.at - b.at).map((r) => ({
+    t: new Date(r.at).toISOString(),
+    five: Math.round(r.limits.primary.used_percent),
+    week: typeof r.limits.secondary?.used_percent === "number" ? Math.round(r.limits.secondary.used_percent) : null
+  }));
 }
 
 // The age of the Claude reading, straight from the file — the refresher needs a

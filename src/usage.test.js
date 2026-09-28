@@ -80,3 +80,45 @@ test("plan names", () => {
   assert.equal(planName("claude_pro", null), "Pro");
   assert.equal(planName(null, "x"), null);
 });
+
+// The Codex reader used to take the last rate_limits block of a file, find it
+// empty and skip the whole file — the screen showed a figure from 9/15 on a day
+// with fresh ones every few seconds. Empty blocks are skipped line by line now.
+test("Codex: the newest block with a figure wins, empty ones in between do not hide it", async () => {
+  const { readQuota, codexTrend } = await import("./quota.js");
+  const dir = home();
+  const day = join(dir, ".codex", "sessions", "2026", "09", "28");
+  mkdirSync(day, { recursive: true });
+  const at = (min) => new Date(now - min * 60000).toISOString();
+  const block = (min, five, week) => JSON.stringify({ timestamp: at(min), type: "event_msg", payload: { type: "token_count",
+    rate_limits: five == null ? { limit_id: "codex", primary: null, secondary: null, plan_type: null }
+      : { primary: { used_percent: five, resets_at: Math.round(now / 1000) + 3600 }, secondary: { used_percent: week, resets_at: Math.round(now / 1000) + 86400 }, plan_type: "plus" } } });
+  writeFileSync(join(day, "rollout-a.jsonl"), [
+    block(26 * 60, 90, 50), // older than a day: not on the trend
+    block(60, 10, 3), block(30, 20, 3), block(29, 21, 3), block(10, 27, 4),
+    block(5, null), "not json at all", block(1, null)
+  ].join("\n") + "\n");
+  const before = process.env.HOME;
+  process.env.HOME = dir;
+  try {
+    const codex = readQuota(now, 0).codex;
+    assert.equal(codex.percent, 27, "the last block with a figure, not the empty one after it");
+    assert.equal(codex.plan, "plus");
+    assert.equal(codex.ageMin, Math.round((Date.now() - (now - 10 * 60000)) / 60000), "the age of the figure, not of the file");
+    const trend = codexTrend(now);
+    assert.deepEqual(trend.map((p) => p.five), [10, 21, 27], "one point per five minutes, the last in each; nothing older than a day");
+  } finally {
+    process.env.HOME = before;
+  }
+});
+
+test("no Codex at all is no reading, not zero", async () => {
+  const { codexTrend } = await import("./quota.js");
+  const before = process.env.HOME;
+  process.env.HOME = home();
+  try {
+    assert.deepEqual(codexTrend(now), []);
+  } finally {
+    process.env.HOME = before;
+  }
+});

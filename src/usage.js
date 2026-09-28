@@ -7,7 +7,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readQuota } from "./quota.js";
+import { readQuota, codexTrend } from "./quota.js";
 
 const CACHE_MS = Number(process.env.PILO_USAGE_MS || 60000);
 let cache = { at: 0, key: "", value: null };
@@ -100,6 +100,8 @@ export function usageReport({ home = homedir(), now = Date.now(), maxAgeMs = CAC
       const c = readQuota(now)?.codex;
       return c ? { five: c.percent, fiveResetsAt: c.resetsAt || null, week: c.week, weekResetsAt: c.weekResetsAt || null, plan: c.plan || null, ageMin: c.ageMin } : null;
     }),
+    // Codex's own figures over the last day, for the trend beside Claude's
+    codexTrend: attempt(() => ({ samples: codexTrend(now) })),
     at: new Date(now).toISOString()
   };
   // the desktop file is only worth reading while the app keeps writing it
