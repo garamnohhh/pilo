@@ -93,6 +93,7 @@ function codexQuota() {
       resetsAt: primary.resets_at ? new Date(primary.resets_at * 1000).toISOString() : "",
       week: limits.secondary ? Math.round(limits.secondary.used_percent) : null,
       weekResetsAt: limits.secondary?.resets_at ? new Date(limits.secondary.resets_at * 1000).toISOString() : "",
+      plan: typeof limits.plan_type === "string" ? limits.plan_type : null,
       ageMin: Math.round((Date.now() - file.at) / 60000)
     };
   }

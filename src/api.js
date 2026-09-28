@@ -3,6 +3,7 @@ import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
 import { paths, readPort, dataDir } from "./paths.js";
 import { spoolDir } from "./spool.js";
+import { usageReport } from "./usage.js";
 import { t } from "./text.js";
 import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
 import { pickResults, withResults } from "./reply.js";
@@ -1220,6 +1221,19 @@ export async function artifactDetail(id) {
   );
   if (!row) throw Object.assign(new Error("artifact not found"), { status: 404 });
   return row;
+}
+
+// The usage screen: the account figures from the files (src/usage.js), and what
+// each agent reported spending today — the only per-agent count Pilo has.
+export async function usageOverview() {
+  const agents = await query(
+    `SELECT a.name, a.runtime, COALESCE(sum(t.tokens_in), 0)::int AS "in", COALESCE(sum(t.tokens_out), 0)::int AS "out", count(t.id)::int AS tasks
+     FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.created_at >= date_trunc('day', now())
+     GROUP BY a.name, a.runtime HAVING COALESCE(sum(t.tokens_in), 0) + COALESCE(sum(t.tokens_out), 0) > 0
+     ORDER BY COALESCE(sum(t.tokens_in), 0) + COALESCE(sum(t.tokens_out), 0) DESC, a.name`
+  );
+  return { ...usageReport(), tokens: { ...(await tokenTotals()), agents } };
 }
 
 async function tokenTotals() {

@@ -311,6 +311,7 @@ const RAIL = [
   ["artifacts", "\u25C6", "\uEAE9", "artifacts"],
   ["projects", "\u25AA", "\uEA83", "projects"],
   ["commands", "\u003A", "\uEA85", "commands"],
+  ["usage", "\u25D4", "\uEB03", "usage"],
   ["settings", "\u2261", "\uEAF8", "settings"],
   ["system", "\u25CF", "\uEBA2", "system"]
 ];
@@ -449,6 +450,7 @@ async function loadDetail() {
     await loadOpenDetails();
   }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
+  if (state.tab === "usage") state.data.usage = await get("/api/usage").catch(() => ({ unavailable: true }));
   if (state.tab === "agents") state.data.models = await get("/api/models").catch(() => ({ missing: true }));
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
@@ -660,7 +662,8 @@ function usageHtml() {
     return `<span class="d-m d-usage" title="${esc(hint)}" style="color:${colour}">${runtimeMark(rt)}` +
       `<span class="d-usage-full">${esc(u.text)}</span><span class="d-usage-short">${esc(u.compact)}</span></span>`;
   });
-  return cells.length ? `<span class="d-usage-row">${cells.join("")}</span>` : "";
+  // the figure is a way in: the usage screen has the rest of it
+  return cells.length ? `<button class="d-plain d-usage-row" data-tab="usage" aria-label="${esc(T("desk.title.usage"))}">${cells.join("")}</button>` : "";
 }
 
 function topstateHtml() {
@@ -2236,6 +2239,79 @@ views.settings = () => {
 };
 
 // ---------- SYSTEM ----------
+// Usage: what the account has left, from the files Claude Code, the desktop app
+// and Codex keep (src/usage.js). Each source stands alone — one that is missing
+// or unreadable says so in its own place and the rest still show.
+const ageText = (m) => (m >= 90 ? `${Math.round(m / 60)}h` : `${Math.round(m)}m`);
+const pctColour = (p) => (p >= 90 ? ERR : p >= 70 ? WARN : OK);
+const resetText = (at) => (at ? `↻ ${stamp(at)}` : "");
+// neutral: a share of what was used, not how close a limit is
+function usageBar(label, percent, note = "", dim = false, neutral = false) {
+  const p = Math.max(0, Math.min(100, Number(percent) || 0));
+  return `<div class="d-tr" style="grid-template-columns:minmax(0,9rem) minmax(0,1fr) 3.5rem;gap:12px;align-items:center">
+    <span style="font-size:var(--fs-body);${dim ? "color:var(--text-3)" : ""}">${esc(label)}</span>
+    <span style="display:flex;flex-direction:column;gap:4px;min-width:0">
+      <span style="display:block;height:6px;background:var(--line)"><span style="display:block;height:100%;width:${p}%;background:${dim ? "var(--text-3)" : neutral ? "var(--text-2)" : pctColour(p)}"></span></span>
+      ${note ? `<span class="d-m d-clip" style="font-size:11px;color:var(--text-3)">${esc(note)}</span>` : ""}
+    </span>
+    <span class="d-m d-num" style="font-size:13px;text-align:right;color:${dim ? "var(--text-3)" : "var(--text)"}">${p}%</span></div>`;
+}
+const noReading = (why) => `<div class="d-list"><div class="d-tr"><span class="d-lbl">${esc(T("usage.none"))}${why ? ` — ${esc(why)}` : ""}</span></div></div>`;
+function sparkline(samples) {
+  if (samples.length < 2) return "";
+  const t0 = new Date(samples[0].t).getTime(), t1 = new Date(samples[samples.length - 1].t).getTime() || t0 + 1;
+  const x = (s) => ((new Date(s.t).getTime() - t0) / Math.max(1, t1 - t0)) * 300;
+  const pts = (key) => samples.filter((s) => typeof s[key] === "number").map((s) => `${x(s).toFixed(1)},${(58 - s[key] * 0.56).toFixed(1)}`).join(" ");
+  return `<svg viewBox="0 0 300 60" preserveAspectRatio="none" style="width:100%;height:72px;display:block;border-bottom:var(--bw) solid var(--line)" role="img" aria-label="${esc(T("usage.trend"))}">
+    <polyline points="${pts("week")}" fill="none" stroke="var(--text-3)" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke"/>
+    <polyline points="${pts("five")}" fill="none" stroke="var(--accent-text)" stroke-width="1.5" vector-effect="non-scaling-stroke"/></svg>`;
+}
+views.usage = () => {
+  const u = state.data.usage;
+  if (!u) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">loading…</div>`);
+  if (u.unavailable) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">${esc(T("usage.oldServer"))}</div>`);
+  const c = u.claude || {}, x = u.codex || {}, d = u.desktop || {};
+  const age = (m) => (m == null ? "" : T("usage.read", { age: ageText(m) }));
+  const now = Date.now();
+  const winLabel = (w) => w.group === "session" ? T("usage.five") : w.model ? T("usage.weekOf", { model: w.model }) : T("usage.week");
+  const claudeHtml = c.missing ? noReading(c.missing) : `<div class="d-list">
+      ${(c.windows || []).map((w) => usageBar(winLabel(w), w.percent, [resetText(w.resetsAt), w.active ? T("usage.active") : ""].filter(Boolean).join(" · "),
+        w.resetsAt && new Date(w.resetsAt).getTime() <= now)).join("") || `<div class="d-tr"><span class="d-lbl">${esc(T("usage.none"))}</span></div>`}
+    </div>
+    ${(c.breakdown || []).length ? `<div style="margin-top:24px">${rule(T("usage.where"))}<div class="d-list">${c.breakdown.map((r) => usageBar(r.name, r.percent, "", false, true)).join("")}</div></div>` : ""}
+    ${c.extra ? `<div class="d-hint" style="margin-top:12px">${esc(c.extra.enabled ? T("usage.extraOn", { used: `${c.extra.used ?? 0} ${c.extra.currency || ""}`.trim() }) : T("usage.extraOff"))}</div>` : ""}`;
+  const codexGone = (at) => at && new Date(at).getTime() <= now;
+  const codexHtml = x.missing ? noReading(x.missing) : `<div class="d-list">
+      ${typeof x.five === "number" ? usageBar(T("usage.five"), x.five, codexGone(x.fiveResetsAt) ? T("usage.passed") : resetText(x.fiveResetsAt), codexGone(x.fiveResetsAt)) : ""}
+      ${typeof x.week === "number" ? usageBar(T("usage.week"), x.week, codexGone(x.weekResetsAt) ? T("usage.passed") : resetText(x.weekResetsAt), codexGone(x.weekResetsAt)) : ""}
+    </div>`;
+  const tokens = u.tokens || {};
+  return page(pageHead(T("desk.title.usage"), "") +
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
+      <div class="d-stack" style="min-width:0">
+        <div>${rule(`Claude${c.plan ? ` · ${esc(c.plan)}` : ""}`, esc(age(c.ageMin)))}${claudeHtml}</div>
+        <div>${rule(`Codex${x.plan ? ` · ${esc(x.plan.charAt(0).toUpperCase() + x.plan.slice(1))}` : ""}`, esc(age(x.ageMin)))}${codexHtml}</div>
+      </div>
+      <div class="d-stack" style="min-width:0">
+        <div>${rule(T("usage.trend"), esc(d.missing ? "" : age(d.ageMin)))}
+          ${d.missing ? noReading(`${T("usage.desktop")} — ${d.missing}`) : (d.samples || []).length < 2 ? noReading(T("usage.fewSamples"))
+            : sparkline(d.samples) + `<div class="d-hint" style="margin-top:8px">${esc(T("usage.trendHint"))}</div>`}</div>
+        <div>${rule(T("desk.lbl.tokensToday"), esc(T("usage.reported")))}
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border-bottom:var(--bw) solid var(--line)">
+            ${[["total", tokens.total], ["in", tokens.in], ["out", tokens.out]].map(([k, v]) => `<div style="background:var(--bg);padding:16px;min-width:0">
+              <div class="d-m" style="font-size:22px">${fmtTokens(v ?? 0)}</div><div class="d-lbl" style="margin-top:4px">${k}</div></div>`).join("")}
+          </div>
+          <div class="d-list">${(tokens.agents || []).map((a) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 64px 5rem 4rem">
+            <span class="d-clip" style="font-size:var(--fs-body)">${esc(a.name)}</span>
+            <span style="display:flex;align-items:center">${runtimeMark(a.runtime) || esc(a.runtime || "—")}</span>
+            <span class="d-m d-num" style="font-size:12px;text-align:right">${fmtTokens(a.in + a.out)}</span>
+            <span class="d-m d-num" style="font-size:11px;color:var(--text-3);text-align:right">${a.tasks} ${esc(T("usage.tasks"))}</span></div>`).join("")
+            || `<div class="d-tr"><span class="d-lbl">${esc(T("usage.noTokens"))}</span></div>`}</div></div>
+        <div class="d-hint">${esc(T("usage.sources"))}</div>
+      </div>
+    </div>`);
+};
+
 views.system = () => {
   const sys = state.data.system || {};
   const st = state.data.overview?.stats || {};
