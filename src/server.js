@@ -65,6 +65,7 @@ const routes = [
   ["GET", /^\/api\/models$/, () => api.modelOverview()],
   ["POST", /^\/api\/models$/, (_m, body) => api.requestModels(body)],
   ["POST", /^\/api\/models\/tap$/, (_m, body) => api.modelTap(body.on)],
+  ["POST", /^\/api\/models\/restart$/, () => api.restartSessions()],
   ["DELETE", /^\/api\/models\/pending\/(\d+)$/, (m) => api.cancelModelChange(Number(m[1]))],
   ["POST", /^\/api\/models\/pin\/(\d+)$/, (m, body) => api.pinModel(Number(m[1]), body)],
   ["GET", /^\/api\/quota$/, () => quotaReport()],

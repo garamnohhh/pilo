@@ -42,20 +42,24 @@ export async function sessions() {
   return rows;
 }
 
+// An empty list means two different things: herdr answered and nothing runs, or
+// herdr did not answer at all. The second must not turn every agent into "no
+// session" at once, so the last read says which it was.
+let health = { ok: true, at: 0, error: "" };
+export const herdrHealth = () => health;
+
 // `herdr agent list` gives us runtime (codex|claude), status, cwd and pane_id per session.
 async function readSessions() {
   let out;
-  try {
-    out = await herdr(["agent", "list"]);
-  } catch {
-    return [];
-  }
   let parsed;
   try {
+    out = await herdr(["agent", "list"]);
     parsed = JSON.parse(out);
-  } catch {
+  } catch (err) {
+    health = { ok: false, at: Date.now(), error: String(err.message || err).split("\n")[0].slice(0, 200) };
     return [];
   }
+  health = { ok: true, at: Date.now(), error: "" };
   const list = parsed?.result?.agents || [];
   return list.map((a) => ({
     runtime: a.agent || "",

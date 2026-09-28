@@ -65,3 +65,40 @@ test("Claude's own answer in the pane confirms a typed change", async () => {
   assert.equal(paneConfirms(pane, { model: "opus[1m]", effort: "high" }), false);
   assert.equal(paneConfirms("nothing", { model: "opus" }), false);
 });
+
+// Claude Code's /model picker reads its own catalogue; the dashboard reads the
+// same file, and falls back to the aliases when the file is missing or odd.
+test("the Claude model list is the picker's own, and the aliases when it cannot be read", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { claudeModels, claudeChoices, knownClaudeModel, CLAUDE_MODELS } = await import("./models.js");
+  const dir = mkdtempSync(join(tmpdir(), "pilo-catalog-"));
+  writeFileSync(join(dir, "x-cc.json"), JSON.stringify({ catalog: { config: { models: [
+    { id: "claude-opus-4-8", name: "Opus 4.8", section: "overflow", thinking: { effort_options: [{ id: "low" }, { id: "high" }] } },
+    { id: "claude-opus-5-5", name: "Opus 5.5", section: "main", thinking: { effort_options: [{ id: "low" }, { id: "medium" }, { id: "xhigh" }, { id: "max" }] } },
+    { id: "claude-haiku-4-5", name: "Haiku 4.5", section: "main" }
+  ] } } }));
+  const list = claudeModels(dir);
+  assert.deepEqual(list.map((m) => m.model), ["claude-opus-5-5", "claude-haiku-4-5", "claude-opus-4-8"], "main first, as the picker has it");
+  assert.deepEqual(list[0].efforts, ["low", "medium", "xhigh"], "max holds for one session only and is left out");
+  const choices = claudeChoices("opus[1m]", list);
+  assert.equal(choices.source, "catalogue");
+  assert.deepEqual(choices.models, ["default", "claude-opus-5-5", "claude-haiku-4-5", "claude-opus-4-8", "opus[1m]"], "the current value stays selectable");
+  assert.equal(choices.labels["claude-opus-5-5"], "Opus 5.5");
+  assert.equal(choices.labels["claude-opus-4-8"], "Opus 4.8 · more");
+  assert.ok(knownClaudeModel("claude-opus-5-5", list) && knownClaudeModel("opus", list) && !knownClaudeModel("gpt-5", list));
+
+  writeFileSync(join(dir, "x-cc.json"), "{ not json");
+  assert.deepEqual(claudeModels(dir), []);
+  assert.deepEqual(claudeChoices(null, []).models, CLAUDE_MODELS, "unreadable: the aliases, as before");
+  assert.deepEqual(claudeModels(join(dir, "missing")), []);
+});
+
+test("a full model name is confirmed by the picker's name in the pane", async () => {
+  const { paneConfirms } = await import("./models.js");
+  const pane = "some output\n  ⎿  Set model to Opus 5.5 (default) and saved as your default\n";
+  assert.ok(paneConfirms(pane, { model: "claude-opus-5-5", label: "Opus 5.5" }));
+  assert.ok(!paneConfirms(pane, { model: "claude-sonnet-5", label: "Sonnet 5" }));
+  assert.ok(paneConfirms(pane, { model: "opus" }), "an alias still matches by family");
+});

@@ -2,7 +2,7 @@ import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited } from "./api.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
@@ -324,8 +324,15 @@ async function pumpQuota() {
 
 // What herdr says each bound session is doing, kept so the tree can show it
 // without every reader shelling out to herdr.
+// A bound pane herdr no longer lists is written down as "gone", which the screens
+// show as "no session" — fitxel's workspace was closed and it still read idle.
+// When herdr itself did not answer, nothing is written: its empty list says
+// nothing about the panes, and the last word on each stays until it answers.
+export const SESSION_GONE = "gone";
+
 export async function pumpSessions() {
   const live = await herdr.sessions();
+  if (!herdr.herdrHealth().ok) return;
   const agents = await query(
     "SELECT id, herdr_target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''"
   );
@@ -338,7 +345,7 @@ export async function pumpSessions() {
          target = EXCLUDED.target, status = EXCLUDED.status, title = EXCLUDED.title,
          since = CASE WHEN agent_sessions.status = EXCLUDED.status THEN agent_sessions.since ELSE now() END,
          updated_at = now()`,
-      [agent.id, agent.herdr_target, session?.status || "", session?.title || ""]
+      [agent.id, agent.herdr_target, session ? session.status || "" : SESSION_GONE, session?.title || ""]
     );
   }
 }
@@ -546,15 +553,30 @@ const MODEL_GAP_MS = Number(process.env.PILO_MODEL_GAP_MS || 1500);
 
 async function pumpModels() {
   const rows = await query(
-    `SELECT a.id, a.name, a.runtime, a.herdr_target AS target, a.model_pending AS p,
+    `SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pending AS p,
        (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS open
      FROM agents a WHERE a.archived_at IS NULL AND a.model_pending IS NOT NULL
-       AND (a.runtime = 'claude' OR a.model_pending->>'kind' = 'pin')`
+       AND (a.runtime = 'claude' OR a.model_pending->>'kind' IN ('pin', 'restart'))
+     ORDER BY a.role = 'pilo', a.name`
   );
   if (!rows.length) return;
   const live = await herdr.freshSessions();
+  // An outage reads as "every session left": nothing restarts on that.
+  if (!herdr.herdrHealth().ok) return;
+  // Restarts go one at a time, and the desk last: with one in flight the rest
+  // wait, and the desk goes only when nobody else is still waiting.
+  const restarts = rows.filter((a) => a.p.kind === "restart");
+  let inFlight = restarts.find((a) => a.p.step);
+  const othersLeft = restarts.some((a) => a.role !== "pilo");
   for (const a of rows) {
     const p = a.p;
+    if (p.kind === "restart") {
+      if (inFlight && inFlight !== a) continue;
+      if (!inFlight && a.role === "pilo" && othersLeft) continue;
+      // one that has started leaving holds the rest until it is back
+      if (await stepPin(a, p, live)) inFlight = a;
+      continue;
+    }
     if (p.kind === "pin") { await stepPin(a, p, live); continue; }
     const session = live.find((s) => s.target && s.target === a.target);
     if (!p.typedAt) {
@@ -621,30 +643,51 @@ async function dropPin(id) {
   await query("UPDATE agents SET model_pending = NULL, model_pin = NULL WHERE id = $1", [id]);
 }
 
+// "Restart every idle session" runs the same steps as a pin, on the model the
+// agent already has (its pin, else whatever the settings file says): a session
+// running an old Claude Code cannot be switched to a model that needs a newer
+// one, and only a fresh start picks the new install up. It differs in three
+// places — a failure never touches the agent's pin, a working session is waited
+// for (an hour at most, then left out), and "came back" is the whole check. Each
+// agent's outcome is written to the run the dashboard shows.
+const RESTART_WAIT_MS = Number(process.env.PILO_RESTART_WAIT_MS || 60 * 60 * 1000);
+
 async function stepPin(a, p, live) {
+  const restart = p.kind === "restart";
   const session = live.find((s) => s.target && s.target === a.target);
   const pin = { model: p.model, effort: p.effort };
+  const what = restart ? "the same model" : [pin.model, pin.effort].filter(Boolean).join(" · ");
+  const fail = async (title, payload = pin) => {
+    if (restart) { await savePin(a.id, null); await noteRestart(a.id, "failed", title); }
+    else await dropPin(a.id);
+    await logEvent({ type: "model_failed", title: `${a.name}: ${title}`, agentId: a.id, payload });
+  };
   if (!p.step) {
-    if (!session || !models.sessionIdle(session.status) || a.open > 0 || pending.has(a.id) || !session.session) return;
+    if (restart) {
+      const gone = !session ? "its session is gone" : !session.session ? "herdr does not know its session id" : "";
+      if (gone) { await savePin(a.id, null); await noteRestart(a.id, "skipped", gone); return false; }
+      if (Date.now() - p.at > RESTART_WAIT_MS) { await savePin(a.id, null); await noteRestart(a.id, "skipped", "still working after an hour"); return false; }
+    }
+    if (!session || !models.sessionIdle(session.status) || a.open > 0 || pending.has(a.id) || !session.session) {
+      if (restart) await noteRestart(a.id, "waiting", "working — restarts once idle");
+      return false;
+    }
     pending.add(a.id);
     try {
       await herdr.prompt(a.target, a.runtime === "codex" ? "/quit" : "/exit");
     } catch (err) {
-      await dropPin(a.id);
-      await logEvent({ type: "model_failed", title: `${a.name}: could not ask the session to leave`, agentId: a.id, payload: { error: err.message } });
-      return;
+      await fail("could not ask the session to leave", { error: err.message });
+      return false;
     }
     await savePin(a.id, { ...p, step: "leaving", session: session.session, name: session.name || a.name, stepAt: Date.now() });
-    await logEvent({ type: "model_restarting", title: `${a.name}: leaving to start again on ${[pin.model, pin.effort].filter(Boolean).join(" · ")}`, agentId: a.id, payload: pin });
-    return;
+    if (restart) await noteRestart(a.id, "restarting", "leaving");
+    await logEvent({ type: "model_restarting", title: `${a.name}: leaving to start again on ${what}`, agentId: a.id, payload: pin });
+    return true;
   }
   if (p.step === "leaving") {
     if (session) {
-      if (Date.now() - p.stepAt > PIN_WAIT_MS) {
-        await dropPin(a.id);
-        await logEvent({ type: "model_failed", title: `${a.name}: the session did not leave — nothing was restarted`, agentId: a.id, payload: pin });
-      }
-      return;
+      if (Date.now() - p.stepAt > PIN_WAIT_MS) await fail("the session did not leave — nothing was restarted");
+      return true;
     }
     const kind = a.runtime === "codex" ? "codex" : "claude";
     const job = herdr.startAgent(p.name, kind, a.target, models.resumeArgs(kind, p.session, pin))
@@ -656,35 +699,50 @@ async function stepPin(a, p, live) {
       });
     starting.set(a.id, job);
     await savePin(a.id, { ...p, step: "starting", stepAt: Date.now() });
-    return;
+    if (restart) await noteRestart(a.id, "restarting", "starting");
+    return true;
   }
   if (p.step === "starting") {
     const job = starting.get(a.id);
-    if (!job) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return; }
+    if (!job) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return true; }
     const done = await Promise.race([job, new Promise((r) => setTimeout(() => r(null), 10))]);
-    if (!done) return;
+    if (!done) return true;
     starting.delete(a.id);
-    if (done.ok) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return; }
-    await dropPin(a.id);
-    await logEvent({ type: "model_failed", title: `${a.name}: could not start on ${pin.model || pin.effort} — ${done.back ? "started again as it was" : "and could not start it again: the pane needs a look"}`,
-      agentId: a.id, payload: { error: done.error, back: done.back } });
-    return;
+    // a restart asks for nothing new, so the second try is the same start again
+    if (done.ok || (restart && done.back)) { await savePin(a.id, { ...p, step: "checking", stepAt: Date.now() }); return true; }
+    await fail(restart
+      ? "could not start again (tried twice) — the pane needs a look"
+      : `could not start on ${pin.model || pin.effort} — ${done.back ? "started again as it was" : "and could not start it again: the pane needs a look"}`,
+      { error: done.error, back: done.back });
+    return false;
   }
   if (p.step === "checking") {
     let took = false;
-    if (a.runtime === "codex") took = Boolean(session) && models.codexModelOnPane(await herdr.readPane(a.target)) === pin.model;
+    // a restart asked for nothing new: coming back is the whole check
+    if (restart) took = Boolean(session);
+    else if (a.runtime === "codex") took = Boolean(session) && models.codexModelOnPane(await herdr.readPane(a.target)) === pin.model;
     else {
       const seen = models.tapReading(session?.session || p.session);
       took = Boolean(seen) && seen.at >= p.stepAt - 60000 && models.modelMatches(pin.model, seen.model) && (!pin.effort || !seen.effort || seen.effort === pin.effort);
     }
     if (took) {
       await savePin(a.id, null);
-      await logEvent({ type: "model_applied", title: `${a.name}: started again on ${[pin.model, pin.effort].filter(Boolean).join(" · ")}`, agentId: a.id, payload: pin });
-    } else if (Date.now() - p.stepAt > PIN_WAIT_MS * 4) {
+      if (restart) await noteRestart(a.id, "done", "started again, same conversation");
+      await logEvent({ type: "model_applied", title: `${a.name}: started again on ${what}`, agentId: a.id, payload: pin });
+      return false;
+    }
+    if (Date.now() - p.stepAt > PIN_WAIT_MS * 4) {
+      if (restart) {
+        await fail("started, but the session never came back");
+        return false;
+      }
       await savePin(a.id, null);
       await logEvent({ type: "model_unconfirmed", title: `${a.name}: started again, but the session never showed ${pin.model || pin.effort}`, agentId: a.id, payload: pin });
+      return false;
     }
+    return true;
   }
+  return false;
 }
 
 // Standing jobs, checked on the same loop as everything else: a schedule that

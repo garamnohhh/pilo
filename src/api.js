@@ -58,7 +58,9 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
   -- what herdr last said the bound session was doing, kept by the watcher
   s.status AS "sessionStatus", s.since AS "sessionSince",
   CASE
-    WHEN a.herdr_target = '' THEN 'unbound'
+    -- no pane registered, or the registered one is gone from herdr (the watcher
+    -- writes "gone" only when herdr answered, so an outage does not land here)
+    WHEN a.herdr_target = '' OR s.status = 'gone' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
     -- the desk agent holds no tasks of its own; it is busy while a request is open
@@ -578,7 +580,8 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
                        a.limited_until AS until, count(*)::int AS n
                   FROM tasks t JOIN agents a ON a.id = t.to_agent_id
                  WHERE t.inbox_id = i.id AND t.status IN ('queued', 'running')
-                   AND (a.limited_until > now() OR a.herdr_target = '')
+                   AND (a.limited_until > now() OR a.herdr_target = ''
+                        OR EXISTS (SELECT 1 FROM agent_sessions s WHERE s.agent_id = a.id AND s.status = 'gone'))
                  GROUP BY a.name, a.limited_until
                  ORDER BY count(*) DESC, a.name LIMIT 1) h) AS held,
        -- the oldest decision still waiting on the user, in the desk's words when
@@ -1246,8 +1249,12 @@ export async function systemStatus() {
       },
       {
         name: "wake",
-        detail: `herdr ${sessions.length} sessions · ${bound.n}/${agents.n} agents bound`,
-        state: sessions.length === 0 ? "down" : bound.n < agents.n ? "degraded" : "running"
+        // herdr not answering is its own fault, shown here; the agents keep the
+        // last state herdr gave them instead of all reading "no session"
+        detail: herdr.herdrHealth().ok
+          ? `herdr ${sessions.length} sessions · ${bound.n}/${agents.n} agents bound`
+          : `herdr is not answering — ${herdr.herdrHealth().error || "no reply"}. agent states are as herdr last said`,
+        state: !herdr.herdrHealth().ok ? "down" : bound.n < agents.n ? "degraded" : "running"
       },
       { name: "dashboard", detail: `http://127.0.0.1:${port}/dashboard`, state: "running" }
     ],
@@ -1569,7 +1576,7 @@ export async function modelOverview() {
       busy, model, effort, source, pending: a.pending, pin: a.pin, system: a.role === "system" });
   }
   return {
-    choices: { claude: { models: models.CLAUDE_MODELS, efforts: models.CLAUDE_EFFORTS }, codex: models.codexModels() },
+    choices: { claude: models.claudeChoices(claude.model), codex: models.codexModels() },
     global: { claude: { model: claude.model, effort: claude.effort }, codex },
     tap: { on: models.tapped(claude.statusLine) },
     agents: rows
@@ -1586,7 +1593,7 @@ export async function requestModels(input) {
   const model = String(input.model || "").trim();
   const effort = String(input.effort || "").trim() || null;
   if (runtime === "claude") {
-    if (model && !models.CLAUDE_MODELS.includes(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
+    if (model && !models.knownClaudeModel(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
     if (effort && !models.CLAUDE_EFFORTS.includes(effort)) throw Object.assign(new Error(`unknown effort: ${effort}`), { status: 400 });
   } else {
     const known = models.codexModels().find((m) => m.model === model);
@@ -1621,14 +1628,52 @@ export async function requestModels(input) {
     // global values are put back once the session has written them
     const restore = all ? null : { model: keep.model, effort: keep.effort };
     await query("UPDATE agents SET model_pending = $2, updated_at = now() WHERE id = $1",
-      [a.id, JSON.stringify({ model: model || null, effort, at, restore })]);
+      [a.id, JSON.stringify({ model: model || null, label: models.claudeModelName(model), effort, at, restore })]);
   }
   await logEvent({ type: "models_changed", title: `claude → ${model || "same model"}${effort ? ` · ${effort}` : ""}${all ? " for all" : ` for ${targets.map((a) => a.name).join(", ")}`}`,
     payload: { runtime, model, effort, all, skipped } });
   return { runtime, applied: "when idle", agents: targets.filter((a) => !skipped.includes(a.name)).map((a) => a.name), skipped };
 }
 
+// "Restart every idle session": each Claude or Codex agent with a live session
+// is queued, and the watcher takes them one at a time, the desk last, on the
+// model each already has. What can't be restarted says why on the run itself,
+// which the dashboard shows and the watcher fills in as each one finishes.
+export async function restartSessions() {
+  const agents = await query(
+    `SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pin AS pin, a.model_pending AS pending, s.status AS session
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role = 'pilo', a.name`
+  );
+  const at = Date.now();
+  const rows = [];
+  for (const a of agents) {
+    const skip = !["claude", "codex"].includes(a.runtime) ? "not a Claude or Codex session"
+      : !a.target || a.session === "gone" ? "no session"
+      : a.pending ? "a model change is already under way"
+      : "";
+    rows.push({ id: String(a.id), name: a.name, state: skip ? "skipped" : "waiting", note: skip || (a.role === "pilo" ? "the desk goes last" : ""), at: new Date(at).toISOString() });
+    if (skip) continue;
+    await query("UPDATE agents SET model_pending = $2, updated_at = now() WHERE id = $1",
+      [a.id, JSON.stringify({ kind: "restart", model: a.pin?.model || null, effort: a.pin?.effort || null, at })]);
+  }
+  const run = { at: new Date(at).toISOString(), rows };
+  await setSetting("restartRun", run);
+  await logEvent({ type: "models_changed", title: `restarting ${rows.filter((r) => r.state === "waiting").length} idle sessions, one at a time`, payload: { restart: true } });
+  return run;
+}
+
+export async function noteRestart(id, state, note = "") {
+  const run = await getSetting("restartRun", null);
+  const row = run?.rows?.find((r) => String(r.id) === String(id));
+  if (!row) return;
+  Object.assign(row, { state, note, at: new Date().toISOString() });
+  await setSetting("restartRun", run);
+}
+
 export async function cancelModelChange(id) {
+  const was = await one("SELECT model_pending AS p FROM agents WHERE id = $1", [id]);
+  if (was?.p?.kind === "restart") await noteRestart(id, "skipped", "cancelled");
   await query("UPDATE agents SET model_pending = NULL, updated_at = now() WHERE id = $1", [id]);
   await logEvent({ type: "models_changed", title: `model change for agent ${id} cancelled`, agentId: id, payload: {} });
   return { id: String(id) };
@@ -1660,7 +1705,7 @@ export async function pinModel(id, input) {
   const model = String(input.model || "").trim() || null;
   const effort = String(input.effort || "").trim() || null;
   if (agent.runtime === "claude") {
-    if (model && !models.CLAUDE_MODELS.includes(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
+    if (model && !models.knownClaudeModel(model)) throw Object.assign(new Error(`unknown Claude model: ${model}`), { status: 400 });
     if (effort && !models.CLAUDE_EFFORTS.includes(effort)) throw Object.assign(new Error(`unknown effort: ${effort}`), { status: 400 });
   } else {
     const known = models.codexModels().find((m) => m.model === model);

@@ -1,7 +1,7 @@
 // Which model and effort each agent runs, and the two files every session reads
 // them from. Nothing here types into a session; the watcher does that, and only
 // into an idle one.
-import { readFileSync, writeFileSync, renameSync, copyFileSync, mkdirSync, existsSync, statSync, chmodSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, copyFileSync, mkdirSync, existsSync, statSync, chmodSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,6 +20,46 @@ export const tapScript = () => join(root, "bin", "pilo-statusline");
 // change made here is meant to hold.
 export const CLAUDE_MODELS = ["opus", "opus[1m]", "sonnet", "sonnet[1m]", "haiku", "fable", "best", "opusplan", "default"];
 export const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh"];
+
+// Claude Code keeps the catalogue its /model picker shows in its own cache: the
+// models this account and install can use, their names, whether the picker puts
+// them up front or under "more", and the efforts each takes. It is not a public
+// file and its shape can change, so anything unexpected reads as nothing and the
+// screens fall back to the aliases above.
+const claudeCatalogueDir = () => process.env.PILO_CLAUDE_CATALOG_DIR || join(homedir(), ".claude", "cache", "model-catalog");
+
+export function claudeModels(dir = claudeCatalogueDir()) {
+  try {
+    const newest = readdirSync(dir).filter((f) => f.endsWith(".json")).map((f) => join(dir, f))
+      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
+    const list = JSON.parse(readFileSync(newest, "utf8"))?.catalog?.config?.models;
+    if (!Array.isArray(list)) return [];
+    return list.filter((m) => m && typeof m.id === "string" && m.id)
+      .map((m) => ({ model: m.id, name: String(m.name || m.id), more: m.section !== "main",
+        // max holds for one session only; a change made here is meant to last
+        efforts: (m.thinking?.effort_options || []).map((e) => e?.id).filter((e) => e && e !== "max") }))
+      .sort((a, b) => a.more - b.more);
+  } catch {
+    return [];
+  }
+}
+
+// What the dashboard offers: the picker's list when it can be read — "default"
+// first, as the picker has it — and the aliases otherwise. A model the settings
+// file names that the list lacks stays on it, so the current value can be shown.
+export function claudeChoices(current = null, catalogue = claudeModels()) {
+  if (!catalogue.length) return { models: CLAUDE_MODELS, efforts: CLAUDE_EFFORTS, labels: {}, source: "builtin" };
+  const models = ["default", ...catalogue.map((m) => m.model)];
+  if (current && !models.includes(current)) models.push(current);
+  const labels = { default: "Default", ...Object.fromEntries(catalogue.map((m) => [m.model, m.more ? `${m.name} · more` : m.name])) };
+  const efforts = [...new Set(catalogue.flatMap((m) => m.efforts))];
+  return { models, efforts: efforts.length ? efforts : CLAUDE_EFFORTS, labels, source: "catalogue" };
+}
+
+// Claude Code takes an alias or a model's full name, so either is a real choice.
+export const knownClaudeModel = (model, catalogue = claudeModels()) =>
+  CLAUDE_MODELS.includes(model) || catalogue.some((m) => m.model === model);
+export const claudeModelName = (model, catalogue = claudeModels()) => catalogue.find((m) => m.model === model)?.name || null;
 
 // Codex keeps its own catalogue of the models this install offers, with the
 // efforts each takes; the hidden ones stay hidden.
@@ -178,7 +218,9 @@ export const sessionIdle = (status) => status === "idle" || status === "done";
 export function paneConfirms(text, asked) {
   const tail = String(text || "").split("\n").slice(-40).join("\n");
   const family = String(asked.model || "").replace(/\[1m\]$/, "");
-  const model = !asked.model || new RegExp(`Set model to [^\n]*${family}`, "i").test(tail)
+  // a full name is answered with the picker's name: "Set model to Opus 5.5"
+  const said = [family, asked.label].filter(Boolean).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  const model = !asked.model || new RegExp(`Set model to [^\n]*(?:${said})`, "i").test(tail)
     || (["default", "best", "opusplan"].includes(asked.model) && /Set model to/.test(tail));
   const effort = !asked.effort || new RegExp(`Set effort level to ${asked.effort}\\b`).test(tail);
   return Boolean(model && effort);

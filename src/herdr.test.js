@@ -16,3 +16,12 @@ test("a herdr call that hangs is cut off", async () => {
   await assert.rejects(herdr.prompt("w1:p1", "hello"));
   assert.ok(Date.now() - started < 5000, "it should give up in well under the sleep");
 });
+
+// An empty list from a herdr that did not answer is not "every pane is gone":
+// the watcher reads the health and leaves the agents as herdr last saw them.
+test("a herdr that does not answer is told apart from one with no sessions", async () => {
+  const herdr = await import("./herdr.js");
+  assert.deepEqual(await herdr.freshSessions(), []);
+  assert.equal(herdr.herdrHealth().ok, false);
+  assert.ok(herdr.herdrHealth().error, "says what went wrong");
+});

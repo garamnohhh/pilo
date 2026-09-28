@@ -1790,6 +1790,10 @@ const waitReason = (r) => !r.bound ? "waits — no session bound"
   : `waits — session reads "${r.sessionState || "unknown"}"`;
 function modelState(r, global) {
   if (r.system) return ["not changed here", "var(--text-3)"];
+  if (r.pending?.kind === "restart") {
+    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started — checking" }[r.pending.step];
+    return [step || (r.busy ? "restarts once the session is idle" : "waiting its turn to restart"), WARN];
+  }
   if (r.pending?.kind === "pin") {
     const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started — checking" }[r.pending.step];
     return [step || (r.busy ? "restarts once the session is idle" : "about to restart"), WARN];
@@ -1803,17 +1807,36 @@ function modelState(r, global) {
   if (r.runtime === "claude" && r.source === "global") return ["not read from the session", "var(--text-3)"];
   return ["", "var(--text-3)"];
 }
+// The last "restart idle sessions": who went, who is waiting, who was left out
+// and why. The watcher fills it in as each one finishes.
+function restartRunHtml() {
+  const run = state.data.settings?.restartRun;
+  if (!run?.rows?.length) return "";
+  const tone = { done: OK, failed: ERR, skipped: "var(--text-3)", waiting: WARN, restarting: WARN };
+  const count = (k) => run.rows.filter((r) => r.state === k).length;
+  return `<div class="d-list" style="margin-top:16px">
+    <div class="d-th" style="grid-template-columns:minmax(0,1fr) 96px minmax(0,2fr)"><span class="d-lbl">restart · ${esc(new Date(run.at).toLocaleString("ko-KR"))}</span>
+      <span class="d-lbl">${count("done")} done · ${count("failed")} failed</span><span class="d-lbl">${count("waiting") + count("restarting")} to go · ${count("skipped")} left out</span></div>
+    ${run.rows.map((r) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 96px minmax(0,2fr)">
+      <span class="d-clip">${esc(r.name)}</span>
+      <span class="d-m" style="font-size:11px;color:${tone[r.state] || "var(--text-3)"}">${esc(r.state)}</span>
+      <span class="d-m d-clip" style="font-size:11px;color:var(--text-3)">${esc(r.note || "")}</span></div>`).join("")}
+  </div>`;
+}
+
 function modelsHtml() {
   const m = state.data.models;
   if (!m) return `<div style="margin-top:48px">${rule("models", "loading…")}</div>`;
   tapOn = Boolean(m.tap?.on);
   if (m.missing) return `<div style="margin-top:48px">${rule("models")}<div class="d-hint">The server running now is older than this screen — start Pilo again to see and change models.</div></div>`;
-  const opts = (list, current) => list.map((v) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(v)}</option>`).join("");
+  // the picker's own names when the server read Claude Code's catalogue; an older
+  // server sends bare aliases and no labels
+  const opts = (list, current, labels = {}) => list.map((v) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(labels[v] || v)}</option>`).join("");
   const codexEfforts = [...new Set(m.choices.codex.flatMap((c) => c.efforts))];
   const bulk = (runtime, models_, efforts, global, note) => `<div class="d-tr" style="grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px">
       <span class="d-lbl">${runtime}</span>
       <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0">
-        <select class="gn-select gn-input-sm" id="m-${runtime}-model" style="width:auto;min-width:150px">${opts(models_, global.model)}</select>
+        <select class="gn-select gn-input-sm" id="m-${runtime}-model" style="width:auto;min-width:150px">${opts(models_, global.model, runtime === "claude" ? m.choices.claude.labels : {})}</select>
         <select class="gn-select gn-input-sm" id="m-${runtime}-effort" style="width:auto;min-width:96px">${opts(efforts, global.effort)}</select>
         <span class="d-m" style="font-size:11px;color:var(--text-3)">now ${esc(global.model || "—")} · ${esc(global.effort || "—")} · ${note}</span>
       </span>
@@ -1827,7 +1850,13 @@ function modelsHtml() {
     <div class="d-list" style="margin-top:16px">
       ${bulk("claude", m.choices.claude.models, m.choices.claude.efforts, m.global.claude, "every new session and each idle one")}
       ${bulk("codex", m.choices.codex.map((c) => c.model), codexEfforts, m.global.codex, "next start")}
+      <div class="d-tr" style="grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px">
+        <span class="d-lbl">restart</span>
+        <span class="d-m" style="font-size:11px;color:var(--text-3)">every idle session starts again on the install there is now — the same conversation, the same model. A new model that needs a newer Claude Code only appears after this.</span>
+        ${btn("Restart idle sessions", "models-restart")}
+      </div>
     </div>
+    ${restartRunHtml()}
     <div class="d-list" style="margin-top:24px">
       <div class="d-th" style="grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr) 72px 110px minmax(0,1.4fr) 132px">
         <span class="d-lbl">agent</span><span class="d-lbl">runtime</span><span class="d-lbl">model</span><span class="d-lbl">effort</span><span class="d-lbl">read from</span><span class="d-lbl">state</span><span></span>
@@ -2562,7 +2591,7 @@ DIALOGS.model = (d) => {
     title: esc(r.name),
     sub: `now ${esc(r.model || "—")} · ${esc(r.effort || "—")} · read from ${esc(MODEL_FROM[r.source] || "—")}${r.pin ? ` · kept on ${esc([r.pin.model, r.pin.effort].filter(Boolean).join(" · "))}` : ""}`,
     fields: [
-      { id: "ma-model", label: "model", kind: "select", value: r.pin?.model || (modelsList.includes(r.model) ? r.model : global.model), options: modelsList.map((v) => [v, v]) },
+      { id: "ma-model", label: "model", kind: "select", value: r.pin?.model || (modelsList.includes(r.model) ? r.model : global.model), options: modelsList.map((v) => [v, (!codex && m.choices.claude.labels?.[v]) || v]) },
       { id: "ma-effort", label: "effort", kind: "select", value: r.pin?.effort || r.effort || global.effort, options: efforts.map((v) => [v, v]) }
     ],
     prose: (codex ? "" : "Change now: typed into this session once it is idle and confirmed on its next reply; the global default is put back, so a later restart reads it again.\n")
@@ -2869,6 +2898,14 @@ const actions = {
     if (!confirm(`${runtime}: ${model} · ${effort} for ${who}? The global ${runtime === "claude" ? "~/.claude/settings.json" : "~/.codex/config.toml"} changes too (a copy is kept).`)) return;
     const res = await call("POST", "/api/models", { runtime, scope: "all", model, effort });
     toast(`${runtime} → ${model} · ${effort} — ${res.applied}${res.skipped?.length ? ` · kept: ${res.skipped.join(", ")}` : ""}`);
+    await loadDetail();
+    render();
+  },
+  async "models-restart"() {
+    if (!confirm("Start every idle Claude and Codex session again, one at a time, on the install there is now? Each resumes its own conversation on the model it has; a working one waits until it is idle (an hour at most), and the desk goes last.")) return;
+    const run = await call("POST", "/api/models/restart", {});
+    state.data.settings = { ...(state.data.settings || {}), restartRun: run };
+    toast(`${run.rows.filter((r) => r.state === "waiting").length} queued · ${run.rows.filter((r) => r.state === "skipped").length} left out`);
     await loadDetail();
     render();
   },
