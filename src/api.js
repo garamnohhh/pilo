@@ -741,19 +741,54 @@ export async function createNote(input) {
   return { id: inbox.id };
 }
 
+// A worker's task belongs to the task its PM is on. The PM names the request by
+// number, and a number is easy to get wrong: pm sent #2196's work (in-1828)
+// as "pilo send 2 1821", the number of the request before it. The worker's
+// result then woke nobody — it was filed under a request pm had finished —
+// and #2196 sat running. So the PM's open tasks decide:
+//   one on the request named          → that one is the parent
+//   none there, exactly one elsewhere → the number was a slip: that task's
+//                                       request and that task, and the reply says so
+//   none there, several elsewhere     → refused, with the list to pick from
+//   none open at all                  → as named (a PM acting on its own)
+async function settleWorkerTask(inboxId, to, input) {
+  if (to.role !== "worker" || !to.parentAgentId) return { inboxId, parent: input.parentTaskId || null, from: input.fromAgentId || null };
+  const open = await query(
+    `SELECT id, inbox_id AS "inboxId" FROM tasks WHERE to_agent_id = $1 AND status IN ('queued', 'running', 'holding')
+     ORDER BY created_at DESC`, [to.parentAgentId]);
+  const pick = pickParent(open, inboxId);
+  if (pick.refuse) {
+    throw Object.assign(new Error(`${to.parentName} has no open task on in-${inboxId}. Open: ${open.map((t) => `#${t.id} (in-${t.inboxId})`).join(", ")} — send again with that request's number`), { status: 400 });
+  }
+  return pick.parent ? { ...pick, from: to.parentAgentId } : { inboxId, parent: input.parentTaskId || null, from: input.fromAgentId || null };
+}
+
+export function pickParent(open, inboxId) {
+  const here = open.find((t) => String(t.inboxId) === String(inboxId));
+  if (here) return { inboxId, parent: here.id };
+  if (open.length === 1) return { inboxId: open[0].inboxId, parent: open[0].id, corrected: { from: Number(inboxId), to: Number(open[0].inboxId) } };
+  if (open.length > 1) return { refuse: true };
+  return { inboxId, parent: null };
+}
+
 export async function createTask(inboxId, input) {
-  const to = await one("SELECT id, name, role FROM agents WHERE id = $1 AND archived_at IS NULL", [input.toAgentId]);
+  const to = await one(
+    `SELECT a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", p.name AS "parentName"
+     FROM agents a LEFT JOIN agents p ON p.id = a.parent_agent_id WHERE a.id = $1 AND a.archived_at IS NULL`, [input.toAgentId]);
   if (!to) throw Object.assign(new Error("target agent not found"), { status: 400 });
   // A system agent runs Pilo's errands; work sent there would sit unread.
   if (to.role === "system") throw Object.assign(new Error(`${to.name} is a system agent and takes no work`), { status: 400 });
+  const settled = await settleWorkerTask(inboxId, to, input);
+  inboxId = settled.inboxId;
   const row = await one(
     `INSERT INTO tasks (inbox_id, parent_task_id, from_agent_id, to_agent_id, title, request)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [inboxId, input.parentTaskId || null, input.fromAgentId || null, to.id, input.title || "", input.request || ""]
+    [inboxId, settled.parent, settled.from, to.id, input.title || "", input.request || ""]
   );
   await query("UPDATE inbox SET status = 'dispatched', updated_at = now() WHERE id = $1 AND status = 'queued'", [inboxId]);
-  await logEvent({ type: "task_created", title: input.title || `task → ${to.name}`, inboxId, taskId: row.id, agentId: to.id, payload: { request: input.request || "" } });
-  return { id: row.id };
+  await logEvent({ type: "task_created", title: input.title || `task → ${to.name}`, inboxId, taskId: row.id, agentId: to.id,
+    payload: { request: input.request || "", parentTaskId: settled.parent, ...(settled.corrected ? { inboxCorrected: settled.corrected } : {}) } });
+  return { id: row.id, inboxId: String(inboxId), parentTaskId: settled.parent ? String(settled.parent) : null, ...(settled.corrected ? { corrected: settled.corrected } : {}) };
 }
 
 export async function saveTaskResult(id, input) {

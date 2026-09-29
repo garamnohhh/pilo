@@ -84,3 +84,14 @@ test("the same words twice are one question, whatever the emphasis", () => {
   // an empty question matches nothing — two blank ones are not one decision
   assert.equal(sameQuestion({ taskId: 1, inboxId: 7, text: "" }, { taskId: 2, inboxId: 7, text: "" }), false);
 });
+
+// pm sent #2196's work (in-1828) as "pilo send 2 1821". The PM's open tasks
+// decide where a worker's task belongs.
+test("a worker's task goes under its PM's open task, and a slipped request number is caught", async () => {
+  const { pickParent } = await import("./api.js");
+  const open = [{ id: 2196, inboxId: 1828 }];
+  assert.deepEqual(pickParent(open, 1828), { inboxId: 1828, parent: 2196 }, "named right: that task is the parent");
+  assert.deepEqual(pickParent(open, 1821), { inboxId: 1828, parent: 2196, corrected: { from: 1821, to: 1828 } }, "one open elsewhere: the number was a slip");
+  assert.deepEqual(pickParent([...open, { id: 2200, inboxId: 1830 }], 1821), { refuse: true }, "several open, none named: ask again");
+  assert.deepEqual(pickParent([], 1821), { inboxId: 1821, parent: null }, "nothing open: as named");
+});

@@ -196,6 +196,8 @@ const commands = {
       title: opts.title || request.split("\n")[0].slice(0, 40),
       request
     });
+    // the request number was a slip, and the server filed it under the PM's open task
+    if (res.corrected) out(t("cli.taskCorrected", { given: res.corrected.from, used: res.corrected.to, parent: res.parentTaskId }));
     return out(t("cli.taskSent", { id: res.id, agent: agentId }));
   },
 
