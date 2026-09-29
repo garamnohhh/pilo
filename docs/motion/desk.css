@@ -1,0 +1,102 @@
+/* pilo 첫 화면 모션 — 데스크 한 사이클.
+   실제 데스크(127.0.0.1:48888/dashboard)에서 잰 값을 옮긴 그림. 사이트 클래스와 섞이지 않게 모두 .pmo 아래.
+   입력 전후로 높이가 달라지지 않게, 올라갈 글(#pmo-posted)은 처음부터 채워 두고 줄만 숨긴다. */
+@font-face{
+  /* 실제 대시보드가 쓰는 아이콘 폰트에서 레일 글리프 다섯 개만 뽑았다.
+     원본 2.5MB → 1.1KB. 그 다섯 자리 말고는 아무것도 들어 있지 않다. */
+  font-family:"Pilo Icons";
+  src:url("fonts/rail-icons.woff2") format("woff2");
+  font-display:block;
+}
+/* ── 데스크 화면 — 실제 데스크(127.0.0.1:48888/dashboard)에서 잰 값 ──
+   헤더 .d-top 54px pad 0 24px / 레일 .d-rail 76px, 아래까지
+   통계띠 .d-strip 72px, 레일 오른쪽부터 / 에이전트 .d-agents 282px
+   줄 .d-arow min-height 32px pad 4px 12px gap 8px, 들여쓰기 pl 12→30px
+   스피너 .d-spin 10px 폭 14px mono, 점자 ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ 1.2s steps(1,end)
+   이름 .d-clip 14px / 역할 칩 .d-chip-sm 9px ls .08em pad 2px 5px, 오른쪽
+   입력칸 .d-composer 56px                                              */
+.pmo .desk{border:1px solid var(--line);background:var(--bg);overflow:hidden;display:flex;flex-direction:column}
+.pmo .d-top{display:flex;align-items:center;gap:16px;height:54px;padding:0 24px;border-bottom:1px solid var(--line);flex:none;min-width:0}
+.pmo .d-top .brand{flex:none;font-size:15px;display:inline-flex}
+.pmo .d-top .st{display:flex;align-items:center;gap:7px;font-family:var(--font-mono);font-size:11px;color:var(--text-2);min-width:0}
+.pmo .d-top .st .n{color:var(--text)}
+.pmo .d-top .right{margin-left:auto;display:flex;align-items:center;gap:12px;font-family:var(--font-mono);font-size:11px;color:var(--text-3);flex:none}
+.pmo .d-top .k{border:1px solid var(--line);padding:2px 6px;font-size:10px}
+.pmo .shell{display:grid;grid-template-columns:76px minmax(0,1fr);flex:1 1 auto;min-height:0}
+.pmo .rail{border-right:1px solid var(--line);padding:6px 0 0;display:flex;flex-direction:column}
+.pmo .railbtn{min-height:64px;padding:11px 0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+ border-left:2px solid transparent;color:var(--text-3)}
+.pmo .railbtn[data-now]{background:var(--bg-2);border-left-color:var(--accent);color:var(--text)}
+.pmo .railbtn .i{width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+ font-family:"Pilo Icons";font-size:17px;line-height:1}
+.pmo .railbtn[data-now] .i{color:var(--accent-text)}
+.pmo .railbtn .l{font-family:var(--font-mono);font-size:9px;line-height:15px}
+.pmo .railbtn{position:relative}
+.pmo .railbtn .badge{position:absolute;top:8px;right:14px;min-width:14px;height:14px;padding:0 3px;
+ display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--on-accent);
+ font-family:var(--font-mono);font-size:9px;line-height:1;opacity:0;transition:opacity .2s}
+.pmo .railbtn[data-n] .badge{opacity:1}
+.pmo .right-of-rail{display:flex;flex-direction:column;min-width:0}
+.pmo .desk-strip{display:grid;grid-template-columns:repeat(4,1fr);height:72px;border-bottom:1px solid var(--line);flex:none}
+.pmo .stat{padding:14px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:5px;min-width:0}
+.pmo .stat:last-child{border-right:0}
+.pmo .stat .k{font-family:var(--font-mono);font-size:11px;letter-spacing:1.54px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmo .stat .v{font-family:var(--font-mono);font-size:22px;line-height:1;color:var(--text);display:flex;align-items:baseline;gap:7px;min-width:0}
+.pmo .stat .v small{font-family:var(--font-mono);font-size:12px;color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pmo .stat .v .red{color:var(--err)}
+.pmo .below{display:grid;grid-template-columns:282px minmax(0,1fr);flex:1 1 auto;min-height:0}
+.pmo .agents{border-right:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.pmo .agents .hd{display:flex;align-items:baseline;gap:10px;height:44px;padding:0 14px;min-width:0}
+.pmo .agents .hd .t{font-family:var(--font-mono);font-size:11px;letter-spacing:1.54px;color:var(--text-3)}
+.pmo .agents .hd .c{font-family:var(--font-mono);font-size:11px;color:var(--text-3);margin-left:auto;white-space:nowrap;
+ overflow:hidden;text-overflow:ellipsis;min-width:0}
+.pmo .agents .list{padding:0;min-width:0}
+/* 계단식: pilo 는 12px, 그 아래는 30px 에서 시작하고 └ 로 이어짐 */
+.pmo .ag{display:flex;align-items:center;gap:8px;width:100%;min-height:32px;padding:4px 12px;border-left:2px solid transparent;min-width:0}
+.pmo .ag.child{padding-left:30px}
+.pmo .ag .tee{font-family:var(--font-mono);font-size:12px;color:var(--text-3);width:7px;flex:none}
+.pmo .ag .spin{display:inline-block;width:10px;flex:none;text-align:center;font:14px/1 var(--font-mono);color:var(--ok)}
+.pmo .ag[data-s="running"] .spin{color:var(--warn)}
+.pmo .ag[data-s="running"] .spin::before{content:"⠋";animation:pmo-spin 1.2s steps(1,end) infinite}
+@keyframes pmo-spin{0%{content:"⠋"}10%{content:"⠙"}20%{content:"⠹"}30%{content:"⠸"}40%{content:"⠼"}
+ 50%{content:"⠴"}60%{content:"⠦"}70%{content:"⠧"}80%{content:"⠇"}90%{content:"⠏"}}
+.pmo .ag[data-s="queued"] .spin::before{content:"○";color:var(--text-3)}
+.pmo .ag[data-s="done"] .spin::before{content:"●";color:var(--ok)}
+.pmo .ag:not([data-s]) .spin::before{content:"·";color:var(--text-3)}
+.pmo .ag .rt{width:15px;height:15px;flex:none;display:block;object-fit:contain}
+.pmo .ag .nm{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;color:var(--text)}
+.pmo .ag .chip{font-family:var(--font-mono);font-size:9px;letter-spacing:.08em;padding:2px 5px;flex:none;
+ background:var(--bg-2);color:var(--text-2)}
+.pmo .ag[data-role="pilo"] .chip{color:var(--accent-text)}
+.pmo .main{display:flex;flex-direction:column;min-width:0}
+.pmo .feed{flex:1 1 auto;padding:16px 28px;display:flex;flex-direction:column;gap:14px;min-width:0;justify-content:flex-end;min-height:0}
+.pmo .row{opacity:0;transform:translateY(5px);transition:opacity .3s,transform .3s;min-width:0}
+.pmo .row[data-on]{opacity:1;transform:none}
+.pmo .ask{background:var(--bg-2);border:1px solid var(--line);padding:12px 16px;font-size:15px;line-height:24.3px;color:var(--text);overflow-wrap:anywhere}
+.pmo .meta{font-family:var(--font-mono);font-size:12px;color:var(--text-2);display:flex;gap:7px;align-items:center;margin-bottom:6px;flex-wrap:wrap;min-width:0}
+.pmo .meta .amber{color:var(--warn)}
+.pmo .meta .green{color:var(--accent-text)}
+.pmo .said{border-left:2px solid var(--line);padding-left:12px;font-size:15px;line-height:24.3px;color:var(--text-2);overflow-wrap:anywhere}
+.pmo .said.work{border-color:var(--warn)}
+.pmo .said.ans{border-color:var(--accent);color:var(--text)}
+.pmo .composer{height:56px;border-top:1px solid var(--line);background:var(--bg-2);display:flex;align-items:center;
+ gap:12px;padding:0 28px;font-size:15px;color:var(--text-3);min-width:0;flex:none}
+.pmo .composer .p{color:var(--accent-text);flex:none}
+.pmo .composer .typed{color:var(--text);white-space:pre;overflow:hidden}
+.pmo .composer .send{margin-left:auto;font-family:var(--font-mono);font-size:10px;letter-spacing:1.2px;color:var(--text-3);flex:none}
+.pmo .cur{display:inline-block;width:8px;height:17px;background:var(--accent);vertical-align:-3px;flex:none}
+.pmo .composer[data-sent] .cur,.pmo .composer[data-sent] .typed{display:none}
+.pmo .ghostbox{display:none;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pmo .composer[data-sent] .ghostbox{display:block}
+.pmo .composer[data-typing] .ghostbox{display:none}
+@media (prefers-reduced-motion: reduce){.pmo .ag[data-s="running"] .spin::before{animation:none}}
+@media (max-width:760px){.pmo .below{grid-template-columns:1fr}.pmo .agents{display:none}
+ .pmo .desk-strip{grid-template-columns:repeat(2,1fr);height:auto}.pmo .stat{border-bottom:1px solid var(--line)}
+ /* 좁은 화면에서는 라벨·꼬리말이 칸보다 길어진다. 글자를 줄여 칸 안에 들인다. */
+ .pmo .stat{padding:12px 14px}
+ .pmo .stat .k{font-size:9.5px;letter-spacing:1.1px}
+ .pmo .stat .v{font-size:19px}
+ .pmo .stat .v small{font-size:10.5px}}
+.pmo .cap{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap;margin:12px 0 0}
+.pmo .replay{font:inherit;background:none;border:0;padding:0;color:var(--text-3);cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.pmo .replay:hover{color:var(--accent-text)}

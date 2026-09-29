@@ -1,0 +1,25 @@
+<!doctype html>
+<!-- README GIF 원본. 저장소 루트에서 띄워 연다: python3 -m http.server -d . 4186 → /docs/motion/?theme=dark
+     site/ 밖에 둬서 Workers 배포에 딸려 나가지 않는다. 녹화는 record.cjs. -->
+<html lang="en" data-lang="en" data-theme="light"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pilo — one request, one cycle</title>
+<script>if (/theme=dark/.test(location.search)) document.documentElement.setAttribute("data-theme", "dark");</script>
+<link rel="stylesheet" href="../../site/garamnoh-system/tokens/fonts.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/tokens/colors.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/tokens/typography.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/tokens/spacing.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/tokens/base.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/components/components.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/components/wordmark.css">
+<link rel="stylesheet" href="../../site/garamnoh-system/products/pilo/brand.css">
+<link rel="stylesheet" href="desk.css">
+<style>
+html[data-lang="ko"] .l-en, html:not([data-lang="ko"]) .l-ko { display: none; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+.pmo { padding: 16px; }
+</style>
+</head><body>
+<div class="pmo" id="pmo"></div>
+<script src="desk.js"></script>
+</body></html>

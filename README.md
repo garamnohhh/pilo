@@ -6,6 +6,11 @@ pilo does not start agents. It gathers the ones already open in your terminal, s
 you say a thing once and the owners split the work between them. macOS, local
 only, no account.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/cycle-dark.gif">
+  <img alt="One request on the pilo desk: typed, handed to shop, shop running, then pilo writes the final reply." src="docs/screenshots/cycle-light.gif">
+</picture>
+
 ![The desk: one conversation, whoever the work belongs to](docs/screenshots/work.png)
 
 *The real screen. The desk above is a sample: three projects — `shop`, `notes`,
