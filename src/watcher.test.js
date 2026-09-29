@@ -67,3 +67,16 @@ test("a PM waiting on its worker is not nudged, and is woken even while holding"
   assert.match(sql, /'holding'/);
   assert.doesNotMatch(sql, /'blocked'/, "a worker waiting on the user is the PM's to carry up, so the PM is still nudged");
 });
+
+// 2026-09-29: worker results whose PM had already reported were skipped inside
+// the loop, unmarked, and the five oldest filled the LIMIT for a day — reviewer's
+// #2149 was never looked at. The open-parent test belongs in the query.
+test("the worker wake filters on an open PM task before it limits", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./watcher.js", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("async function pumpWorkerResults"), src.indexOf("\n}\n", src.indexOf("async function pumpWorkerResults")));
+  const filter = fn.indexOf("WHERE r.parent IS NOT NULL");
+  assert.ok(filter > 0 && filter < fn.indexOf("LIMIT 5`"), "parentless rows are dropped before the LIMIT");
+  assert.doesNotMatch(fn, /if \(!row\.parent\) continue/, "nothing is skipped after the LIMIT has been spent");
+  assert.doesNotMatch(fn, /reviewer/, "a reviewer is a worker like any other here");
+});

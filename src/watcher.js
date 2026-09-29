@@ -446,28 +446,35 @@ async function pumpFollowups() {
 // stall sweep. Now a finished worker task wakes the PM whose task on the same
 // request is still open, once per worker task.
 async function pumpWorkerResults() {
+  // The PM's open task is part of the filter, not checked after it. It used to
+  // be checked in the loop, and a worker result whose PM had already reported
+  // was skipped without a mark — so it came back every tick for a day, and the
+  // five oldest of those filled the LIMIT: on 2026-09-29 reviewer's #2149 and
+  // chatbot's #2148 were never looked at while #2022…#2076 held the five places.
   const done = await query(
-    `SELECT t.id AS task, t.status, t.inbox_id AS "inboxId", w.name AS worker,
-            p.id AS "pmId", p.name AS pm, p.herdr_target, p.runtime,
-            -- holding counts: a PM parked "waiting on the worker" is exactly the one to wake
-            (SELECT pt.id FROM tasks pt
-              WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running', 'holding')
-                AND pt.created_at <= t.done_at
-              ORDER BY pt.created_at DESC LIMIT 1) AS parent
-       FROM tasks t
-       JOIN agents w ON w.id = t.to_agent_id
-       JOIN agents p ON p.id = w.parent_agent_id
-       LEFT JOIN agent_sessions s ON s.agent_id = p.id
-      WHERE t.status IN ('done', 'failed') AND t.done_at > now() - interval '24 hours'
-        AND w.role = 'worker' AND p.archived_at IS NULL AND p.herdr_target <> ''
-        AND coalesce(s.status, '') <> 'gone'
-        AND (p.limited_until IS NULL OR p.limited_until < now())
-        AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'worker_result_woken')
-      ORDER BY t.done_at LIMIT 5`
+    `SELECT * FROM (
+       SELECT t.id AS task, t.status, t.done_at, t.inbox_id AS "inboxId", w.name AS worker,
+              p.id AS "pmId", p.name AS pm, p.herdr_target, p.runtime,
+              -- holding counts: a PM parked "waiting on the worker" is exactly the one to wake
+              (SELECT pt.id FROM tasks pt
+                WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running', 'holding')
+                  AND pt.created_at <= t.done_at
+                ORDER BY pt.created_at DESC LIMIT 1) AS parent
+         FROM tasks t
+         JOIN agents w ON w.id = t.to_agent_id
+         JOIN agents p ON p.id = w.parent_agent_id
+         LEFT JOIN agent_sessions s ON s.agent_id = p.id
+        WHERE t.status IN ('done', 'failed') AND t.done_at > now() - interval '24 hours'
+          AND w.role = 'worker' AND p.archived_at IS NULL AND p.herdr_target <> ''
+          AND coalesce(s.status, '') <> 'gone'
+          AND (p.limited_until IS NULL OR p.limited_until < now())
+          AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'worker_result_woken')
+     ) r
+     -- the PM already reported, or never held anything on that request
+     WHERE r.parent IS NOT NULL
+     ORDER BY r.done_at LIMIT 5`
   );
   for (const row of done) {
-    // the PM already reported, or never held anything on that request
-    if (!row.parent) continue;
     const pm = { id: row.pmId, name: row.pm, herdr_target: row.herdr_target, runtime: row.runtime };
     const vars = { task: row.task, worker: row.worker, status: t(row.status === "failed" ? "worker.failed" : "worker.done"), parent: row.parent, pm: row.pm };
     const sent = await wake(pm, t("wake.workerResult", vars), { taskId: row.parent, inboxId: row.inboxId });
