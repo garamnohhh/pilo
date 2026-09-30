@@ -80,3 +80,16 @@ test("the worker wake filters on an open PM task before it limits", async () => 
   assert.doesNotMatch(fn, /if \(!row\.parent\) continue/, "nothing is skipped after the LIMIT has been spent");
   assert.doesNotMatch(fn, /reviewer/, "a reviewer is a worker like any other here");
 });
+
+// #2272: five wakes, the last one into the session that was about to be
+// replaced, and the backoff then held the new session off for an hour.
+test("a session coming back from gone resets the wake clock", async () => {
+  const { readFileSync } = await import("node:fs");
+  const src = readFileSync(new URL("./watcher.js", import.meta.url), "utf8");
+  const should = src.slice(src.indexOf("async function shouldWake"), src.indexOf("\n}\n", src.indexOf("async function shouldWake")));
+  assert.match(should, /type = 'session_started' AND agent_id = \$2/);
+  assert.match(src, /shouldWake\("task_id", task\.id, task\.agent_id\)/);
+  const sessions = src.slice(src.indexOf("export async function pumpSessions"), src.indexOf("\n}\n", src.indexOf("export async function pumpSessions")));
+  assert.match(sessions, /before\.get\(String\(agent\.id\)\) === SESSION_GONE/);
+  assert.match(sessions, /type: "session_started"/);
+});

@@ -33,16 +33,19 @@ async function noteJob(name, result, ran = true) {
   changed();
 }
 
-async function shouldWake(column, id) {
+async function shouldWake(column, id, agentId = null) {
   // An answer resets the clock: attempts before it should not hold back the retry.
+  // So does a new session for the agent: wakes typed into the one before it went
+  // nowhere. #2272 had five, the last 42 seconds before pirep-dev came back on a
+  // fresh session, and the next was an hour away.
   const row = await one(
     `SELECT count(*)::int AS attempts, max(created_at) AS last
      FROM events
      WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1
-       AND created_at > COALESCE(
-         (SELECT max(created_at) FROM events WHERE type = 'task_answered' AND ${column} = $1),
-         to_timestamp(0))`,
-    [id]
+       AND created_at > GREATEST(
+         COALESCE((SELECT max(created_at) FROM events WHERE type = 'task_answered' AND ${column} = $1), to_timestamp(0)),
+         COALESCE((SELECT max(created_at) FROM events WHERE type = 'session_started' AND agent_id = $2), to_timestamp(0)))`,
+    [id, agentId]
   );
   const attempts = row?.attempts || 0;
   if (!attempts) return { wake: true, attempts };
@@ -160,7 +163,7 @@ async function pumpTasks() {
   );
   for (const task of pending) {
     const agent = { id: task.agent_id, name: task.name, herdr_target: task.herdr_target, runtime: task.runtime };
-    const check = await shouldWake("task_id", task.id);
+    const check = await shouldWake("task_id", task.id, task.agent_id);
     if (check.giveUp) {
       await gaveUp("task_id", task.id, agent, { taskId: task.id, inboxId: task.inbox_id });
       continue;
@@ -336,10 +339,15 @@ export async function pumpSessions() {
   const live = await herdr.sessions();
   if (!herdr.herdrHealth().ok) return;
   const agents = await query(
-    "SELECT id, herdr_target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''"
+    "SELECT id, name, herdr_target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''"
   );
+  const before = new Map((await query("SELECT agent_id, status FROM agent_sessions")).map((r) => [String(r.agent_id), r.status]));
   for (const agent of agents) {
     const session = live.find((s) => s.target === agent.herdr_target);
+    // back from gone: a new session, which has heard none of the wakes before it
+    if (session && before.get(String(agent.id)) === SESSION_GONE) {
+      await logEvent({ type: "session_started", title: `${agent.name || "agent"}: session back in ${agent.herdr_target}`, agentId: agent.id, payload: { target: agent.herdr_target } });
+    }
     await query(
       `INSERT INTO agent_sessions (agent_id, target, status, title, since, updated_at)
        VALUES ($1, $2, $3, $4, now(), now())
