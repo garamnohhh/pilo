@@ -23,3 +23,15 @@ test("the front door forwards nothing it was not asked to", () => {
   const extra = arm[1].split("|").filter((name) => !known.has(name));
   assert.deepEqual(extra, [], `bin/pilo forwards commands the CLI does not have: ${extra.join(", ")}`);
 });
+
+// #2272: the parent PM polled its worker's task with `pilo api GET`, and the read
+// was recorded as the worker opening it. The CLI names its pane; the server
+// counts only the assignee's own pane.
+test("a task read names the pane it came from, and only the assignee's pane opens it", async () => {
+  const cli = readFileSync(new URL("./cli.js", import.meta.url), "utf8");
+  assert.match(cli, /HERDR_PANE_ID/);
+  assert.match(cli, /_pane=/);
+  const api = readFileSync(new URL("./api.js", import.meta.url), "utf8");
+  const fn = api.slice(api.indexOf("async function noteOpened"), api.indexOf("async function noteOpened") + 600);
+  assert.match(fn, /pane && task\.herdrTarget && pane !== task\.herdrTarget\) return/);
+});

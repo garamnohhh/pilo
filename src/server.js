@@ -99,7 +99,7 @@ const routes = [
   ["POST", /^\/api\/inbox\/(\d+)\/reply$/, (m, body) => api.saveFinalReply(Number(m[1]), body)],
 
   ["GET", /^\/api\/tasks$/, () => api.listTasks()],
-  ["GET", /^\/api\/tasks\/(\d+)$/, (m) => api.taskDetail(Number(m[1]))],
+  ["GET", /^\/api\/tasks\/(\d+)$/, (m, _b, q) => api.taskDetail(Number(m[1]), { pane: q.get("_pane") || "" })],
   ["POST", /^\/api\/tasks\/(\d+)\/hold$/, (m, body) => api.holdTask(Number(m[1]), body.note || "")],
   ["POST", /^\/api\/tasks\/(\d+)\/resume$/, (m) => api.resumeTask(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/limited$/, (m, body) => api.setLimited(Number(m[1]), body.until || null)],

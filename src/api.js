@@ -1104,8 +1104,11 @@ export async function listTasks(limit = 100) {
 // Reading the work is the only signal Pilo gets that a wake landed. Without it
 // "never received it" and "received it and never finished" look identical, and
 // the second one is the failure that keeps happening.
-async function noteOpened(task) {
+async function noteOpened(task, pane = "") {
   if (!task || task.status !== "queued") return;
+  // read from some other pane — the parent PM polling, the desk looking — is not
+  // the agent picking the work up. No pane (outside herdr) still counts.
+  if (pane && task.herdrTarget && pane !== task.herdrTarget) return;
   const seen = await one("SELECT 1 AS hit FROM events WHERE type = 'task_opened' AND task_id = $1 LIMIT 1", [task.id]);
   if (seen) return;
   await logEvent({
@@ -1195,14 +1198,14 @@ export async function handOverToPm(agentId) {
   return moved;
 }
 
-export async function taskDetail(id) {
+export async function taskDetail(id, { pane = "" } = {}) {
   const row = await one(
     `SELECT t.id, t.title, t.request, t.pm_result AS "pmResult", t.status, t.error,
        t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut", t.created_at AS "createdAt",
        t.blocked_question AS "blockedQuestion", t.answer, t.progress AS "progressNote",
        t.progress_at AS "progressAt",
        t.inbox_id AS "inboxId", t.parent_task_id AS "parentTaskId",
-       a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty,
+       a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty, a.herdr_target AS "herdrTarget",
        f.name AS "fromAgent", i.user_request AS "userRequest", p.name AS project
      FROM tasks t
        LEFT JOIN agents a ON a.id = t.to_agent_id
@@ -1223,7 +1226,7 @@ export async function taskDetail(id) {
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.parent_task_id = $1 ORDER BY t.created_at`,
     [id]
   );
-  await noteOpened(row);
+  await noteOpened(row, pane);
   return { ...row, progress, children };
 }
 

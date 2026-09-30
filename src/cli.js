@@ -88,6 +88,11 @@ function viaSocket(method, path, body) {
 const BLOCKED = new Set(["EPERM", "EACCES", "ENOENT", "ECONNREFUSED", "EINVAL", "ENAMETOOLONG"]);
 
 async function call(method, path, body) {
+  // The pane this command runs in, where herdr says so. The server marks a task
+  // "opened" only when its own agent's pane reads it — a PM polling its worker's
+  // task used to count as the worker picking it up (#2272).
+  const pane = process.env.HERDR_PANE_ID;
+  if (method === "GET" && pane && /^\/api\/tasks\/\d+$/.test(path)) path += `?_pane=${encodeURIComponent(pane)}`;
   try {
     return await viaSocket(method, path, body);
   } catch (err) {
