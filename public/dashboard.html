@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Pilo dashboard</title>
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="theme-color" content="#08090a">
@@ -274,6 +274,44 @@
   a { color: var(--green); text-decoration: none }
   @media (max-width: 1100px) { .split, .half, .grid2 { grid-template-columns: 1fr } .grid4 { grid-template-columns: repeat(2, 1fr) } }
   @media (max-width: 780px) { .app { grid-template-columns: 1fr } aside { display: none } main { padding: 20px } }
+
+  /* Phone (the "Pilo Mobile" design): one column, a bar of four tabs at the
+     bottom, the top bar down to what fits. Desktop and tablet never see any of
+     it — every rule sits under the 720px container query or is hidden by default. */
+  .d-mtabs, .d-msend, .d-mchips, .d-mneeds, .d-mback { display: none }
+  /* a header that wraps must not be squeezed under the content below it */
+  .d-fill > .d-head { flex: none }
+  @container (max-width: 720px) {
+    body { height: var(--vvh, 100dvh) }
+    .d-top { min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
+    #sync, .d-top-wide { display: none !important }
+    .d-mneeds { display: inline }
+    .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
+    .d-rail, .d-strip, .d-agents { display: none !important }
+    .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background: var(--bg-2); padding-bottom: env(safe-area-inset-bottom) }
+    .d-mtab { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); border-top: 2px solid transparent; margin-top: -1px }
+    .d-mtab[aria-current="page"] { border-top-color: var(--accent); color: var(--text) }
+    .d-mtab-g { font-family: var(--font-mono); font-size: 15px; line-height: 1 }
+    .d-mtab-l { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label) }
+    .d-mchips { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px 0; flex: none }
+    .d-mchips .gn-tag { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; flex: none }
+    .d-cin { padding: 10px 16px; align-items: flex-end }
+    .d-cin-hint { display: none }
+    .d-msend { display: inline-flex; flex: none }
+    /* Requests: the list, or one request — not the agent tree, list and detail stacked */
+    [data-mreq] .d-byagent, [data-mreq] .d-reqcol > .d-lblrule { display: none }
+    [data-mreq] .d-reqsec { margin-top: 0 }
+    [data-mreq] .d-reqlist { max-height: none }
+    [data-mreq="list"] .d-handling { display: none }
+    [data-mreq="detail"] .d-reqcol, [data-mreq="detail"] > .d-head { display: none }
+    .d-mback { display: inline-flex; min-height: 44px; align-items: center; font-size: 13px; color: var(--text-2); flex: none }
+    /* iOS zooms the page into any field set under 16px */
+    .d-ta, input, select, textarea { font-size: 16px !important }
+    main.d-main > #view:not(:has(.d-composer)) { padding: 0 0 24px }
+    /* dialog fields: label over field, field full width */
+    .d-frow { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important }
+    .d-frow > * { grid-column: 1 !important; max-width: 100%; min-width: 0 }
+  }
 </style>
 </head>
 <body>
@@ -290,6 +328,7 @@
     <section id="view"></section>
     <button class="gn-btn gn-btn-sm" id="newlines" data-act="to-end" hidden></button>
   </main>
+  <nav class="d-mtabs" id="mtabs" aria-label="screens"></nav>
 </div>
 <div id="dlg"></div>
 <div class="d-tip" id="agenttip" role="tooltip" hidden></div>
@@ -321,14 +360,15 @@ const RAIL = [
 // come back by putting the key back in RAIL.
 
 const state = {
-  tab: location.hash.slice(1) || "work",
+  tab: location.hash.slice(1).split("/")[0] || "work",
+  mReq: location.hash.slice(1).split("/")[0] === "inbox" ? location.hash.slice(1).split("/")[1] || null : null,
   data: {},
   form: emptyForm(),
   editing: null,
   candidates: [],
   rules: null,
   openTrace: null,
-  selected: { event: null, artifact: null, inbox: null },
+  selected: { event: null, artifact: null, inbox: location.hash.slice(1).split("/")[1] || null },
   inboxFilter: null,
   project: { id: null, name: "", repo: "", path: "", note: "" },
   schedule: { name: "", toAgentId: "", request: "", cadence: "09:00", weekdaysOnly: true, onMiss: "run" },
@@ -365,10 +405,15 @@ const $ = (id) => document.getElementById(id);
 // already answers to; the language picks which of text.js's two tables t()
 // reads, so every string that has a key follows it. Labels drawn verbatim from
 // the handoff stay English in both, exactly as the handoff shows them.
+// "auto" follows the device and keeps following it when it flips at sunset;
+// a pick of dark or light is kept. A phone starts on auto, a desktop on dark.
+const narrow = () => matchMedia("(max-width: 720px)").matches;
+const deviceTheme = () => (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
 function setTheme(mode) {
-  state.theme = mode === "light" ? "light" : "dark";
+  state.themeMode = ["auto", "light", "dark"].includes(mode) ? mode : "dark";
+  state.theme = state.themeMode === "auto" ? deviceTheme() : state.themeMode;
   document.documentElement.setAttribute("data-theme", state.theme);
-  try { localStorage.setItem("pilo-theme", state.theme); } catch (err) { /* private window */ }
+  try { localStorage.setItem("pilo-theme", state.themeMode); } catch (err) { /* private window */ }
 }
 
 function setLang(code) {
@@ -676,11 +721,12 @@ function topstateHtml() {
   return `
     <span class="d-m" style="font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:7px">
       <span class="d-dot${server?.state === "running" ? " d-live" : ""}" style="background:${stateColor(server?.state)}"></span>${esc(server?.state || "unknown")}</span>
-    <span class="d-m" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
-    ${waiting ? `<span class="d-m" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
-    ${st.failed?.total ? `<span class="d-m" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
+    <span class="d-m d-top-wide" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
+    ${waiting ? `<span class="d-m d-top-wide" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
+    ${st.failed?.total ? `<span class="d-m d-top-wide" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
+    ${st.needsYou?.total ? `<button class="d-plain d-m d-mneeds" style="font-size:12px;color:var(--err)" data-act="needs-you">${st.needsYou.total} ${esc(T("desk.mobile.needs"))}</button>` : ""}
     ${usageHtml()}
-    <button class="d-plain d-m" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
+    <button class="d-plain d-m d-top-wide" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
   // The old sidebar's herdr card has no home in the rail; the same facts are on
   // the System screen, and the topbar already says whether the server is up.
 }
@@ -878,6 +924,7 @@ function render() {
   $("strip").hidden = !isWork;
   $("tree").hidden = !isWork;
   if (isWork) touched |= renderWorkPanes();
+  touched |= paint("mtabs", mtabsHtml());
   syncAgentTip();
   const viewChanged = paint("view", views[state.tab]());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
@@ -1399,7 +1446,11 @@ function renderWorkPanes() {
     <div class="d-m" style="font-size:24px;margin-top:6px;color:${color}">${v}<span style="font-size:13px;color:var(--text-3)"> · ${sub}</span></div>
   </${act ? "button" : "div"}>`).join("");
 
-  const treeHtml = `<div style="padding:16px 14px 10px;display:flex;align-items:center">
+  return paint("strip", stripHtml) | paint("tree", agentTreeHtml(rows, st));
+}
+
+function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {}) {
+  return `<div style="padding:16px 14px 10px;display:flex;align-items:center">
       <span class="d-lbl">${T("desk.rail.agents")}</span>
       <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker</span>
     </div>
@@ -1421,9 +1472,43 @@ function renderWorkPanes() {
       </button>`;
     }).join("")}</div>
     <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
-
-  return paint("strip", stripHtml) | paint("tree", treeHtml);
 }
+
+// ── Phone ───────────────────────────────────────────────────────────────────
+// Four tabs at the bottom. Work and Requests are the desktop screens; Agents is
+// the tree; More holds usage, theme and every other screen, so nothing the
+// desktop can reach is out of reach here.
+const MTABS = [["work", "❯", "desk.rail.work"], ["inbox", "▤", "desk.rail.inbox"], ["tree", "✳", "desk.rail.agents"], ["more", "≡", "desk.mobile.more"]];
+function mtabsHtml() {
+  const cur = ["work", "inbox", "tree"].includes(state.tab) ? state.tab : "more";
+  return MTABS.map(([key, glyph, label]) => `<button class="d-plain d-mtab" data-tab="${key}" aria-current="${cur === key ? "page" : "false"}">
+      <span class="d-mtab-g" aria-hidden="true">${glyph}</span><span class="d-mtab-l">${esc(T(label)).toUpperCase()}</span></button>`).join("");
+}
+
+function agentChipsHtml() {
+  const names = (state.data.tree?.pms || []).map((p) => p.name);
+  const f = state.feed.agent;
+  const chip = (label, act, extra, on) => `<button class="gn-tag" data-act="${act}" ${extra} aria-pressed="${on}" style="${on ? "border-color:var(--accent);color:var(--text)" : ""}">${esc(label)}</button>`;
+  return `<div class="d-mchips">${chip(T("desk.mobile.everyAgent"), "clear-feed-filter", "", !f)}${names.map((n) => chip(n, "pick-agent", `data-name="${esc(n)}"`, f === n)).join("")}</div>`;
+}
+
+views.tree = () => `<div class="d-scroll" style="display:flex;flex-direction:column">${agentTreeHtml()}</div>`;
+
+views.more = () => {
+  const q = state.data.quota || {};
+  const go = (tab, label, sub = "") => `<button class="d-plain d-tr" data-tab="${tab}" style="grid-template-columns:minmax(0,1fr) auto;min-height:52px;width:100%">
+      <span style="font-size:var(--fs-body)">${esc(label)}</span><span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(sub)} ›</span></button>`;
+  const runtimes = ["claude", "codex"].filter((rt) => q[rt]).map((rt) => `${rt} ${q[rt].compact}`).join(" · ");
+  return page(pageHead(T("desk.mobile.more"), "") +
+    `<div class="d-list">${go("usage", T("desk.title.usage"), runtimes)}</div>
+    <div style="margin-top:24px">${rule(T("desk.lbl.theme"))}
+      <div class="d-tr" style="grid-template-columns:minmax(0,1fr)">${seg([["auto", "AUTO"], ["dark", "DARK"], ["light", "LIGHT"]], state.themeMode || state.theme, "set-theme")}</div>
+      <div class="d-hint">${esc(T(state.themeMode === "auto" ? "desk.mobile.themeAuto" : "desk.mobile.themeKept"))}</div></div>
+    <div style="margin-top:24px">${rule(T("desk.lbl.language"))}
+      <div class="d-tr" style="grid-template-columns:minmax(0,1fr)">${seg([["en", "EN"], ["ko", "KO"]], state.lang, "set-lang")}</div></div>
+    <div class="d-list" style="margin-top:24px">${[["agents", "desk.rail.agents"], ["schedules", "desk.rail.schedules"], ["events", "desk.rail.events"], ["artifacts", "desk.rail.artifacts"],
+      ["projects", "desk.rail.projects"], ["commands", "desk.rail.commands"], ["settings", "desk.rail.settings"], ["system", "desk.rail.system"]].map(([tab, key]) => go(tab, T(key))).join("")}</div>`);
+};
 
 // One request reads as a conversation: what you asked, what the desk said, what
 // each agent is doing, and the answer.
@@ -1648,11 +1733,12 @@ function feedSize() {
     n + 1 + (folded(item.id, i) ? 0 : feedMessages(item, state.feed.detail[item.id]).length), 0);
 }
 
-views.work = () => `<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
+views.work = () => `${agentChipsHtml()}<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
   <div class="d-composer">${followHtml()}<div class="d-cin">
     <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
     <textarea class="d-ta" id="draft" rows="1" placeholder="${T("desk.composer")}"></textarea>
-    <span class="d-m" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">${T("desk.composer.hint")}</span>
+    <span class="d-m d-cin-hint" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">${T("desk.composer.hint")}</span>
+    <button class="gn-btn gn-btn-brand gn-btn-sm d-msend" data-act="send-draft">${T("desk.composer.send")}</button>
   </div></div>`;
 
 views.overview = () => {
@@ -2006,7 +2092,8 @@ views.inbox = () => {
     : `<div style="min-width:0"><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span></div>
         <div style="padding:48px 4px;font-size:var(--fs-body);color:var(--text-3)">Pick a request on the left.</div></div>`;
 
-  return `<div class="d-pad d-fill">` +
+  return `<div class="d-pad d-fill" data-mreq="${state.mReq ? "detail" : "list"}">` +
+    (state.mReq ? `<button class="d-plain d-m d-mback" data-act="req-back">‹ ${esc(T("desk.title.inbox"))}</button>` : "") +
     pageHead(T("desk.title.inbox"), `${all.length} in all`,
       seg([["Open", "Open"], ["Closed", "Closed"], ["All", "All"]], state.reqFilter, "req-filter")) +
     `<div class="d-split"><div class="d-reqcol">
@@ -2622,7 +2709,7 @@ function fieldHtml(f) {
             : f.kind === "switch"
               ? `<label class="gn-switch" style="justify-self:start"><input type="checkbox" id="${f.id}" ${f.value ? "checked" : ""}><span class="gn-switch-track"><span class="gn-switch-knob"></span></span></label>`
               : `<input class="gn-input gn-input-sm gn-input-mono" id="${f.id}" value="${esc(f.value || "")}" placeholder="${esc(f.place || "")}">`;
-  return `<div style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:center;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
+  return `<div class="d-frow" style="display:grid;grid-template-columns:132px minmax(0,1fr);gap:16px;align-items:center;padding:12px 0;border-bottom:var(--hairline) solid var(--line-soft)">
     <span class="d-lbl">${esc(f.label)}</span>${body}
     ${f.hint ? `<span style="grid-column:2;font-size:var(--fs-small);line-height:1.5;color:var(--text-3)">${esc(f.hint)}</span>` : ""}</div>`;
 }
@@ -3251,6 +3338,11 @@ const actions = {
     showUnseen();
   },
   async "set-theme"(el) { setTheme(el.dataset.value); render(); },
+  // the phone's send button: the same path as Enter in the composer
+  async "req-back"() { if (state.mReq) history.back(); else location.hash = "inbox"; },
+  async "send-draft"() {
+    $("draft")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  },
   async "set-lang"(el) { setLang(el.dataset.value); render(); },
   async "rules"(el) {
     state.rules = await get(`/api/agents/${el.dataset.id}/rules`);
@@ -3345,6 +3437,8 @@ const actions = {
   },
   async "open-inbox"(el) {
     state.selected.inbox = el.dataset.id;
+    // on a phone the request opens over the list, as a page the back gesture closes
+    if (narrow()) location.hash = `inbox/${el.dataset.id}`;
     state.data.inboxDetail = await get(`/api/inbox/${el.dataset.id}`);
     render();
   },
@@ -3486,14 +3580,33 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("hashchange", async () => {
-  state.tab = location.hash.slice(1) || "work";
+  const [tab, sub] = location.hash.slice(1).split("/");
+  state.tab = tab || "work";
+  // a phone opens one request over the list; going back closes it
+  state.mReq = state.tab === "inbox" && sub ? sub : null;
+  if (state.mReq) state.selected.inbox = state.mReq;
   render();
   await loadDetail();
   render();
 });
 
 try {
-  setTheme(localStorage.getItem("pilo-theme") || "dark");
+  setTheme(localStorage.getItem("pilo-theme") || (narrow() ? "auto" : "dark"));
+  matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => {
+    if (state.themeMode === "auto") { setTheme("auto"); render(); }
+  });
+  // iOS keeps the layout viewport when the keyboard opens and slides the page up
+  // under it. The body takes the visible height instead, so the composer stays
+  // just above the keyboard and the tab bar never floats over the feed.
+  if (window.visualViewport) {
+    const fit = () => {
+      document.documentElement.style.setProperty("--vvh", `${Math.round(visualViewport.height)}px`);
+      if (narrow() && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+    };
+    visualViewport.addEventListener("resize", fit);
+    visualViewport.addEventListener("scroll", fit);
+    fit();
+  }
   setLang(localStorage.getItem("pilo-lang") || "en");
 } catch (err) {
   setTheme("dark");
