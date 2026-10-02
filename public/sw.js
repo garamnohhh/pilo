@@ -17,16 +17,17 @@ const OFFLINE = `<!doctype html><html lang="ko"><meta charset="utf-8">
 html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.62 -apple-system,system-ui,sans-serif;display:flex;flex-direction:column}
 .top{display:flex;align-items:center;gap:12px;min-height:48px;padding:env(safe-area-inset-top) 16px 0;border-bottom:1px solid var(--line);font:600 15px ui-monospace,Menlo,monospace;position:sticky;top:0;background-color:var(--bg)}
 .top b{color:var(--accent)}.top i{font-style:normal;font-weight:400;font-size:13px;color:var(--err)}
-main{flex:1;display:flex;flex-direction:column;justify-content:center;gap:12px;padding:16px}
+main{flex:1;display:flex;flex-direction:column;gap:12px;padding:max(16px,14vh) 16px 16px;word-break:keep-all}
+.rows{margin-top:10px;display:flex;flex-direction:column;gap:8px}code{font:13px ui-monospace,Menlo,monospace}
 .box{background:var(--surface);border:1px solid var(--line);padding:24px}.chk{border:1px dashed var(--line);padding:16px 20px;color:var(--text-2);font-size:13px}
-.lbl{font:11px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--text-3)}h1{margin:12px 0 0;font-size:22px;font-weight:500}
+.lbl{font:11px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--text-3)}h1{margin:12px 0 0;font-size:22px;font-weight:400;line-height:1.3}
 button{margin-top:20px;width:100%;height:44px;border:0;background:var(--accent);color:#08090a;font:600 15px system-ui}
 </style>
 <div class="top"><span><b>❯</b> pilo</span><i>■ offline</i></div>
 <main><div class="box"><div class="lbl" style="color:var(--err)">NOT CONNECTED</div><h1>맥북에 연결할 수 없어요</h1>
-<p style="color:var(--text-2)">Pilo는 맥북에서 돌아요. 맥북이 잠들었거나 같은 네트워크에 없으면 여기서 열 수 없어요.</p>
+<p style="margin:12px 0 0;color:var(--text-2)">Pilo는 맥북에서 돌아요. 맥북이 잠들었거나 같은 네트워크에 없으면 여기서 열 수 없어요.</p>
 <button onclick="location.reload()">다시 시도</button></div>
-<div class="chk"><div class="lbl">CHECK</div><p>맥북이 켜져 있는지<br>폰과 맥북이 같은 Tailscale에 있는지<br>맥북에서 <code>pilo status</code></p></div></main>
+<div class="chk"><div class="lbl">CHECK</div><div class="rows"><span>맥북이 켜져 있는지</span><span>폰과 맥북이 같은 Tailscale에 있는지</span><span>맥북에서 <code>pilo status</code></span></div></div></main>
 <script>setTimeout(function(){location.reload()},15000)</script></html>`;
 
 self.addEventListener("install", (event) => {
