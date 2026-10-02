@@ -68,3 +68,15 @@ test("the tab bar tints Safari's toolbar and a light start picks the white statu
   const head = page.slice(0, page.indexOf("</head>"));
   assert.match(head, /setAttribute\("content", "default"\)/);
 });
+
+// A phone that cannot reach the Mac gets the offline screen, from a page the
+// service worker kept; the API is never answered from the cache.
+test("offline: the page is kept, the API is not, and the phone shows its own screen", () => {
+  const sw = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
+  assert.match(sw, /cache\.put\(key, res\.clone\(\)\)/);
+  assert.match(sw, /pathname === "\/api\/stream"\) return/);
+  const api = sw.slice(sw.indexOf('url.pathname.startsWith("/api/")'), sw.indexOf('event.request.mode === "navigate"'));
+  assert.doesNotMatch(api, /caches|cache\./);
+  assert.match(page, /if \(state\.offline && narrow\(\)\) return renderOffline\(\);/);
+  for (const lang of Object.keys(LANGS)) for (const k of ["offline.title", "offline.retry", "offline.saved", "offline.kept"]) assert.ok(LANGS[lang][k], `${lang} ${k}`);
+});

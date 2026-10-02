@@ -326,6 +326,9 @@
     /* Safari 26 colours its bottom toolbar from a sticky or fixed box with a
        plain background colour on the bottom edge — the tab bar is that box */
     .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background-color: var(--bg-2); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px)); position: sticky; bottom: 0; z-index: 10 }
+    /* offline: no tabs to go anywhere, and the state sits by the wordmark */
+    body[data-offline] .d-mtabs { display: none }
+    body[data-offline] #topstate { margin-left: 12px !important }
     /* the keyboard covers the tab bar; its safe-area padding would float over the keys */
     body[data-kb] .d-mtabs { display: none }
     /* the home indicator is a thin line at the very bottom; the tabs sit just
@@ -507,6 +510,8 @@ async function load() {
     get("/api/sessions"), get("/api/agents"), get("/api/schedules"), get("/api/quota").catch(() => ({}))
   ]);
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
+  state.offline = false;
+  keepRecords(inbox);
   refreshFeed();
   await loadDetail();
   // kept as a time and formatted in render(), so a language switch shows at once
@@ -952,6 +957,8 @@ function render() {
     owedRender = true;
     return;
   }
+  if (state.offline && narrow()) return renderOffline();
+  document.body.removeAttribute("data-offline");
   if (state.syncedAt) $("sync").textContent = "updated " + state.syncedAt.toLocaleTimeString(loc());
   const held = holdFields();
   // a request opened over the phone's list is a page of its own: it starts at the top
@@ -1518,6 +1525,73 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
       </button>`;
     }).join("")}</div>
     <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
+}
+
+// ── Offline (phone) ─────────────────────────────────────────────────────────
+// Pilo runs on the Mac; a phone that cannot reach it gets this screen instead of
+// a dead one. The service worker keeps the page itself on the phone, and every
+// load that works leaves the latest requests and answers here, read only.
+const RECORDS_KEY = "pilo-records";
+function keepRecords(inbox) {
+  if (!Array.isArray(inbox)) return;
+  const items = inbox.slice(0, 30).map((i) => ({
+    id: i.id, createdAt: i.createdAt, agent: inboxAgents(i)[0] || "pilo", state: reqState(i),
+    request: String(i.userRequest || "").slice(0, 2000), reply: String(i.finalReply || "").slice(0, 4000)
+  }));
+  try { localStorage.setItem(RECORDS_KEY, JSON.stringify({ at: new Date().toISOString(), items })); } catch (err) { /* full or private */ }
+}
+function savedRecords() {
+  try { return JSON.parse(localStorage.getItem(RECORDS_KEY) || "null"); } catch (err) { return null; }
+}
+// Korean time, whatever the phone is set to: the desk lives in KST.
+const kst = (iso, opts) => new Date(iso).toLocaleString("en-CA", { timeZone: "Asia/Seoul", ...opts });
+function keptWhen(iso) {
+  const day = (d) => kst(d, { year: "numeric", month: "2-digit", day: "2-digit" });
+  const hm = new Date(iso).toLocaleTimeString("en-GB", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit" });
+  const today = day(Date.now()), yesterday = day(Date.now() - 864e5), d = day(iso);
+  return `${d === today ? T("offline.today") : d === yesterday ? T("offline.yesterday") : d.slice(5).replace("-", ".")} ${hm}`;
+}
+
+function offlineHtml() {
+  const saved = savedRecords();
+  const n = saved?.items?.length || 0;
+  if (state.offlineView === "saved" && n) {
+    return `<div class="m-top" style="gap:8px"><button class="d-plain d-m" style="min-height:44px;font-size:13px;color:var(--text-2)" data-act="offline-back">← ${esc(T("offline.back"))}</button>
+      <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${esc(T("offline.kept", { when: keptWhen(saved.at), n }))}</span></div>
+      <div class="m-scroll">${saved.items.map((r) => `<div class="m-box m-boxpad">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(keptWhen(r.createdAt))}</span>
+          <span class="d-chip" style="color:var(--text-2);background:var(--bg-2)">${esc(r.agent)}</span>
+          <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">in-${esc(r.id)} · ${esc(r.state)}</span></div>
+        <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(r.request)}</div>
+        ${r.reply ? `<div style="margin-top:12px;padding-left:12px;box-shadow:inset 2px 0 0 0 var(--accent)">
+          <div class="d-lbl" style="color:var(--accent-text)">FINAL REPLY</div>
+          <div class="md md-said" style="margin-top:6px;font-size:var(--fs-body);line-height:1.62">${prose(r.reply)}</div></div>` : ""}</div>`).join("")}</div>`;
+  }
+  return `<div class="m-scroll" style="padding-top:max(16px, 14vh)">
+    <div class="m-box" style="padding:24px">
+      <div class="d-lbl" style="color:var(--err)">${esc(T("offline.label"))}</div>
+      <div style="margin-top:12px;font-size:var(--fs-h2);letter-spacing:-0.02em;line-height:1.3">${esc(T("offline.title"))}</div>
+      <div style="margin-top:12px;font-size:var(--fs-body);line-height:1.62;color:var(--text-2)">${esc(T("offline.body"))}</div>
+      <button class="gn-btn gn-btn-brand gn-btn-block" style="margin-top:20px;height:44px" data-act="offline-retry" ${state.retrying ? 'aria-disabled="true"' : ""}>${esc(T(state.retrying ? "offline.trying" : "offline.retry"))}</button>
+      ${n ? `<button class="gn-btn gn-btn-block" style="margin-top:8px;height:44px" data-act="offline-saved">${esc(T("offline.saved"))}</button>` : ""}
+      <div class="d-m" style="margin-top:16px;font-size:11px;color:var(--text-3)">${esc(n ? T("offline.kept", { when: keptWhen(saved.at), n }) : T("offline.none"))}</div>
+    </div>
+    <div class="m-box" style="padding:16px 20px;border-style:dashed;background:transparent">
+      <div class="d-lbl">${esc(T("offline.check"))}</div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;font-size:var(--fs-small);color:var(--text-2)">
+        <span>${esc(T("offline.check1"))}</span><span>${esc(T("offline.check2"))}</span>
+        <span>${esc(T("offline.check3"))}<span class="d-m">pilo status</span></span></div>
+    </div></div>`;
+}
+
+function renderOffline() {
+  document.body.setAttribute("data-offline", "");
+  $("sync").textContent = "disconnected";
+  paint("topstate", `<span class="d-m" style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--err)"><span class="d-dot" style="background:var(--err)"></span>${esc(T("offline.word"))}</span>`);
+  paint("view", offlineHtml());
+  renderedTab = "offline";
+  wire();
 }
 
 // ── Phone ───────────────────────────────────────────────────────────────────
@@ -3227,6 +3301,16 @@ function readProjectForm() {
 }
 
 const actions = {
+  async "offline-retry"() {
+    if (state.retrying) return;
+    state.retrying = true;
+    render();
+    // a refusal comes back at once; the word stays long enough to be seen
+    const pause = new Promise((resolve) => setTimeout(resolve, 700));
+    try { await load(); } catch (err) { state.offline = true; } finally { await pause; state.retrying = false; render(); }
+  },
+  "offline-saved"() { state.offlineView = "saved"; render(); },
+  "offline-back"() { state.offlineView = null; render(); },
   async "open-palette"() { state.palette = true; state.palQuery = ""; render(); },
   async "close-palette"() { state.palette = false; state.palQuery = ""; render(); },
   async "go-screen"(el) { state.palette = false; state.palQuery = ""; state.tab = el.dataset.value; location.hash = state.tab; render(); await loadDetail(); render(); },
@@ -3772,7 +3856,18 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
 
-await load();
+// A phone that cannot reach the Mac gets the offline screen and keeps trying
+// on the clock below; the desktop says "disconnected" as it always has.
+try {
+  await load();
+} catch (err) {
+  state.offline = true;
+  $("sync").textContent = "disconnected";
+  if (narrow()) render();
+  // the desktop opened from the kept copy with no server says what the old
+  // offline page said, and the clock below brings the desk in once it is up
+  else $("view").innerHTML = `<div style="margin:auto;text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--text-3)">서버가 꺼져 있습니다 — 터미널에서 <code>pilo up</code></div>`;
+}
 // Refreshing. The server says when something changed (/api/stream) and the page
 // loads then. The clock is only a safety net: thirty seconds while the stream is
 // up, the old five while it is not — an older server without the route, or a
@@ -3796,7 +3891,9 @@ async function refresh() {
     await load();
   } catch (err) {
     state.syncedAt = null;
+    state.offline = true;
     $("sync").textContent = "disconnected";
+    if (narrow()) render();
   } finally {
     sync.loading = false;
     sync.lastLoad = Date.now();
