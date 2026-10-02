@@ -32,8 +32,8 @@ export async function missingTask(id) {
 
 // A PM that handed its work down and ended its turn is waiting, not stuck: its
 // worker holds the request and is watched on its own. Without this the stall
-// sweep nudged pm ten minutes after it handed #2109 down, pm parked #2108
-// as holding, and the worker's result then woke nobody.
+// sweep nudged a PM ten minutes after it handed its work down, the PM parked
+// its own task as holding, and the worker's result then woke nobody.
 export const WAITS_ON_WORKER = (task, agent) => `EXISTS (SELECT 1 FROM tasks wt JOIN agents w ON w.id = wt.to_agent_id
   WHERE w.parent_agent_id = ${agent}.id AND wt.inbox_id = ${task}.inbox_id
     AND wt.status IN ('queued', 'running', 'holding') AND wt.created_at >= ${task}.created_at)`;
@@ -742,9 +742,9 @@ export async function createNote(input) {
 }
 
 // A worker's task belongs to the task its PM is on. The PM names the request by
-// number, and a number is easy to get wrong: pm sent #2196's work (in-1828)
+// number, and a number is easy to get wrong: a PM sent #2196's work (in-1828)
 // as "pilo send 2 1821", the number of the request before it. The worker's
-// result then woke nobody — it was filed under a request pm had finished —
+// result then woke nobody — it was filed under a request the PM had finished —
 // and #2196 sat running. So the PM's open tasks decide:
 //   one on the request named          → that one is the parent
 //   none there, exactly one elsewhere → the number was a slip: that task's

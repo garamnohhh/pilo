@@ -85,7 +85,7 @@ test("the same words twice are one question, whatever the emphasis", () => {
   assert.equal(sameQuestion({ taskId: 1, inboxId: 7, text: "" }, { taskId: 2, inboxId: 7, text: "" }), false);
 });
 
-// pm sent #2196's work (in-1828) as "pilo send 2 1821". The PM's open tasks
+// A PM sent #2196's work (in-1828) as "pilo send 2 1821". The PM's open tasks
 // decide where a worker's task belongs.
 test("a worker's task goes under its PM's open task, and a slipped request number is caught", async () => {
   const { pickParent } = await import("./api.js");

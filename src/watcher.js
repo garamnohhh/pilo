@@ -449,7 +449,7 @@ async function pumpFollowups() {
 
 // A worker's result is its PM's to gather, and nothing used to tell the PM it
 // had landed. The PM had to wait inside its own turn — a sleep-and-poll loop —
-// which Claude Code's auto mode refuses: pm handed #2072 down, wrote "I cannot
+// which Claude Code's auto mode refuses: a PM handed #2072 down, wrote "I cannot
 // wait for the worker, I will check when woken", and nobody woke it until the
 // stall sweep. Now a finished worker task wakes the PM whose task on the same
 // request is still open, once per worker task.
@@ -457,8 +457,8 @@ async function pumpWorkerResults() {
   // The PM's open task is part of the filter, not checked after it. It used to
   // be checked in the loop, and a worker result whose PM had already reported
   // was skipped without a mark — so it came back every tick for a day, and the
-  // five oldest of those filled the LIMIT: on 2026-09-29 reviewer's #2149 and
-  // chatbot's #2148 were never looked at while #2022…#2076 held the five places.
+  // five oldest of those filled the LIMIT: on 2026-09-29 two workers' #2148 and
+  // #2149 were never looked at while #2022…#2076 held the five places.
   const done = await query(
     `SELECT * FROM (
        SELECT t.id AS task, t.status, t.done_at, t.inbox_id AS "inboxId", w.name AS worker,

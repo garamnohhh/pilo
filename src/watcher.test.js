@@ -50,7 +50,7 @@ test("a decision nobody answered is raised at 30 minutes and 2 hours, then left 
   assert.equal(reminderDue(blocked, 2, at(60 * 24)), false, "two rounds and no more");
 });
 
-// pm #2108: nudged ten minutes after handing #2109 down, it parked #2108 as
+// #2108: a PM nudged ten minutes after handing #2109 down parked #2108 as
 // holding, and the worker's result then woke nobody — the wake looked only at
 // queued and running. Both halves are held here: a PM waiting on its worker is
 // not swept, and a holding PM is woken when the worker reports.
@@ -69,8 +69,8 @@ test("a PM waiting on its worker is not nudged, and is woken even while holding"
 });
 
 // 2026-09-29: worker results whose PM had already reported were skipped inside
-// the loop, unmarked, and the five oldest filled the LIMIT for a day — reviewer's
-// #2149 was never looked at. The open-parent test belongs in the query.
+// the loop, unmarked, and the five oldest filled the LIMIT for a day — a
+// reviewer's #2149 was never looked at. The open-parent test belongs in the query.
 test("the worker wake filters on an open PM task before it limits", async () => {
   const { readFileSync } = await import("node:fs");
   const src = readFileSync(new URL("./watcher.js", import.meta.url), "utf8");
