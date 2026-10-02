@@ -1470,11 +1470,13 @@ function feedMessages(item, detail) {
         kind: item.source === "desk" ? "note" : "answer", text: reply.body, inbox: item.id });
     }
   }
-  // A decision is a red line with its own answer button until the user answers it,
-  // then a quiet one that keeps what was asked and what they said.
+  // An open decision is answered in one place only: the card at the bottom of the
+  // feed. Here it is a marker — no question, no button — or the user sees the same
+  // question twice with two Answer buttons (#2473). Once answered, a quiet line
+  // keeps what was asked and what they said.
   for (const d of decisionsOf(item, detail)) {
     msgs.push(d.open
-      ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "decision", text: `${firstLine(d.text || "")} — ${T("desk.decision.below")}`, task: d.taskId, inbox: item.id }
+      ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "attention", text: T("desk.decision.below") }
       : { who: T("desk.decision.done", { agent: d.agent || "agent", id: d.taskId }), kind: "decided", text: `${d.text || ""}\n\n**→ ${d.answer || ""}**` });
   }
   if (openDecisions(item, detail).length) return msgs;
@@ -1627,7 +1629,12 @@ function decisionBubbles() {
     .slice()
     .sort((a, b) => new Date(a.at || 0) - new Date(b.at || 0));
   return waiting.map((d) => ({
-    who: `pilo → you · ${T("desk.decision.needs")} · in-${d.inboxId} · ${d.agent || "agent"} · task #${d.taskId}`, kind: "decision", at: d.at,
+    // the desk's words once it has asked; before that the PM's own question, marked
+    // as such, so a decision never waits unseen while the desk is still writing
+    who: d.asked === false
+      ? `${d.agent || "agent"} → you · ${T("desk.decision.needs")} · in-${d.inboxId} · task #${d.taskId} · ${T("desk.decision.deskWriting")}`
+      : `pilo → you · ${T("desk.decision.needs")} · in-${d.inboxId} · ${d.agent || "agent"} · task #${d.taskId}`,
+    kind: "decision", at: d.at,
     text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}`, task: d.taskId, inbox: d.inboxId
   }));
 }

@@ -1361,6 +1361,9 @@ export async function overview() {
   const decisions = groupDecisions(await query(
     `SELECT t.id AS "taskId", t.inbox_id AS "inboxId", a.name AS agent, t.relay_of AS "relayOf",
        a.id AS "agentId", a.parent_agent_id AS "parentAgentId", ${OPEN_ASK_TEXT} AS text,
+       -- whether the desk has put it to the user yet; until then the text is the
+       -- PM's own question, and the card says the desk is still on it
+       EXISTS (SELECT 1 FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL) AS asked,
        split_part(i.user_request, E'\n', 1) AS request,
        COALESCE((SELECT max(k.created_at) FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL), t.updated_at) AS at
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN inbox i ON i.id = t.inbox_id

@@ -95,3 +95,16 @@ test("a worker's task goes under its PM's open task, and a slipped request numbe
   assert.deepEqual(pickParent([...open, { id: 2200, inboxId: 1830 }], 1821), { refuse: true }, "several open, none named: ask again");
   assert.deepEqual(pickParent([], 1821), { inboxId: 1821, parent: null }, "nothing open: as named");
 });
+
+// #2473: the same question showed twice, in its request with an Answer button
+// and at the bottom of the feed with another. The request keeps a marker only.
+test("an open decision is answered at the bottom only; the request shows a marker", () => {
+  const page = readFileSync(new URL("../public/dashboard.html", import.meta.url), "utf8");
+  const feed = page.slice(page.indexOf("function feedMessages"), page.indexOf("function feedMessages") + 6000);
+  const open = feed.slice(feed.indexOf("for (const d of decisionsOf(item, detail))"), feed.indexOf("if (openDecisions(item, detail).length) return msgs;"));
+  const marker = open.slice(open.indexOf("? {"), open.indexOf(": {", open.indexOf("? {")));
+  assert.match(marker, /kind: "attention", text: T\("desk\.decision\.below"\) \}/, "a marker only");
+  assert.doesNotMatch(marker, /task: d\.taskId|d\.text/, "no question text and no task to answer");
+  const bubbles = page.slice(page.indexOf("function decisionBubbles()"), page.indexOf("function feedSize()"));
+  assert.match(bubbles, /d\.asked === false/, "before the desk asks, the card says whose question it is");
+});

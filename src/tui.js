@@ -448,7 +448,10 @@ function decisionCard(d, width) {
   const box = Math.max(24, width - 2);
   return cardBlock({
     box,
-    title: `pilo → you · ${t("card.decision")} · ${d.agent || "agent"}`,
+    // the PM's own question until the desk has put it to the user in its words
+    title: d.asked === false
+      ? `${d.agent || "agent"} → you · ${t("card.decision")} · ${t("card.deskWriting")}`
+      : `pilo → you · ${t("card.decision")} · ${d.agent || "agent"}`,
     titleColor: c.red,
     right: `in-${d.inboxId} · task #${d.taskId}`,
     body: [...wrap(`in-${d.inboxId} · ${d.request || ""}`, box - 5).slice(0, 2), "", ...wrap(alignTables(d.text || "", box - 5), box - 5)],
