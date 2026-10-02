@@ -58,7 +58,7 @@ curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
 It clones the source into `~/.pilo/app`, installs the two dependencies and links
 `pilo` into `~/.local/bin`. Nothing is compiled and nothing asks for sudo — pilo
 is a terminal tool, not an app bundle, so Gatekeeper and notarisation never come
-into it. *(A shorter address moves here once the homepage is up.)*
+into it.
 
 Before the first run you need:
 
@@ -210,5 +210,4 @@ picks up refs that are nobody's business in a public repository.
 ## License
 
 [Apache License 2.0](LICENSE) · Copyright 2026
-[garamnoh](https://github.com/garamnohhh) · homepage pilo.pages.dev
-*(in preparation)*
+[garamnoh](https://github.com/garamnohhh) · homepage [pilo.garamnoh.workers.dev](https://pilo.garamnoh.workers.dev)
