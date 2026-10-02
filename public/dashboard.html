@@ -278,36 +278,54 @@
   /* Phone (the "Pilo Mobile" design): one column, a bar of four tabs at the
      bottom, the top bar down to what fits. Desktop and tablet never see any of
      it — every rule sits under the 720px container query or is hidden by default. */
-  .d-mtabs, .d-msend, .d-mchips, .d-mneeds, .d-mback { display: none }
+  .d-mtabs, .d-msend, .d-mchips, .d-mneeds { display: none }
   /* a header that wraps must not be squeezed under the content below it */
   .d-fill > .d-head { flex: none }
+  /* iOS Safari enlarges text it judges too small to read in a wide block — a
+     table wider than the screen got bigger letters than the line above it.
+     The desktop has no such step; this turns it off so both draw the same. */
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100% }
+  /* the phone screens' own pieces, as the design names them */
+  .m-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px; display: flex; flex-direction: column; gap: 12px }
+  .m-top { flex: none; display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 0 16px; border-bottom: var(--bw) solid var(--line) }
+  .m-box { background: var(--surface); border: var(--bw) solid var(--line); min-width: 0; flex: none }
+  .m-boxpad { padding: 16px }
+  .m-head { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; width: 100% }
+  .m-row { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 0 16px; border-bottom: var(--hairline) solid var(--line-soft); width: 100% }
+  .m-row:last-child { border-bottom: none }
+  .m-ubar { display: block; height: 6px; background: var(--line) }
+  .m-ubar > span { display: block; height: 100% }
   @container (max-width: 720px) {
-    body { height: var(--vvh, 100dvh) }
+    /* The page never scrolls; the body is pinned to the part of the screen the
+       keyboard leaves (--vvt/--vvh, set only while it is up), so the composer
+       sits on the keyboard and nothing slides back under it afterwards. */
+    html, body { overflow: hidden; overscroll-behavior: none }
+    body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100dvh) }
     .d-top { min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
     .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background: var(--bg-2); padding-bottom: env(safe-area-inset-bottom) }
+    /* the keyboard covers the tab bar; its safe-area padding would float over the keys */
+    body[data-kb] .d-mtabs { display: none }
     .d-mtab { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); border-top: 2px solid transparent; margin-top: -1px }
     .d-mtab[aria-current="page"] { border-top-color: var(--accent); color: var(--text) }
     .d-mtab-g { font-family: var(--font-mono); font-size: 15px; line-height: 1 }
     .d-mtab-l { font-family: var(--font-mono); font-size: var(--fs-label); letter-spacing: var(--ls-label) }
-    .d-mchips { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px 0; flex: none }
-    .d-mchips .gn-tag { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; flex: none }
+    /* Work: chips on top of the feed, each conversation a box, 12px apart */
+    .d-workfeed { gap: 12px !important; padding: 16px !important }
+    .d-mchips { display: flex; flex-wrap: wrap; gap: 6px; flex: none; margin-bottom: 4px }
+    .d-mchips .gn-tag { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center }
+    .d-convb { background: var(--surface); border: var(--bw) solid var(--line); padding: 0 16px 16px; gap: 16px !important; flex: none }
+    .d-convb:has(> :only-child) { padding-bottom: 0 }
+    .d-convb > button[data-act="toggle-conv"] { min-height: 44px; align-items: center !important }
     .d-cin { padding: 10px 16px; align-items: flex-end }
     .d-cin-hint { display: none }
     .d-msend { display: inline-flex; flex: none }
-    /* Requests: the list, or one request — not the agent tree, list and detail stacked */
-    [data-mreq] .d-byagent, [data-mreq] .d-reqcol > .d-lblrule { display: none }
-    [data-mreq] .d-reqsec { margin-top: 0 }
-    [data-mreq] .d-reqlist { max-height: none }
-    [data-mreq="list"] .d-handling { display: none }
-    [data-mreq="detail"] .d-reqcol, [data-mreq="detail"] > .d-head { display: none }
-    .d-mback { display: inline-flex; min-height: 44px; align-items: center; font-size: 13px; color: var(--text-2); flex: none }
     /* iOS zooms the page into any field set under 16px */
     .d-ta, input, select, textarea { font-size: 16px !important }
-    main.d-main > #view:not(:has(.d-composer)) { padding: 0 0 24px }
+    main.d-main > #view:not(:has(.d-composer)) { padding: 0; overflow: hidden }
     /* dialog fields: label over field, field full width */
     .d-frow { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important }
     .d-frow > * { grid-column: 1 !important; max-width: 100%; min-width: 0 }
@@ -498,7 +516,7 @@ async function loadDetail() {
     await loadOpenDetails();
   }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
-  if (state.tab === "usage") state.data.usage = await get("/api/usage").catch(() => ({ unavailable: true }));
+  if (state.tab === "usage" || state.tab === "more") state.data.usage = await get("/api/usage").catch(() => ({ unavailable: true }));
   if (state.tab === "agents") state.data.models = await get("/api/models").catch(() => ({ missing: true }));
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
@@ -711,7 +729,7 @@ function usageHtml() {
       `<span class="d-usage-full">${esc(u.text)}</span><span class="d-usage-short">${esc(u.compact)}</span></span>`;
   });
   // the figure is a way in: the usage screen has the rest of it
-  return cells.length ? `<button class="d-plain d-usage-row" data-tab="usage" aria-label="${esc(T("desk.title.usage"))}">${cells.join("")}</button>` : "";
+  return cells.length ? `<button class="d-plain d-usage-row" data-tab="${narrow() ? "more" : "usage"}" aria-label="${esc(T("desk.title.usage"))}">${cells.join("")}</button>` : "";
 }
 
 function topstateHtml() {
@@ -926,7 +944,7 @@ function render() {
   if (isWork) touched |= renderWorkPanes();
   touched |= paint("mtabs", mtabsHtml());
   syncAgentTip();
-  const viewChanged = paint("view", views[state.tab]());
+  const viewChanged = paint("view", ((narrow() && mviews[state.tab]) || views[state.tab])());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
 
   if (viewChanged && !tabChanged) restoreScroll(saved);
@@ -1475,9 +1493,9 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
 }
 
 // ── Phone ───────────────────────────────────────────────────────────────────
-// Four tabs at the bottom. Work and Requests are the desktop screens; Agents is
-// the tree; More holds usage, theme and every other screen, so nothing the
-// desktop can reach is out of reach here.
+// Four tabs at the bottom, as the phone design has them: Work, Requests, Agents
+// and More. Requests, Agents and More are phone screens of their own, drawn
+// after the design; the rest of the desk stays a desktop thing.
 const MTABS = [["work", "❯", "desk.rail.work"], ["inbox", "▤", "desk.rail.inbox"], ["tree", "✳", "desk.rail.agents"], ["more", "≡", "desk.mobile.more"]];
 function mtabsHtml() {
   const cur = ["work", "inbox", "tree"].includes(state.tab) ? state.tab : "more";
@@ -1492,22 +1510,109 @@ function agentChipsHtml() {
   return `<div class="d-mchips">${chip(T("desk.mobile.everyAgent"), "clear-feed-filter", "", !f)}${names.map((n) => chip(n, "pick-agent", `data-name="${esc(n)}"`, f === n)).join("")}</div>`;
 }
 
-views.tree = () => `<div class="d-scroll" style="display:flex;flex-direction:column">${agentTreeHtml()}</div>`;
+const mTitle = (title, sub = "") => `<div style="display:flex;align-items:baseline;gap:10px">
+    <span style="font-size:var(--fs-h2);letter-spacing:-0.02em">${esc(title)}</span>
+    ${sub ? `<span class="d-m" style="font-size:var(--fs-small);color:var(--text-3)">${esc(sub)}</span>` : ""}</div>`;
+const mHead = (label, right = "") => `<div class="m-head" style="border-bottom:var(--bw) solid var(--line)"><span class="d-lbl">${esc(label)}</span>
+    ${right ? `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">${esc(right)}</span>` : ""}</div>`;
 
-views.more = () => {
-  const q = state.data.quota || {};
-  const go = (tab, label, sub = "") => `<button class="d-plain d-tr" data-tab="${tab}" style="grid-template-columns:minmax(0,1fr) auto;min-height:52px;width:100%">
-      <span style="font-size:var(--fs-body)">${esc(label)}</span><span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(sub)} ›</span></button>`;
-  const runtimes = ["claude", "codex"].filter((rt) => q[rt]).map((rt) => `${rt} ${q[rt].compact}`).join(" · ");
-  return page(pageHead(T("desk.mobile.more"), "") +
-    `<div class="d-list">${go("usage", T("desk.title.usage"), runtimes)}</div>
-    <div style="margin-top:24px">${rule(T("desk.lbl.theme"))}
-      <div class="d-tr" style="grid-template-columns:minmax(0,1fr)">${seg([["auto", "AUTO"], ["dark", "DARK"], ["light", "LIGHT"]], state.themeMode || state.theme, "set-theme")}</div>
-      <div class="d-hint">${esc(T(state.themeMode === "auto" ? "desk.mobile.themeAuto" : "desk.mobile.themeKept"))}</div></div>
-    <div style="margin-top:24px">${rule(T("desk.lbl.language"))}
-      <div class="d-tr" style="grid-template-columns:minmax(0,1fr)">${seg([["en", "EN"], ["ko", "KO"]], state.lang, "set-lang")}</div></div>
-    <div class="d-list" style="margin-top:24px">${[["agents", "desk.rail.agents"], ["schedules", "desk.rail.schedules"], ["events", "desk.rail.events"], ["artifacts", "desk.rail.artifacts"],
-      ["projects", "desk.rail.projects"], ["commands", "desk.rail.commands"], ["settings", "desk.rail.settings"], ["system", "desk.rail.system"]].map(([tab, key]) => go(tab, T(key))).join("")}</div>`);
+// Read only: who is alive. Adding and changing agents is a desktop job.
+const mviews = {};
+mviews.tree = () => {
+  const st = state.data.overview?.stats || {};
+  return `<div class="m-scroll">${mTitle(T("desk.title.agents"), `${st.pilo ?? 0} pilo · ${st.pm ?? 0} pm · ${st.worker ?? 0} worker`)}
+    <div class="m-box m-boxpad"><div class="gn-ladder gn-ladder-compact">${treeRows().map(({ a, lvl }) => {
+      const role = a.role.toUpperCase();
+      const tone = agentTone(a);
+      return `<div class="gn-ladder-row"><span class="gn-ladder-indent" data-level="${Math.min(lvl, 2)}"></span>
+        <span class="gn-ladder-block" data-role="${esc(a.role)}" style="gap:8px">
+          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${tone}"></span>
+          <span class="gn-ladder-name">${esc(a.name)}</span>
+          <span class="d-lbl" style="color:${roleFg(role)}">${role}</span>
+          <span class="gn-ladder-note" style="color:${tone}">${esc(agentNote(a))}</span></span></div>`;
+    }).join("")}</div></div>
+    <div class="m-box m-boxpad" style="border-style:dashed"><div style="font-size:var(--fs-small);line-height:1.6;color:var(--text-3)">${esc(T("desk.mobile.agentsNote"))}</div></div></div>`;
+};
+
+// Usage, the system's health and the theme, on one page that scrolls.
+mviews.more = () => {
+  const u = state.data.usage || {};
+  const c = u.claude || {}, x = u.codex || {};
+  const now = Date.now();
+  const bar = (label, pct, note, fill) => {
+    const p = Math.max(0, Math.min(100, Number(pct) || 0));
+    return `<div style="padding:12px 16px;border-bottom:var(--hairline) solid var(--line-soft)">
+      <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:var(--fs-body);flex:1">${esc(label)}</span>
+        <span class="d-m" style="font-size:13px;color:${p >= 70 ? pctColour(p) : "var(--text)"}">${p}%</span></div>
+      <span class="m-ubar" style="margin-top:8px"><span style="width:${p}%;background:${fill}"></span></span>
+      ${note ? `<div class="d-m" style="margin-top:6px;font-size:11px;color:var(--text-3)">${esc(note)}</div>` : ""}</div>`;
+  };
+  const age = (m) => (m == null ? "" : T("usage.read", { age: ageText(m) }));
+  const none = (why) => `<div style="padding:12px 16px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("usage.none"))}${why ? ` — ${esc(why)}` : ""}</div>`;
+  const claude = c.missing ? none(c.missing) : (c.windows || []).map((w) => bar(
+    w.group === "session" ? T("usage.five") : w.model ? T("usage.weekOf", { model: w.model }) : T("usage.week"),
+    w.percent, resetText(w.resetsAt), "var(--rt-claude)")).join("") || none("");
+  const gone = (at) => at && new Date(at).getTime() <= now;
+  const codex = x.missing ? none(x.missing) : [
+    typeof x.five === "number" ? bar(T("usage.five"), x.five, gone(x.fiveResetsAt) ? T("usage.passed") : resetText(x.fiveResetsAt), "var(--rt-codex)") : "",
+    typeof x.week === "number" ? bar(T("usage.week"), x.week, gone(x.weekResetsAt) ? T("usage.passed") : resetText(x.weekResetsAt), "var(--rt-codex)") : ""].join("") || none("");
+  const usage = !state.data.usage ? `<div class="m-box">${none("loading…")}</div>`
+    : u.unavailable ? `<div class="m-box">${none(T("usage.oldServer"))}</div>`
+    : `<div class="m-box">${mHead(`CLAUDE${c.plan ? ` · ${c.plan}` : ""}`, age(c.ageMin))}${claude}</div>
+       <div class="m-box">${mHead(`CODEX${x.plan ? ` · ${x.plan}` : ""}`, age(x.ageMin))}${codex}</div>`;
+  const services = (state.data.system?.services || []).map((v) => `<div class="m-row" style="min-height:48px">
+      <span class="d-dot" style="background:${stateColor(v.state)}"></span>
+      <span class="d-m" style="font-size:13px;width:76px;flex:none">${esc(v.name)}</span>
+      <span class="d-m d-clip" style="font-size:11px;color:var(--text-3);flex:1">${esc(v.detail)}</span>
+      <span class="d-m" style="font-size:11px;color:${stateColor(v.state)};flex:none">${esc(v.state)}</span></div>`).join("");
+  return `<div class="m-scroll">${mTitle(T("desk.title.usage"))}${usage}
+    <div style="margin-top:12px">${mTitle(T("desk.title.system"))}</div>
+    <div class="m-box">${services || none("")}</div>
+    <div style="margin-top:12px">${mTitle(T("desk.lbl.appearance"))}</div>
+    <div class="m-box"><div class="m-row" style="min-height:60px;border-bottom:none">
+        <span style="font-size:var(--fs-body);flex:1">${T("desk.lbl.theme")}</span>
+        ${seg([["auto", "AUTO"], ["dark", "DARK"], ["light", "LIGHT"]], state.themeMode || state.theme, "set-theme")}</div>
+      <div style="padding:0 16px 14px;font-size:var(--fs-small);color:var(--text-3)">${esc(T(state.themeMode === "auto" ? "desk.mobile.themeAuto" : "desk.mobile.themeKept"))}</div></div></div>`;
+};
+
+// a hash the desktop has no screen for falls back to the nearest one
+views.tree = () => views.agents();
+views.more = () => views.usage();
+
+// A list, and a request opened over it as its own page; back closes it.
+mviews.inbox = () => {
+  const all = state.data.inbox || [];
+  const id = state.mReq;
+  if (!id) {
+    const rows = all.filter((i) => (state.reqFilter === "All" ? true : state.reqFilter === "Closed" ? !isOpen(i) : isOpen(i)));
+    return `<div class="m-scroll">${mTitle(T("desk.title.inbox"), `${rows.length} / ${all.length}`)}
+      <div style="align-self:flex-start">${seg([["Open", "Open"], ["Closed", "Closed"], ["All", "All"]], state.reqFilter, "req-filter")}</div>
+      <div class="m-box">${rows.map((i) => `<button class="d-plain m-row" style="flex-direction:column;align-items:flex-start;justify-content:center;gap:4px;padding-top:10px;padding-bottom:10px" data-act="open-inbox" data-id="${i.id}">
+          <span style="display:flex;align-items:center;gap:8px;width:100%">
+            <span class="d-m" style="font-size:11px;color:var(--text-3)">${hhmm(i.createdAt)}</span>
+            <span class="d-chip" style="color:var(--text-2);background:var(--bg-2)">${esc(inboxAgents(i)[0] || "pilo")}</span>
+            <span class="d-m" style="margin-left:auto;font-size:11px;color:${reqColor(i)}">${esc(reqState(i))}</span></span>
+          <span class="d-clip" style="display:block;width:100%;font-size:var(--fs-body);text-align:left">${esc(firstLine(i.userRequest))}</span></button>`).join("")
+        || `<div style="padding:16px;font-size:var(--fs-small);color:var(--text-3)">${T("desk.lbl.nothingHere")}</div>`}</div></div>`;
+  }
+  const d = state.data.inboxDetail;
+  const back = `<div class="m-top" style="gap:8px"><button class="d-plain d-m" style="min-height:44px;font-size:13px;color:var(--text-2)" data-act="req-back">← ${esc(T("desk.title.inbox").toLowerCase())}</button>
+    <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">in-${esc(id)}</span></div>`;
+  if (!d || String(d.id) !== String(id)) return `${back}<div class="m-scroll"><div class="d-hint">loading…</div></div>`;
+  const trace = (d.trace || []).filter((t) => t.stage !== "inbox" && t.stage !== "final_reply");
+  const reply = d.finalReply || [...(d.trace || [])].reverse().find((t) => t.stage === "final_reply")?.text || "";
+  const stageColour = (s) => s === "pm_result" ? INFO : s === "dispatch" ? ACCT : "var(--text-3)";
+  return `${back}<div class="m-scroll">
+    <div class="m-box m-boxpad"><div class="d-lbl">YOU ASKED</div>
+      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(d.userRequest)}</div>
+      <div class="d-m" style="margin-top:10px;font-size:11px;color:var(--text-3)">${esc([inboxAgents(d)[0] || "pilo", stamp(d.createdAt), d.status].filter(Boolean).join(" · "))}</div></div>
+    <div class="m-box">${mHead(T("desk.lbl.handling"))}${trace.map((t) => `<div style="display:flex;gap:12px;padding:12px 16px;border-bottom:var(--hairline) solid var(--line-soft)">
+        <span class="d-m" style="flex:none;width:84px;font-size:11px;color:${stageColour(t.stage)}">${esc(STAGE[t.stage] || t.stage)}${t.who ? `<br>${esc(t.who)}` : ""}</span>
+        <span class="md md-said" style="flex:1;min-width:0;font-size:var(--fs-small);line-height:1.6">${prose(t.text)}</span></div>`).join("")
+      || `<div style="padding:12px 16px;font-size:var(--fs-small);color:var(--text-3)">not handed on yet</div>`}</div>
+    ${reply ? `<div class="m-box m-boxpad" style="box-shadow:inset 3px 0 0 0 var(--accent)"><div class="d-lbl" style="color:var(--accent-text)">FINAL REPLY</div>
+      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(reply)}</div></div>` : ""}
+    <button class="gn-btn gn-btn-block" style="height:44px;flex:none" data-act="follow-request" data-id="${esc(d.id)}">${esc(T("desk.follow.ask"))}</button></div>`;
 };
 
 // One request reads as a conversation: what you asked, what the desk said, what
@@ -1681,10 +1786,10 @@ function convHead(item, isFolded) {
 function convBlock(item, fromNewest) {
   const shut = folded(item.id, fromNewest);
   const head = convHead(item, shut);
-  if (shut) return `<div style="display:flex;flex-direction:column">${head}</div>`;
+  if (shut) return `<div class="d-convb" style="display:flex;flex-direction:column">${head}</div>`;
   const detail = state.feed.detail[item.id];
   const msgs = feedMessages(item, detail);
-  return `<div style="display:flex;flex-direction:column;gap:22px;padding-bottom:8px">
+  return `<div class="d-convb" style="display:flex;flex-direction:column;gap:22px;padding-bottom:8px">
     ${head}${msgs.map(bubble).join("")}</div>`;
 }
 
@@ -1733,12 +1838,12 @@ function feedSize() {
     n + 1 + (folded(item.id, i) ? 0 : feedMessages(item, state.feed.detail[item.id]).length), 0);
 }
 
-views.work = () => `${agentChipsHtml()}<div class="d-scroll d-pad" style="display:flex;flex-direction:column;gap:22px">${workFeed()}</div>
+views.work = () => `<div class="d-scroll d-pad d-workfeed" style="display:flex;flex-direction:column;gap:22px">${agentChipsHtml()}${workFeed()}</div>
   <div class="d-composer">${followHtml()}<div class="d-cin">
     <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
     <textarea class="d-ta" id="draft" rows="1" placeholder="${T("desk.composer")}"></textarea>
     <span class="d-m d-cin-hint" style="font-size:11px;letter-spacing:0.14em;color:var(--text-3);align-self:center">${T("desk.composer.hint")}</span>
-    <button class="gn-btn gn-btn-brand gn-btn-sm d-msend" data-act="send-draft">${T("desk.composer.send")}</button>
+    <button class="gn-btn gn-btn-brand gn-btn-lg d-msend" data-act="send-draft">${T("desk.composer.send")}</button>
   </div></div>`;
 
 views.overview = () => {
@@ -2092,8 +2197,7 @@ views.inbox = () => {
     : `<div style="min-width:0"><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span></div>
         <div style="padding:48px 4px;font-size:var(--fs-body);color:var(--text-3)">Pick a request on the left.</div></div>`;
 
-  return `<div class="d-pad d-fill" data-mreq="${state.mReq ? "detail" : "list"}">` +
-    (state.mReq ? `<button class="d-plain d-m d-mback" data-act="req-back">‹ ${esc(T("desk.title.inbox"))}</button>` : "") +
+  return `<div class="d-pad d-fill">` +
     pageHead(T("desk.title.inbox"), `${all.length} in all`,
       seg([["Open", "Open"], ["Closed", "Closed"], ["All", "All"]], state.reqFilter, "req-filter")) +
     `<div class="d-split"><div class="d-reqcol">
@@ -3595,15 +3699,29 @@ try {
   matchMedia("(prefers-color-scheme: light)").addEventListener?.("change", () => {
     if (state.themeMode === "auto") { setTheme("auto"); render(); }
   });
-  // iOS keeps the layout viewport when the keyboard opens and slides the page up
-  // under it. The body takes the visible height instead, so the composer stays
-  // just above the keyboard and the tab bar never floats over the feed.
+  // iOS keeps the layout viewport when the keyboard opens and pans the visible
+  // part over it. While the keyboard is up the body is pinned to that visible
+  // part (offset and height); when it goes down both are dropped and 100dvh
+  // takes over. Scrolling the window back on every pan used to fight iOS's own
+  // pan animation, which is what slid the composer back under the keys. The
+  // height is never taken from visualViewport with the keyboard down: a home
+  // screen app reports it short by the status bar, which left a band at the bottom.
   if (window.visualViewport) {
+    const root = document.documentElement;
     const fit = () => {
-      document.documentElement.style.setProperty("--vvh", `${Math.round(visualViewport.height)}px`);
-      if (narrow() && (window.scrollY || document.documentElement.scrollTop)) window.scrollTo(0, 0);
+      const kb = narrow() && window.innerHeight - visualViewport.height > 120;
+      if (kb) {
+        root.style.setProperty("--vvh", `${Math.round(visualViewport.height)}px`);
+        root.style.setProperty("--vvt", `${Math.round(visualViewport.offsetTop)}px`);
+      } else {
+        root.style.removeProperty("--vvh");
+        root.style.removeProperty("--vvt");
+      }
+      if (kb !== document.body.hasAttribute("data-kb")) document.body.toggleAttribute("data-kb", kb);
     };
     visualViewport.addEventListener("resize", fit);
+    // a phone turned sideways past 720px gets the desktop screens, and back
+    matchMedia("(max-width: 720px)").addEventListener?.("change", () => { fit(); render(); });
     visualViewport.addEventListener("scroll", fit);
     fit();
   }
