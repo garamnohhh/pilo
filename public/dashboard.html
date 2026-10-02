@@ -387,8 +387,10 @@ const T = (key, vars = {}) => {
 // tags, so nothing in an agent's words can become one.
 const prose = (text) => renderMarkdown(text, esc);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const time = (v) => (v ? new Date(v).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }) : "—");
-const stamp = (v) => (v ? new Date(v).toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+// Dates follow the dashboard language: an English screen should not say 오전.
+const loc = () => (state.lang === "ko" ? "ko-KR" : "en-US");
+const time = (v) => (v ? new Date(v).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit" }) : "—");
+const stamp = (v) => (v ? new Date(v).toLocaleString(loc(), { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
 const stateColor = (s) => ({ failed: "var(--red)", down: "var(--red)", running: "var(--amber)", degraded: "var(--amber)", blocked: "var(--blue)", queued: "var(--faint)", archived: "var(--faint)", unbound: "var(--faint)" }[s] || "var(--green)");
 
 let toastTimer;
@@ -421,7 +423,7 @@ async function load() {
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
   refreshFeed();
   await loadDetail();
-  $("sync").textContent = "updated " + new Date().toLocaleTimeString("ko-KR");
+  $("sync").textContent = "updated " + new Date().toLocaleTimeString(loc());
   render();
 }
 
@@ -1825,7 +1827,7 @@ function restartRunHtml() {
   const tone = { done: OK, failed: ERR, skipped: "var(--text-3)", waiting: WARN, restarting: WARN };
   const count = (k) => run.rows.filter((r) => r.state === k).length;
   return `<div class="d-list" style="margin-top:16px">
-    <div class="d-th" style="grid-template-columns:minmax(0,1fr) 96px minmax(0,2fr)"><span class="d-lbl">restart · ${esc(new Date(run.at).toLocaleString("ko-KR"))}</span>
+    <div class="d-th" style="grid-template-columns:minmax(0,1fr) 96px minmax(0,2fr)"><span class="d-lbl">restart · ${esc(new Date(run.at).toLocaleString(loc()))}</span>
       <span class="d-lbl">${count("done")} done · ${count("failed")} failed</span><span class="d-lbl">${count("waiting") + count("restarting")} to go · ${count("skipped")} left out</span></div>
     ${run.rows.map((r) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 96px minmax(0,2fr)">
       <span class="d-clip">${esc(r.name)}</span>
@@ -1900,7 +1902,7 @@ function dayLabel(at) {
   const same = (a, b) => a.toDateString() === b.toDateString();
   if (same(d, today)) return "today";
   if (same(d, new Date(today.getTime() - 86400000))) return "yesterday";
-  return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric" });
+  return d.toLocaleDateString(loc(), { month: "long", day: "numeric" });
 }
 
 function ago(at) {
@@ -1932,7 +1934,7 @@ const reqState = (i) => (i.needsReply ? "needs an answer"
   // held: the rest of the work cannot move, and until #1769 that read as "open"
   : i.held ? T(i.held.reason === "limited" ? "held.limited" : "held.unbound",
       { done: i.doneCount ?? 0, total: i.taskCount ?? 0, who: i.held.agent,
-        until: i.held.until ? new Date(i.held.until).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false }) : "" })
+        until: i.held.until ? new Date(i.held.until).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit", hour12: false }) : "" })
   : { queued: "not handed on", dispatched: "open", replied: "answered", failed: "failed" }[i.status] || i.status);
 const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.held ? WARN : i.status === "replied" ? OK : WARN);
 const isOpen = (i) => i.status !== "replied";
@@ -2297,7 +2299,7 @@ function trendChart(series, now = Date.now()) {
   const legend = series.map((s) => `<span style="display:inline-flex;align-items:center;gap:6px">
       <svg width="22" height="6" aria-hidden="true"><line x1="0" x2="22" y1="3" y2="3" stroke="${s.colour}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ""}/></svg>
       <span>${esc(s.name)}${s.none ? ` — ${esc(s.none)}` : ""}</span></span>`).join("");
-  const clock = (t) => new Date(t).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const clock = (t) => new Date(t).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit", hour12: false });
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:96px;display:block" role="img" aria-label="${esc(T("usage.trend"))}">${grid}${lines}</svg>
     <div class="d-m" style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:4px"><span>${clock(t0)}</span><span>${clock(now - 12 * 3600e3)}</span><span>${clock(now)}</span></div>
     <div class="d-m" style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-2);margin-top:8px">${legend}</div>`;
@@ -2821,7 +2823,7 @@ DIALOGS.schedule = (d) => {
     fields: [{ id: "s-cadence", label: "every", value: s.cadence, hint: "every:N minutes" }],
     prose: esc(SYSTEM_JOBS[s.name]?.[1] || ""),
     traceLabel: "last run",
-    trace: s.lastRunAt || s.lastResult ? [[s.lastRunAt ? new Date(s.lastRunAt).toLocaleString("ko-KR") : "—", s.lastResult || "—", jobResultColor(s.lastResult)]] : [],
+    trace: s.lastRunAt || s.lastResult ? [[s.lastRunAt ? new Date(s.lastRunAt).toLocaleString(loc()) : "—", s.lastResult || "—", jobResultColor(s.lastResult)]] : [],
     actions: [
       btn(s.enabled ? "Turn off" : "Turn on", "toggle-schedule", `data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}"`, "gn-btn-ghost"),
       right(T("desk.act.save"), "save-job", `data-id="${s.id}"`, "gn-btn-brand")
@@ -2841,7 +2843,7 @@ DIALOGS.schedule = (d) => {
         options: [["run", "RUN"], ["skip", "SKIP"]], hint: "what to do when the machine was asleep at that hour" }
     ],
     traceLabel: "runs",
-    trace: runs.map((r) => [new Date(r.firedAt).toLocaleString("ko-KR"),
+    trace: runs.map((r) => [new Date(r.firedAt).toLocaleString(loc()),
       `${r.taskStatus || (r.reply ? "answered" : "in flight")}${r.taskId ? ` · task ${r.taskId}` : ""}${r.error ? ` · ${r.error}` : ""}`,
       r.taskStatus === "failed" ? ERR : r.taskStatus === "done" ? OK : WARN]),
     actions: [
