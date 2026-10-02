@@ -7,23 +7,27 @@
 const SHELL = "pilo-shell-v3";
 const WAIT_MS = 4000; // a Mac that sleeps does not refuse, it just never answers
 
-// Only for a phone that has never had the page: the dashboard keeps its own
+// Only for a phone that has never had the page (colours copied from the
+// design tokens, which a page with no server cannot load): the dashboard keeps its own
 // offline screen once it has loaded once.
 const OFFLINE = `<!doctype html><html lang="ko"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Pilo</title>
 <style>
-:root{--bg:#08090a;--surface:#0f1110;--line:#232826;--text:#eef2ee;--text-2:#a9b2ab;--text-3:#6f7a72;--err:#e5484d;--accent:#3ecf8e}
-@media (prefers-color-scheme: light){:root{--bg:#f4f6f4;--surface:#fff;--line:#d6dbd7;--text:#141716;--text-2:#4b544e;--text-3:#7b857e;--err:#b5473a;--accent:#3ecf8e}}
-html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.62 -apple-system,system-ui,sans-serif;display:flex;flex-direction:column}
-.top{display:flex;align-items:center;gap:12px;min-height:48px;padding:env(safe-area-inset-top) 16px 0;border-bottom:1px solid var(--line);font:600 15px ui-monospace,Menlo,monospace;position:sticky;top:0;background-color:var(--bg)}
-.top b{color:var(--accent)}.top i{font-style:normal;font-weight:400;font-size:13px;color:var(--err)}
+@font-face{font-family:"Pretendard Variable";font-weight:45 920;src:url(/fonts/PretendardVariable.woff2) format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-weight:400 500;src:url(/fonts/JetBrainsMono-latin.woff2) format("woff2")}
+:root{--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;--bg:#08090a;--surface:#0b0e0d;--line:#1e2422;--text:#e6ebe6;--text-2:#8b968e;--text-3:#6b776f;--err:#e0685f;--accent:#3ed49c;--accent-text:#3ed49c}
+@media (prefers-color-scheme: light){:root{--bg:#f4f6f4;--surface:#fff;--line:#d3dad4;--text:#101413;--text-2:#59635c;--text-3:#6e7a72;--err:#b03a30;--accent:#3ed49c;--accent-text:#0b6b4a}}
+html{-webkit-text-size-adjust:100%}body{margin:0;min-height:100vh;background:var(--bg);color:var(--text);font:15px/1.62 "Pretendard Variable",-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex;flex-direction:column}
+.top{box-sizing:border-box;display:flex;align-items:center;gap:22px;min-height:48px;padding:env(safe-area-inset-top) 16px 0;border-bottom:1px solid var(--line);position:sticky;top:0;background-color:var(--bg)}
+.mark{display:inline-flex;align-items:baseline;gap:.34em;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.03em}.mark b{color:var(--accent-text);font-weight:600}
+.top i{display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:13px;font-style:normal;color:var(--err)}.top s{display:block;width:7px;height:7px;background:var(--err)}
 main{flex:1;display:flex;flex-direction:column;gap:12px;padding:max(16px,14vh) 16px 16px;word-break:keep-all}
-.rows{margin-top:10px;display:flex;flex-direction:column;gap:8px}code{font:13px ui-monospace,Menlo,monospace}
+.rows{margin-top:10px;display:flex;flex-direction:column;gap:8px}code{font:13px var(--mono)}
 .box{background:var(--surface);border:1px solid var(--line);padding:24px}.chk{border:1px dashed var(--line);padding:16px 20px;color:var(--text-2);font-size:13px}
-.lbl{font:11px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--text-3)}h1{margin:12px 0 0;font-size:22px;font-weight:400;line-height:1.3}
-button{margin-top:20px;width:100%;height:44px;border:0;background:var(--accent);color:#08090a;font:600 15px system-ui}
+.lbl{font:11px/1.3 var(--mono);letter-spacing:.14em;color:var(--text-3)}h1{margin:12px 0 0;font-size:22px;font-weight:400;line-height:1.3;letter-spacing:-.02em}
+button{margin-top:20px;width:100%;height:44px;border:0;background:var(--accent);color:#08090a;font:600 13px "Pretendard Variable",system-ui}
 </style>
-<div class="top"><span><b>❯</b> pilo</span><i>■ offline</i></div>
+<div class="top"><span class="mark"><b>❯</b>pilo</span><i><s></s>offline</i></div>
 <main><div class="box"><div class="lbl" style="color:var(--err)">NOT CONNECTED</div><h1>맥북에 연결할 수 없어요</h1>
 <p style="margin:12px 0 0;color:var(--text-2)">Pilo는 맥북에서 돌아요. 맥북이 잠들었거나 같은 네트워크에 없으면 여기서 열 수 없어요.</p>
 <button onclick="location.reload()">다시 시도</button></div>
