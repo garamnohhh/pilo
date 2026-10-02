@@ -712,7 +712,13 @@ const RESTART_WAIT_MS = Number(process.env.PILO_RESTART_WAIT_MS || 60 * 60 * 100
 
 async function stepPin(a, p, live) {
   const restart = p.kind === "restart";
-  const session = live.find((s) => s.target && s.target === a.target);
+  let session = live.find((s) => s.target && s.target === a.target);
+  // Codex: the session is read from the pane's own transcript, not taken from
+  // herdr, which has no id for a session started by hand and has named the
+  // wrong pane's session. Nothing found → left out, with that reason.
+  if (!p.step && session && a.runtime === "codex") {
+    session = { ...session, session: await models.codexSessionInPane(session.target, session.cwd) || "" };
+  }
   const pin = { model: p.model, effort: p.effort };
   const what = restart ? "the same model" : [pin.model, pin.effort].filter(Boolean).join(" · ");
   const fail = async (title, payload = pin) => {
@@ -722,7 +728,7 @@ async function stepPin(a, p, live) {
   };
   if (!p.step) {
     if (restart) {
-      const gone = !session ? "its session is gone" : !session.session ? "herdr does not know its session id" : "";
+      const gone = !session ? "its session is gone" : !session.session ? (a.runtime === "codex" ? "its Codex session could not be told apart from the transcripts" : "herdr does not know its session id") : "";
       if (gone) { await savePin(a.id, null); await noteRestart(a.id, "skipped", gone); return false; }
       if (Date.now() - p.at > RESTART_WAIT_MS) { await savePin(a.id, null); await noteRestart(a.id, "skipped", "still working after an hour"); return false; }
     }

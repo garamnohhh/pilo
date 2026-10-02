@@ -5,6 +5,8 @@ import { readFileSync, writeFileSync, renameSync, copyFileSync, mkdirSync, exist
 import { homedir } from "node:os";
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { home as piloHome } from "./paths.js";
 
 const root = normalize(join(fileURLToPath(import.meta.url), "../.."));
@@ -192,6 +194,71 @@ export function modelMatches(asked, id) {
   if (!asked || ["default", "best", "opusplan"].includes(asked)) return true;
   const family = asked.replace(/\[1m\]$/, "");
   return String(id || "").includes(family);
+}
+
+// The Codex session a pane is running, for a restart that resumes it. herdr
+// knows the id only for sessions it started — pirep-dev, restarted by hand, had
+// none and the restart left it out — and once named another pane's session
+// for promo. So the id is worked out from the transcripts and herdr's is only
+// taken when they agree: the codex process in the pane carries HERDR_PANE_ID,
+// and its conversation is the one main (not a review "guardian" sub-session)
+// transcript for the pane's folder written to since that process started. Two
+// such transcripts in one folder means two sessions there — then nothing is
+// guessed and the agent is left out with that reason.
+const run = promisify(execFile);
+const codexDir = () => process.env.PILO_CODEX_SESSIONS || join(homedir(), ".codex", "sessions");
+
+export function pickCodexSession(files, cwd, startedMs) {
+  const mine = files.filter((f) => f.cwd === cwd && !f.sub && f.mtime >= startedMs - 5000);
+  return mine.length === 1 ? mine[0].id : null;
+}
+
+function sessionMeta(file) {
+  try {
+    const meta = JSON.parse(readFileSync(file, "utf8").split("\n", 1)[0]);
+    if (meta?.type !== "session_meta" || !meta.payload?.id) return null;
+    return { id: meta.payload.id, cwd: meta.payload.cwd, sub: typeof meta.payload.source === "object" && Boolean(meta.payload.source?.subagent) };
+  } catch {
+    return null;
+  }
+}
+
+async function paneStarted(pane) {
+  const { stdout } = await run("ps", ["-Ao", "pid=,lstart=,comm="]);
+  let started = 0;
+  for (const line of stdout.split("\n")) {
+    const m = /^\s*(\d+)\s+(.+?)\s+(\S+)$/.exec(line);
+    if (!m || !/(^|\/)codex$/.test(m[3])) continue;
+    const env = await run("ps", ["eww", "-p", m[1]]).then((r) => r.stdout, () => "");
+    if (env.split(/\s+/).includes(`HERDR_PANE_ID=${pane}`)) started = Math.max(started, Date.parse(m[2]));
+  }
+  return started;
+}
+
+export async function codexSessionInPane(pane, cwd) {
+  if (!pane || !cwd) return null;
+  try {
+    const started = await paneStarted(pane);
+    if (!started) return null;
+    const files = [];
+    const walk = (dir, depth) => {
+      if (depth > 3) return;
+      for (const e of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, e.name);
+        if (e.isDirectory()) walk(full, depth + 1);
+        else if (e.name.startsWith("rollout-")) {
+          const mtime = statSync(full).mtimeMs;
+          if (mtime < started - 5000) continue;
+          const meta = sessionMeta(full);
+          if (meta) files.push({ ...meta, mtime });
+        }
+      }
+    };
+    walk(codexDir(), 0);
+    return pickCodexSession(files, cwd, started);
+  } catch {
+    return null;
+  }
 }
 
 // The arguments that start a session again where it was, on a model of its own:

@@ -102,3 +102,20 @@ test("a full model name is confirmed by the picker's name in the pane", async ()
   assert.ok(!paneConfirms(pane, { model: "claude-sonnet-5", label: "Sonnet 5" }));
   assert.ok(paneConfirms(pane, { model: "opus" }), "an alias still matches by family");
 });
+
+// pirep-dev's Codex was restarted by hand and herdr had no id for it; herdr also
+// named pirep-dev's session as promo's. The id comes from the transcripts.
+test("a pane's Codex session is the one main transcript written in its folder since it started", async () => {
+  const { pickCodexSession } = await import("./models.js");
+  const started = Date.parse("2026-09-30T03:09:51Z");
+  const f = (id, cwd, mtime, sub = false) => ({ id, cwd, mtime: Date.parse(mtime), sub });
+  const files = [
+    f("pirep-dev", "/w/pirep", "2026-10-02T00:19:00Z"),
+    f("guardian", "/w/pirep", "2026-10-01T01:36:00Z", true),    // a review sub-session: never the conversation
+    f("old", "/w/pirep", "2026-09-29T00:00:00Z"),               // before this process started
+    f("promo", "/w/promo", "2026-10-02T00:10:00Z")
+  ];
+  assert.equal(pickCodexSession(files, "/w/pirep", started), "pirep-dev");
+  assert.equal(pickCodexSession([...files, f("other", "/w/pirep", "2026-10-02T00:00:00Z")], "/w/pirep", started), null, "two in one folder: not guessed");
+  assert.equal(pickCodexSession(files, "/w/none", started), null);
+});

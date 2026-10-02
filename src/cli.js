@@ -144,6 +144,20 @@ async function file(taskId, payload) {
   }
 }
 
+// What a bare number names here: a task, a request, or nothing at all — and
+// when nothing, the server's own words on which Pilo answered.
+async function whatIs(id, requestFirst) {
+  const asTask = await call("GET", `/api/tasks/${id}`).then((x) => x, (err) => ({ missing: err.message }));
+  const asInbox = await call("GET", `/api/inbox/${id}`).then((x) => x, () => null);
+  const lines = [];
+  if (!asTask.missing) lines.push(t("cli.historyTask", { id, agent: asTask.agent || "—", status: asTask.status, inbox: asTask.inboxId }));
+  if (asInbox?.id) lines.push(t("cli.historyInbox", { id, status: asInbox.status }));
+  if (requestFirst) lines.reverse();
+  if (lines.length) return [t("cli.historyNoText", { id }), ...lines].join("\n");
+  process.exitCode = 1;
+  return asTask.missing;
+}
+
 // The catalogue in commands.js is the one list; this renders the CLI half of it.
 // Korean summaries mean the column has to be measured in display width.
 const signature = (x) => `pilo ${x.name}${x.args ? " " + x.args : ""}`;
@@ -223,6 +237,11 @@ const commands = {
     const params = new URLSearchParams({ q: rest.join(" ") });
     for (const key of ["since", "agent", "limit"]) if (opts[key]) params.set(key, opts[key]);
     const res = await call("GET", `/api/history?${params}`);
+    // A number on its own is usually a task or request someone was told about.
+    // "Nothing found" then read as "it does not exist" — dial was told exactly
+    // that about #1975 while the task sat in the database. Say which it is.
+    const num = rest.length === 1 && /^(?:#|in-)?(\d+)$/i.exec(rest[0]);
+    if (!res.rows.length && num) return out(await whatIs(num[1], /^in-/i.test(rest[0])));
     if (!res.rows.length) return out(t("cli.historyNone", { words: res.words.join(" ") }));
     const label = (m) => `${t(`history.${m.field}`)}${m.agent ? `(${m.agent})` : ""}`;
     return out([
