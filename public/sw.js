@@ -44,7 +44,11 @@ const late = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 // is used — if there is one; with none, the network is all there is.
 async function kept(request, key) {
   const cache = await caches.open(SHELL);
+  // With the Pilo server stopped the Mac still answers: tailscale serve sends
+  // a 502 with an empty body, which a phone draws as a blank white page. Any
+  // 5xx counts as no answer.
   const net = fetch(request).then((res) => {
+    if (res.status >= 500) throw new Error(`server answered ${res.status}`);
     if (res.ok) cache.put(key, res.clone());
     return res;
   });
@@ -61,7 +65,8 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname === "/api/stream") return;
   if (url.pathname.startsWith("/api/") || url.pathname === "/health") {
     // answered by the server or not at all, and not left hanging on a Mac that sleeps
-    event.respondWith(Promise.race([fetch(event.request), late(WAIT_MS * 2).then(() => { throw new Error("timeout"); })])
+    event.respondWith(Promise.race([fetch(event.request).then((res) => { if (res.status >= 500 && !res.headers.get("content-type")?.includes("json")) throw new Error("proxy"); return res; }),
+      late(WAIT_MS * 2).then(() => { throw new Error("timeout"); })])
       .catch(() => new Response(JSON.stringify({ error: "pilo server offline" }), { status: 503, headers: { "content-type": "application/json" } })));
     return;
   }

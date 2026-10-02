@@ -80,3 +80,11 @@ test("offline: the page is kept, the API is not, and the phone shows its own scr
   assert.match(page, /if \(state\.offline && narrow\(\)\) return renderOffline\(\);/);
   for (const lang of Object.keys(LANGS)) for (const k of ["offline.title", "offline.retry", "offline.saved", "offline.kept"]) assert.ok(LANGS[lang][k], `${lang} ${k}`);
 });
+
+// With the server stopped, tailscale serve still answers — a 502 with an empty
+// body, which a phone drew as a blank white page. A 5xx is no answer.
+test("the service worker treats a 5xx page as no answer", () => {
+  const sw = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
+  const kept = sw.slice(sw.indexOf("async function kept("), sw.indexOf('self.addEventListener("fetch"'));
+  assert.match(kept, /res\.status >= 500\) throw/);
+});
