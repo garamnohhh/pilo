@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#08090a">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Pilo">
 <!-- The tab and the installed app read the same files, so they cannot drift:
      icons/app-*.png are the handoff's own app icon (Pilo Wordmark.dc.html)
@@ -300,7 +300,8 @@
        keyboard leaves (--vvt/--vvh, set only while it is up), so the composer
        sits on the keyboard and nothing slides back under it afterwards. */
     html, body { overflow: hidden; overscroll-behavior: none }
-    body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); height: var(--vvh, 100dvh) }
+    /* top and bottom 0 is the web view itself — 100dvh read short in a home screen app */
+    body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); bottom: var(--vvb, 0px); height: var(--vvh, auto) }
     .d-top { min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
     .d-mneeds { display: inline }
@@ -763,7 +764,7 @@ function paint(id, html) {
   return true;
 }
 
-const SCROLLERS = [["tree", "#tree .d-scroll"], ["view", "#view .d-scroll"], ["dlg", "#dlg .d-dlgbody"],
+const SCROLLERS = [["tree", "#tree .d-scroll"], ["view", "#view .d-scroll"], ["dlg", "#dlg .d-dlgbody"], ["phone", "#view .m-scroll"],
   // requests: the page when it is too narrow for the panes, then each pane
   ["reqpage", "#view .d-fill"], ["byagent", "#view .d-byagent"], ["reqlist", "#view .d-reqlist"], ["handling", "#view .d-handling"]];
 // A different request opens its handling at the top; the same one keeps its place.
@@ -832,6 +833,7 @@ function syncPulse() {
 }
 
 let renderedTab = null;
+const scrollByView = {};
 
 // A repaint replaces every element it covers, and the composer sits inside the
 // feed's view. Refreshing used to stop outright while any field had focus: the
@@ -930,8 +932,12 @@ function render() {
   }
   if (state.syncedAt) $("sync").textContent = "updated " + state.syncedAt.toLocaleTimeString(loc());
   const held = holdFields();
-  const tabChanged = renderedTab !== state.tab;
-  const saved = tabChanged ? {} : scrollState();
+  // a request opened over the phone's list is a page of its own: it starts at the top
+  const viewKey = `${state.tab}/${state.mReq || ""}`;
+  const tabChanged = renderedTab !== viewKey;
+  // on a phone each screen keeps its place: back from a request lands where the list was
+  if (tabChanged && renderedTab) scrollByView[renderedTab] = scrollState();
+  const saved = tabChanged ? (narrow() && scrollByView[viewKey]) || {} : scrollState();
   const before = feedNode();
   const gap = before ? before.scrollHeight - before.scrollTop : 0;
   const wasPinned = tabChanged ? true : pinned;
@@ -947,7 +953,7 @@ function render() {
   const viewChanged = paint("view", ((narrow() && mviews[state.tab]) || views[state.tab])());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
 
-  if (viewChanged && !tabChanged) restoreScroll(saved);
+  if (viewChanged) restoreScroll(saved);
   const reading = state.tab === "inbox" ? String(state.selected.inbox ?? "") : null;
   if (reading !== null && reading !== handlingFor) {
     const pane = document.querySelector("#view .d-handling");
@@ -975,7 +981,7 @@ function render() {
     if (back && document.contains(back)) back.focus({ preventScroll: true });
   }
   shownOverlay = overlay;
-  renderedTab = state.tab;
+  renderedTab = viewKey;
 
   const feed = feedNode();
   if (feed) {
@@ -3406,9 +3412,17 @@ const actions = {
     const at = f.rows.findIndex((row) => String(row.id) === key);
     if (folded(key, at)) { f.open.add(key); f.shut.delete(key); }
     else { f.shut.add(key); f.open.delete(key); }
-    render();
+    // the row tapped stays where it was on screen; the feed's follow-the-end
+    // would otherwise carry it off the top as it opens
+    const head = () => feedNode()?.querySelector(`[data-act="toggle-conv"][data-id="${CSS.escape(key)}"]`);
+    const y = head() ? head().getBoundingClientRect().top : null;
+    const hold = () => {
+      const feed = feedNode(), now = head();
+      if (y !== null && feed && now) { feed.scrollTop += now.getBoundingClientRect().top - y; pinned = atEnd(feed); }
+    };
+    render(); hold();
     await loadOpenDetails();
-    render();
+    render(); hold();
   },
   async "pick-agent"(el) {
     const f = state.feed;
@@ -3701,8 +3715,8 @@ try {
   });
   // iOS keeps the layout viewport when the keyboard opens and pans the visible
   // part over it. While the keyboard is up the body is pinned to that visible
-  // part (offset and height); when it goes down both are dropped and 100dvh
-  // takes over. Scrolling the window back on every pan used to fight iOS's own
+  // part (offset and height); when it goes down the body spans the web view
+  // top to bottom again. Scrolling the window back on every pan used to fight iOS's own
   // pan animation, which is what slid the composer back under the keys. The
   // height is never taken from visualViewport with the keyboard down: a home
   // screen app reports it short by the status bar, which left a band at the bottom.
@@ -3713,9 +3727,11 @@ try {
       if (kb) {
         root.style.setProperty("--vvh", `${Math.round(visualViewport.height)}px`);
         root.style.setProperty("--vvt", `${Math.round(visualViewport.offsetTop)}px`);
+        root.style.setProperty("--vvb", "auto");
       } else {
         root.style.removeProperty("--vvh");
         root.style.removeProperty("--vvt");
+        root.style.removeProperty("--vvb");
       }
       if (kb !== document.body.hasAttribute("data-kb")) document.body.toggleAttribute("data-kb", kb);
     };

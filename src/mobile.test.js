@@ -11,7 +11,7 @@ const narrow = page.slice(page.indexOf("@container (max-width: 720px) {\n    /* 
 
 test("the phone layout is one narrow block with tabs, a send button and 16px fields", () => {
   assert.ok(narrow.length > 0, "narrow block found");
-  for (const rule of [".d-mtabs { display: grid", ".d-msend { display: inline-flex", "font-size: 16px !important", "env(safe-area-inset-bottom)", "var(--vvh, 100dvh)", "top: var(--vvt, 0px)"]) {
+  for (const rule of [".d-mtabs { display: grid", ".d-msend { display: inline-flex", "font-size: 16px !important", "env(safe-area-inset-bottom)", "bottom: var(--vvb, 0px)", "top: var(--vvt, 0px)"]) {
     assert.ok(narrow.includes(rule), rule);
   }
   assert.match(page, /viewport-fit=cover/);
@@ -40,4 +40,11 @@ test("phone Agents has no add button and phone More links nowhere", () => {
   const body = (name) => page.slice(page.indexOf(`mviews.${name} = () =>`), page.indexOf("};", page.indexOf(`mviews.${name} = () =>`)));
   assert.doesNotMatch(body("tree"), /add-agent|go-agents|data-act=/);
   assert.doesNotMatch(body("more"), /data-tab=/);
+});
+
+// A translucent status bar put the header in iOS's blurred top edge and left a
+// band the status bar's height under the tab bar in a home screen app.
+test("the home screen app keeps its own status bar and the phone screens keep their scroll", () => {
+  assert.match(page, /apple-mobile-web-app-status-bar-style" content="black"/);
+  assert.match(page, /\["phone", "#view \.m-scroll"\]/);
 });
