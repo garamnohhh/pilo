@@ -302,14 +302,21 @@
     html, body { overflow: hidden; overscroll-behavior: none }
     /* top and bottom 0 is the web view itself — 100dvh read short in a home screen app */
     body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); bottom: var(--vvb, 0px); height: var(--vvh, auto) }
-    .d-top { min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
+    /* iOS 26+ draws its own blur over the top of a home screen app ("scroll
+       edge effect") and the header sat under it. WebKit leaves it out when the
+       top edge is a full-width sticky or fixed box with a plain background
+       colour, and tints the status bar with that colour instead — so the
+       header is that box. */
+    .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
-    .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background: var(--bg-2); padding-bottom: env(safe-area-inset-bottom) }
+    .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background: var(--bg-2); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px)) }
     /* the keyboard covers the tab bar; its safe-area padding would float over the keys */
     body[data-kb] .d-mtabs { display: none }
+    /* the home indicator is a thin line at the very bottom; the tabs sit just
+       above it, as a native tab bar does, not a whole inset (34pt) higher */
     .d-mtab { min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--text-3); border-top: 2px solid transparent; margin-top: -1px }
     .d-mtab[aria-current="page"] { border-top-color: var(--accent); color: var(--text) }
     .d-mtab-g { font-family: var(--font-mono); font-size: 15px; line-height: 1 }

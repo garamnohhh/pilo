@@ -48,3 +48,13 @@ test("the home screen app keeps its own status bar and the phone screens keep th
   assert.match(page, /apple-mobile-web-app-status-bar-style" content="black"/);
   assert.match(page, /\["phone", "#view \.m-scroll"\]/);
 });
+
+// iOS 26+ blurs the top of a home screen app unless the top edge is a full-width
+// sticky or fixed box with a plain background colour (WebKit's own rule).
+test("the phone header is a sticky box with a solid background", () => {
+  const top = narrow.slice(narrow.indexOf(".d-top {"), narrow.indexOf("}", narrow.indexOf(".d-top {")));
+  assert.match(top, /position: sticky/);
+  assert.match(top, /top: 0/);
+  assert.match(top, /background-color: var\(--bg\)/);
+  assert.doesNotMatch(top, /backdrop-filter|opacity/);
+});
