@@ -9,6 +9,17 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
+<script>
+  // The home screen app reads its status bar style once, at launch, and the
+  // text on it is white on "black" and dark on "default" (a white bar). A light
+  // start gets the white bar so the top reads as one piece with the page; a
+  // switch made later shows from the next launch.
+  try {
+    var m = localStorage.getItem("pilo-theme") || "auto";
+    if (m === "light" || (m === "auto" && matchMedia("(prefers-color-scheme: light)").matches))
+      document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]').setAttribute("content", "default");
+  } catch (e) {}
+</script>
 <meta name="apple-mobile-web-app-title" content="Pilo">
 <!-- The tab and the installed app read the same files, so they cannot drift:
      icons/app-*.png are the handoff's own app icon (Pilo Wordmark.dc.html)
@@ -312,7 +323,9 @@
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
-    .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background: var(--bg-2); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px)) }
+    /* Safari 26 colours its bottom toolbar from a sticky or fixed box with a
+       plain background colour on the bottom edge — the tab bar is that box */
+    .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background-color: var(--bg-2); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px)); position: sticky; bottom: 0; z-index: 10 }
     /* the keyboard covers the tab bar; its safe-area padding would float over the keys */
     body[data-kb] .d-mtabs { display: none }
     /* the home indicator is a thin line at the very bottom; the tabs sit just
@@ -439,6 +452,8 @@ function setTheme(mode) {
   state.themeMode = ["auto", "light", "dark"].includes(mode) ? mode : "dark";
   state.theme = state.themeMode === "auto" ? deviceTheme() : state.themeMode;
   document.documentElement.setAttribute("data-theme", state.theme);
+  // browsers that still read theme-color (Chrome, Safari before 26) follow the page
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#08090a");
   try { localStorage.setItem("pilo-theme", state.themeMode); } catch (err) { /* private window */ }
 }
 

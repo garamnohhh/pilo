@@ -58,3 +58,13 @@ test("the phone header is a sticky box with a solid background", () => {
   assert.match(top, /background-color: var\(--bg\)/);
   assert.doesNotMatch(top, /backdrop-filter|opacity/);
 });
+
+// Safari 26 tints its bottom toolbar from a sticky box on the bottom edge, and
+// a light start gives the home screen app a white status bar.
+test("the tab bar tints Safari's toolbar and a light start picks the white status bar", () => {
+  const tabs = narrow.slice(narrow.indexOf(".d-mtabs { display: grid"), narrow.indexOf("}", narrow.indexOf(".d-mtabs { display: grid")));
+  assert.match(tabs, /position: sticky; bottom: 0/);
+  assert.match(tabs, /background-color: var\(--bg-2\)/);
+  const head = page.slice(0, page.indexOf("</head>"));
+  assert.match(head, /setAttribute\("content", "default"\)/);
+});
