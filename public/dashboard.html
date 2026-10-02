@@ -423,7 +423,8 @@ async function load() {
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
   refreshFeed();
   await loadDetail();
-  $("sync").textContent = "updated " + new Date().toLocaleTimeString(loc());
+  // kept as a time and formatted in render(), so a language switch shows at once
+  state.syncedAt = new Date();
   render();
 }
 
@@ -863,6 +864,7 @@ function render() {
     owedRender = true;
     return;
   }
+  if (state.syncedAt) $("sync").textContent = "updated " + state.syncedAt.toLocaleTimeString(loc());
   const held = holdFields();
   const tabChanged = renderedTab !== state.tab;
   const saved = tabChanged ? {} : scrollState();
@@ -3524,6 +3526,7 @@ async function refresh() {
   try {
     await load();
   } catch (err) {
+    state.syncedAt = null;
     $("sync").textContent = "disconnected";
   } finally {
     sync.loading = false;
