@@ -53,12 +53,27 @@ ensure_server() {
   wait_http || { echo "Pilo server failed. See $LOG"; exit 1; }
 }
 
+# Stops the server this launcher started, and waits until it no longer answers
+# so a start right after does not find the old one still up.
+stop_server() {
+  if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+    kill "$(cat "$PIDFILE")"
+    for _ in $(seq 1 40); do
+      health || break
+      sleep 0.25
+    done
+  fi
+  rm -f "$PIDFILE"
+}
+
 case "${1:-tui}" in
   tui|"")
     ensure_server
     PILO_PORT="$(live_port)" PILO_LAUNCH_CWD="$LAUNCH_CWD" node "$ROOT/src/tui.js"
     ;;
-  up|serve|start)
+  # start/stop/restart, as systemctl and brew services name them; up and serve
+  # stay as quiet aliases of start for hands and scripts that already use them
+  start|up|serve)
     ensure_server
     echo "Pilo ready"
     ;;
@@ -68,9 +83,13 @@ case "${1:-tui}" in
     echo "Pilo dashboard opened"
     ;;
   stop)
-    if [[ -f "$PIDFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then kill "$(cat "$PIDFILE")"; fi
-    rm -f "$PIDFILE"
+    stop_server
     echo "Pilo server stopped"
+    ;;
+  restart)
+    stop_server
+    ensure_server
+    echo "Pilo restarted"
     ;;
   status)
     if health; then echo "server:    running (port $(live_port))"; else echo "server:    stopped"; fi
@@ -94,7 +113,7 @@ for s in d["services"]:
 print("  wake failures: %d" % len(d["wakeFailures"]))
 '
     else
-      echo "server:    stopped — run 'pilo up'"
+      echo "server:    stopped — run 'pilo start'"
     fi
     ;;
   logs) tail -f "$LOG" ;;
@@ -106,5 +125,5 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     exec node "$ROOT/src/cli.js" "$@"
     ;;
   help|--help|-h) node "$ROOT/src/cli.js" ;;
-  *) echo "Usage: pilo [tui|up|dashboard|status|doctor|stop|logs]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
+  *) echo "Usage: pilo [tui|start|stop|restart|status|dashboard|doctor|logs]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
 esac

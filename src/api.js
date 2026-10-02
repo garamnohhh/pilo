@@ -1323,7 +1323,8 @@ export async function systemStatus() {
     sessions,
     wakeFailures: failures,
     commands: [
-      { cmd: "pilo up", desc: "start the server — it opens the database itself" },
+      { cmd: "pilo start", desc: "start the server — it opens the database itself" },
+      { cmd: "pilo restart", desc: "stop the server and start it again" },
       { cmd: "pilo status", desc: "service status" },
       { cmd: "pilo doctor", desc: "diagnostics" }
     ]

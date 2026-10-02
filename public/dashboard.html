@@ -3871,7 +3871,7 @@ try {
   if (narrow()) render();
   // the desktop opened from the kept copy with no server says what the old
   // offline page said, and the clock below brings the desk in once it is up
-  else $("view").innerHTML = `<div style="margin:auto;text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--text-3)">서버가 꺼져 있습니다 — 터미널에서 <code>pilo up</code></div>`;
+  else $("view").innerHTML = `<div style="margin:auto;text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--text-3)">서버가 꺼져 있습니다 — 터미널에서 <code>pilo start</code></div>`;
 }
 // Refreshing. The server says when something changed (/api/stream) and the page
 // loads then. The clock is only a safety net: thirty seconds while the stream is

@@ -579,7 +579,7 @@ function setupScreen(setup, width) {
   }
   const steps = [
     [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t("setup.herdrHint")],
-    [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo up"],
+    [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo start"],
     [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.deskHow"), deskCommand(setup)],
     [t("setup.pm"), setup.pmCount > 0, t("setup.pmOk"), t("setup.register")]
   ];

@@ -28,7 +28,7 @@
 - Port: default 48888 with fallback on conflict, actual port written to `~/.pilo/port`. Dashboard is served by the same server at `/dashboard`. No second port.
 - herdr has no listening port; wake is a CLI call (`herdr agent prompt`).
 - `herdr agent list` provides runtime (`codex`/`claude`), status, cwd and pane_id, so runtime and target are auto-detected by cwd match. Re-bind manually when a session is replaced.
-- CLI set: `pilo up`, `pilo status`, `pilo doctor`. GUI first, CLI possible.
+- CLI set: `pilo start`, `pilo stop`, `pilo restart`, `pilo status`, `pilo doctor`. GUI first, CLI possible. (2026-10-02: start/stop/restart as systemctl and brew services name them; `up` and `serve` stay as undocumented aliases of start, no `down`.)
 - Agent roles: `pilo`, `pm`, `worker`. Exactly one `pilo` enforced by a partial unique index.
 - `model` is a display-only manual memo, not a value Pilo can enforce.
 - `specialty` field added to agents.

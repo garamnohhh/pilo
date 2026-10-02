@@ -77,6 +77,7 @@ history stay in `~/.pilo` until you remove that too.
 pilo                  # start the services and enter the terminal UI
 pilo dashboard        # the same desk in a browser
 pilo status           # what is running
+pilo stop             # stop the server; pilo start / pilo restart
 pilo doctor           # what is missing
 ```
 

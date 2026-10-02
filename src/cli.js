@@ -34,7 +34,7 @@ function viaSpool(method, path, body, timeoutMs = 15000) {
         raw = readFileSync(resFile, "utf8");
       } catch {
         if (Date.now() > deadline) {
-          return reject(new Error(`no answer from the Pilo server (spool ${spoolDir}). is it up? try 'pilo up'.`));
+          return reject(new Error(`no answer from the Pilo server (spool ${spoolDir}). is it running? try 'pilo start'.`));
         }
         return setTimeout(poll, 120);
       }

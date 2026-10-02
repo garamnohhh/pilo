@@ -90,7 +90,7 @@ const EN = {
 
   // setup screen
   "setup.title": "setup required",
-  "setup.lead": "what Pilo needs to start. one command, `pilo up`; agents are registered in the dashboard.",
+  "setup.lead": "what Pilo needs to start. one command, `pilo start`; agents are registered in the dashboard.",
   "setup.duplicate": "{count} agents claim role=pilo",
   "setup.duplicateHint": "there must be exactly one. remove the others in the dashboard.",
   "setup.herdr": "herdr running",
@@ -438,7 +438,7 @@ const KO = {
   "note.answerUsage": "사용법: :answer <taskId> <답변>",
 
   "setup.title": "설정이 필요합니다",
-  "setup.lead": "기동에 필요한 항목입니다. 명령은 `pilo up` 하나뿐이고, agent 등록은 대시보드에서 합니다.",
+  "setup.lead": "기동에 필요한 항목입니다. 명령은 `pilo start` 하나뿐이고, agent 등록은 대시보드에서 합니다.",
   "setup.duplicate": "role=pilo agent가 {count}개 감지됨",
   "setup.duplicateHint": "대표 agent는 정확히 하나여야 합니다. 대시보드에서 하나만 남기세요.",
   "setup.herdr": "herdr 실행 중",
