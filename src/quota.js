@@ -100,9 +100,13 @@ const codexFiles = (limit) => {
     .slice(0, limit);
 };
 
+// Codex touches several transcripts at once when it starts or resumes — old
+// ones and new empty ones — so the five newest by time could all be files with
+// no figure while the one written a minute ago sat sixth. Twenty covers that;
+// only their tails are read.
 function codexQuota() {
   let best = null;
-  for (const file of codexFiles(5)) {
+  for (const file of codexFiles(20)) {
     for (const r of codexReadings(file.full)) if (!best || r.at > best.at) best = r;
   }
   if (!best) return null;

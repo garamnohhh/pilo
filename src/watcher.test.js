@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serialize, probeWorthTrying, jobSetting, reminderDue } from "./watcher.js";
+import { serialize, probeWorthTrying, probeBackoffMs, jobSetting, reminderDue } from "./watcher.js";
 
 // The bug this exists for: a herdr call hung for 78 minutes, setInterval kept
 // firing on the clock, and every waiting tick read the same "not woken yet"
@@ -92,4 +92,10 @@ test("a session coming back from gone resets the wake clock", async () => {
   const sessions = src.slice(src.indexOf("export async function pumpSessions"), src.indexOf("\n}\n", src.indexOf("export async function pumpSessions")));
   assert.match(sessions, /before\.get\(String\(agent\.id\)\) === SESSION_GONE/);
   assert.match(sessions, /type: "session_started"/);
+});
+
+// /usage every minute kept Claude's usage endpoint rate limited, so the figure
+// never refreshed; misses now back off 5, 10, 20, 40, 60 minutes.
+test("a usage probe that misses waits longer each time, up to an hour", () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map((n) => probeBackoffMs(n) / 60000), [0, 5, 10, 20, 40, 60, 60]);
 });

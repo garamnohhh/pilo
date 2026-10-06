@@ -276,6 +276,14 @@ let probe = { pane: "", askedAt: 0 };
 // same pane is left alone for a while instead of being asked again each tick.
 let probeLost = { pane: "", at: 0 };
 const PROBE_RETRY_MS = Number(process.env.PILO_PROBE_RETRY_MS || 10 * 60 * 1000);
+// A /usage that left the figure where it was is not tried again the next
+// minute: Claude's usage endpoint answers "rate limited" to a session that asks
+// that often, and then never refreshes it at all. Each miss doubles the wait,
+// 5 minutes up to an hour; a reading that lands resets it.
+let probeMiss = { count: 0, at: 0 };
+export function probeBackoffMs(count) {
+  return count ? Math.min(60, 5 * 2 ** (count - 1)) * 60000 : 0;
+}
 
 export function probeWorthTrying(lost, pane, now = Date.now()) {
   return !(lost.pane === pane && now - lost.at < PROBE_RETRY_MS);
@@ -291,13 +299,17 @@ async function pumpQuota() {
     } catch {
       // the pane went away; the next round will find another
     }
-    await noteJob("usage-probe", claudeAgeMin() < minutes ? "probe ok" : "asked, figure not refreshed yet");
+    const fresh = claudeAgeMin() < minutes;
+    probeMiss = fresh ? { count: 0, at: 0 } : { count: probeMiss.count + 1, at: Date.now() };
+    await noteJob("usage-probe", fresh ? "probe ok"
+      : `asked, figure not refreshed yet — next try in ${probeBackoffMs(probeMiss.count) / 60000} min`);
     return;
   }
   if (probe.askedAt) return;
   const job = jobSetting(await systemJob("usage-probe"), QUOTA_STALE_MIN);
   if (!job.on) return;
-  if (claudeAgeMin() < job.minutes) return;
+  if (claudeAgeMin() < job.minutes) { probeMiss = { count: 0, at: 0 }; return; }
+  if (Date.now() - probeMiss.at < probeBackoffMs(probeMiss.count)) return;
   // The pane is whichever system agent runs Claude — a registered fact, not a
   // name matched in two files.
   const probeAgent = await one(
