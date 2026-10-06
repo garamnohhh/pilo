@@ -3,7 +3,7 @@
 // to the account, not to one pane, so one read covers every agent of that kind.
 import { readFileSync, readdirSync, statSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 
 const CACHE_MS = Number(process.env.PILO_QUOTA_MS || 60000);
 let cache = { at: 0, value: {} };
@@ -95,18 +95,29 @@ export function codexReadings(file, bytes = 200000) {
 
 const codexFiles = (limit) => {
   const home = join(homedir(), ".codex");
-  return [...newestRollouts(join(home, "sessions"), limit), ...newestRollouts(join(home, "archived_sessions"), limit)]
+  return [...newestRollouts(join(home, "sessions"), Infinity), ...newestRollouts(join(home, "archived_sessions"), Infinity)]
     .sort((a, b) => b.at - a.at)
     .slice(0, limit);
 };
 
-// Codex touches several transcripts at once when it starts or resumes — old
-// ones and new empty ones — so the five newest by time could all be files with
-// no figure while the one written a minute ago sat sixth. Twenty covers that;
-// only their tails are read.
+// Which transcripts to read for the newest figure. Codex can rewrite the
+// modified time of every transcript at once (172 of them at 09:28 on 10/6), so
+// the newest by time can all be old files with nothing new in them. The date in
+// the name (rollout-YYYY-MM-DDTHH-MM-SS-…) is when a session began and never
+// moves, so the newest sessions by name are always read; an old session that was
+// resumed carries its fresh figure under an old name, so the newest by time are
+// read too. The figure itself is chosen by the time on its own line.
+export function pickRollouts(files, n = 10) {
+  const byName = [...files].sort((a, b) => (basename(b.full) > basename(a.full) ? 1 : -1)).slice(0, n);
+  const byTime = [...files].sort((a, b) => b.at - a.at).slice(0, n);
+  return [...new Map([...byName, ...byTime].map((f) => [f.full, f])).values()];
+}
+
 function codexQuota() {
   let best = null;
-  for (const file of codexFiles(20)) {
+  const home = join(homedir(), ".codex");
+  const all = [...newestRollouts(join(home, "sessions"), Infinity), ...newestRollouts(join(home, "archived_sessions"), Infinity)];
+  for (const file of pickRollouts(all)) {
     for (const r of codexReadings(file.full)) if (!best || r.at > best.at) best = r;
   }
   if (!best) return null;

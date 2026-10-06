@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { quotaCell, quotaReport, STALE_MIN, limitReached } from "./quota.js";
+import { quotaCell, quotaReport, STALE_MIN, limitReached, pickRollouts } from "./quota.js";
 
 // Built in local time, so the clock the cell prints does not depend on where the
 // test runs.
@@ -80,4 +80,19 @@ test("a reading with no time to point at parks nobody", () => {
   // otherwise a file nobody writes any more would re-park everyone every tick
   assert.equal(limitReached({ percent: 100, week: 0, resetsAt: "", weekResetsAt: "" }, NOW), null);
   assert.equal(limitReached({ percent: 100, week: 0, resetsAt: back(-60), weekResetsAt: "" }, NOW), null);
+});
+
+// On 10/6 Codex rewrote the modified time of 172 transcripts at once, and the
+// newest by time were old files with nothing new in them. The newest by the
+// date in the name are read whatever the times say; a resumed old session, newest
+// by time, is still read.
+test("transcripts are picked by the date in the name and by time", () => {
+  const f = (name, at) => ({ full: `/s/2026/10/06/${name}.jsonl`, at });
+  const touched = Array.from({ length: 30 }, (_, i) => f(`rollout-2026-0${1 + (i % 9)}-01T00-00-${String(i).padStart(2, "0")}-old${i}`, 1000));
+  const fresh = f("rollout-2026-10-06T09-25-59-new", 900);
+  const resumed = f("rollout-2026-07-28T12-33-08-resumed", 2000);
+  const picked = pickRollouts([...touched, fresh, resumed], 10).map((x) => x.full);
+  assert.ok(picked.includes(fresh.full), "the newest session by name, though its time is oldest");
+  assert.ok(picked.includes(resumed.full), "a resumed old session, newest by time");
+  assert.ok(picked.length <= 20);
 });
