@@ -132,6 +132,12 @@ you asked last week.
   A line of its own, with nothing waiting on it.
 - **Decisions** — when an owner needs you to decide something, the question
   arrives in that conversation and your answer goes back to the work.
+- **Phone** — the dashboard fits a phone: one screen at a time with a tab bar
+  at the bottom, and it can be added to the home screen. pilo only listens on
+  `127.0.0.1`, so reaching it from a phone is up to a tunnel you run (for
+  example `tailscale serve`). When the Mac does not answer, the phone shows an
+  offline screen with the last requests and answers it kept, and comes back by
+  itself.
 
 ## What it keeps, and where
 
@@ -154,6 +160,7 @@ The ones you use:
 ```bash
 pilo                  # the terminal UI
 pilo dashboard        # the browser desk
+pilo start            # the server only — pilo stop · pilo restart
 pilo inbox [id]       # requests, or one request in full
 pilo agents           # id · name · role · project
 pilo history <words>  # what was asked, answered and reported before

@@ -79,6 +79,10 @@ a:hover { color: var(--accent); }
           <a href="#limits" aria-current="false"><span class="l-en">Limits</span><span class="l-ko">사용량 한도</span></a>
           <a href="#data" aria-current="false"><span class="l-en">Where it keeps things</span><span class="l-ko">보관 위치</span></a>
           <a href="#commands" aria-current="false"><span class="l-en">Commands</span><span class="l-ko">명령</span></a>
+          <a href="#phone" aria-current="false">
+<span class="l-en">On a phone</span>
+<span class="l-ko">폰에서</span>
+</a>
           <a href="#second" aria-current="false"><span class="l-en">A second instance</span><span class="l-ko">두 번째 인스턴스</span></a>
           <a href="#trouble" aria-current="false"><span class="l-en">When something is off</span><span class="l-ko">막힐 때</span></a>
         </nav>
@@ -321,6 +325,7 @@ a:hover { color: var(--accent); }
           <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
           <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo                  # the terminal UI
 <span style="color: var(--text-3);">$ </span>pilo dashboard        # the browser desk
+<span style="color: var(--text-3);">$ </span>pilo start            # the server only — pilo stop · pilo restart
 <span style="color: var(--text-3);">$ </span>pilo inbox [id]       # requests, or one request in full
 <span style="color: var(--text-3);">$ </span>pilo agents           # id · name · role · project
 <span style="color: var(--text-3);">$ </span>pilo history <words>  # what was asked, answered and reported before
@@ -329,6 +334,20 @@ a:hover { color: var(--accent); }
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Agents have their own set — pilo task, pilo progress, pilo done, pilo block, pilo reply — written into their instruction file when you register them. pilo help lists every one.</span><span class="l-ko">에이전트용은 따로 있어요 — pilo task·progress·done·block·reply. 등록할 때 지시 파일에 적힙니다. 전체 목록은 pilo help.</span></p>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 0px; text-wrap: pretty;"><span class="l-en">Inside the terminal UI, :help does the same. :dash, :project &lt;name&gt;, :follow, :fold, :cost and :icons are the ones worth knowing.</span><span class="l-ko">터미널 UI 안에서는 :help 가 같은 역할을 해요. :dash · :project &lt;이름&gt; · :follow · :fold · :cost · :icons 정도는 알아 둘 만합니다.</span></p>
+      </div>
+      <div id="phone">
+        <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;">
+<span class="l-en">On a phone</span>
+<span class="l-ko">폰에서</span>
+</h2>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;">
+<span class="l-en">The dashboard fits a phone: one screen at a time — Work, Requests, Agents, More — with a tab bar at the bottom, and it can be added to the home screen as an app. pilo itself only listens on 127.0.0.1, so reaching it from a phone is up to a tunnel you run, such as tailscale serve.</span>
+<span class="l-ko">대시보드는 폰에도 맞춰져 있어요. 한 번에 한 화면 — Work·Requests·Agents·More — 아래쪽 탭으로 오가고, 홈 화면에 앱으로 추가할 수 있습니다. pilo 는 127.0.0.1 만 듣기 때문에 폰에서 여는 길은 직접 여는 터널(예: tailscale serve)이 맡아요.</span>
+</p>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 0px; text-wrap: pretty;">
+<span class="l-en">When the Mac does not answer — asleep, off the network, or the server stopped — the phone shows an offline screen instead of a blank page, with the last requests and answers it kept, and comes back by itself once the Mac does.</span>
+<span class="l-ko">맥이 응답하지 않으면 — 잠들었거나, 네트워크 밖이거나, 서버가 꺼졌으면 — 빈 화면 대신 오프라인 화면이 뜨고, 폰에 남은 마지막 요청과 답을 볼 수 있어요. 맥이 돌아오면 저절로 원래 화면으로 돌아갑니다.</span>
+</p>
       </div>
       <div id="second">
         <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">Running a second instance</span><span class="l-ko">두 번째 인스턴스 돌리기</span></h2>
