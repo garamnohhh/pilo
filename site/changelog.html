@@ -66,9 +66,82 @@ a:hover { color: var(--accent); }
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+          <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.2.0</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.07</span>
+          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
+<span class="l-en">The desk on a phone, updates from inside pilo, and a screen for usage.</span>
+<span class="l-ko">폰에서 쓰는 창구, pilo 안에서 하는 업데이트, 사용량 화면.</span>
+</p>
+        <div  style="border-top: 1px solid var(--line);">
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">phone</span>
+<span class="l-ko">폰</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">the dashboard fits a phone: one screen at a time with a tab bar, and it can be added to the home screen. When the Mac does not answer, an offline screen shows the requests and answers the phone kept.</span>
+<span class="l-ko">대시보드가 폰에 맞춰져요. 한 번에 한 화면, 아래쪽 탭으로 오가고 홈 화면에 앱으로 추가할 수 있어요. 맥이 응답하지 않으면 오프라인 화면에 폰에 남은 요청과 답이 보여요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">updates</span>
+<span class="l-ko">업데이트</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">pilo looks once a day for a newer release and says so on the dashboard and the terminal UI. Install it from System, or run pilo update. The installer now installs the newest release instead of main.</span>
+<span class="l-ko">하루 한 번 새 릴리스를 확인해 대시보드와 터미널 UI 에 알려요. System 화면에서 설치하거나 pilo update 를 실행하면 돼요. 설치 스크립트도 main 대신 최신 릴리스를 설치해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">commands</span>
+<span class="l-ko">명령</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">pilo start, pilo stop and pilo restart. up and serve still work.</span>
+<span class="l-ko">pilo start · pilo stop · pilo restart. up 과 serve 도 그대로 돼요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">usage</span>
+<span class="l-ko">사용량</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">a usage screen: Claude and Codex five-hour and weekly figures, the last day on one chart, and today's tokens. When Claude's figure cannot refresh, it says why.</span>
+<span class="l-ko">사용량 화면이 생겼어요. Claude·Codex 의 5시간·주간 수치, 하루 추이 그래프, 오늘 토큰. Claude 수치가 갱신되지 않으면 이유를 보여줘요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">agents</span>
+<span class="l-ko">에이전트</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">a PM waiting on its worker counts as waiting, and is woken when the worker reports. Idle sessions can be restarted, and models picked, from the dashboard.</span>
+<span class="l-ko">워커를 기다리는 담당은 '기다림'으로 보이고, 워커가 보고하면 깨워요. 쉬고 있는 세션 재시작과 모델 선택을 대시보드에서 할 수 있어요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">decisions</span>
+<span class="l-ko">결정</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">a question is asked once, in the conversation it belongs to.</span>
+<span class="l-ko">같은 질문은 한 번만, 그 대화 안에서 물어요.</span>
+</span>
+        </div>
+        </div>
+      </div>
+      <div >
+        <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.1.0</span>
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.09.21</span>
-          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
+          
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;"><span class="l-en">The first release. One desk in front of the agents you already run, on your own machine.</span><span class="l-ko">첫 공개예요. 이미 띄워둔 에이전트 앞에 두는 창구 하나, 전부 내 컴퓨터에서 돌아요.</span></p>
         <div  style="border-top: 1px solid var(--line);">

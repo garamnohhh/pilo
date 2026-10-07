@@ -68,6 +68,10 @@ Before the first run you need:
 | **[herdr](https://herdr.dev)** | the terminal workspace pilo watches — `brew install herdr` |
 | **At least one coding agent** | Claude Code or Codex, opened by you in a herdr pane |
 
+The installer puts the newest release in `~/.pilo/app`. To update it later,
+run `pilo update`, or press Install where the dashboard says a new release is
+out (System). Running the install line again does the same.
+
 To remove it: `rm -rf ~/.pilo/app ~/.local/bin/pilo`. Your requests and their
 history stay in `~/.pilo` until you remove that too.
 
@@ -152,8 +156,10 @@ One process owns that directory at a time. pilo writes `~/.pilo/db.lock` when it
 opens the database and refuses to start if another server still holds it — PGlite
 has no lock of its own, and two writers would corrupt the files.
 
-Nothing is sent anywhere: no account, no telemetry, no outbound connection. The
-only socket that listens is `127.0.0.1`, for the dashboard.
+Nothing about you is sent anywhere: no account, no telemetry. The one outbound
+request is a `git ls-remote` of this repository once a day, to see whether a
+newer release is out; `PILO_UPDATE_CHECK=off` stops it. The only socket that
+listens is `127.0.0.1`, for the dashboard.
 
 ## Commands
 
@@ -163,6 +169,7 @@ The ones you use:
 pilo                  # the terminal UI
 pilo dashboard        # the browser desk
 pilo start            # the server only — pilo stop · pilo restart
+pilo update           # move to the newest release
 pilo inbox [id]       # requests, or one request in full
 pilo agents           # id · name · role · project
 pilo history <words>  # what was asked, answered and reported before

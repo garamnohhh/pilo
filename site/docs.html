@@ -309,7 +309,7 @@ a:hover { color: var(--accent); }
           </div>
           <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
             <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">127.0.0.1</span>
-            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the only socket that listens, for the dashboard. No account, no telemetry, no outbound connection.</span><span class="l-ko">듣는 소켓은 이것 하나, 대시보드용이에요. 계정도 수집도 바깥 연결도 없습니다.</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the only socket that listens, for the dashboard. No account, no telemetry. The one outbound request is a git ls-remote of the repository once a day, to see whether a newer release is out (PILO_UPDATE_CHECK=off stops it).</span><span class="l-ko">듣는 소켓은 이것 하나, 대시보드용이에요. 계정도 수집도 없어요. 바깥으로 나가는 건 하루 한 번 새 릴리스가 나왔는지 저장소를 확인하는 git ls-remote 하나예요(PILO_UPDATE_CHECK=off 로 끌 수 있음).</span></span>
           </div>
         </div>
               <img  class="gn-shot gn-shot-light l-en" width="972" height="483" src="/assets/diagrams/storage-en-light.png" alt="The pilo home directory holding settings, the database, logs, the port file and the lock" style="width: 100%; height: auto; margin-top: 8px;">
@@ -326,6 +326,7 @@ a:hover { color: var(--accent); }
           <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>pilo                  # the terminal UI
 <span style="color: var(--text-3);">$ </span>pilo dashboard        # the browser desk
 <span style="color: var(--text-3);">$ </span>pilo start            # the server only — pilo stop · pilo restart
+<span style="color: var(--text-3);">$ </span>pilo update           # move to the newest release
 <span style="color: var(--text-3);">$ </span>pilo inbox [id]       # requests, or one request in full
 <span style="color: var(--text-3);">$ </span>pilo agents           # id · name · role · project
 <span style="color: var(--text-3);">$ </span>pilo history <words>  # what was asked, answered and reported before

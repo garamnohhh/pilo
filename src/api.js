@@ -1325,6 +1325,7 @@ export async function systemStatus() {
     commands: [
       { cmd: "pilo start", desc: "start the server — it opens the database itself" },
       { cmd: "pilo restart", desc: "stop the server and start it again" },
+      { cmd: "pilo update", desc: "move this copy to the newest release" },
       { cmd: "pilo status", desc: "service status" },
       { cmd: "pilo doctor", desc: "diagnostics" }
     ]
