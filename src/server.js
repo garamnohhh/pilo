@@ -12,6 +12,7 @@ import { startWatcher } from "./watcher.js";
 import { startSpool } from "./spool.js";
 import { changed, openStream, listening } from "./changes.js";
 import { quotaReport } from "./quota.js";
+import * as update from "./update.js";
 import { saveUpload } from "./attachments.js";
 
 const publicDir = join(root, "public");
@@ -56,6 +57,32 @@ async function readBody(req) {
   return text ? JSON.parse(text) : {};
 }
 
+// Updating from the dashboard: the server moves its own copy to the newest
+// release, then hands the restart to a shell that outlives it. While that runs
+// the screens read "installing" and the step; a failure stays on the screen.
+let updating = false;
+async function updateStatus() {
+  return { ...(await update.status()), installing: updating };
+}
+async function startUpdate() {
+  if (updating) return updateStatus();
+  const kind = await update.installKind();
+  if (kind !== "ok") throw Object.assign(new Error(kind), { status: 409 });
+  updating = true;
+  update.install().then((res) => {
+    if (!res.updated) { updating = false; return; }
+    update.restartLater();
+    setTimeout(() => process.kill(process.pid, "SIGTERM"), 300);
+  }).catch((err) => {
+    update.failed(err);
+    updating = false;
+  });
+  return updateStatus();
+}
+// once a day is enough to notice a release; the check keeps its own clock
+setTimeout(() => update.check().catch(() => {}), 5000).unref?.();
+setInterval(() => update.check().catch(() => {}), 3600e3).unref?.();
+
 const routes = [
   ["GET", /^\/health$/, async () => ({ ok: true, name: "Pilo", port: readPort(), streams: listening() })],
   // part=stats: the counts alone, which is all the TUI's status line reads
@@ -94,6 +121,9 @@ const routes = [
   ["GET", /^\/api\/inbox\/count$/, (_m, _b, q) => api.countInbox(q.get("agent") || "")],
   ["POST", /^\/api\/inbox$/, (_m, body) => api.createInbox(body.userRequest || body.text || "", body.cwd || "")],
   ["POST", /^\/api\/notes$/, (_m, body) => api.createNote(body)],
+  ["GET", /^\/api\/update$/, () => updateStatus()],
+  ["POST", /^\/api\/update\/check$/, async () => { await update.check({ force: true }); return updateStatus(); }],
+  ["POST", /^\/api\/update\/install$/, () => startUpdate()],
   ["GET", /^\/api\/inbox\/(\d+)$/, (m) => api.inboxDetail(Number(m[1]))],
   ["POST", /^\/api\/inbox\/(\d+)\/tasks$/, (m, body) => api.createTask(Number(m[1]), body)],
   ["POST", /^\/api\/inbox\/(\d+)\/reply$/, (m, body) => api.saveFinalReply(Number(m[1]), body)],

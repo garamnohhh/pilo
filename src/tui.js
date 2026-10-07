@@ -693,14 +693,15 @@ function railRows(tree, width, actions = [], spins = []) {
 }
 
 async function refresh() {
-  const [setup, tree, inbox, overview, settings] = await Promise.all([
+  const [setup, tree, inbox, overview, settings, update] = await Promise.all([
     api("/api/setup", { herdr: false, sessions: 0, postgres: true, piloAgents: [], duplicatePilo: false, needsSetup: true, pmCount: 0 }),
     api("/api/agents/tree", { pilo: null, pms: [], orphanWorkers: [] }),
     api("/api/inbox?replies=0", []).then(withReplies),
     api("/api/overview?part=stats", { stats: { pm: 0, worker: 0, failed: { total: 0 }, tokens: { total: 0 } } }),
-    api("/api/settings", { tokens: { showInTui: true } })
+    api("/api/settings", { tokens: { showInTui: true } }),
+    api("/api/update", null)
   ]);
-  state.data = { setup, tree, inbox, overview, settings };
+  state.data = { setup, tree, inbox, overview, settings, update };
   return state.data;
 }
 
@@ -720,6 +721,10 @@ function handleClick({ x, y }) {
   if (action.type === "dash") {
     spawn("open", [`${dashboardUrl}#${action.tab}`], { detached: true, stdio: "ignore" }).unref();
     return note(t("note.agentsTab"));
+  }
+  if (action.type === "update") {
+    spawn("open", [`${dashboardUrl}#system`], { detached: true, stdio: "ignore" }).unref();
+    return note(t("note.updateTab"));
   }
   if (action.type === "project") return applyProject(action.name);
   if (action.type === "follow") {
@@ -964,8 +969,13 @@ function render() {
   // The desk agent's name was here too, and said nothing the tree below does
   // not say better. The path is what this line is for.
   const topLeft = `${wordmark} ${c.line}│${c.reset} ${c.faint}${agentHome}${c.reset}`;
-  const topRight = `${c.faint}${t("header.help")}${c.reset}`;
+  // A newer release shows here, on the line that is always on screen; a click
+  // opens the dashboard's System screen, where it installs.
+  const upd = state.data.update;
+  const newer = upd?.available ? `${c.amber}↑ ${t("update.tui", { version: upd.latest })}${c.reset}  ` : "";
+  const topRight = `${newer}${c.faint}${t("header.help")}${c.reset}`;
   emit(pre + cell(topLeft, outWidth - cols(topRight)) + topRight);
+  const updateRow = newer ? screen.length : 0;
   emit(pre + line(outWidth));
 
   const running = tree.pms.filter((p) => p.status === "running").length;
@@ -1149,6 +1159,7 @@ function render() {
   state.rowCount = rows.length;
   const first = Math.max(0, bottom - visible);
   state.hits = new Map();
+  if (updateRow) state.hits.set(updateRow, { main: { type: "update" }, rail: { type: "update" } });
   for (let i = 0; i < visible; i++) {
     // The tree goes first and the answer text last. Anything the width model
     // misjudges then only moves the tail of its own row, where nothing lines up

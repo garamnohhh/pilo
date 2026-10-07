@@ -19,13 +19,33 @@ have npm  || die "Pilo needs npm, which comes with Node.js."
   || die "Pilo needs Node.js 20 or newer. This one is $(node -v)."
 have herdr || echo "herdr is not installed yet — 'brew install herdr' before you start Pilo."
 
+# The newest release, not whatever is on main: vX.Y.Z tags only, compared as
+# numbers. With no release at all, main is what there is.
+TAG=$(git ls-remote --tags --refs "$REPO" 'v*' 2>/dev/null \
+  | sed -n 's|.*refs/tags/\(v[0-9]*\.[0-9]*\.[0-9]*\)$|\1|p' \
+  | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1)
+
 mkdir -p "$APP" "$BIN"
 if [ -d "$APP/.git" ]; then
-  echo "Updating the copy in $APP"
-  git -C "$APP" pull --ff-only
+  # npm rewrites package-lock.json by itself; that is not a local change
+  if [ -n "$(git -C "$APP" status --porcelain -- . ':!package-lock.json')" ]; then
+    die "$APP has local changes. Commit or drop them, then run this again."
+  fi
+  echo "Updating the copy in $APP to ${TAG:-main}"
+  if [ -n "$TAG" ]; then
+    git -C "$APP" fetch --depth 1 "$REPO" "refs/tags/$TAG:refs/tags/$TAG"
+    git -C "$APP" checkout -q -- package-lock.json 2>/dev/null || true
+    git -C "$APP" checkout -q "$TAG"
+  else
+    git -C "$APP" pull --ff-only
+  fi
 else
-  echo "Cloning into $APP"
-  git clone --depth 1 "$REPO" "$APP"
+  echo "Cloning ${TAG:-main} into $APP"
+  if [ -n "$TAG" ]; then
+    git -c advice.detachedHead=false clone -q --depth 1 --branch "$TAG" "$REPO" "$APP"
+  else
+    git clone --depth 1 "$REPO" "$APP"
+  fi
 fi
 
 ( cd "$APP" && npm install --omit=dev --no-audit --no-fund )
@@ -38,4 +58,5 @@ case ":$PATH:" in
   *) echo "Add it to your PATH:  export PATH=\"$BIN:\$PATH\"" ;;
 esac
 echo "Start it:   pilo"
+echo "Update it:  pilo update"
 echo "Remove it:  rm -rf $APP $BIN/pilo      (your data stays in ~/.pilo)"

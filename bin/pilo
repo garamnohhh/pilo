@@ -91,6 +91,20 @@ case "${1:-tui}" in
     ensure_server
     echo "Pilo restarted"
     ;;
+  update)
+    # moves an installed copy to the newest release; a working copy is told how
+    set +e
+    node "$ROOT/src/update.js"
+    code=$?
+    set -e
+    if [[ $code -eq 0 ]] && health; then
+      stop_server
+      ensure_server
+      echo "Pilo restarted on the new version"
+    fi
+    [[ $code -eq 3 ]] && exit 0
+    exit $code
+    ;;
   status)
     if health; then echo "server:    running (port $(live_port))"; else echo "server:    stopped"; fi
     echo "database:  $PILO_HOME_DIR/data (PGlite)"
@@ -125,5 +139,5 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     exec node "$ROOT/src/cli.js" "$@"
     ;;
   help|--help|-h) node "$ROOT/src/cli.js" ;;
-  *) echo "Usage: pilo [tui|start|stop|restart|status|dashboard|doctor|logs]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
+  *) echo "Usage: pilo [tui|start|stop|restart|status|update|dashboard|doctor|logs]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
 esac

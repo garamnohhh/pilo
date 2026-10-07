@@ -289,6 +289,10 @@
   /* Phone (the "Pilo Mobile" design): one column, a bar of four tabs at the
      bottom, the top bar down to what fits. Desktop and tablet never see any of
      it — every rule sits under the 720px container query or is hidden by default. */
+  /* a newer release: one line under the header, on every screen */
+  #ubanner:empty { display: none }
+  .d-ubanner { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--accent); font-size: var(--fs-small); color: var(--text-2) }
+  .d-ubanner .d-ub-acts { margin-left: auto; display: flex; gap: 8px }
   .d-mtabs, .d-msend, .d-mchips, .d-mneeds { display: none }
   /* a header that wraps must not be squeezed under the content below it */
   .d-fill > .d-head { flex: none }
@@ -320,6 +324,7 @@
        header is that box. */
     .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
+    .d-ubanner { padding: 10px 16px }
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
@@ -362,6 +367,7 @@
   <span style="margin-left:auto;display:flex;align-items:center;gap:16px" id="topstate"></span>
   <span class="d-m" id="sync" style="font-size:11px;color:var(--text-3);flex:none">loading…</span>
 </div>
+<div id="ubanner"></div>
 <div class="d-shell" id="shell">
   <div class="d-rail" id="rail"></div>
   <div class="d-strip" id="strip" hidden></div>
@@ -512,6 +518,11 @@ async function load() {
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
   state.offline = false;
   keepRecords(inbox);
+  // an older server has no such route; the screens then simply say nothing
+  const upd = await get("/api/update").catch(() => null);
+  // back from an update: the page that loaded is the old one, so load the new
+  if (upd && state.data.update?.current && upd.current !== state.data.update.current) return location.reload();
+  state.data.update = upd;
   refreshFeed();
   await loadDetail();
   // kept as a time and formatted in render(), so a language switch shows at once
@@ -980,6 +991,7 @@ function render() {
   $("tree").hidden = !isWork;
   if (isWork) touched |= renderWorkPanes();
   touched |= paint("mtabs", mtabsHtml());
+  touched |= paint("ubanner", updateBannerHtml());
   syncAgentTip();
   const viewChanged = paint("view", ((narrow() && mviews[state.tab]) || views[state.tab])());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
@@ -1529,6 +1541,43 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
     <div class="d-treefoot"><button class="gn-btn gn-btn-brand gn-btn-block" data-act="go-agents">${T("desk.act.addAgent")}</button></div>`;
 }
 
+// ── Updates ─────────────────────────────────────────────────────────────────
+// The server checks for a newer release once a day (src/update.js). A newer one
+// shows as a banner under the header until it is installed or put off; System
+// (and More on a phone) has the version, a check and the install button.
+const updateWhy = (u) => (u.kind && u.kind !== "ok" ? T(`update.${u.kind}`) : "");
+function updateBannerHtml() {
+  const u = state.data.update;
+  if (!u) return "";
+  if (u.installing || u.step) return `<div class="d-ubanner">${esc(T("update.installing", { latest: u.latest || "", step: u.step || "…" }))}</div>`;
+  if (u.error) return `<div class="d-ubanner" style="box-shadow:inset 3px 0 0 0 var(--err)">${esc(T("update.failed", { error: u.error }))}
+    <span class="d-ub-acts">${btn(T("update.later"), "update-later", `data-v="${esc(u.latest || "")}"`, "gn-btn-ghost")}</span></div>`;
+  if (!u.available) return "";
+  let later = "";
+  try { later = localStorage.getItem("pilo-update-later") || ""; } catch (err) { /* private window */ }
+  if (later === u.latest) return "";
+  const why = updateWhy(u);
+  return `<div class="d-ubanner"><span>${esc(T("update.banner", { latest: u.latest, current: u.current }))}${why ? ` <span style="color:var(--text-3)">${esc(why)}</span>` : ""}</span>
+    <span class="d-ub-acts">${why ? "" : btn(T("update.install"), "update-install", "", "gn-btn-brand")}${btn(T("update.later"), "update-later", `data-v="${esc(u.latest)}"`, "gn-btn-ghost")}</span></div>`;
+}
+// One block for System and the phone's More: the version, the newest release and
+// when that was looked up, and the two buttons.
+function updateRows(compact = false) {
+  const u = state.data.update;
+  if (!u) return "";
+  const checked = u.checkOff ? T("update.off") : u.checkedAt ? T("update.checkedAt", { at: stamp(u.checkedAt) }) : T("update.none");
+  const latest = u.latest ? `${u.latest}${u.available ? "" : ` · ${T("update.upToDate")}`}` : "—";
+  const why = updateWhy(u);
+  const row = (k, v, sub = "") => compact
+    ? `<div class="m-row" style="min-height:48px"><span style="font-size:var(--fs-body);flex:1">${esc(k)}</span><span class="d-m" style="font-size:13px">${esc(v)}</span></div>`
+    : `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto"><span style="font-size:var(--fs-body)">${esc(k)}</span><span class="d-m" style="font-size:12px">${esc(v)}${sub ? ` <span style="color:var(--text-3)">${esc(sub)}</span>` : ""}</span></div>`;
+  const acts = `<div style="display:flex;gap:8px;flex-wrap:wrap;${compact ? "padding:12px 16px" : "margin-top:12px"}">
+      ${btn(T("update.check"), "update-check", "", "gn-btn-ghost")}
+      ${u.available && !why && !u.installing ? btn(T("update.install"), "update-install", "", "gn-btn-brand") : ""}</div>
+    <div style="${compact ? "padding:0 16px 14px;" : "margin-top:8px;"}font-size:var(--fs-small);color:${u.error ? ERR : "var(--text-3)"}">${esc(u.error ? T("update.failed", { error: u.error }) : u.installing || u.step ? T("update.installing", { latest: u.latest || "", step: u.step || "…" }) : [checked, why].filter(Boolean).join(" · "))}</div>`;
+  return row(T("update.current"), u.current) + row(T("update.latest"), latest) + acts;
+}
+
 // ── Offline (phone) ─────────────────────────────────────────────────────────
 // Pilo runs on the Mac; a phone that cannot reach it gets this screen instead of
 // a dead one. The service worker keeps the page itself on the phone, and every
@@ -1681,7 +1730,8 @@ mviews.more = () => {
     <div class="m-box"><div class="m-row" style="min-height:60px;border-bottom:none">
         <span style="font-size:var(--fs-body);flex:1">${T("desk.lbl.theme")}</span>
         ${seg([["auto", "AUTO"], ["dark", "DARK"], ["light", "LIGHT"]], state.themeMode || state.theme, "set-theme")}</div>
-      <div style="padding:0 16px 14px;font-size:var(--fs-small);color:var(--text-3)">${esc(T(state.themeMode === "auto" ? "desk.mobile.themeAuto" : "desk.mobile.themeKept"))}</div></div></div>`;
+      <div style="padding:0 16px 14px;font-size:var(--fs-small);color:var(--text-3)">${esc(T(state.themeMode === "auto" ? "desk.mobile.themeAuto" : "desk.mobile.themeKept"))}</div></div>
+    ${state.data.update ? `<div style="margin-top:12px">${mTitle(T("update.title"))}</div><div class="m-box">${updateRows(true)}</div>` : ""}</div>`;
 };
 
 // a hash the desktop has no screen for falls back to the nearest one
@@ -2669,6 +2719,8 @@ views.system = () => {
     pageHead(T("desk.title.system"), "") +
     `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
       <div class="d-stack" style="min-width:0">
+        ${state.data.update ? `<div><div class="d-lblrule"><span class="d-lbl">${esc(T("update.title"))}</span></div>
+          <div class="d-list">${updateRows()}</div></div>` : ""}
         <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.appearance")}</span></div>
           <div class="d-list">
             <div class="d-tr" style="grid-template-columns:minmax(0,1fr) auto"><span style="font-size:var(--fs-body)">${T("desk.lbl.language")}</span>
@@ -3308,6 +3360,29 @@ function readProjectForm() {
 }
 
 const actions = {
+  async "update-check"() {
+    state.data.update = await call("POST", "/api/update/check");
+    render();
+  },
+  async "update-install"() {
+    state.data.update = await call("POST", "/api/update/install");
+    render();
+    // the server goes away and comes back on the new release; load() notices the
+    // new version and reloads the page
+    const poll = setInterval(async () => {
+      const u = await get("/api/update").catch(() => null);
+      if (!u) return;
+      if (u.current !== state.data.update?.current) { clearInterval(poll); return location.reload(); }
+      state.data.update = { ...state.data.update, ...u };
+      if (!u.installing && !u.step) clearInterval(poll);
+      render();
+    }, 1500);
+  },
+  "update-later"(el) {
+    try { localStorage.setItem("pilo-update-later", el.dataset.v || ""); } catch (err) { /* private window */ }
+    if (state.data.update) state.data.update = { ...state.data.update, error: "" };
+    render();
+  },
   async "offline-retry"() {
     if (state.retrying) return;
     state.retrying = true;
