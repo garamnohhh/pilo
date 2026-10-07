@@ -29,6 +29,7 @@
 - herdr has no listening port; wake is a CLI call (`herdr agent prompt`).
 - `herdr agent list` provides runtime (`codex`/`claude`), status, cwd and pane_id, so runtime and target are auto-detected by cwd match. Re-bind manually when a session is replaced.
 - CLI set: `pilo start`, `pilo stop`, `pilo restart`, `pilo status`, `pilo doctor`. GUI first, CLI possible. (2026-10-02: start/stop/restart as systemctl and brew services name them; `up` and `serve` stay as undocumented aliases of start, no `down`.)
+- Install and update follow release tags (vX.Y.Z), not main (2026-10-07). The installer clones the newest tag; `pilo update` and the dashboard's Install move an installed (shallow, clean) copy to the newest tag and restart; a full clone or a copy with local changes is told to update by hand. The release check is one `git ls-remote` a day (`PILO_UPDATE_CHECK=off` stops it) — the only outbound request. No npm package and no Homebrew formula for now (installer only).
 - Agent roles: `pilo`, `pm`, `worker`. Exactly one `pilo` enforced by a partial unique index.
 - `model` is a display-only manual memo, not a value Pilo can enforce.
 - `specialty` field added to agents.
