@@ -128,6 +128,8 @@ you asked last week.
   instead of stacking a second one.
 - **Limits** — when a provider's window runs out, pilo parks that runtime until
   it reopens and hands the parked agent's unopened queue to its owner.
+  When Claude's usage figure cannot be refreshed, the status line says why —
+  `? · login needed` or `? · rate limited` — and the desk leaves one note.
 - **Notes** — the desk can also speak first: a job that ran, a limit that landed.
   A line of its own, with nothing waiting on it.
 - **Decisions** — when an owner needs you to decide something, the question
