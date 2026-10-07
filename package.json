@@ -1,9 +1,46 @@
 {
-  "name": "pilo",
-  "version": "0.2.0",
-  "private": true,
+  "name": "@garamnohhh/pilo",
+  "version": "0.2.1",
+  "description": "A local desk in front of the coding agents you already run — one conversation, every project, on your own Mac.",
   "type": "module",
   "license": "Apache-2.0",
+  "homepage": "https://pilo.garamnoh.workers.dev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garamnohhh/pilo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/garamnohhh/pilo/issues"
+  },
+  "keywords": [
+    "agents",
+    "claude-code",
+    "codex",
+    "herdr",
+    "desk",
+    "tui",
+    "dashboard"
+  ],
+  "bin": {
+    "pilo": "bin/pilo"
+  },
+  "files": [
+    "bin/",
+    "!bin/pilo-next",
+    "src/",
+    "!src/**/*.test.js",
+    "public/",
+    "migrations/"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "start": "node src/server.js",
     "check": "node --check src/server.js",
@@ -12,8 +49,5 @@
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@electric-sql/pglite-pgvector": "0.0.9"
-  },
-  "engines": {
-    "node": ">=20"
   }
 }

@@ -67,7 +67,7 @@ async function updateStatus() {
 async function startUpdate() {
   if (updating) return updateStatus();
   const kind = await update.installKind();
-  if (kind !== "ok") throw Object.assign(new Error(kind), { status: 409 });
+  if (kind !== "ok" && kind !== "npm") throw Object.assign(new Error(kind), { status: 409 });
   updating = true;
   update.install().then((res) => {
     if (!res.updated) { updating = false; return; }

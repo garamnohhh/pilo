@@ -52,13 +52,14 @@ on your own machine.
 ## Install
 
 ```bash
-curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
+npm install -g @garamnohhh/pilo
 ```
 
-It clones the source into `~/.pilo/app`, installs the two dependencies and links
-`pilo` into `~/.local/bin`. Nothing is compiled and nothing asks for sudo — pilo
-is a terminal tool, not an app bundle, so Gatekeeper and notarisation never come
-into it.
+That installs the `pilo` command. Nothing is compiled and nothing asks for sudo
+beyond what your Node setup already needs for global packages — pilo is a
+terminal tool, not an app bundle, so Gatekeeper and notarisation never come into
+it. (`curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh` does the same
+thing, if you would rather.)
 
 Before the first run you need:
 
@@ -68,11 +69,10 @@ Before the first run you need:
 | **[herdr](https://herdr.dev)** | the terminal workspace pilo watches — `brew install herdr` |
 | **At least one coding agent** | Claude Code or Codex, opened by you in a herdr pane |
 
-The installer puts the newest release in `~/.pilo/app`. To update it later,
-run `pilo update`, or press Install where the dashboard says a new release is
-out (System). Running the install line again does the same.
+To update later, run `pilo update` (or `npm install -g @garamnohhh/pilo@latest`),
+or press Install where the dashboard says a new release is out (System).
 
-To remove it: `rm -rf ~/.pilo/app ~/.local/bin/pilo`. Your requests and their
+To remove it: `npm uninstall -g @garamnohhh/pilo`. Your requests and their
 history stay in `~/.pilo` until you remove that too.
 
 ## First run
@@ -157,8 +157,8 @@ opens the database and refuses to start if another server still holds it — PGl
 has no lock of its own, and two writers would corrupt the files.
 
 Nothing about you is sent anywhere: no account, no telemetry. The one outbound
-request is a `git ls-remote` of this repository once a day, to see whether a
-newer release is out; `PILO_UPDATE_CHECK=off` stops it. The only socket that
+request is a look at the npm registry once a day, to see whether a newer
+release is out; `PILO_UPDATE_CHECK=off` stops it. The only socket that
 listens is `127.0.0.1`, for the dashboard.
 
 ## Commands

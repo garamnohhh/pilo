@@ -1545,7 +1545,7 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
 // The server checks for a newer release once a day (src/update.js). A newer one
 // shows as a banner under the header until it is installed or put off; System
 // (and More on a phone) has the version, a check and the install button.
-const updateWhy = (u) => (u.kind && u.kind !== "ok" ? T(`update.${u.kind}`) : "");
+const updateWhy = (u) => (u.kind && !["ok", "npm"].includes(u.kind) ? T(`update.${u.kind}`) : "");
 function updateBannerHtml() {
   const u = state.data.update;
   if (!u) return "";

@@ -127,9 +127,9 @@ a:hover { color: var(--accent); }
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">Nothing is compiled and nothing asks for sudo. pilo is a terminal tool, not an app bundle, so there is no security prompt to clear.</span><span class="l-ko">컴파일도 sudo도 없어요. pilo는 앱 번들이 아니라 터미널 도구라 열어야 할 보안 창도 없어요.</span></p>
         <div  style="border: 1px solid var(--line); background: var(--surface);">
           <div  style="padding: 10px 14px; border-bottom: 1px solid var(--line-soft);"><span  class="gn-mono" style="font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3);">TERMINAL</span></div>
-          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh</div></div>
+          <div  style="padding: 14px; overflow-x: auto;"><div  class="gn-mono" style="font-size: 12.5px; line-height: 1.9; color: var(--text); white-space: pre;"><span style="color: var(--text-3);">$ </span>npm install -g @garamnohhh/pilo</div></div>
         </div>
-        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">It clones the source into ~/.pilo/app, installs the two dependencies and links pilo into ~/.local/bin.</span><span class="l-ko">소스를 ~/.pilo/app 에 받고 의존성 두 개를 설치한 뒤 pilo 를 ~/.local/bin 에 연결해요.</span></p>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 22px; text-wrap: pretty;"><span class="l-en">It installs the pilo command from npm. Your data lives in ~/.pilo, apart from the package.</span><span class="l-ko">npm 에서 pilo 명령을 설치해요. 데이터는 패키지와 따로 ~/.pilo 에 있어요.</span></p>
         <div  style="border: 1px solid var(--line); background: var(--surface);">
           <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
             <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">Node.js 20+</span>
@@ -144,7 +144,7 @@ a:hover { color: var(--accent); }
             <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">Claude Code or Codex, opened by you in a herdr pane</span><span class="l-ko">herdr 창에 직접 띄운 Claude Code 나 Codex</span></span>
           </div>
         </div>
-        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">To remove it: rm -rf ~/.pilo/app ~/.local/bin/pilo — your requests and their history stay in ~/.pilo until you remove that too.</span><span class="l-ko">지울 때: rm -rf ~/.pilo/app ~/.local/bin/pilo — 요청과 기록은 ~/.pilo 를 지우기 전까지 남아요.</span></p>
+        <p  class="gn-mono" style="font-size: 11.5px; line-height: 1.8; color: var(--text-3); margin: 18px 0px 0px;"><span class="l-en">To update: pilo update. To remove it: npm uninstall -g @garamnohhh/pilo — your requests and their history stay in ~/.pilo until you remove that too.</span><span class="l-ko">업데이트: pilo update. 지울 때: npm uninstall -g @garamnohhh/pilo — 요청과 기록은 ~/.pilo 를 지우기 전까지 남아요.</span></p>
       </div>
       <div id="first-run">
         <h2  style="font-size: 22px; letter-spacing: -0.01em; margin: 0px 0px 14px;"><span class="l-en">First run</span><span class="l-ko">첫 실행</span></h2>
@@ -311,7 +311,7 @@ a:hover { color: var(--accent); }
           </div>
           <div  style="display: flex; gap: 20px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); align-items: baseline; flex-wrap: wrap;">
             <span  class="gn-mono" style="font-size: 12.5px; color: var(--text); flex: 0 0 auto; width: 176px;">127.0.0.1</span>
-            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the only socket that listens, for the dashboard. No account, no telemetry. The one outbound request is a git ls-remote of the repository once a day, to see whether a newer release is out (PILO_UPDATE_CHECK=off stops it).</span><span class="l-ko">듣는 소켓은 이것 하나, 대시보드용이에요. 계정도 수집도 없어요. 바깥으로 나가는 건 하루 한 번 새 릴리스가 나왔는지 저장소를 확인하는 git ls-remote 하나예요(PILO_UPDATE_CHECK=off 로 끌 수 있음).</span></span>
+            <span  style="font-size: 13.5px; line-height: 1.75; color: var(--text-2); flex: 1 1 220px; min-width: 0px;"><span class="l-en">the only socket that listens, for the dashboard. No account, no telemetry. The one outbound request is a look at the npm registry once a day, to see whether a newer release is out (PILO_UPDATE_CHECK=off stops it).</span><span class="l-ko">듣는 소켓은 이것 하나, 대시보드용이에요. 계정도 수집도 없어요. 바깥으로 나가는 건 하루 한 번 새 릴리스가 나왔는지 npm 레지스트리를 확인하는 것 하나예요(PILO_UPDATE_CHECK=off 로 끌 수 있음).</span></span>
           </div>
         </div>
               <img  class="gn-shot gn-shot-light l-en" width="972" height="483" src="/assets/diagrams/storage-en-light.png" alt="The pilo home directory holding settings, the database, logs, the port file and the lock" style="width: 100%; height: auto; margin-top: 8px;">

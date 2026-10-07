@@ -1,10 +1,15 @@
-// Updates follow release tags, never main: a release is what was meant to be
-// used, main is what is being worked on. The check is one `git ls-remote` a day
-// against the public repository — no API, no account, nothing about this
-// machine sent — and a failure says nothing. PILO_UPDATE_CHECK=off stops it.
+// Updates follow releases, never main: a release is what was meant to be used,
+// main is what is being worked on. How depends on how this copy got here:
+//   npm   — installed with npm install -g: the registry's latest version, and
+//           npm install -g <name>@<version> to move to it
+//   ok    — a git copy from the old install script: the newest vX.Y.Z tag
+//   dev / dirty / nogit — someone's working copy: told how, never moved
+// The check runs once a day, sends nothing about this machine, and a failure
+// says nothing. PILO_UPDATE_CHECK=off stops it.
 import { execFile, spawn } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { home } from "./paths.js";
 
@@ -13,7 +18,15 @@ const repo = () => process.env.PILO_UPDATE_REPO || "https://github.com/garamnohh
 const stateFile = () => join(home, "update.json");
 const DAY_MS = 24 * 3600e3;
 
-export const currentVersion = () => JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version;
+const pkg = () => JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+export const currentVersion = () => pkg().version;
+// An npm install lives at <prefix>/lib/node_modules/<name>; the same prefix is
+// handed back to npm so the update lands where this copy is, whichever Node
+// manager put it there.
+export function npmPrefix(root = ROOT) {
+  const at = root.lastIndexOf("/lib/node_modules/");
+  return at > 0 ? root.slice(0, at) : "";
+}
 
 const parse = (v) => {
   const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(v || "").trim());
@@ -58,6 +71,7 @@ export async function installKind(maxAgeMs = 60000) {
   return kindCache.value;
 }
 async function readKind() {
+  if (ROOT.includes("/node_modules/") && !existsSync(join(ROOT, ".git"))) return "npm";
   try {
     // npm rewrites package-lock.json on its own; that is not a change of anyone's
     if ((await git(["status", "--porcelain", "--", ".", ":!package-lock.json"])).trim()) return "dirty";
@@ -88,8 +102,8 @@ export async function check({ force = false, now = Date.now() } = {}) {
   if (process.env.PILO_UPDATE_CHECK === "off" && !force) return status();
   if (!force && s.checkedAt && now - Date.parse(s.checkedAt) < DAY_MS) return status();
   try {
-    const out = await git(["ls-remote", "--tags", "--refs", repo()], 15000);
-    const latest = newest(out.split("\n").map((line) => line.split("\t")[1]).filter(Boolean));
+    const latest = (await installKind()) === "npm" ? await npmLatest() : newest((await git(["ls-remote", "--tags", "--refs", repo()], 15000))
+      .split("\n").map((line) => line.split("\t")[1]).filter(Boolean));
     writeState({ latest, checkedAt: new Date(now).toISOString(), ...(force ? { error: "" } : {}) });
   } catch {
     // offline, or GitHub did not answer: try again tomorrow, say nothing
@@ -98,16 +112,35 @@ export async function check({ force = false, now = Date.now() } = {}) {
   return status();
 }
 
+// PILO_UPDATE_LATEST stands in for the registry in tests.
+async function npmLatest() {
+  if (process.env.PILO_UPDATE_LATEST) return process.env.PILO_UPDATE_LATEST;
+  const v = (await run("npm", ["view", pkg().name, "version"], 20000)).trim();
+  return parse(v) ? v : null;
+}
+
 // Moves this copy to the newest release and installs its dependencies. It does
 // not restart anything; the caller does, since only it knows what is running.
 export async function install({ onStep = () => {} } = {}) {
   const kind = await installKind(0);
-  if (kind !== "ok") throw Object.assign(new Error(kind), { kind });
+  if (kind !== "ok" && kind !== "npm") throw Object.assign(new Error(kind), { kind });
   const st = await check({ force: true });
   if (!st.latest) throw new Error("no release found");
   if (!st.available) return { updated: false, version: st.current };
-  const tag = `v${st.latest}`;
   const step = (name) => { writeState({ step: name, error: "" }); onStep(name); };
+  if (kind === "npm") {
+    // PILO_UPDATE_SPEC (a tarball, in tests) stands in for <name>@<version>
+    const spec = process.env.PILO_UPDATE_SPEC || `${pkg().name}@${st.latest}`;
+    const prefix = npmPrefix();
+    step("installing");
+    // A Node manager's own hook can fail after npm has put the files in place
+    // (mise's reshim did, once); what is on disk decides whether it worked.
+    await run("npm", ["install", "-g", spec, "--no-audit", "--no-fund", ...(prefix ? ["--prefix", prefix] : [])], 300000)
+      .catch((err) => { if (currentVersion() !== st.latest) throw err; });
+    writeState({ step: "", error: "" });
+    return { updated: true, from: st.current, version: st.latest };
+  }
+  const tag = `v${st.latest}`;
   step("fetching");
   await git(["fetch", "--depth", "1", repo(), `refs/tags/${tag}:refs/tags/${tag}`], 120000);
   step("switching");
@@ -125,7 +158,11 @@ export async function install({ onStep = () => {} } = {}) {
 export function restartLater(pid = process.pid) {
   const launcher = join(ROOT, "bin", "pilo");
   const script = `while kill -0 ${pid} 2>/dev/null; do sleep 0.2; done; exec "${launcher}" start`;
-  spawn("sh", ["-c", script], { detached: true, stdio: "ignore", env: process.env }).unref();
+  // not the server's own directory as cwd: an npm update has just replaced it,
+  // and a process cannot start in a directory that is gone
+  const child = spawn("sh", ["-c", script], { cwd: homedir(), detached: true, stdio: "ignore", env: process.env });
+  child.on("error", () => {});
+  child.unref();
 }
 
 export const failed = (err) => writeState({ step: "", error: String(err?.kind || err?.message || err) });
@@ -137,7 +174,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     const kind = await installKind();
     if (kind === "dev") { say(`This is a working copy (${ROOT}). Update it with git; pilo update only moves installed copies.`); process.exit(1); }
     if (kind === "dirty") { say(`There are local changes in ${ROOT}. Commit or drop them first.`); process.exit(1); }
-    if (kind === "nogit") { say(`${ROOT} is not a git copy. Install again: curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh`); process.exit(1); }
+    if (kind === "nogit") { say(`${ROOT} is neither an npm install nor a git copy. Install it with: npm install -g @garamnohhh/pilo`); process.exit(1); }
     const res = await install({ onStep: (s) => say(`… ${s}`) });
     say(res.updated ? `Pilo ${res.from} → ${res.version}` : `Pilo ${res.version} is the newest release.`);
     process.exit(res.updated ? 0 : 3);
