@@ -184,6 +184,10 @@ const EN = {
   "event.progress": "{agent} progress #{id}",
   "event.dismissed": "{agent} wake failures dismissed",
   "event.probeLost": "usage probe pane {pane} is gone — the usage figure will go stale until it is back",
+  "note.probeLogin": "Claude usage is not refreshing: the usage-probe pane ({pane}) has to sign in again. Run /login in that pane.",
+  "note.probeRate": "Claude usage is not refreshing: the usage endpoint answers the usage-probe pane ({pane}) \"rate limited\". It is asked less often until it answers.",
+  "quota.reason.login": "login needed",
+  "quota.reason.rate": "rate limited",
 
   // wake messages, which the instruction files quote verbatim
   "wake.inbox": "[pilo:inbox] request #{id} — for {agent}. read it with 'pilo inbox {id}'.",
@@ -530,6 +534,10 @@ const KO = {
   "event.progress": "{agent} 진행 #{id}",
   "event.dismissed": "{agent} wake 실패 확인 처리",
   "event.probeLost": "사용량 probe 창 {pane} 이 사라짐 — 다시 붙이기 전까지 사용량 값이 낡아감",
+  "note.probeLogin": "Claude 사용량이 갱신되지 않음: usage-probe 창({pane})의 로그인이 풀림. 그 창에서 /login 필요.",
+  "note.probeRate": "Claude 사용량이 갱신되지 않음: 사용량 요청이 usage-probe 창({pane})에 '요청 제한'으로 막힘. 풀릴 때까지 간격을 늘려 다시 시도.",
+  "quota.reason.login": "로그인 필요",
+  "quota.reason.rate": "요청 제한",
 
   "wake.inbox": "[pilo:inbox] 요청 도착 #{id} — {agent} 앞. 'pilo inbox {id}' 로 확인.",
   "wake.task": "[pilo:task] 작업 도착 #{id} — {agent} 앞. 'pilo task {id}' 로 읽고 'pilo done {id}' 로 보고.",

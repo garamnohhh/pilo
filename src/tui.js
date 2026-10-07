@@ -284,8 +284,9 @@ function quotaLine(compact = false) {
     const cell = quotaCell(quota[runtime], Date.now(), compact);
     if (!cell) continue;
     const level = cell.percent >= 90 ? c.red : cell.percent >= 70 ? c.amber : c.green;
+    const why = cell.reason ? ` ${c.red}· ${t(`quota.reason.${cell.reason}`)}${c.reset}` : "";
     parts.push(cell.dim
-      ? `${c.faint}${runtimeMark(runtime)} ${cell.text}${c.reset}`
+      ? `${c.faint}${runtimeMark(runtime)} ${cell.text}${c.reset}${why}`
       : `${runtimeMark(runtime)} ${level}${cell.text}${c.reset}`);
   }
   if (!parts.length) return "";

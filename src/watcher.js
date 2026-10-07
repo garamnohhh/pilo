@@ -1,8 +1,8 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import { t } from "./text.js";
-import { claudeAgeMin, readQuota, quotaReport, limitReached } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER } from "./api.js";
+import { claudeAgeMin, readQuota, quotaReport, limitReached, probeReason, readProbe, writeProbe } from "./quota.js";
+import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER, createNote } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
@@ -289,17 +289,38 @@ export function probeWorthTrying(lost, pane, now = Date.now()) {
   return !(lost.pane === pane && now - lost.at < PROBE_RETRY_MS);
 }
 
+// The reason a probe missed goes on the usage figure until a reading lands, and
+// into one desk note per reason: the same reason again says nothing new.
+export async function probeOutcome(fresh, reason, pane, { note = createNote } = {}) {
+  const held = readProbe();
+  if (fresh) {
+    if (held.reason) writeProbe(null);
+    return null;
+  }
+  if (!reason) return held.reason || null;
+  writeProbe({ reason, pane, at: new Date().toISOString(), noted: held.noted === reason ? reason : held.noted });
+  if (held.noted !== reason) {
+    await note({ body: t(reason === "login" ? "note.probeLogin" : "note.probeRate", { pane }) }).catch(() => {});
+    writeProbe({ reason, pane, at: new Date().toISOString(), noted: reason });
+  }
+  return reason;
+}
+
 async function pumpQuota() {
   // Close the panel we opened on an earlier tick before anything else.
   if (probe.askedAt && Date.now() - probe.askedAt > 5000) {
     const { pane, minutes } = probe;
     probe = { pane: "", askedAt: 0 };
+    // what the panel says, read while it is still open: an expired sign-in or a
+    // rate limit is written there and nowhere else
+    const screen = await herdr.readPane(pane).catch(() => "");
     try {
       await herdr.sendKeys(pane, "esc");
     } catch {
       // the pane went away; the next round will find another
     }
     const fresh = claudeAgeMin() < minutes;
+    await probeOutcome(fresh, probeReason(screen), pane);
     probeMiss = fresh ? { count: 0, at: 0 } : { count: probeMiss.count + 1, at: Date.now() };
     await noteJob("usage-probe", fresh ? "probe ok"
       : `asked, figure not refreshed yet — next try in ${probeBackoffMs(probeMiss.count) / 60000} min`);

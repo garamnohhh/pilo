@@ -1,9 +1,10 @@
 // What `/usage` in Claude Code and `/status` in Codex show, read from the files
 // those tools already keep instead of typed into a session. Both figures belong
 // to the account, not to one pane, so one read covers every agent of that kind.
-import { readFileSync, readdirSync, statSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, openSync, readSync, closeSync, fstatSync, writeFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
+import { home as piloHome } from "./paths.js";
 
 const CACHE_MS = Number(process.env.PILO_QUOTA_MS || 60000);
 let cache = { at: 0, value: {} };
@@ -26,6 +27,29 @@ function claudeQuota() {
     weekResetsAt: u.utilization?.seven_day?.resets_at || "",
     ageMin
   };
+}
+
+// Why the usage probe could not refresh the figure, read off the probe pane's
+// own screen: "login" (the session's sign-in expired — "run /login") or "rate"
+// (the usage endpoint said "rate limited"). Kept in a file beside the database
+// so the terminal UI, which reads the figure itself, sees it too.
+export const probeFile = () => join(piloHome, "usage-probe.json");
+export function probeReason(screen) {
+  const text = String(screen || "");
+  if (/run \/login|token refresh failed|please (run )?\/?login|not logged in/i.test(text)) return "login";
+  if (/rate[ -]limited|rate limit/i.test(text)) return "rate";
+  return null;
+}
+export function readProbe() {
+  try { return JSON.parse(readFileSync(probeFile(), "utf8")) || {}; } catch { return {}; }
+}
+export function writeProbe(state) {
+  try {
+    if (!state || !state.reason) rmSync(probeFile(), { force: true });
+    else writeFileSync(probeFile(), JSON.stringify(state));
+  } catch {
+    // the figure still shows; only the reason is lost
+  }
 }
 
 // Codex writes a rate_limits block into the session transcript on every turn, so
@@ -180,6 +204,8 @@ export function readQuota(now = Date.now(), maxAgeMs = CACHE_MS) {
       // nothing to show for that runtime
     }
   }
+  const reason = readProbe().reason;
+  if (value.claude && reason) value.claude = { ...value.claude, reason };
   cache = { at: now, value };
   return value;
 }
@@ -217,13 +243,21 @@ export function quotaReport(quota = readQuota(), now = Date.now()) {
       percent: cell.percent,
       compact: quotaCell(found, now, true).text,
       week: typeof found.week === "number" ? found.week : null,
-      ageMin: Number.isFinite(Number(found.ageMin)) ? Number(found.ageMin) : null
+      ageMin: Number.isFinite(Number(found.ageMin)) ? Number(found.ageMin) : null,
+      ...(cell.reason ? { reason: cell.reason } : {})
     };
   }
   return out;
 }
 
+// A faint figure the probe could not refresh carries why ("login", "rate"); the
+// screens put that into words. A fresh one never does.
 export function quotaCell(found, now = Date.now(), compact = false) {
+  const cell = plainCell(found, now, compact);
+  return cell && cell.dim && found.reason ? { ...cell, reason: found.reason } : cell;
+}
+
+function plainCell(found, now, compact) {
   if (!found) return null;
   if (found.unknown || typeof found.percent !== "number") return { text: "?", dim: true, percent: null };
   const at = found.resetsAt ? new Date(found.resetsAt) : null;

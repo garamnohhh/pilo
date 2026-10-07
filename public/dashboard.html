@@ -753,8 +753,10 @@ function usageHtml() {
     const u = quota[rt];
     const colour = u.dim ? "var(--text-3)" : u.percent >= 90 ? ERR : u.percent >= 70 ? WARN : OK;
     const hint = `${rt} · 5h ${u.text}${u.week != null ? ` · week ${u.week}%` : ""}${u.ageMin != null ? ` · read ${u.ageMin}m ago` : ""}`;
+    // a figure the probe could not refresh says why, in the error colour
+    const why = u.reason ? ` <span style="color:${ERR}">· ${esc(T(`quota.reason.${u.reason}`))}</span>` : "";
     return `<span class="d-m d-usage" title="${esc(hint)}" style="color:${colour}">${runtimeMark(rt)}` +
-      `<span class="d-usage-full">${esc(u.text)}</span><span class="d-usage-short">${esc(u.compact)}</span></span>`;
+      `<span class="d-usage-full">${esc(u.text)}</span><span class="d-usage-short">${esc(u.compact)}</span>${why}</span>`;
   });
   // the figure is a way in: the usage screen has the rest of it
   return cells.length ? `<button class="d-plain d-usage-row" data-tab="${narrow() ? "more" : "usage"}" aria-label="${esc(T("desk.title.usage"))}">${cells.join("")}</button>` : "";
