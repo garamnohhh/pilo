@@ -147,6 +147,8 @@ ${roster}
 - **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
 - Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
+- **Risky even if you can: ask first.** Deleting, push, deploy, posting anywhere public, writing to a database,
+  anything touching an account or a payment — before running it, ask with \`pilo block\` and wait for the answer.
 - **\`pilo block\` only for what the user must decide.** The desk tells them for you. For a step only they can take — a
   restart, a permission — write exactly what is needed and what you do once it is done, so one answer is enough.
   When you are carrying a worker's question up, say which one: \`pilo block <your task> "…" --for <its task>\`. The
@@ -253,6 +255,8 @@ ${roster}
 
 - **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
+- **할 수 있어도 위험한 작업은 먼저 확인한다.** 지우기·push·배포·외부 게시·DB 쓰기·계정·결제는 실행 전에
+  \`pilo block\` 으로 확인을 받고, 답이 올 때까지 기다린다.
 - **\`pilo block\` 은 사용자가 정해야 하는 것만.** 사용자에게는 데스크가 대신 말한다. 사용자만 할 수 있는 절차(재시작·권한 등)는
   무엇이 필요한지와 끝나면 무엇을 할지를 분명히 적어 답 한 번으로 이어지게 한다.
   worker 의 질문을 올려 보내는 경우에는 어느 것인지 밝힌다: \`pilo block <내 task> "…" --for <그 task>\`.

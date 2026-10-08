@@ -85,3 +85,13 @@ test("a PM with workers is told to end its turn after handing down, not to wait"
   const alone = workerRules({ id: 6, name: "solo", role: "pm" }, "http://x", []);
   assert.doesNotMatch(alone, /\[pilo:worker\]/, "a PM with no workers is not told about worker wakes");
 });
+
+// Workers can run with the network and more paths now (the worker-net codex
+// profile); what they must not do on their own is said in their rules.
+test("every PM and worker is told to ask before anything risky", () => {
+  for (const role of ["pm", "worker"]) {
+    const text = workerRules({ id: 9, name: "w", role }, "http://127.0.0.1:0", [], null);
+    assert.match(text, /pilo block/);
+    assert.match(text, /Deleting, push, deploy|지우기·push·배포/);
+  }
+});
