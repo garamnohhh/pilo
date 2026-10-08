@@ -44,3 +44,4 @@
 - Agents use soft delete (`archived_at`) so past task references stay intact.
 - `aliases` is stored as comma-separated TEXT for now.
 - One inbox row fans out to N tasks; worker branches hang off `parent_task_id`.
+- Site (pilo.garamnoh.workers.dev): no third-party requests, with one exception — the host's own measure, Cloudflare Web Analytics (beacon, no cookies), on every page (2026-10-08, same rule as the portfolio).
