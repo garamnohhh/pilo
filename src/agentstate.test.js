@@ -67,3 +67,13 @@ test("the tree and the dashboard put the same agent on the same rung", () => {
     assert.equal(theirs(agent), agentState(agent), `${name} reads the same on both screens`);
   }
 });
+
+// garamnoh read "running" with a still dot: the dashboard spun the mark only
+// for held work, while the state also says running when herdr reports the pane
+// working. The TUI spins for both; so does the dashboard now.
+test("the dashboard spins every agent whose state is running", () => {
+  const page = readFileSync(new URL("../public/dashboard.html", import.meta.url), "utf8");
+  const mark = page.slice(page.indexOf("function agentMark("), page.indexOf("\n}", page.indexOf("function agentMark(")));
+  assert.match(mark, /if \(key === "running"\) return `<span class="d-spin"/);
+  assert.doesNotMatch(page, /d-dot\$\{a\.status === "running"/);
+});

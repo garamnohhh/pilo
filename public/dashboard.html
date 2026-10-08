@@ -1482,7 +1482,9 @@ const agentNote = (a) => T(`state.${agentState(a)}`);
 const MARK = { stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
   const key = agentState(a);
-  if (key === "running" && a.status === "running") return `<span class="d-spin" style="color:${colour}" aria-hidden="true"></span>`;
+  // "running" is held work or a pane herdr says is working — the TUI spins for
+  // both, and a still dot under the word "running" read as a contradiction
+  if (key === "running") return `<span class="d-spin" style="color:${colour}" aria-hidden="true"></span>`;
   if (MARK[key]) return `<span class="d-spin-still" style="color:${colour}" aria-hidden="true">${MARK[key]}</span>`;
   return `<span class="d-spin-still" aria-hidden="true"><span class="d-dot" style="background:${colour};display:inline-block"></span></span>`;
 }
@@ -1684,7 +1686,7 @@ mviews.tree = () => {
       const tone = agentTone(a);
       return `<div class="gn-ladder-row"><span class="gn-ladder-indent" data-level="${Math.min(lvl, 2)}"></span>
         <span class="gn-ladder-block" data-role="${esc(a.role)}" style="gap:8px">
-          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${tone}"></span>
+          <span class="d-dot${agentState(a) === "running" ? " d-live" : ""}" style="background:${tone}"></span>
           <span class="gn-ladder-name">${esc(a.name)}</span>
           <span class="d-lbl" style="color:${roleFg(role)}">${role}</span>
           <span class="gn-ladder-note" style="color:${tone}">${esc(agentNote(a))}</span></span></div>`;
@@ -2133,7 +2135,7 @@ views.agents = () => {
           ${a.reviewer ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);margin-left:6px" title="reviewer — its PM hands it checks">REVIEW</span>` : ""}
           ${runtimeMark(a.runtime)}
           <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
-          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
+          <span class="d-dot${agentState(a) === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
           <span class="gn-ladder-note" style="color:${colour}">${esc(agentNote(a))}</span>
           <button class="gn-btn gn-btn-sm gn-btn-ghost" style="margin-right:8px;flex:none" data-act="open-agent" data-id="${a.id}">open</button>
         </span></div>`;
@@ -2310,7 +2312,7 @@ views.inbox = () => {
       return `<button class="d-plain d-tr d-rowbtn d-pick" aria-selected="${state.reqAgent === a.name}" style="grid-template-columns:minmax(0,1fr) 32px;min-height:34px;padding-left:${12 + lvl * 18}px" data-act="req-agent" data-name="${esc(a.name)}">
         <span style="display:flex;align-items:center;gap:8px;min-width:0">
           ${lvl ? `<span class="d-m" style="color:var(--text-3);font-size:12px;flex:none">└</span>` : ""}
-          <span class="d-dot${a.status === "running" ? " d-live" : ""}" style="background:${agentTone(a)}"></span>
+          <span class="d-dot${agentState(a) === "running" ? " d-live" : ""}" style="background:${agentTone(a)}"></span>
           <span class="d-clip" style="font-size:var(--fs-body)">${esc(a.name)}</span>
           <span class="d-chip" style="color:${roleFg(role)};background:${roleBg(role)};flex:none">${role}</span>
         </span>
