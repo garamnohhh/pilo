@@ -1,0 +1,4 @@
+{
+  "description": "pilo-usage: writes the session's usage to Pilo's home after each turn",
+  "modules": ["./register.js"]
+}

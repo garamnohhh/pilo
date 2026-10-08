@@ -1,0 +1,6 @@
+{
+  "name": "pilo-usage",
+  "version": "0.1.0",
+  "description": "Hands each Claude Code session's usage (context, plan limits, cost) to Pilo through a file. No network, no environment, no conversation.",
+  "author": { "name": "garamnoh" }
+}

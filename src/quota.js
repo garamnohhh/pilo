@@ -5,14 +5,27 @@ import { readFileSync, readdirSync, statSync, openSync, readSync, closeSync, fst
 import { homedir } from "node:os";
 import { basename, join } from "node:path";
 import { home as piloHome } from "./paths.js";
+import { newestLimits } from "./sessionusage.js";
 
 const CACHE_MS = Number(process.env.PILO_QUOTA_MS || 60000);
 let cache = { at: 0, value: {} };
 
 // Claude Code keeps the answer to /usage in its own config, with the time it
 // was fetched — which is what says whether the number is still worth reading.
+// Two sources, the newer wins: what a session reported after its last turn
+// (the pilo-usage mod) and Claude Code's /usage cache in ~/.claude.json.
 function claudeQuota() {
-  const raw = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
+  const fromCache = cacheQuota();
+  const live = newestLimits();
+  if (!live) return fromCache;
+  const liveAge = Math.round((Date.now() - live.at) / 60000);
+  if (fromCache && !fromCache.unknown && fromCache.ageMin <= liveAge) return fromCache;
+  return { percent: live.percent, resetsAt: live.resetsAt, week: live.week, weekResetsAt: live.weekResetsAt, ageMin: liveAge, source: "session" };
+}
+
+function cacheQuota() {
+  let raw;
+  try { raw = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8")); } catch { return null; }
   const u = raw?.cachedUsageUtilization;
   if (!u) return null;
   const five = u.utilization?.five_hour;
@@ -182,13 +195,16 @@ export function codexTrend(now = Date.now(), hours = 24) {
 // The age of the Claude reading, straight from the file — the refresher needs a
 // number the one-minute cache would hide.
 export function claudeAgeMin() {
+  let cache = Infinity;
   try {
     const raw = JSON.parse(readFileSync(join(homedir(), ".claude.json"), "utf8"));
     const at = Number(raw?.cachedUsageUtilization?.fetchedAtMs || 0);
-    return at ? (Date.now() - at) / 60000 : Infinity;
-  } catch {
-    return Infinity;
-  }
+    if (at) cache = (Date.now() - at) / 60000;
+  } catch {}
+  // a session that reported after its turn is as good as a /usage, so the
+  // probe stays quiet while sessions are working
+  const live = newestLimits();
+  return Math.min(cache, live ? (Date.now() - live.at) / 60000 : Infinity);
 }
 
 // A missing file, a changed format, a machine with neither tool: all the same

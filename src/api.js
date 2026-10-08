@@ -1,4 +1,5 @@
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
+import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
 import { paths, readPort, dataDir } from "./paths.js";
@@ -1280,7 +1281,14 @@ export async function usageOverview() {
      GROUP BY a.name, a.runtime HAVING COALESCE(sum(t.tokens_in), 0) + COALESCE(sum(t.tokens_out), 0) > 0
      ORDER BY COALESCE(sum(t.tokens_in), 0) + COALESCE(sum(t.tokens_out), 0) DESC, a.name`
   );
-  return { ...usageReport(), tokens: { ...(await tokenTotals()), agents } };
+  // each Claude session that reported through the pilo-usage mod: where it runs,
+  // how full its context is, what it has cost — never what it said
+  const sessions = sessionReadings().map((r) => ({
+    cwd: r.cwd || "", model: r.model || "", at: new Date(r.at).toISOString(),
+    context: r.context?.percent ?? null, cost: typeof r.cost?.usd === "number" ? r.cost.usd : null
+  }));
+  return { ...usageReport(), tokens: { ...(await tokenTotals()), agents },
+    sessionMod: { dir: modDir(), installed: modInstalled(), sessions } };
 }
 
 async function tokenTotals() {

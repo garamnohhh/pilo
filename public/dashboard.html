@@ -2656,6 +2656,21 @@ function trendChart(series, now = Date.now()) {
     <div class="d-m" style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:4px"><span>${clock(t0)}</span><span>${clock(now - 12 * 3600e3)}</span><span>${clock(now)}</span></div>
     <div class="d-m" style="display:flex;gap:16px;flex-wrap:wrap;font-size:11px;color:var(--text-2);margin-top:8px">${legend}</div>`;
 }
+// Claude sessions as the pilo-usage mod reports them: context and cost per
+// session. Off until Claude Code loads the mod; the hint says how.
+function sessionUsageHtml(mod) {
+  if (!mod) return "";
+  const rows = (mod.sessions || []).slice(0, 12);
+  const name = (cwd) => String(cwd || "").split("/").filter(Boolean).slice(-2).join("/") || "—";
+  return `<div>${rule(T("usage.sessions"), esc(rows.length ? T("usage.sessionsMod") : ""))}
+    ${rows.length ? `<div class="d-list">${rows.map((r) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 5rem 4rem 4.5rem">
+        <span class="d-m d-clip" style="font-size:12px" title="${esc(r.cwd)}">${esc(name(r.cwd))}</span>
+        <span class="d-m d-clip" style="font-size:11px;color:var(--text-3)">${esc(r.model)}</span>
+        <span class="d-m d-num" style="font-size:12px;text-align:right">${r.context == null ? "—" : `${r.context}%`}</span>
+        <span class="d-m d-num" style="font-size:11px;color:var(--text-3);text-align:right">${ago(r.at)}</span></div>`).join("")}</div>`
+      : `<div class="d-hint">${esc(T("usage.sessionsOff"))} <span class="d-m">CLAUDE_CODE_PLUGIN_DIRS=${esc(mod.dir)}</span></div>`}</div>`;
+}
+
 views.usage = () => {
   const u = state.data.usage;
   if (!u) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">loading…</div>`);
@@ -2706,6 +2721,7 @@ views.usage = () => {
             <span class="d-m d-num" style="font-size:12px;text-align:right">${fmtTokens(a.in + a.out)}</span>
             <span class="d-m d-num" style="font-size:11px;color:var(--text-3);text-align:right">${a.tasks} ${esc(T("usage.tasks"))}</span></div>`).join("")
             || `<div class="d-tr"><span class="d-lbl">${esc(T("usage.noTokens"))}</span></div>`}</div></div>
+        ${sessionUsageHtml(u.sessionMod)}
         <div class="d-hint">${esc(T("usage.sources"))}</div>
       </div>
     </div>`);

@@ -9,6 +9,7 @@ import * as api from "./api.js";
 import { buildRules } from "./rules.js";
 import { ensureHome, writePort, writePid, writeSocket, readPort, socketPath } from "./paths.js";
 import { startWatcher } from "./watcher.js";
+import { installMod } from "./sessionusage.js";
 import { startSpool } from "./spool.js";
 import { changed, openStream, listening } from "./changes.js";
 import { quotaReport } from "./quota.js";
@@ -258,6 +259,8 @@ if (running?.name === "Pilo") {
 const ran = await migrate();
 if (ran.length) console.log(`migrations applied: ${ran.join(", ")}`);
 ensureHome();
+// the pilo-usage mod lives in Pilo's home; Claude Code loads it from there
+installMod();
 
 const server = createServer((req, res) => {
   handle(req, res).catch((err) => json(res, err.status || 500, { error: err.message }));
