@@ -180,6 +180,25 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
 
 // Writing the file is only half of it: the session is already running, so tell it to
 // re-read the file instead of waiting for a restart.
+// The conversation a codex agent's pane is running, for a PM that restarts it.
+// herdr's own session id for a codex pane can be another thread: on 10/8 one
+// was the auto-review subagent's (the worker then answered every wake with a
+// risk verdict) and another belonged to a different worker's folder. This is
+// the main thread started in this pane, in this agent's folder.
+export async function agentSession(id) {
+  const agent = await one("SELECT id, name, runtime, herdr_target AS target, cwd FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
+  if (agent.runtime !== "codex") return { ...agent, session: null, note: "only codex sessions are looked up here" };
+  const session = await models.codexSessionInPane(agent.target, agent.cwd);
+  return {
+    ...agent,
+    session,
+    restart: session
+      ? `herdr agent start ${agent.name} --kind codex --pane ${agent.target} -- resume ${session} -p worker-net -c 'approvals_reviewer="user"'`
+      : null
+  };
+}
+
 export async function applyRules(id) {
   const written = await writeRules(id);
   const agent = await one(
@@ -422,7 +441,9 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
       attempts: prior.n + 1,
       runtime: agent.runtime || "",
       target: agent.herdr_target || "",
-      hint: code === "SESSION_NOT_FOUND" ? "rebind the herdr session" : "check the herdr session"
+      hint: code === "SESSION_NOT_FOUND" ? "rebind the herdr session"
+        : code === "PANE_IN_DIALOG" ? "the session is showing a dialog (codex hooks review) — answer it in the pane; the wake retries"
+        : "check the herdr session"
     },
     runLog: [{ t: "00:00", text: `wake ${agent.name}` }, { t: "00:00", text: code }]
   });

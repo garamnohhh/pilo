@@ -147,6 +147,8 @@ ${roster}
 - **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
 - Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
+- **Restarting a codex worker: take its session from Pilo**, \`pilo api GET /api/agents/<id>/session\` — it gives the
+  thread and the whole restart line. herdr's session id for a codex pane can be another thread (the auto-review one).
 - **Risky even if you can: ask first.** Deleting, push, deploy, posting anywhere public, writing to a database,
   anything touching an account or a payment — before running it, ask with \`pilo block\` and wait for the answer.
 - **\`pilo block\` only for what the user must decide.** The desk tells them for you. For a step only they can take — a
@@ -255,6 +257,8 @@ ${roster}
 
 - **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
+- **codex worker 를 다시 띄울 때 세션은 Pilo 에서 받는다**: \`pilo api GET /api/agents/<id>/session\` 이 그 대화와
+  재시작 명령 한 줄을 준다. herdr 가 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.
 - **할 수 있어도 위험한 작업은 먼저 확인한다.** 지우기·push·배포·외부 게시·DB 쓰기·계정·결제는 실행 전에
   \`pilo block\` 으로 확인을 받고, 답이 올 때까지 기다린다.
 - **\`pilo block\` 은 사용자가 정해야 하는 것만.** 사용자에게는 데스크가 대신 말한다. 사용자만 할 수 있는 절차(재시작·권한 등)는

@@ -122,8 +122,16 @@ export async function sendKeys(target, ...keys) {
   return true;
 }
 
+// Screens a session can open before it takes any prompt. Codex asks about new
+// or changed hooks when it starts or resumes; a wake typed into that screen
+// is lost (10/8: qa and promo never got their tasks). Such a pane is reported
+// as waiting on a dialog, and the wake is tried again on the usual clock.
+const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/];
+export const inDialog = (screen) => DIALOGS.some((re) => re.test(String(screen || "").split("\n").slice(-25).join("\n")));
+
 export async function prompt(target, message) {
   if (!target) throw new Error("SESSION_NOT_BOUND");
+  if (inDialog(await readPane(target))) throw new Error("PANE_IN_DIALOG");
   try {
     await herdr(["agent", "prompt", target, message]);
     return true;

@@ -111,6 +111,7 @@ const routes = [
   ["POST", /^\/api\/agents\/(\d+)\/wake$/, (m, body) => api.wakeAgent(Number(m[1]), body.message || "")],
   ["GET", /^\/api\/agents\/(\d+)\/rules$/, (m) => buildRules(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => api.applyRules(Number(m[1]))],
+  ["GET", /^\/api\/agents\/(\d+)\/session$/, (m) => api.agentSession(Number(m[1]))],
 
   ["GET", /^\/api\/projects$/, () => api.listProjects()],
   ["POST", /^\/api\/projects$/, (_m, body) => api.createProject(body)],

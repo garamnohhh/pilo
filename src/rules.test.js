@@ -95,3 +95,8 @@ test("every PM and worker is told to ask before anything risky", () => {
     assert.match(text, /Deleting, push, deploy|지우기·push·배포/);
   }
 });
+
+test("PMs are told to take a codex worker's session from Pilo, not herdr", () => {
+  const text = workerRules({ id: 9, name: "w", role: "pm" }, "http://127.0.0.1:0", [], null);
+  assert.match(text, /\/api\/agents\/<id>\/session/);
+});
