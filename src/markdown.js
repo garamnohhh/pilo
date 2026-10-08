@@ -163,6 +163,17 @@ function inlineHtml(escaped) {
   return s.replace(/\u0000(\d+)\u0000/g, (_, n) => parked[Number(n)]);
 }
 
+// A follow-up is stored as typed, with the head the screens put in front of it:
+// "follow-up to in-2466 — …" (or the Korean "in-2466 이어서 — …"). The screens show
+// that head on a line of its own and the user's words from the start, so a list
+// the user began with "1." starts there too. What is stored never changes.
+const FOLLOW_HEAD = /^(?:follow-up to in-(\d+)|in-(\d+) 이어서) — /;
+export function followHead(text) {
+  const s = String(text ?? "");
+  const m = FOLLOW_HEAD.exec(s);
+  return m ? { follow: m[1] || m[2], body: s.slice(m[0].length) } : { follow: null, body: s };
+}
+
 // Bullets and numbers nest by how far they are indented; two spaces is a level,
 // which is what the agents' own writing uses.
 function listHtml(items, escape) {
@@ -174,7 +185,9 @@ function listHtml(items, escape) {
     if (open.length === depth + 1 && open[depth] !== item.tag) out.push(`</li></${open.pop()}>`);
     if (open.length < depth + 1) {
       open.push(item.tag);
-      out.push(`<${item.tag} class="md-list"><li>`);
+      // a numbered list keeps the number it starts at: "2." stays 2
+      const start = item.tag === "ol" && item.start > 1 ? ` start="${item.start}"` : "";
+      out.push(`<${item.tag} class="md-list"${start}><li>`);
     } else {
       out.push("</li><li>");
     }
@@ -248,7 +261,7 @@ export function renderMarkdown(text, escape) {
         const bullet = BULLET.exec(lines[i]);
         const number = NUMBER.exec(lines[i]);
         if (bullet) items.push({ indent: bullet[1].length, tag: "ul", text: bullet[2] });
-        else if (number) items.push({ indent: number[1].length, tag: "ol", text: number[3] });
+        else if (number) items.push({ indent: number[1].length, tag: "ol", text: number[3], start: Number(number[2]) });
         else break;
         i += 1;
       }

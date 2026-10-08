@@ -383,7 +383,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { renderMarkdown } from "/markdown.js";
+import { renderMarkdown, followHead } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t, LANGS } from "/text.js";
 // The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
@@ -1751,7 +1751,7 @@ mviews.inbox = () => {
             <span class="d-m" style="font-size:11px;color:var(--text-3)">${hhmm(i.createdAt)}</span>
             <span class="d-chip" style="color:var(--text-2);background:var(--bg-2)">${esc(inboxAgents(i)[0] || "pilo")}</span>
             <span class="d-m" style="margin-left:auto;font-size:11px;color:${reqColor(i)}">${esc(reqState(i))}</span></span>
-          <span class="d-clip" style="display:block;width:100%;font-size:var(--fs-body);text-align:left">${esc(firstLine(i.userRequest))}</span></button>`).join("")
+          <span class="d-clip" style="display:block;width:100%;font-size:var(--fs-body);text-align:left">${esc(firstLine(followHead(i.userRequest).body))}</span></button>`).join("")
         || `<div style="padding:16px;font-size:var(--fs-small);color:var(--text-3)">${T("desk.lbl.nothingHere")}</div>`}</div></div>`;
   }
   const d = state.data.inboxDetail;
@@ -1763,7 +1763,8 @@ mviews.inbox = () => {
   const stageColour = (s) => s === "pm_result" ? INFO : s === "dispatch" ? ACCT : "var(--text-3)";
   return `${back}<div class="m-scroll">
     <div class="m-box m-boxpad"><div class="d-lbl">YOU ASKED</div>
-      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(d.userRequest)}</div>
+      ${followHead(d.userRequest).follow ? `<div class="d-m" style="margin-top:8px;font-size:11px;color:var(--text-3)">↳ ${esc(T("desk.follow.head", { id: followHead(d.userRequest).follow }))}</div>` : ""}
+      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(followHead(d.userRequest).body)}</div>
       <div class="d-m" style="margin-top:10px;font-size:11px;color:var(--text-3)">${esc([inboxAgents(d)[0] || "pilo", stamp(d.createdAt), d.status].filter(Boolean).join(" · "))}</div></div>
     <div class="m-box">${mHead(T("desk.lbl.handling"))}${trace.map((t) => `<div style="display:flex;gap:12px;padding:12px 16px;border-bottom:var(--hairline) solid var(--line-soft)">
         <span class="d-m" style="flex:none;width:84px;font-size:11px;color:${stageColour(t.stage)}">${esc(STAGE[t.stage] || t.stage)}${t.who ? `<br>${esc(t.who)}` : ""}</span>
@@ -1791,9 +1792,9 @@ function feedMessages(item, detail) {
   // says so rather than posing as something the user typed.
   const msgs = item.source === "desk" ? [] : [{
     who: `${item.source === "schedule" ? "pilo" : "you"} · ${hhmm(item.createdAt)}`,
-    chip: item.source === "schedule" ? T("feed.scheduled") : "",
+    chip: item.source === "schedule" ? T("feed.scheduled") : followHead(item.userRequest).follow ? T("desk.follow.head", { id: followHead(item.userRequest).follow }) : "",
     kind: "you",
-    text: item.userRequest || ""
+    text: followHead(item.userRequest).body
   }];
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
@@ -1932,7 +1933,7 @@ const openDecisions = (item, detail) => decisionsOf(item, detail).filter((d) => 
 // mark and who took it; the time is added here because a page of ten covers
 // more than one day and the reader asked to see when.
 function convHead(item, isFolded) {
-  const line = String(item.userRequest || "").split("\n").map((x) => x.trim()).filter(Boolean).join(" · ");
+  const line = String(followHead(item.userRequest).body).split("\n").map((x) => x.trim()).filter(Boolean).join(" · ");
   return `<button class="d-plain" style="display:flex;align-items:baseline;gap:10px;width:100%;padding:6px 0;cursor:pointer" data-act="toggle-conv" data-id="${item.id}">
     <span class="d-m" style="color:${convMood(item, state.feed.detail[item.id])};flex:none">${isFolded ? "›" : "⌄"}</span>
     <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">${hhmm(item.createdAt)}</span>
@@ -2328,7 +2329,7 @@ views.inbox = () => {
         ${Number(i.replyCount) > 1 ? `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3);flex:none">${T("card.followUp")} ${i.replyCount - 1}</span>` : ""}
         <span class="d-m" style="${Number(i.replyCount) > 1 ? "" : "margin-left:auto;"}font-size:11px;color:${reqColor(i)};flex:none">${esc(reqState(i))}</span>
       </span>
-      <span class="d-clip" style="display:block;margin-top:4px;font-size:var(--fs-body)">${esc(firstLine(i.userRequest))}</span></button>`;
+      <span class="d-clip" style="display:block;margin-top:4px;font-size:var(--fs-body)">${esc(firstLine(followHead(i.userRequest).body))}</span></button>`;
   }).join("");
 
   const handling = detail && String(detail.id) === String(state.selected.inbox)
@@ -2336,7 +2337,8 @@ views.inbox = () => {
         <div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.handling")}</span>
           <span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">in-${esc(detail.id)} · ${detail.tasks.length} tasks</span></div>
         <div style="padding:16px 4px 0">
-          <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(detail.userRequest)}</div>
+          ${followHead(detail.userRequest).follow ? `<div class="d-m" style="font-size:11px;color:var(--text-3);margin-bottom:6px">↳ ${esc(T("desk.follow.head", { id: followHead(detail.userRequest).follow }))}</div>` : ""}
+          <div class="md" style="font-size:var(--fs-body);line-height:1.62">${prose(followHead(detail.userRequest).body)}</div>
           <div class="d-m" style="margin-top:8px;font-size:12px;color:var(--text-3)">${stamp(detail.createdAt)} · ${esc(detail.status)}</div>
         </div>
         <div class="d-list" style="margin-top:24px">${(detail.trace || []).filter((t) => t.stage !== "inbox").map((t) => `
@@ -3572,7 +3574,7 @@ const actions = {
       || (state.data.inbox || []).find((i) => String(i.id) === id)
       || state.feed.rows.find((i) => String(i.id) === id);
     state.answering = null;
-    state.followUp = { id, line: firstLine(item?.userRequest || "") };
+    state.followUp = { id, line: firstLine(followHead(item?.userRequest || "").body) };
     state.selected.inbox = id;
     state.tab = "work";
     location.hash = "work";

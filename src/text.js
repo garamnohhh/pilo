@@ -379,6 +379,7 @@ const EN = {
   "desk.composer.hint": "ENTER to send",
   "desk.follow.ask": "follow up",
   "desk.follow.chip": "follow-up to in-{id}",
+  "desk.follow.head": "follow-up to in-{id}",
   "desk.follow.cancel": "don't follow up",
   "desk.follow.prefix": "follow-up to in-{id} — "
 };
@@ -746,6 +747,7 @@ const KO = {
   "desk.composer.hint": "ENTER 로 보냄",
   "desk.follow.ask": "이어 묻기",
   "desk.follow.chip": "in-{id} 에 이어 묻는 중",
+  "desk.follow.head": "in-{id} 이어서",
   "desk.follow.cancel": "이어 묻기 취소",
   "desk.follow.prefix": "in-{id} 이어서 — "
 };

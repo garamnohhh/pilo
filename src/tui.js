@@ -17,7 +17,7 @@ import { clipboardImage, clipboardText, droppedPaths, imageSize } from "./clipbo
 import { charWidth, cols, setAmbiguousWidth } from "./width.js";
 import { t } from "./text.js";
 import { parseCommand, suggest, HELP } from "./commands.js";
-import { alignTables } from "./markdown.js";
+import { alignTables, followHead } from "./markdown.js";
 import { parseMouse, ENABLE as MOUSE_ON, DISABLE as MOUSE_OFF } from "./mouse.js";
 
 const port = Number(process.env.PILO_PORT || readPort());
@@ -1029,7 +1029,12 @@ function render() {
       // spills past the rail.
       const tagged = routedBadge(item, tree);
       const textWidth = mainWidth - 6 - (tagged.width + 1);
-      const lines = wrap(alignTables(item.userRequest, textWidth), textWidth);
+      // a follow-up's head on a line of its own, the user's words from the next
+      const head = followHead(item.userRequest);
+      const lines = [
+        ...(head.follow ? [`${c.faint}↳ ${t("desk.follow.head", { id: head.follow })}${c.reset}`] : []),
+        ...wrap(alignTables(head.body, textWidth), textWidth)
+      ];
       const shownLines = folded ? lines.slice(0, 2) : lines;
       // The state of a request lives in its own mark rather than in a word: green
       // once answered, amber while the work is out, red when it needs a person.
@@ -1078,7 +1083,7 @@ function render() {
         // anywhere on a decision card picks it to answer
         const answer = deciding ? { type: "answer", taskId: String(item.decision.taskId), line: String(item.decision.text || "").split("\n")[0] } : null;
         // inside an answer card, a click follows that request up
-        const follow = item.finalReply ? { type: "follow", id: String(item.id), line: firstLine(item.userRequest) } : null;
+        const follow = item.finalReply ? { type: "follow", id: String(item.id), line: firstLine(followHead(item.userRequest).body) } : null;
         actions.push(...block.map((_row, i) => answer || (i === 0 ? fold : follow)));
         feed.push("");
         actions.push(null);
@@ -1388,7 +1393,7 @@ async function command(parsed) {
     const found = inbox.find((row) => String(row.id) === id) || (await api(`/api/inbox/${id}`, null));
     if (!found?.id) return note(t("tui.follow.missing", { id }), { sticky: true });
     state.answering = null;
-    state.follow = { id, line: firstLine(found.userRequest) };
+    state.follow = { id, line: firstLine(followHead(found.userRequest).body) };
     return note(t("tui.follow.on", { id }));
   }
   if (word === "fold" || word === "unfold") {

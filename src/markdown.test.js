@@ -132,3 +132,24 @@ test("the same text renders identically twice", () => {
   const text = "**a** `b`\n- c\n\n| x |\n| --- |\n| 1 |";
   assert.equal(renderMarkdown(text, esc), renderMarkdown(text, esc));
 });
+
+// A follow-up the user wrote as "1. … 2. … 3. …" showed as 1, 1, 2: the head
+// "follow-up to in-2466 — " sat on the first item's line, so the list began at
+// "2." and was numbered from 1. The screens now take the head off (stored text
+// unchanged) and a list keeps the number it starts at.
+import { followHead } from "./markdown.js";
+test("a numbered list keeps its numbers, and a follow-up's head comes off", () => {
+  const esc = (s) => s;
+  const three = renderMarkdown("1. one\n2. two\n3. three", esc);
+  assert.equal((three.match(/<li>/g) || []).length, 3);
+  assert.doesNotMatch(three, /start=/);
+  assert.match(renderMarkdown("2. two\n3. three", esc), /<ol class="md-list" start="2">/);
+  const stored = "follow-up to in-2466 — 1. thinkterm\n2. badge\n3. repo";
+  const head = followHead(stored);
+  assert.deepEqual(head, { follow: "2466", body: "1. thinkterm\n2. badge\n3. repo" });
+  const html = renderMarkdown(head.body, esc);
+  assert.equal((html.match(/<li>/g) || []).length, 3);
+  assert.doesNotMatch(html, /start=/);
+  assert.deepEqual(followHead("in-12 이어서 — 그거 다시"), { follow: "12", body: "그거 다시" });
+  assert.deepEqual(followHead("no head here"), { follow: null, body: "no head here" });
+});
