@@ -65,8 +65,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
      so the strip's bottom edge lands where the selected rail item's own
      breathing room ends. The strip and the rail then read as one band. */
   .d-strip { grid-area: strip; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); min-height: 72px; border-bottom: var(--bw) solid var(--line) }
-  .d-strip > div { display: flex; flex-direction: column; justify-content: center; padding: 0 20px; border-right: var(--hairline) solid var(--line-soft); min-width: 0 }
-  .d-strip > div:last-child { border-right: none }
+  /* every cell, a button one (Needs you) as well: d-plain strips a button's
+     padding, which put its label on the column line */
+  .d-strip > * { display: flex; flex-direction: column; justify-content: center; padding: 12px 20px; border-right: var(--hairline) solid var(--line-soft); min-width: 0; min-height: 72px; box-sizing: border-box }
+  .d-strip > *:last-child { border-right: none }
 
   /* The screen title is a title, not a block opening — it carries no rule.
      The first block below it opens with its own (.d-th or .d-lblrule), so
@@ -146,7 +148,11 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
     .d-railtxt { display: none }
     .d-pad { padding: 16px }
     .d-cin { padding: 12px 16px }
+    /* two rows of two: each row its own line, so the second row does not run
+       into the first or into the feed below */
     .d-strip { grid-template-columns: repeat(2, minmax(0, 1fr)) }
-    .d-strip > div:nth-child(2) { border-right: none }
+    .d-strip > * { min-height: 64px; padding: 10px 16px }
+    .d-strip > *:nth-child(2) { border-right: none }
+    .d-strip > *:nth-child(-n+2) { border-bottom: var(--hairline) solid var(--line-soft) }
     .d-hide-narrow { display: none !important }
   }
