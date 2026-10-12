@@ -1470,6 +1470,7 @@ function agentState(a) {
   // a give-up counts only while that work is still waiting, so it outranks the
   // "running" the queued task puts on the row — see src/agentstate.js
   if (a.gaveUp > 0) return "gaveUp";
+  if (a.waitingApproval) return "blocked";
   if (a.status === "running" && stalled(a)) return "stalled";
   if (a.status === "blocked") return "blocked";
   if (a.status === "failed") return "failed";
@@ -1578,18 +1579,25 @@ function approvalsHtml() {
       return `<div class="d-appr-item">${head}${qs.map((q, qi) => {
         const chosen = picks[r.id]?.[q.question] || [];
         return `<div style="font-size:var(--fs-body);color:var(--text)">${esc(q.question)}</div>
-        <div class="d-appr-acts">${(q.options || []).map((o) => btn(esc(o.label), "appr-pick", `data-id="${r.id}" data-q="${qi}" data-label="${esc(o.label)}" title="${esc(o.description || "")}" ${key ? "" : 'aria-disabled="true"'}`, chosen.includes(o.label) ? "gn-btn-brand" : "")).join("")}</div>`;
+        <div class="d-appr-acts">${(q.options || []).map((o) => btn(esc(o.label), "appr-pick", `data-id="${r.id}" data-q="${qi}" data-label="${esc(o.label)}" title="${esc(o.description || "")}"`, chosen.includes(o.label) ? "gn-btn-brand" : "")).join("")}</div>`;
       }).join("")}
-        <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-ghost")}</div></div>`;
+        <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}"`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div>`;
     }
     return `<div class="d-appr-item">${head}<pre>${esc(apprWhat(r))}</pre>
-      <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny" ${key ? "" : 'aria-disabled="true"'}`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-ghost")}</div></div>`;
+      <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div>`;
   };
-  const notice = (n) => `<div class="d-appr-item"><div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(n.agent)} · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))} · ${esc(ago(n.at))}</div>${n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}</div>`;
-  const pair = key || !pending.length ? "" : `<div class="d-appr-item"><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
-    <div class="d-appr-acts"><input id="appr-code" autocomplete="one-time-code" placeholder="${esc(T("appr.code"))}" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
+  // asked in the pane only: what it is about, and why it cannot be answered here
+  const notice = (n) => `<div class="d-appr-item"><div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(n.agent)} · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</div>
+    ${n.tool ? `<pre>${esc(apprWhat(n))}</pre>` : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
+    <div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div></div>`;
+  const pair = key || !pending.length ? "" : `<div class="d-appr-item"><div style="font-size:var(--fs-small);color:var(--warn, var(--text))">${esc(T("appr.unpaired"))}</div><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
+    <div class="d-appr-acts"><input id="appr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
   return `<div class="d-appr"><div style="font-size:var(--fs-small);color:var(--text);font-weight:600">${esc(T("appr.title", { n: pending.length + notices.length }))}</div>
     ${pair}${pending.map(item).join("")}${notices.map(notice).join("")}</div>`;
+}
+function apprNeedsPair() {
+  toast(T("appr.unpaired"), true);
+  $("appr-code")?.focus();
 }
 async function apprSend(id, body) {
   const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === String(id));
@@ -3454,13 +3462,15 @@ const actions = {
   },
   async appr(el) {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
-    if (!r || !apprKey()) return;
+    if (!r) return;
+    if (!apprKey()) return apprNeedsPair();
     if (el.dataset.d === "allow" && !confirm(T("appr.confirm", { agent: r.agent, what: apprWhat(r).slice(0, 300) }))) return;
     await apprSend(r.id, { decision: el.dataset.d });
   },
   async "appr-pick"(el) {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
-    if (!r || !apprKey()) return;
+    if (!r) return;
+    if (!apprKey()) return apprNeedsPair();
     const q = r.input.questions[Number(el.dataset.q)];
     const picks = (state.apprPicks ||= {})[r.id] ||= {};
     const now = picks[q.question] || [];
@@ -3472,13 +3482,17 @@ const actions = {
   async "appr-send"(el) {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
     const picks = state.apprPicks?.[r?.id] || {};
-    if (!r || r.input.questions.some((q) => !picks[q.question]?.length)) return;
+    if (!r) return;
+    if (!apprKey()) return apprNeedsPair();
+    if (r.input.questions.some((q) => !picks[q.question]?.length)) return toast(T("appr.pickAll"), true);
     // Claude Code takes a multi-select answer as its labels joined with commas
     const answers = Object.fromEntries(r.input.questions.map((q) => [q.question, picks[q.question].join(", ")]));
     await apprSend(r.id, { answers });
   },
   async "appr-pair"() {
-    const code = $("appr-code")?.value || "";
+    const code = ($("appr-code")?.value || "").trim();
+    // the command itself typed into the box: it runs in the Mac's terminal
+    if (!/^\d{6}$/.test(code)) return toast(T(/[a-z]/i.test(code) ? "appr.codeIsCommand" : "appr.codeShape"), true);
     try {
       const res = await call("POST", "/api/approvals/pair", { code, name: navigator.userAgent.slice(0, 60) });
       try { localStorage.setItem("pilo-approve-key", res.key); } catch (err) { /* private window: nothing to keep it in */ }

@@ -150,7 +150,7 @@ async function main([group, verb = "status", ...rest]) {
     return console.log("pilo hooks install [--codex] · pilo hooks remove [--codex]");
   }
   if (group === "approvals") {
-    if (verb === "pair") return console.log(`Pairing code: ${newPairCode()}  (5 minutes — type it on the device's Pilo screen)`);
+    if (verb === "pair") return console.log(`Pairing code: ${newPairCode()}  (5 minutes — type these 6 digits into the code box on the device's Pilo screen)`);
     if (verb === "reset") { forgetDevices(); return console.log("every paired device forgotten"); }
     return console.log("pilo approvals pair · pilo approvals reset");
   }

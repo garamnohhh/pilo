@@ -132,7 +132,10 @@ export async function notifyRule(when, title, body) {
 }
 
 export async function listAgents() {
-  return query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
+  const rows = await query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
+  // live from the pane's hooks, not the database: a permission prompt shows at once
+  for (const a of rows) a.waitingApproval = Boolean(a.herdrTarget) && approvals.busy(a.herdrTarget);
+  return rows;
 }
 
 export async function agentTree() {

@@ -1041,7 +1041,7 @@ function render() {
     ...(appr.pending || []).map((r, i) => `${c.amber}◆ ${i + 1}${c.reset} ${c.fg}${r.agent}${c.reset} ${c.faint}·${c.reset} ${r.kind === "question"
       ? (r.input?.questions || []).map((q) => `${q.question} ${(q.options || []).map((o, k) => `${c.faint}${k + 1}${c.reset} ${o.label}`).join(" ")}`).join(" / ")
       : `${r.tool} ${c.muted}${String(Array.isArray(r.input?.command) ? r.input.command.join(" ") : r.input?.command ?? r.input?.file_path ?? "")}${c.reset}`}`),
-    ...(appr.notices || []).map((n) => `${c.faint}◇ ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${c.reset}`)
+    ...(appr.notices || []).map((n) => `${c.faint}◇ ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${n.tool ? ` · ${n.tool} ${String(Array.isArray(n.input?.command) ? n.input.command.join(" ") : n.input?.command ?? n.input?.file_path ?? "")}` : ""}${n.reason ? ` · ${t("appr.paneOnly", { why: n.reason })}` : ""}${c.reset}`)
   ];
   if (apprRows.length) {
     for (const row of apprRows.slice(0, 4)) emit(pre + cut(row, outWidth));

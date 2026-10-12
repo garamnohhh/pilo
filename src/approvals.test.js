@@ -31,6 +31,20 @@ test("window-only: the list the user set, and nothing ordinary", () => {
     assert.equal(bash(ok), "", ok);
   }
   assert.equal(A.windowOnly("Read", { file_path: "/w/app/src/env.js" }), "");
+  // what a command runs, not words it carries (10/12: a handoff note stopped a pane)
+  assert.equal(bash("cat > handoff.md <<'EOF'\n- run pilo approvals pair on the Mac\n- never git push --force\nEOF"), "");
+  assert.equal(bash('echo "git push --force and rm -rf are pane-only"'), "");
+  assert.equal(bash("git commit -m 'stop rm -rf, sudo and pilo approvals'"), "");
+  assert.equal(A.windowOnly("Write", { file_path: "/w/notes.md", content: "pilo approvals pair; rm -rf /" }), "");
+  // and still caught when they run, however they are wrapped
+  assert.equal(bash("bash -c 'rm -rf build'"), "rm -rf");
+  assert.equal(bash("bash <<'EOF'\nrm -rf build\nEOF"), "rm -rf");
+  assert.equal(bash("FOO=1 git push --force-with-lease"), "git push --force");
+  assert.equal(bash("pilo api POST /api/approvals/3 '{}'"), "pilo approvals");
+  assert.equal(bash("/opt/homebrew/bin/pilo approvals pair"), "pilo approvals");
+  assert.equal(bash("ls && env sudo true"), "sudo");
+  assert.equal(bash("curl -s 127.0.0.1:48888/api/approvals"), "", "reading the list answers nothing");
+  assert.equal(bash("pilo api GET /api/approvals"), "");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "select * from users" }), "");
 });
 
@@ -76,6 +90,15 @@ test("a question is answered with answers, a permission with allow or deny", asy
   assert.deepEqual(await q, { decision: "answer", answers: { "Which?": "A" } });
 });
 
+test("a prompt in the pane says what it is about, from the tool the pane asked to run", () => {
+  A.notify({ pane: "w7:p1", type: "tool", tool: "Bash", input: { command: "git push --force" }, reason: "git push --force" }, agent);
+  A.notify({ pane: "w7:p1", type: "permission_prompt", message: "Claude needs your permission" }, agent);
+  const n = A.list().notices.find((x) => x.pane === "w7:p1");
+  assert.deepEqual([n.tool, n.input.command, n.reason], ["Bash", "git push --force", "git push --force"]);
+  assert.equal(A.busy("w7:p1"), true);
+  A.notify({ pane: "w7:p1", type: "stop" }, agent);
+});
+
 test("notices: a prompt in the pane, cleared by the next tool call or an idle pane", () => {
   A.notify({ pane: "w5:p1", type: "permission_prompt", message: "Claude needs your permission" }, agent);
   assert.equal(A.busy("w5:p1"), true);
@@ -100,13 +123,17 @@ test("answered in the pane: the next tool call or the turn's end drops what was 
 
 test("pairing: a code once, then a key that answers", () => {
   const code = A.newPairCode();
-  assert.throws(() => A.pair({ code: "WRONG" }), /wrong or expired/);
+  assert.match(code, /^\d{6}$/);
+  assert.throws(() => A.pair({ code: "pilo approvals pair" }), /wrong or expired/);
   const { key } = A.pair({ code, name: "phone" });
   assert.equal(A.checkKey({ key }).ok, true);
   assert.throws(() => A.pair({ code }), /wrong or expired/);
   assert.ok(!readFileSync(join(dir, ".pilo", "approvals.json"), "utf8").includes(key));
   A.forgetDevices();
   assert.equal(A.checkKey({ key }).ok, false);
+  const again = A.newPairCode();
+  for (let i = 0; i < 5; i++) assert.throws(() => A.pair({ code: "000000" === again ? "111111" : "000000" }), /wrong or expired/);
+  assert.throws(() => A.pair({ code: again }), /wrong or expired/, "five misses and the code is gone");
 });
 
 test("settings: Pilo's hooks go beside the user's and come out alone", () => {

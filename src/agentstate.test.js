@@ -26,7 +26,9 @@ const AGENTS = {
   "limit expired": { status: "idle", gaveUp: 0, limitedUntil: ago(30) },
   // the task table still calls this one running: it holds a queued task nobody
   // is being nudged about any more
-  "gave up on the task it holds": { status: "running", gaveUp: 1, lastSignal: ago(2) }
+  "gave up on the task it holds": { status: "running", gaveUp: 1, lastSignal: ago(2) },
+  // its pane asks for a permission: the user's at once, not "running" until it stalls
+  "asking for a permission": { status: "running", gaveUp: 0, lastSignal: ago(60), sessionStatus: "idle", waitingApproval: true }
 };
 
 test("every agent lands on one rung", () => {
@@ -45,6 +47,7 @@ test("every agent lands on one rung", () => {
   assert.equal(agentState(AGENTS.limited, now), "limited", "a limit outranks everything else");
   assert.equal(agentState(AGENTS["limit expired"], now), "idle");
   assert.equal(agentState(AGENTS["gave up on the task it holds"], now), "gaveUp", "nobody is nudging it any more");
+  assert.equal(agentState(AGENTS["asking for a permission"], now), "blocked");
 });
 
 test("silence only counts against work in hand", () => {

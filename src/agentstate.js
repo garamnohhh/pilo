@@ -27,6 +27,9 @@ export function agentState(agent, now = Date.now()) {
   // it outranks the "running" the queued task itself puts on the row: nobody is
   // nudging that agent any more, whatever the task table says it holds.
   if (agent.gaveUp > 0) return "gaveUp";
+  // its pane is asking for a permission or an answer, as its hooks just said:
+  // that is the user's to give, the same as a decision
+  if (agent.waitingApproval) return "blocked";
   if (agent.status === "running" && stalled(agent, now)) return "stalled";
   if (agent.status === "blocked") return "blocked";
   if (agent.status === "failed") return "failed";

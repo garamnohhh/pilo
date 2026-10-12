@@ -29,35 +29,77 @@ import { fileURLToPath } from "node:url";
 export const HOOK_TIMEOUT_S = 86400;
 
 // Never answered from outside the pane: a lost phone or a stale tap must not be
-// able to say yes to these. The pattern names what it caught, for the reason line.
-const SEGMENT = /[^;&|\n]+/g;
-const BASH_RULES = [
-  ["rm -rf", (s) => /^\s*(sudo\s+)?rm\s/.test(s) && /\s-[a-zA-Z]*r|--recursive/.test(s) && /\s-[a-zA-Z]*f|--force/.test(s)],
-  ["git push --force", (s) => /\bgit\b.*\bpush\b/.test(s) && /(\s--force\b|\s--force-with-lease\b|\s-[a-zA-Z]*f\b|\s\+\S)/.test(s)],
-  ["git reset --hard", (s) => /\bgit\b.*\breset\b.*--hard\b/.test(s)],
-  ["sudo", (s) => /(^|\s)sudo\s/.test(s)]
-];
+// able to say yes to these. Judged on what a command runs — its command word and
+// arguments — not on words that only appear in a string or a heredoc it writes
+// (10/12: a handoff note that mentioned "pilo approvals" stopped a pane).
 const SQL_WRITE = /\b(drop\s+(table|database|schema)|delete\s+from|update\s+\S+\s+set|truncate|insert\s+into|alter\s+table|grant|revoke)\b/i;
-const DB_CLIENT = /(^|[\s/])(psql|mysql|pg_restore|dropdb|mongosh)\b/;
-const SECRET = /(^|[\s/'"=])\.env(\.[\w.-]+)?($|[\s'"])|(^|[\s/])secrets?(\/|$|\s)|\.pilo\/approv/;
+const DB_CLIENTS = new Set(["psql", "mysql", "pg_restore", "dropdb", "mongosh", "sqlite3"]);
+const SHELLS = new Set(["sh", "bash", "zsh"]);
+const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)|\.pilo\/approv/;
 // Pilo's own approval doors: an agent opening them could answer for itself
-const PILO_APPROVAL = /\/api\/approvals|\bpilo\s+(approvals|hooks)\b/;
+const PILO_DOOR = /\/api\/approvals/;
+
+// Heredoc bodies come out, except one fed to a shell, which runs as commands.
+function heredocs(command) {
+  const runs = [];
+  const rest = command.replace(/(^|\n)([^\n]*?)<<-?\s*(['"]?)(\w+)\3[^\n]*\n([\s\S]*?)\n\s*\4\s*(?=\n|$)/g, (_m, lead, line, _q, _tag, body) => {
+    if (SHELLS.has(words(line)[0])) runs.push(body);
+    return `${lead}${line}`;
+  });
+  return [rest, ...runs.flatMap(heredocs)];
+}
+// Words of one simple command, quotes taken off; a quoted word stays one word.
+function words(segment) {
+  const out = [];
+  for (const m of String(segment).matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  return out;
+}
+const base = (w) => String(w || "").split("/").pop();
+
+function commandRule(segment) {
+  let w = words(segment);
+  while (w.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(w[0])) w = w.slice(1);
+  const cmd = base(w[0]);
+  const args = w.slice(1);
+  const flag = (re) => args.some((a) => re.test(a));
+  if (cmd === "sudo") return "sudo";
+  if ((cmd === "env" || cmd === "command" || cmd === "exec" || cmd === "nohup" || cmd === "time") && args.length) return commandRule(args.join(" "));
+  if (SHELLS.has(cmd)) {
+    const i = args.indexOf("-c");
+    if (i >= 0 && args[i + 1]) return check(args[i + 1]);
+  }
+  if (cmd === "rm" && flag(/^-[a-zA-Z]*r|^--recursive$/) && flag(/^-[a-zA-Z]*f|^--force$/)) return "rm -rf";
+  if (cmd === "git" && args.includes("push") && flag(/^--force(-with-lease)?(=|$)|^-[a-zA-Z]*f$|^\+/)) return "git push --force";
+  if (cmd === "git" && args.includes("reset") && args.includes("--hard")) return "git reset --hard";
+  if (DB_CLIENTS.has(cmd)) return "database client";
+  if (cmd === "pilo" && (args[0] === "approvals" || args[0] === "hooks")) return "pilo approvals";
+  // reading the list is harmless; sending to it answers
+  if (args.some((a) => PILO_DOOR.test(a)) && args.some((a) => /^(POST|PUT|PATCH|-d|--data.*|--json|-F|--form)$/i.test(a) || /^-X(POST|PUT|PATCH)?$/i.test(a))) return "pilo approvals";
+  if (args.some((a) => SECRET.test(a))) return ".env / secrets";
+  return "";
+}
+
+function check(command) {
+  for (const part of heredocs(String(command))) {
+    for (const segment of part.split(/\n|;|&&|\|\||\||&/)) {
+      const hit = commandRule(segment.replace(/^[\s({]+/, ""));
+      if (hit) return hit;
+    }
+  }
+  return "";
+}
 
 export function windowOnly(tool, input = {}) {
   const name = String(tool || "");
-  const text = typeof input === "string" ? input : JSON.stringify(input || {});
   const command = Array.isArray(input?.command) ? input.command.join(" ") : String(input?.command ?? input?.cmd ?? "");
   if (command) {
-    for (const seg of command.match(SEGMENT) || []) {
-      for (const [label, hit] of BASH_RULES) if (hit(seg)) return label;
-    }
-    if (DB_CLIENT.test(command)) return "database client";
+    const hit = check(command);
+    if (hit) return hit;
   }
-  if (PILO_APPROVAL.test(text)) return "pilo approvals";
-  if (/^mcp__/.test(name) && /postgres|sql|db/i.test(name) && SQL_WRITE.test(text)) return "database write";
-  if (command && SQL_WRITE.test(command)) return "database write";
+  if (/^mcp__/.test(name) && /postgres|sql|db/i.test(name) && SQL_WRITE.test(JSON.stringify(input || {}))) return "database write";
+  if (PILO_DOOR.test(String(input?.url ?? ""))) return "pilo approvals";
   const path = String(input?.file_path ?? input?.path ?? input?.notebook_path ?? "");
-  if (SECRET.test(path) || (command && SECRET.test(command))) return ".env / secrets";
+  if (SECRET.test(path)) return ".env / secrets";
   return "";
 }
 
@@ -107,7 +149,7 @@ async function main() {
   const toolInput = input.tool_input || {};
   const base = { runtime, pane, session: input.session_id || "", cwd: input.cwd || "", tool, input: toolInput };
 
-  const tell = (type, extra = {}) => (pane ? post("/api/hooks/notify", { ...base, type, ...extra }, 500) : null);
+  const tell = (type, extra = {}) => (pane ? post("/api/hooks/notify", { ...base, type, ...extra }, 1500) : null);
   if (event === "Notification") return void await tell(input.notification_type || "notice", { message: input.message || "" });
   if (event === "SessionStart") return void await tell("session", { source: input.source || "" });
   if (event === "Stop") return void await tell("stop");
@@ -121,8 +163,9 @@ async function main() {
   }
   const why = windowOnly(tool, toolInput);
   if (event === "PreToolUse") {
-    // a tool running means whatever the pane waited on is over
-    await tell("tool");
+    // a tool running means whatever the pane waited on is over; Pilo keeps it
+    // too, so a prompt the pane shows next says what it is about
+    await tell("tool", why ? { reason: why } : {});
     if (why) print({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask",
       permissionDecisionReason: `Pilo: ${why} is answered in this window only` } });
     return;

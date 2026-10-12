@@ -11,7 +11,7 @@
 // with a code from `pilo approvals pair` (typed by the user in a terminal, so an
 // agent cannot fetch one for itself); the TUI reads its own key from Pilo's
 // home. Only key hashes are kept on disk.
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "./paths.js";
@@ -72,8 +72,14 @@ export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()
   });
 }
 
+// The last tool each pane asked to run: a Notification says only "Claude needs
+// your permission", so the notice borrows what it is about from here.
+const lastTool = new Map();
+const ASKED_MS = 10 * 60e3;
+
 export function notify(body, agent, now = Date.now()) {
   if (!agent || !body.pane) return { ok: true };
+  if (body.type === "tool" && body.tool) lastTool.set(body.pane, { tool: body.tool, input: body.input ?? {}, reason: body.reason || "", at: now });
   // A later tool call, the turn ending or a new session means whatever the pane
   // waited on is over. Answering in the pane does not end the hook — Claude
   // Code shows its own prompt beside it — so the request held here goes too.
@@ -89,7 +95,9 @@ export function notify(body, agent, now = Date.now()) {
   // permission prompt for a request held here is already on the screens
   if (body.type === "idle_prompt") return { ok: true };
   if (body.type === "permission_prompt" && [...pending.values()].some((r) => r.pane === body.pane)) return { ok: true };
-  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, type: body.type, message: String(body.message || "").slice(0, 300), at: now });
+  const asked = lastTool.get(body.pane);
+  const about = asked && now - asked.at < ASKED_MS && body.type === "permission_prompt" ? { tool: asked.tool, input: asked.input, reason: asked.reason } : {};
+  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, type: body.type, message: String(body.message || "").slice(0, 300), at: now, ...about });
   onChange();
   return { ok: true };
 }
@@ -143,9 +151,11 @@ function keyOk(key) {
 }
 
 // `pilo approvals pair`, from the user's terminal: a code good for five minutes.
+// Six digits, so a phone takes it with its number pad. Five wrong tries and the
+// code is gone: a guess has 5 in a million, not a million tries.
 export function newPairCode(now = Date.now()) {
-  const code = randomBytes(5).toString("hex").toUpperCase().slice(0, 8);
-  write({ ...read(), pair: { hash: hash(code), until: now + PAIR_MS } });
+  const code = String(randomInt(0, 1e6)).padStart(6, "0");
+  write({ ...read(), pair: { hash: hash(code), until: now + PAIR_MS, misses: 0 } });
   return code;
 }
 
@@ -153,7 +163,9 @@ export function pair(body, now = Date.now()) {
   const s = read();
   const code = String(body.code || "").trim().toUpperCase();
   if (!s.pair || now > s.pair.until || !code || !same(hash(code), s.pair.hash)) {
-    throw Object.assign(new Error("wrong or expired code — run 'pilo approvals pair' again"), { status: 403 });
+    const misses = (s.pair?.misses || 0) + 1;
+    if (s.pair) write({ ...s, pair: misses >= 5 ? null : { ...s.pair, misses } });
+    throw Object.assign(new Error("wrong or expired code — run 'pilo approvals pair' in a terminal on the Mac for a new one"), { status: 403 });
   }
   const key = randomBytes(24).toString("base64url");
   const name = String(body.name || "device").slice(0, 60);
