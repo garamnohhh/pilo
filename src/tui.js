@@ -1,10 +1,10 @@
 import readline from "node:readline";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { readPort } from "./paths.js";
+import { readPort, home } from "./paths.js";
 import { expandImages, edit, layoutDraft, cursorCell } from "./draft.js";
 import { waitingDecisions } from "./decisions.js";
 import { agentState, stalled } from "./agentstate.js";
@@ -701,8 +701,49 @@ async function refresh() {
     api("/api/settings", { tokens: { showInTui: true } }),
     api("/api/update", null)
   ]);
-  state.data = { setup, tree, inbox, overview, settings, update };
+  const approvals = await api("/api/approvals", null);
+  state.data = { setup, tree, inbox, overview, settings, update, approvals };
   return state.data;
+}
+
+// :allow / :deny / :pane [n] and :pick <option…> [n] answer what a session's
+// hook holds open. Allow asks once more: the same :allow again within 10 s.
+async function answerApproval(word, rest) {
+  const pending = (await api("/api/approvals", null))?.pending || [];
+  const nums = rest.map(Number).filter((n) => Number.isInteger(n) && n > 0);
+  const which = word === "pick" ? (nums.length > 1 ? nums.at(-1) : 1) : nums[0] || 1;
+  const r = pending[which - 1];
+  if (!r) return note(t("note.noBlocked"));
+  let body;
+  if (word === "pick") {
+    const qs = r.input?.questions || [];
+    if (r.kind !== "question" || !qs.length) return note("usage: :pick <option> [request]");
+    const picks = (nums.length > 1 ? nums.slice(0, -1) : nums);
+    // one option per question in order; a multi-select question takes them all
+    const answers = qs.length === 1
+      ? { [qs[0].question]: picks.map((n) => qs[0].options?.[n - 1]?.label).filter(Boolean).join(", ") }
+      : Object.fromEntries(qs.map((q, i) => [q.question, q.options?.[picks[i] - 1]?.label || ""]));
+    if (Object.values(answers).some((v) => !v)) return note("usage: :pick <option per question…> [request]");
+    body = { answers };
+  } else {
+    if (r.kind === "question" && word !== "pane") return note("usage: :pick <option> — this one is a question");
+    if (word === "allow" && !(state.apprConfirm?.id === r.id && Date.now() - state.apprConfirm.at < 10000)) {
+      state.apprConfirm = { id: r.id, at: Date.now() };
+      return note(t("appr.confirm", { agent: r.agent, what: String(r.input?.command ?? r.tool) }).replace("\n", " — ") + " :allow", { sticky: true });
+    }
+    state.apprConfirm = null;
+    body = { decision: word };
+  }
+  let key = "";
+  try { key = readFileSync(join(home, "approve-tui.key"), "utf8").trim(); } catch {}
+  const res = await fetch(`${base}/api/approvals/${r.id}`, {
+    method: "POST", headers: { "content-type": "application/json" },
+    body: JSON.stringify({ ...body, key, fingerprint: r.fingerprint })
+  }).catch(() => null);
+  const data = await res?.json().catch(() => ({}));
+  await refresh();
+  render();
+  return note(res?.ok ? t("appr.done", { agent: r.agent }) : `failed: ${data?.error || "no answer"}`, { sticky: !res?.ok });
 }
 
 function applyProject(name) {
@@ -994,8 +1035,21 @@ function render() {
   const gap = Math.max(2, outWidth - cols(statusLeft) - cols(right));
   emit(pre + cut(`${statusLeft}${" ".repeat(gap)}${right}`, outWidth));
   emit(pre + line(outWidth));
+  // Requests a session holds open for an answer, numbered for :allow 2 and the like
+  const appr = state.data.approvals || {};
+  const apprRows = [
+    ...(appr.pending || []).map((r, i) => `${c.amber}◆ ${i + 1}${c.reset} ${c.fg}${r.agent}${c.reset} ${c.faint}·${c.reset} ${r.kind === "question"
+      ? (r.input?.questions || []).map((q) => `${q.question} ${(q.options || []).map((o, k) => `${c.faint}${k + 1}${c.reset} ${o.label}`).join(" ")}`).join(" / ")
+      : `${r.tool} ${c.muted}${String(Array.isArray(r.input?.command) ? r.input.command.join(" ") : r.input?.command ?? r.input?.file_path ?? "")}${c.reset}`}`),
+    ...(appr.notices || []).map((n) => `${c.faint}◇ ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${c.reset}`)
+  ];
+  if (apprRows.length) {
+    for (const row of apprRows.slice(0, 4)) emit(pre + cut(row, outWidth));
+    emit(pre + cut(`${c.faint}${t("appr.tui", { n: apprRows.length })}${c.reset}`, outWidth));
+    emit(pre + line(outWidth));
+  }
 
-  const visible = Math.max(8, height - 11);
+  const visible = Math.max(8, height - 11 - (apprRows.length ? Math.min(4, apprRows.length) + 2 : 0));
   let rows = [];
   let rowActions = [];
   let waiting = 0;
@@ -1362,6 +1416,7 @@ async function command(parsed) {
     if (!res?.ok) return note(t("note.scheduleFailed", { id }), { sticky: true });
     return note(t(verb === "rm" ? "note.scheduleRemoved" : verb === "on" ? "note.scheduleOn" : "note.scheduleOff", { id }));
   }
+  if (["allow", "deny", "pane", "pick"].includes(word)) return answerApproval(word, rest);
   if (word === "blocked") {
     const rows = await api("/api/blocked", []);
     return note(rows.length ? rows.map((r) => `#${r.id} ${r.agent}: ${r.question}`).join("  │  ") : t("note.noBlocked"));

@@ -138,6 +138,16 @@ you asked last week.
   A line of its own, with nothing waiting on it.
 - **Decisions** — when an owner needs you to decide something, the question
   arrives in that conversation and your answer goes back to the work.
+- **Approvals** — with `pilo hooks install`, a session pilo runs asks its
+  permission prompts and its multiple-choice questions on the dashboard, the
+  terminal UI and the phone as well as in its own pane; the first answer from
+  either side wins. A few things are answered in the pane only, whatever the
+  mode: `rm -rf`, `git push --force`, `git reset --hard`, `sudo`, database
+  clients and writes, and reading `.env` or secrets. A phone answers once paired
+  with a code from `pilo approvals pair`, and Allow asks once more. The same
+  hooks tell pilo when a pane is waiting, when a turn ends and which
+  conversation a pane runs. Settings are backed up and the change shown before
+  it is written; `pilo hooks remove` takes it out again.
 - **Phone** — the dashboard fits a phone: one screen at a time with a tab bar
   at the bottom, and it can be added to the home screen. pilo only listens on
   `127.0.0.1`, so reaching it from a phone is up to a tunnel you run (for
@@ -170,6 +180,8 @@ pilo                  # the terminal UI
 pilo dashboard        # the browser desk
 pilo start            # the server only — pilo stop · pilo restart
 pilo update           # move to the newest release
+pilo hooks install    # approvals from the dashboard (--codex for Codex) · pilo hooks remove
+pilo approvals pair   # a code to pair a phone for answering
 pilo inbox [id]       # requests, or one request in full
 pilo agents           # id · name · role · project
 pilo history <words>  # what was asked, answered and reported before
@@ -182,7 +194,8 @@ Agents have their own set — `pilo task`, `pilo progress`, `pilo done`,
 register them. `pilo help` lists every one.
 
 Inside the terminal UI, `:help` does the same; `:dash`, `:project <name>`,
-`:follow`, `:fold`, `:cost` and `:icons` are the ones worth knowing.
+`:follow`, `:fold`, `:cost` and `:icons` are the ones worth knowing, and
+`:allow`, `:deny`, `:pane` and `:pick` answer what a session is asking.
 
 ## Running a second instance
 

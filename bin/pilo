@@ -131,6 +131,8 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     fi
     ;;
   logs) tail -f "$LOG" ;;
+  # the user's own: put Pilo's hooks into Claude Code / Codex, pair a phone
+  hooks|approvals) exec node "$ROOT/src/hooks.js" "$@" ;;
   # Every CLI command in src/commands.js has to be named here or it never
   # reaches the dispatcher — the shell answers with the usage line instead.
   # cli.test.js reads this list and that one, and fails when they drift.
@@ -139,5 +141,5 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     exec node "$ROOT/src/cli.js" "$@"
     ;;
   help|--help|-h) node "$ROOT/src/cli.js" ;;
-  *) echo "Usage: pilo [tui|start|stop|restart|status|update|dashboard|doctor|logs]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
+  *) echo "Usage: pilo [tui|start|stop|restart|status|update|dashboard|doctor|logs|hooks|approvals]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
 esac

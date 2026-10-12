@@ -1,5 +1,6 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
+import * as approvals from "./approvals.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached, probeReason, readProbe, writeProbe } from "./quota.js";
 import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER, createNote } from "./api.js";
@@ -377,6 +378,7 @@ export async function pumpSessions() {
   const before = new Map((await query("SELECT agent_id, status FROM agent_sessions")).map((r) => [String(r.agent_id), r.status]));
   for (const agent of agents) {
     const session = live.find((s) => s.target === agent.herdr_target);
+    if (session) approvals.settle(agent.herdr_target, session.status);
     // back from gone: a new session, which has heard none of the wakes before it
     if (session && before.get(String(agent.id)) === SESSION_GONE) {
       await logEvent({ type: "session_started", title: `${agent.name || "agent"}: session back in ${agent.herdr_target}`, agentId: agent.id, payload: { target: agent.herdr_target } });
@@ -386,6 +388,7 @@ export async function pumpSessions() {
        VALUES ($1, $2, $3, $4, now(), now())
        ON CONFLICT (agent_id) DO UPDATE SET
          target = EXCLUDED.target, status = EXCLUDED.status, title = EXCLUDED.title,
+         session_id = CASE WHEN agent_sessions.target = EXCLUDED.target THEN agent_sessions.session_id ELSE '' END,
          since = CASE WHEN agent_sessions.status = EXCLUDED.status THEN agent_sessions.since ELSE now() END,
          updated_at = now()`,
       [agent.id, agent.herdr_target, session ? session.status || "" : SESSION_GONE, session?.title || ""]

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import * as approvals from "./approvals.js";
 
 const run = promisify(execFile);
 const bin = process.env.PILO_HERDR || "/opt/homebrew/bin/herdr";
@@ -131,7 +132,9 @@ export const inDialog = (screen) => DIALOGS.some((re) => re.test(String(screen |
 
 export async function prompt(target, message) {
   if (!target) throw new Error("SESSION_NOT_BOUND");
-  if (inDialog(await readPane(target))) throw new Error("PANE_IN_DIALOG");
+  // what the pane's hooks told Pilo first; the screen read stays behind it for
+  // panes without them (and for codex's own hooks-review screen)
+  if (approvals.busy(target) || inDialog(await readPane(target))) throw new Error("PANE_IN_DIALOG");
   try {
     await herdr(["agent", "prompt", target, message]);
     return true;

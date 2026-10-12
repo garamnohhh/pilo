@@ -293,6 +293,11 @@
   #ubanner:empty { display: none }
   .d-ubanner { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--accent); font-size: var(--fs-small); color: var(--text-2) }
   .d-ubanner .d-ub-acts { margin-left: auto; display: flex; gap: 8px }
+  .d-appr { flex: none; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--warn, var(--accent)); padding: 10px 24px; max-height: 50vh; overflow-y: auto }
+  .d-appr-item { padding: 10px 0; border-top: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 8px }
+  .d-appr-item:first-of-type { border-top: 0 }
+  .d-appr pre { margin: 0; font: 12px/1.5 var(--mono); color: var(--text); white-space: pre-wrap; word-break: break-all; max-height: 8em; overflow-y: auto }
+  .d-appr-acts { display: flex; gap: 8px; flex-wrap: wrap }
   .d-mtabs, .d-msend, .d-mchips, .d-mneeds { display: none }
   /* a header that wraps must not be squeezed under the content below it */
   .d-fill > .d-head { flex: none }
@@ -324,7 +329,8 @@
        header is that box. */
     .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
-    .d-ubanner { padding: 10px 16px }
+    .d-ubanner, .d-appr { padding: 10px 16px }
+    .d-appr-acts .gn-btn { min-height: 44px; flex: 1 }
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
@@ -368,6 +374,7 @@
   <span class="d-m" id="sync" style="font-size:11px;color:var(--text-3);flex:none">loading…</span>
 </div>
 <div id="ubanner"></div>
+<div id="approvals"></div>
 <div class="d-shell" id="shell">
   <div class="d-rail" id="rail"></div>
   <div class="d-strip" id="strip" hidden></div>
@@ -523,6 +530,7 @@ async function load() {
   // back from an update: the page that loaded is the old one, so load the new
   if (upd && state.data.update?.current && upd.current !== state.data.update.current) return location.reload();
   state.data.update = upd;
+  state.data.approvals = await get("/api/approvals").catch(() => null);
   refreshFeed();
   await loadDetail();
   // kept as a time and formatted in render(), so a language switch shows at once
@@ -992,6 +1000,7 @@ function render() {
   if (isWork) touched |= renderWorkPanes();
   touched |= paint("mtabs", mtabsHtml());
   touched |= paint("ubanner", updateBannerHtml());
+  touched |= paint("approvals", approvalsHtml());
   syncAgentTip();
   const viewChanged = paint("view", ((narrow() && mviews[state.tab]) || views[state.tab])());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
@@ -1548,6 +1557,51 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
 // shows as a banner under the header until it is installed or put off; System
 // (and More on a phone) has the version, a check and the install button.
 const updateWhy = (u) => (u.kind && !["ok", "npm"].includes(u.kind) ? T(`update.${u.kind}`) : "");
+// Permissions and questions a session holds open through its Pilo hook. They
+// wait here until answered — no clock — and leave when the session moves on.
+// Answering needs this device's key (pilo approvals pair); Allow asks once more.
+const apprKey = () => { try { return localStorage.getItem("pilo-approve-key") || ""; } catch (err) { return ""; } };
+const apprWhat = (r) => r.kind === "question"
+  ? (r.input?.questions || []).map((q) => q.question).join(" / ")
+  : r.input?.command ? String(Array.isArray(r.input.command) ? r.input.command.join(" ") : r.input.command)
+  : r.input?.file_path || JSON.stringify(r.input || {});
+function approvalsHtml() {
+  const a = state.data.approvals;
+  const pending = a?.pending || [], notices = a?.notices || [];
+  if (!pending.length && !notices.length) return "";
+  const key = apprKey();
+  const picks = state.apprPicks || {};
+  const item = (r) => {
+    const head = `<div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(r.agent)} · ${esc(r.kind === "question" ? T("appr.question") : r.tool)} · ${esc(ago(r.at))}</div>`;
+    if (r.kind === "question") {
+      const qs = r.input?.questions || [];
+      return `<div class="d-appr-item">${head}${qs.map((q, qi) => {
+        const chosen = picks[r.id]?.[q.question] || [];
+        return `<div style="font-size:var(--fs-body);color:var(--text)">${esc(q.question)}</div>
+        <div class="d-appr-acts">${(q.options || []).map((o) => btn(esc(o.label), "appr-pick", `data-id="${r.id}" data-q="${qi}" data-label="${esc(o.label)}" title="${esc(o.description || "")}" ${key ? "" : 'aria-disabled="true"'}`, chosen.includes(o.label) ? "gn-btn-brand" : "")).join("")}</div>`;
+      }).join("")}
+        <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-ghost")}</div></div>`;
+    }
+    return `<div class="d-appr-item">${head}<pre>${esc(apprWhat(r))}</pre>
+      <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny" ${key ? "" : 'aria-disabled="true"'}`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane" ${key ? "" : 'aria-disabled="true"'}`, "gn-btn-ghost")}</div></div>`;
+  };
+  const notice = (n) => `<div class="d-appr-item"><div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(n.agent)} · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))} · ${esc(ago(n.at))}</div>${n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}</div>`;
+  const pair = key || !pending.length ? "" : `<div class="d-appr-item"><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
+    <div class="d-appr-acts"><input id="appr-code" autocomplete="one-time-code" placeholder="${esc(T("appr.code"))}" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
+  return `<div class="d-appr"><div style="font-size:var(--fs-small);color:var(--text);font-weight:600">${esc(T("appr.title", { n: pending.length + notices.length }))}</div>
+    ${pair}${pending.map(item).join("")}${notices.map(notice).join("")}</div>`;
+}
+async function apprSend(id, body) {
+  const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === String(id));
+  if (!r) return;
+  try {
+    await call("POST", `/api/approvals/${id}`, { ...body, key: apprKey(), fingerprint: r.fingerprint });
+    toast(T("appr.done", { agent: r.agent }));
+  } catch (err) { toast(err.message, true); }
+  if (state.apprPicks) delete state.apprPicks[id];
+  state.data.approvals = await get("/api/approvals").catch(() => state.data.approvals);
+  render();
+}
 function updateBannerHtml() {
   const u = state.data.update;
   if (!u) return "";
@@ -3397,6 +3451,40 @@ const actions = {
       if (!u.installing && !u.step) clearInterval(poll);
       render();
     }, 1500);
+  },
+  async appr(el) {
+    const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
+    if (!r || !apprKey()) return;
+    if (el.dataset.d === "allow" && !confirm(T("appr.confirm", { agent: r.agent, what: apprWhat(r).slice(0, 300) }))) return;
+    await apprSend(r.id, { decision: el.dataset.d });
+  },
+  async "appr-pick"(el) {
+    const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
+    if (!r || !apprKey()) return;
+    const q = r.input.questions[Number(el.dataset.q)];
+    const picks = (state.apprPicks ||= {})[r.id] ||= {};
+    const now = picks[q.question] || [];
+    picks[q.question] = q.multiSelect ? (now.includes(el.dataset.label) ? now.filter((x) => x !== el.dataset.label) : [...now, el.dataset.label]) : [el.dataset.label];
+    // one single-choice question: the tap is the answer
+    if (r.input.questions.length === 1 && !q.multiSelect) return actions["appr-send"](el);
+    render();
+  },
+  async "appr-send"(el) {
+    const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
+    const picks = state.apprPicks?.[r?.id] || {};
+    if (!r || r.input.questions.some((q) => !picks[q.question]?.length)) return;
+    // Claude Code takes a multi-select answer as its labels joined with commas
+    const answers = Object.fromEntries(r.input.questions.map((q) => [q.question, picks[q.question].join(", ")]));
+    await apprSend(r.id, { answers });
+  },
+  async "appr-pair"() {
+    const code = $("appr-code")?.value || "";
+    try {
+      const res = await call("POST", "/api/approvals/pair", { code, name: navigator.userAgent.slice(0, 60) });
+      try { localStorage.setItem("pilo-approve-key", res.key); } catch (err) { /* private window: nothing to keep it in */ }
+      toast(T("appr.paired"));
+    } catch (err) { toast(err.message, true); }
+    render();
   },
   "update-later"(el) {
     try { localStorage.setItem("pilo-update-later", el.dataset.v || ""); } catch (err) { /* private window */ }

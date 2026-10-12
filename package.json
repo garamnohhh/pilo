@@ -30,6 +30,7 @@
     "src/",
     "!src/**/*.test.js",
     "mods/",
+    "hooks/",
     "public/",
     "migrations/"
   ],

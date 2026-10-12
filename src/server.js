@@ -15,6 +15,9 @@ import { changed, openStream, listening } from "./changes.js";
 import { quotaReport } from "./quota.js";
 import * as update from "./update.js";
 import { saveUpload } from "./attachments.js";
+import * as approvals from "./approvals.js";
+import { tick } from "./watcher.js";
+import { installHookFile } from "./hooks.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -153,6 +156,13 @@ const routes = [
   ["POST", /^\/api\/schedules\/(\d+)$/, (m, body) => api.setSchedule(Number(m[1]), body)],
   ["DELETE", /^\/api\/schedules\/(\d+)$/, (m) => api.deleteSchedule(Number(m[1]))],
 
+  // from hooks/pilo-hook.mjs; /api/hooks/wait is held open, so handle() takes it
+  ["POST", /^\/api\/hooks\/notify$/, (_m, body) => api.hookNotify(body, { onStop: () => tick() })],
+  ["GET", /^\/api\/approvals$/, () => approvals.list()],
+  ["POST", /^\/api\/approvals\/pair$/, (_m, body) => approvals.pair(body)],
+  ["POST", /^\/api\/approvals\/check$/, (_m, body) => approvals.checkKey(body)],
+  ["POST", /^\/api\/approvals\/(\d+)$/, (m, body) => approvals.decide(m[1], body)],
+
   ["GET", /^\/api\/settings$/, () => api.settingsAll()],
   ["PUT", /^\/api\/settings\/([a-z]+)$/, (m, body) => api.saveSetting(m[1], body.value)]
 ];
@@ -209,6 +219,14 @@ async function handle(req, res) {
     openStream(req, res);
     return;
   }
+  // A session's hook waiting for an answer: held open until one comes, and let
+  // go when the hook hangs up (Esc in the pane cancels it).
+  if (method === "POST" && url.pathname === "/api/hooks/wait") {
+    const body = await readBody(req);
+    const gone = new Promise((resolve) => res.on("close", resolve));
+    json(res, 200, await approvals.wait(body, await api.agentForPane(body.pane), gone));
+    return;
+  }
   // An image from the dashboard: raw bytes, not JSON, so it is read before the
   // JSON body parser would try.
   if (method === "POST" && url.pathname === "/api/attachments") {
@@ -262,6 +280,11 @@ if (ran.length) console.log(`migrations applied: ${ran.join(", ")}`);
 ensureHome();
 // the pilo-usage mod lives in Pilo's home; Claude Code loads it from there
 installMod();
+// the hook in settings points at Pilo's home; keep that copy current
+installHookFile();
+
+approvals.setOnChange(changed);
+approvals.tuiKey();
 
 const server = createServer((req, res) => {
   handle(req, res).catch((err) => json(res, err.status || 500, { error: err.message }));

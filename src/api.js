@@ -1,4 +1,5 @@
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
+import * as approvals from "./approvals.js";
 import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
@@ -185,18 +186,47 @@ async function validateHierarchy({ role, parentAgentId, id = null }) {
 // was the auto-review subagent's (the worker then answered every wake with a
 // risk verdict) and another belonged to a different worker's folder. This is
 // the main thread started in this pane, in this agent's folder.
+// The pane's own SessionStart hook says which conversation it runs; without the
+// hook, a codex pane is looked up from its rollout files as before.
 export async function agentSession(id) {
-  const agent = await one("SELECT id, name, runtime, herdr_target AS target, cwd FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  const agent = await one(
+    `SELECT a.id, a.name, a.runtime, a.herdr_target AS target, a.cwd, s.session_id AS reported, s.session_at AS "reportedAt"
+       FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.herdr_target
+      WHERE a.id = $1 AND a.archived_at IS NULL`, [id]);
   if (!agent) throw Object.assign(new Error("agent not found"), { status: 404 });
-  if (agent.runtime !== "codex") return { ...agent, session: null, note: "only codex sessions are looked up here" };
-  const session = await models.codexSessionInPane(agent.target, agent.cwd);
+  const { reported, reportedAt, ...rest } = agent;
+  const codex = agent.runtime === "codex";
+  const session = reported || (codex ? await models.codexSessionInPane(agent.target, agent.cwd) : null);
+  if (!session) return { ...rest, session: null, note: codex ? "no codex session found for this pane" : "no session reported yet — install the hooks (pilo hooks install)" };
   return {
-    ...agent,
+    ...rest,
     session,
-    restart: session
+    source: reported ? "hook" : "rollout",
+    reportedAt: reportedAt || null,
+    restart: codex
       ? `herdr agent start ${agent.name} --kind codex --pane ${agent.target} -- resume ${session} -p worker-net -c 'approvals_reviewer="user"'`
-      : null
+      : `herdr agent start ${agent.name} --kind claude --pane ${agent.target} -- --resume ${session}`
   };
+}
+
+export const agentForPane = (pane) => (pane
+  ? one("SELECT id, name, runtime FROM agents WHERE herdr_target = $1 AND archived_at IS NULL ORDER BY id LIMIT 1", [pane])
+  : Promise.resolve(null));
+
+// Notification, SessionStart, Stop and every tool call, from hooks/pilo-hook.mjs.
+export async function hookNotify(body, { onStop = () => {} } = {}) {
+  const agent = await agentForPane(body.pane);
+  approvals.notify(body, agent);
+  if (!agent) return { ok: true };
+  if (body.type === "session" && /^[\w-]{8,80}$/.test(body.session || "")) {
+    await query(
+      `INSERT INTO agent_sessions (agent_id, target, session_id, session_at) VALUES ($1, $2, $3, now())
+       ON CONFLICT (agent_id) DO UPDATE SET session_id = EXCLUDED.session_id, session_at = now()`,
+      [agent.id, body.pane, body.session]
+    );
+  }
+  if (body.type === "stop") onStop(agent);
+  return { ok: true };
 }
 
 export async function applyRules(id) {
