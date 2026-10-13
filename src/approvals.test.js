@@ -46,6 +46,16 @@ test("window-only: the list the user set, and nothing ordinary", () => {
   assert.equal(bash("curl -s 127.0.0.1:48888/api/approvals"), "", "reading the list answers nothing");
   assert.equal(bash("pilo api GET /api/approvals"), "");
   assert.equal(bash("pilo api POST /api/agents/3/choose '{}'"), "pilo approvals");
+  // 10/13: a report that talked about rm -rf, tables and all, stopped a pane
+  assert.equal(bash('pilo done 3370 "| pilo 훅(rm -rf) | 4 | rm -rf \\"${S:?}/boot1\\" |\n- sudo, git push --force, git reset --hard 얘기"'), "");
+  assert.equal(bash("pilo done 7 'rm -rf 얘기; sudo 도 | 표 안에'"), "");
+  assert.equal(bash("rm -rf /x"), "rm -rf");
+  assert.equal(bash("cd a && rm -rf b"), "rm -rf");
+  assert.equal(bash("echo $(rm -rf c)"), "rm -rf");
+  assert.equal(bash('echo "$(rm -rf c)"'), "rm -rf", "a substitution runs even inside double quotes");
+  assert.equal(bash("echo `sudo id`"), "sudo");
+  assert.equal(bash("ls | xargs rm -rf"), "rm -rf");
+  assert.equal(bash("find . -name x -exec rm -rf {} +"), "rm -rf");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "select * from users" }), "");
 });
 

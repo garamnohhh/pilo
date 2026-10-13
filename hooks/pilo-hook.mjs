@@ -65,6 +65,12 @@ function commandRule(segment) {
   const flag = (re) => args.some((a) => re.test(a));
   if (cmd === "sudo") return "sudo";
   if ((cmd === "env" || cmd === "command" || cmd === "exec" || cmd === "nohup" || cmd === "time") && args.length) return commandRule(args.join(" "));
+  // commands that run another command they are given
+  if (cmd === "xargs") { const i = args.findIndex((a) => !a.startsWith("-")); if (i >= 0) return commandRule(args.slice(i).join(" ")); }
+  if (cmd === "find") {
+    const i = args.findIndex((a) => a === "-exec" || a === "-execdir" || a === "-ok");
+    if (i >= 0) { const hit = commandRule(args.slice(i + 1).join(" ")); if (hit) return hit; }
+  }
   if (SHELLS.has(cmd)) {
     const i = args.indexOf("-c");
     if (i >= 0 && args[i + 1]) return check(args[i + 1]);
@@ -80,10 +86,56 @@ function commandRule(segment) {
   return "";
 }
 
+// Simple commands, split where the shell splits them: on ; & && || | and new
+// lines outside quotes. A "…" or '…' string stays inside its command, so a
+// report that mentions rm -rf is one argument to `pilo done`, not a command
+// (10/13: it stopped a pane). What $( … ) or `…` holds does run, even inside
+// "…", so it comes back as commands of its own.
+export function simpleCommands(command) {
+  const out = [];
+  const subs = [];
+  let cur = "";
+  let quote = "";
+  const s = String(command);
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quote === "'") { cur += ch; if (ch === "'") quote = ""; continue; }
+    if (ch === "\\" && i + 1 < s.length) { cur += ch + s[++i]; continue; }
+    if (ch === "$" && s[i + 1] === "(" && s[i + 2] !== "(") {
+      // the matching ), counting nested ones and skipping quoted text
+      let depth = 1, j = i + 2, q = "";
+      for (; j < s.length && depth; j++) {
+        const c = s[j];
+        if (q) { if (c === q) q = ""; else if (c === "\\" && q === '"') j++; continue; }
+        if (c === "'" || c === '"') q = c;
+        else if (c === "(") depth++;
+        else if (c === ")") depth--;
+      }
+      subs.push(s.slice(i + 2, j - 1));
+      cur += "$SUB";
+      i = j - 1;
+      continue;
+    }
+    if (ch === "`") {
+      const j = s.indexOf("`", i + 1);
+      subs.push(s.slice(i + 1, j < 0 ? s.length : j));
+      cur += "$SUB";
+      i = j < 0 ? s.length : j;
+      continue;
+    }
+    if (quote === '"') { cur += ch; if (ch === '"') quote = ""; continue; }
+    if (ch === "'" || ch === '"') { quote = ch; cur += ch; continue; }
+    if (ch === ";" || ch === "\n" || ch === "|" || ch === "&") { out.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  out.push(cur);
+  return [...out.map((c) => c.replace(/^[\s({!]+/, "")).filter((c) => c.trim()), ...subs.flatMap(simpleCommands)];
+}
+
 function check(command) {
   for (const part of heredocs(String(command))) {
-    for (const segment of part.split(/\n|;|&&|\|\||\||&/)) {
-      const hit = commandRule(segment.replace(/^[\s({]+/, ""));
+    for (const segment of simpleCommands(part)) {
+      const hit = commandRule(segment);
       if (hit) return hit;
     }
   }
