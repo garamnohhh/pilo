@@ -38,7 +38,7 @@ const DB_CLIENTS = new Set(["psql", "mysql", "pg_restore", "dropdb", "mongosh", 
 const SHELLS = new Set(["sh", "bash", "zsh"]);
 const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)|\.pilo\/approv/;
 // Pilo's own approval doors: an agent opening them could answer for itself
-const PILO_DOOR = /\/api\/approvals/;
+const PILO_DOOR = /\/api\/(approvals|agents\/\d+\/choose)/;
 
 // Heredoc bodies come out, except one fed to a shell, which runs as commands.
 function heredocs(command) {

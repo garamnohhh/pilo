@@ -1592,8 +1592,22 @@ function approvalsHtml() {
   // asked in the pane only: what it is about, and why it cannot be answered here
   const notice = (n) => `<div><span class="d-lbl d-appr-who">${esc(n.agent)} → you · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
     ${n.tool ? `<pre>${esc(apprWhat(n))}</pre>` : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
-    <div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>
-    ${n.agentId ? `<div class="d-appr-acts">${btn(T("appr.openPane"), "appr-focus", `data-id="${n.agentId}"`)}</div>` : ""}</div></div>`;
+    ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>` : ""}
+    ${menuHtml(n)}</div></div>`;
+  // The pane's own numbered choice as buttons, when it could be read and the
+  // request is not pane-only. A standing rule or a mode switch, or a choice that
+  // wants words typed, stays in the pane. "Open the pane" is the last resort.
+  function menuHtml(n) {
+    const m = !n.reason && n.menu;
+    const open = n.agentId ? btn(T("appr.openPane"), "appr-focus", `data-id="${n.agentId}"`, m ? "gn-btn-ghost" : "") : "";
+    if (!m) return `<div class="d-appr-acts">${open}</div>`;
+    const kept = m.options.filter((o) => o.standing || o.typed);
+    return `${!n.tool && m.context?.length ? `<pre>${esc(m.context.join("\n"))}</pre>` : ""}
+      <div style="font-size:var(--fs-body);color:var(--text)">${esc(m.question)}</div>
+      <div class="d-appr-acts">${m.options.filter((o) => !o.standing && !o.typed).map((o) =>
+        btn(`${o.n}. ${esc(o.label)}`, "appr-choose", `data-id="${n.agentId}" data-n="${o.n}"`, o.n === 1 ? "gn-btn-brand" : "")).join("")}${open}</div>
+      ${kept.length ? `<div class="d-clip" style="font-size:var(--fs-small);color:var(--text-3)" title="${esc(kept.map((o) => `${o.n}. ${o.label}`).join("\n"))}">${esc(kept.map((o) => o.n).join(", "))} — ${esc(T("appr.standing"))}</div>` : ""}`;
+  }
   const pair = key || !pending.length ? "" : `<div class="d-appr-item" style="border-left-color:var(--warn, var(--err))"><div style="font-size:var(--fs-small);color:var(--warn, var(--text))">${esc(T("appr.unpaired"))}</div><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
     <div class="d-appr-acts"><input id="appr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
   return `<div class="d-appr" id="approvals">${pair}${pending.map(item).join("")}${notices.map(notice).join("")}</div>`;
@@ -3339,6 +3353,19 @@ DIALOGS["appr-confirm"] = (d) => {
   };
 };
 
+DIALOGS["pane-choose"] = (d) => {
+  const n = (state.data.approvals?.notices || []).find((x) => x.agentId === d.agentId);
+  const o = n?.menu?.options.find((x) => x.n === d.n);
+  if (!o) return { title: esc(T("appr.goneTitle")), sub: "", prose: esc(T("appr.gone")), actions: [btn(T("desk.act.close"), "close-dialog", "", "gn-btn-ghost")] };
+  return {
+    title: esc(T("appr.chooseTitle")),
+    sub: `${esc(n.agent)}${n.tool ? ` · ${esc(n.tool)}` : ""}`,
+    prose: `${n.tool ? `<pre style="margin:0 0 12px;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto">${esc(apprWhat(n))}</pre>` : ""}<div style="color:var(--text-2)">${esc(n.menu.question)}</div><div style="margin-top:8px;font-size:var(--fs-h3, 17px);color:var(--text)">${o.n}. ${esc(o.label)}</div><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.chooseNote"))}</div>`,
+    actions: [btn(T("appr.choose"), "pane-choose-yes", "", "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
+      `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
+  };
+};
+
 DIALOGS.event = (d) => {
   const e = state.data.eventDetail;
   if (!e || String(e.id) !== String(d.id)) return { title: `event ${d.id}`, sub: "", prose: "loading…" };
@@ -3530,6 +3557,26 @@ const actions = {
     // Claude Code takes a multi-select answer as its labels joined with commas
     const answers = Object.fromEntries(r.input.questions.map((q) => [q.question, picks[q.question].join(", ")]));
     await apprSend(r.id, { answers });
+  },
+  async "appr-choose"(el) {
+    if (!apprKey()) return apprNeedsPair();
+    const n = (state.data.approvals?.notices || []).find((x) => String(x.agentId) === el.dataset.id);
+    const o = n?.menu?.options.find((x) => String(x.n) === el.dataset.n);
+    if (!o) return;
+    state.dlg = { kind: "pane-choose", agentId: n.agentId, n: o.n };
+    render();
+    document.querySelector('[data-act="pane-choose-yes"]')?.focus();
+  },
+  async "pane-choose-yes"() {
+    const d = state.dlg;
+    const n = (state.data.approvals?.notices || []).find((x) => x.agentId === d?.agentId);
+    state.dlg = null;
+    render();
+    if (!n?.menu) return toast(T("appr.screenChanged"), true);
+    try {
+      const res = await call("POST", `/api/agents/${n.agentId}/choose`, { key: apprKey(), fingerprint: n.menu.fingerprint, n: d.n });
+      toast(T("appr.chosen", { agent: n.agent, choice: `${res.n}. ${res.label}` }));
+    } catch (err) { toast(/screen changed/.test(err.message) ? T("appr.screenChanged") : err.message, true); }
   },
   async "appr-focus"(el) {
     try {
@@ -4057,6 +4104,10 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     const yes = document.querySelector('[data-act="appr-confirm-yes"]');
     if (yes) return actions["appr-confirm-yes"](yes);
+  }
+  if (event.key === "Enter" && state.dlg?.kind === "pane-choose" && !event.isComposing) {
+    event.preventDefault();
+    return actions["pane-choose-yes"]();
   }
   if (event.key === "Escape" && (state.palette || state.dlg)) {
     state.palette = false;

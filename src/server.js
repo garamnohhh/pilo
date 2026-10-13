@@ -120,6 +120,7 @@ const routes = [
   ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => api.applyRules(Number(m[1]))],
   ["GET", /^\/api\/agents\/(\d+)\/session$/, (m) => api.agentSession(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/focus$/, (m) => api.focusAgent(Number(m[1]))],
+  ["POST", /^\/api\/agents\/(\d+)\/choose$/, (m, body) => api.chooseInPane(Number(m[1]), body)],
 
   ["GET", /^\/api\/projects$/, () => api.listProjects()],
   ["POST", /^\/api\/projects$/, (_m, body) => api.createProject(body)],

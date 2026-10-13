@@ -1,5 +1,6 @@
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as approvals from "./approvals.js";
+import { parseMenu } from "./panemenu.js";
 import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
 import { writeRules } from "./rules.js";
@@ -212,6 +213,44 @@ export async function agentSession(id) {
   };
 }
 
+approvals.setOnReturn((pane) => readMenuSoon(pane));
+function readMenuSoon(pane) {
+  const read = async (again) => {
+    if (!approvals.noticeFor(pane)) return;
+    const menu = parseMenu(await herdr.readPane(pane));
+    if (menu || !again) approvals.attachMenu(pane, menu);
+    else setTimeout(() => read(false), 1200).unref?.();
+  };
+  setTimeout(() => read(true), 250).unref?.();
+}
+
+// A choice from the pane's own menu, made from the dashboard: the screen is read
+// again first and must still show the same question and options, the request
+// must not be pane-only, and a choice that sets a standing rule or a mode, or
+// wants words typed, stays in the pane. Then the number goes in, as if typed.
+export async function chooseInPane(id, body) {
+  if (!approvals.keyAllowed(body.key)) throw Object.assign(new Error("this device is not paired for approvals"), { status: 403 });
+  const agent = await one("SELECT id, name, herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  if (!agent?.target) throw Object.assign(new Error("no pane bound to that agent"), { status: 404 });
+  const notice = approvals.noticeFor(agent.target);
+  if (notice?.reason) throw Object.assign(new Error(`${notice.reason}: answered in its pane only`), { status: 403 });
+  const menu = parseMenu(await herdr.readPane(agent.target));
+  if (!menu || menu.fingerprint !== body.fingerprint) {
+    approvals.attachMenu(agent.target, menu);
+    throw Object.assign(new Error("the screen changed — look again"), { status: 409, code: "SCREEN_CHANGED" });
+  }
+  const option = menu.options.find((o) => o.n === Number(body.n));
+  if (!option) throw Object.assign(new Error("no such option"), { status: 400 });
+  if (option.standing || option.typed) throw Object.assign(new Error("that choice is made in the pane"), { status: 403 });
+  await herdr.sendKeys(agent.target, String(option.n));
+  // a menu that only moved its pointer to the number takes Enter as well
+  await new Promise((r) => setTimeout(r, 400));
+  const after = parseMenu(await herdr.readPane(agent.target));
+  if (after?.fingerprint === menu.fingerprint) await herdr.sendKeys(agent.target, "Enter");
+  await logEvent({ type: "pane_choice", title: `${agent.name}: chose ${option.n}. ${option.label}`, agentId: agent.id, payload: { question: menu.question, n: option.n, label: option.label } });
+  return { ok: true, n: option.n, label: option.label };
+}
+
 // "Open the pane": herdr brings it forward, for what only the pane can answer.
 export async function focusAgent(id) {
   const agent = await one("SELECT herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
@@ -228,6 +267,8 @@ export async function hookNotify(body, { onStop = () => {} } = {}) {
   const agent = await agentForPane(body.pane);
   approvals.notify(body, agent);
   if (!agent) return { ok: true };
+  // a prompt the pane shows: read its choices once it is drawn, again a moment later
+  if (["permission_prompt", "elicitation_dialog"].includes(body.type)) readMenuSoon(body.pane);
   if (body.type === "session" && /^[\w-]{8,80}$/.test(body.session || "")) {
     await query(
       `INSERT INTO agent_sessions (agent_id, target, session_id, session_at) VALUES ($1, $2, $3, now())

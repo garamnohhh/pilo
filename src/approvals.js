@@ -27,6 +27,8 @@ const pending = new Map();
 const notices = new Map();
 let seq = 0;
 let onChange = () => {};
+let onReturn = () => {};
+export const setOnReturn = (fn) => { onReturn = fn; };
 export const setOnChange = (fn) => { onChange = fn; };
 
 export const fingerprint = (r) => createHash("sha256")
@@ -110,6 +112,18 @@ export function list(now = Date.now()) {
   return out;
 }
 
+// What the pane's screen shows for a notice: its numbered choice, read by
+// api.js after the prompt is drawn. Null when nothing could be read.
+export function attachMenu(pane, menu) {
+  const n = notices.get(pane);
+  if (!n) return false;
+  n.menu = menu || null;
+  onChange();
+  return true;
+}
+export const noticeFor = (pane) => notices.get(pane) || null;
+export const keyAllowed = (key) => keyOk(key);
+
 // A pane Pilo should not type into: a request held open, or the pane said it
 // is showing a prompt. The screen read in herdr.js stays behind this.
 export const busy = (pane) => [...pending.values()].some((r) => r.pane === pane) ||
@@ -125,7 +139,13 @@ export function decide(id, body) {
   const item = pending.get(Number(id));
   if (!item) throw Object.assign(new Error("that request is no longer waiting"), { status: 410 });
   if (body.fingerprint !== item.fingerprint) throw Object.assign(new Error("that request changed; look again"), { status: 409 });
-  if (body.decision === "pane") item.resolve({ decision: null, back: true });
+  if (body.decision === "pane") {
+    item.resolve({ decision: null, back: true });
+    // the pane asks it now: the screens keep it, as the pane's own choice
+    notices.set(item.pane, { pane: item.pane, agent: item.agent, agentId: item.agentId, type: "permission_prompt", message: "", at: Date.now(), tool: item.tool, input: item.input, reason: "" });
+    onChange();
+    onReturn(item.pane);
+  }
   else if (item.kind === "permission" && (body.decision === "allow" || body.decision === "deny")) item.resolve({ decision: body.decision });
   else if (item.kind === "question" && body.answers && typeof body.answers === "object") item.resolve({ decision: "answer", answers: body.answers });
   else throw Object.assign(new Error("decision must be allow, deny, pane or answers"), { status: 400 });

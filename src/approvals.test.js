@@ -45,6 +45,7 @@ test("window-only: the list the user set, and nothing ordinary", () => {
   assert.equal(bash("ls && env sudo true"), "sudo");
   assert.equal(bash("curl -s 127.0.0.1:48888/api/approvals"), "", "reading the list answers nothing");
   assert.equal(bash("pilo api GET /api/approvals"), "");
+  assert.equal(bash("pilo api POST /api/agents/3/choose '{}'"), "pilo approvals");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "select * from users" }), "");
 });
 
@@ -80,6 +81,9 @@ test("moving on drops the old request: a new one from the session, or the hook h
   const [left] = A.list().pending;
   A.decide(left.id, { key: A.tuiKey(), decision: "pane", fingerprint: left.fingerprint });
   assert.equal((await second).back, true);
+  // sent back, the pane asks it itself; the screens keep it as the pane's prompt
+  const n = A.list().notices.find((x) => x.pane === "w2:p1");
+  assert.deepEqual([n.type, n.tool, n.input.command], ["permission_prompt", "Bash", "b"]);
 });
 
 test("a question is answered with answers, a permission with allow or deny", async () => {
@@ -105,7 +109,7 @@ test("notices: a prompt in the pane, cleared by the next tool call or an idle pa
   A.notify({ pane: "w5:p1", type: "tool" }, agent);
   assert.equal(A.busy("w5:p1"), false);
   A.notify({ pane: "w5:p1", type: "idle_prompt" }, agent);
-  assert.equal(A.list().notices.length, 0);
+  assert.equal(A.list().notices.filter((n) => n.pane === "w5:p1").length, 0);
   A.notify({ pane: "w5:p1", type: "permission_prompt" }, agent);
   A.settle("w5:p1", "done");
   assert.equal(A.busy("w5:p1"), false);

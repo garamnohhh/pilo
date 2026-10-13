@@ -709,11 +709,28 @@ async function refresh() {
 // :allow / :deny / :pane [n] and :pick <option…> [n] answer what a session's
 // hook holds open. Allow asks once more: the same :allow again within 10 s.
 async function answerApproval(word, rest) {
-  const pending = (await api("/api/approvals", null))?.pending || [];
+  const all = (await api("/api/approvals", null)) || {};
+  const pending = all.pending || [];
+  // rows as drawn: held requests, then prompts the pane shows itself
+  const rows = [...pending, ...(all.notices || []).map((n) => ({ ...n, notice: true }))];
   const nums = rest.map(Number).filter((n) => Number.isInteger(n) && n > 0);
   const which = word === "pick" ? (nums.length > 1 ? nums.at(-1) : 1) : nums[0] || 1;
-  const r = pending[which - 1];
+  const r = rows[which - 1];
   if (!r) return note(t("note.noBlocked"));
+  let key = "";
+  try { key = readFileSync(join(home, "approve-tui.key"), "utf8").trim(); } catch {}
+  if (r.notice) {
+    // the pane's own menu: :pick <number>, read again and typed by the server
+    if (word !== "pick" || !r.menu || r.reason) return note(r.reason ? t("appr.paneOnly", { why: r.reason }) : t("appr.inPane"), { sticky: true });
+    const res = await fetch(`${base}/api/agents/${r.agentId}/choose`, {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ key, fingerprint: r.menu.fingerprint, n: nums[0] || 1 })
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
+    await refresh();
+    render();
+    return note(res?.ok ? t("appr.chosen", { agent: r.agent, choice: `${data.n}. ${data.label}` }) : /screen changed/.test(data?.error || "") ? t("appr.screenChanged") : `failed: ${data?.error || "no answer"}`, { sticky: !res?.ok });
+  }
   let body;
   if (word === "pick") {
     const qs = r.input?.questions || [];
@@ -734,8 +751,6 @@ async function answerApproval(word, rest) {
     state.apprConfirm = null;
     body = { decision: word };
   }
-  let key = "";
-  try { key = readFileSync(join(home, "approve-tui.key"), "utf8").trim(); } catch {}
   const res = await fetch(`${base}/api/approvals/${r.id}`, {
     method: "POST", headers: { "content-type": "application/json" },
     body: JSON.stringify({ ...body, key, fingerprint: r.fingerprint })
@@ -1041,7 +1056,7 @@ function render() {
     ...(appr.pending || []).map((r, i) => `${c.amber}◆ ${i + 1}${c.reset} ${c.fg}${r.agent}${c.reset} ${c.faint}·${c.reset} ${r.kind === "question"
       ? (r.input?.questions || []).map((q) => `${q.question} ${(q.options || []).map((o, k) => `${c.faint}${k + 1}${c.reset} ${o.label}`).join(" ")}`).join(" / ")
       : `${r.tool} ${c.muted}${String(Array.isArray(r.input?.command) ? r.input.command.join(" ") : r.input?.command ?? r.input?.file_path ?? "")}${c.reset}`}`),
-    ...(appr.notices || []).map((n) => `${c.faint}◇ ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${n.tool ? ` · ${n.tool} ${String(Array.isArray(n.input?.command) ? n.input.command.join(" ") : n.input?.command ?? n.input?.file_path ?? "")}` : ""}${n.reason ? ` · ${t("appr.paneOnly", { why: n.reason })}` : ""}${c.reset}`)
+    ...(appr.notices || []).map((n, k) => `${c.faint}◇ ${(appr.pending || []).length + k + 1} ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${n.tool ? ` · ${n.tool} ${String(Array.isArray(n.input?.command) ? n.input.command.join(" ") : n.input?.command ?? n.input?.file_path ?? "")}` : ""}${n.reason ? ` · ${t("appr.paneOnly", { why: n.reason })}` : ""}${!n.reason && n.menu ? ` · ${n.menu.question} ${n.menu.options.filter((o) => !o.typed && !o.standing).map((o) => `${o.n} ${o.label}`).join(" · ")}` : ""}${c.reset}`)
   ];
   if (apprRows.length) {
     for (const row of apprRows.slice(0, 4)) emit(pre + cut(row, outWidth));
