@@ -41,7 +41,7 @@ const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)|\.pilo\/approv/;
 const PILO_DOOR = /\/api\/(approvals|agents\/\d+\/choose)/;
 
 // Heredoc bodies come out, except one fed to a shell, which runs as commands.
-function heredocs(command) {
+export function heredocs(command) {
   const runs = [];
   const rest = command.replace(/(^|\n)([^\n]*?)<<-?\s*(['"]?)(\w+)\3[^\n]*\n([\s\S]*?)\n\s*\4\s*(?=\n|$)/g, (_m, lead, line, _q, _tag, body) => {
     if (SHELLS.has(words(line)[0])) runs.push(body);
@@ -50,9 +50,12 @@ function heredocs(command) {
   return [rest, ...runs.flatMap(heredocs)];
 }
 // Words of one simple command, quotes taken off; a quoted word stays one word.
-function words(segment) {
+export function words(segment) {
   const out = [];
-  for (const m of String(segment).matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'|(\S+)/g)) out.push(m[1] ?? m[2] ?? m[3]);
+  // one shell word: quoted and bare pieces that touch, "$PWD":/w included
+  for (const m of String(segment).matchAll(/(?:"(?:[^"\\]|\\.)*"|'[^']*'|[^\s"'])+/g)) {
+    out.push(m[0].replace(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g, (_q, d, sq) => d ?? sq));
+  }
   return out;
 }
 const base = (w) => String(w || "").split("/").pop();
@@ -125,6 +128,8 @@ export function simpleCommands(command) {
     }
     if (quote === '"') { cur += ch; if (ch === '"') quote = ""; continue; }
     if (ch === "'" || ch === '"') { quote = ch; cur += ch; continue; }
+    // 2>&1 and &> are redirections, not a new command
+    if (ch === "&" && (s[i - 1] === ">" || s[i + 1] === ">")) { cur += ch; continue; }
     if (ch === ";" || ch === "\n" || ch === "|" || ch === "&") { out.push(cur); cur = ""; continue; }
     cur += ch;
   }

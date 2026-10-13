@@ -16,6 +16,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "./paths.js";
 import { HOOK_TIMEOUT_S, windowOnly } from "../hooks/pilo-hook.mjs";
+import { describe } from "./describe.js";
 
 export { windowOnly };
 // a little short of the hook's timeout, so the pane hears "no answer" from us
@@ -35,7 +36,7 @@ export const fingerprint = (r) => createHash("sha256")
   .update([r.pane, r.session, r.tool, JSON.stringify(r.input ?? {})].join("\u001f")).digest("hex").slice(0, 32);
 
 // The request as the screens show it: no resolver, no timer.
-const view = ({ resolve, timer, ...r }) => r;
+const view = ({ resolve, timer, ...r }) => ({ ...r, about: describe(r.tool, r.input) });
 
 // `agent` is the Pilo agent bound to the pane, or null: a session Pilo does not
 // run answers in its own pane, at once. `gone` resolves when the hook hangs up
@@ -106,7 +107,7 @@ export function notify(body, agent, now = Date.now()) {
 
 export function list(now = Date.now()) {
   for (const [pane, n] of notices) if (now - n.at > NOTICE_MS) notices.delete(pane);
-  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()] };
+  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()].map((n) => (n.tool ? { ...n, about: describe(n.tool, n.input) } : n)) };
   // the panes that are asking, so a screen can mark their agents without a reload
   out.busy = [...new Set([...out.pending.map((r) => r.pane), ...out.notices.filter((n) => busy(n.pane)).map((n) => n.pane)])];
   return out;

@@ -1586,13 +1586,13 @@ function approvalsHtml() {
       }).join("")}
         <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}"`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
     }
-    return `<div>${who}<div class="d-appr-item"><pre>${esc(apprWhat(r))}</pre>
+    return `<div>${who}<div class="d-appr-item">${aboutHtml(r)}
       <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
   const notice = (n) => `<div><span class="d-lbl d-appr-who">${esc(n.agent)} → you · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
-    ${n.tool ? `<pre>${esc(apprWhat(n))}</pre>` : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
-    ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>` : ""}
+    ${n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
+    ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? aboutWords(n.about).danger || T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>` : ""}
     ${menuHtml(n)}</div></div>`;
   // The pane's own numbered choice as buttons, when it could be read and the
   // request is not pane-only. A standing rule or a mode switch, or a choice that
@@ -1626,6 +1626,32 @@ function markAsking(busy) {
   };
   walk(state.data.agents);
   walk(state.data.tree);
+}
+// What a request is about, in words (src/describe.js gives the parts): the
+// tool's own sentence when it wrote one, else the steps read off the command,
+// the file and how it changes, and why it is pane-only, naming what it deletes.
+// The command itself stays one click away.
+const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "pilo approvals": "pilo" };
+function aboutWords(a) {
+  if (!a) return { head: "", sub: "", danger: "" };
+  const tgt = (t) => T(t.temp ? (/^\$/.test(t.path) ? "about.temp" : "about.tmpPath") : "about.file.other", { path: t.path });
+  const stepText = (s) => (s.key === "rm" ? T("about.rm", { arg: s.targets.map(tgt).join(", ") }) : T(`about.${s.key}`, { arg: s.arg || "" }).trim());
+  const steps = (a.steps || []).map(stepText).join(T("about.then"));
+  const f = a.file;
+  const file = f ? T(f.kind === "edit" && f.edits ? "about.file.edits" : `about.file.${f.kind}`, f) : "";
+  const head = a.line || steps || file;
+  const sub = a.line ? [steps, file].filter(Boolean).join(" · ") : steps && file ? file : "";
+  const k = a.danger && RULE_KEY[a.danger.rule];
+  const danger = k ? T(`why.${k}`, { targets: (a.danger.targets || []).map(tgt).join(", ") || "-" }) : "";
+  return { head, sub, danger };
+}
+function aboutHtml(x) {
+  const w = aboutWords(x.about);
+  const raw = apprWhat(x);
+  if (!w.head) return `<pre>${esc(raw)}</pre>`;
+  return `<div style="font-size:var(--fs-body);color:var(--text);line-height:1.5">${esc(w.head)}</div>
+    ${w.sub ? `<div style="font-size:var(--fs-small);color:var(--text-2)">${esc(w.sub)}</div>` : ""}
+    <details><summary style="cursor:pointer;font-size:var(--fs-small);color:var(--text-3)">${esc(T("about.raw"))}</summary><pre style="margin-top:6px">${esc(raw)}</pre></details>`;
 }
 function apprNeedsPair() {
   toast(T("appr.unpaired"), true);
@@ -3347,7 +3373,7 @@ DIALOGS["appr-confirm"] = (d) => {
   return {
     title: esc(T("appr.confirmTitle")),
     sub: `${esc(r.agent)} · ${esc(r.tool)} · ${esc(r.cwd || "")}`,
-    prose: `<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>`,
+    prose: `${aboutWords(r.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(r.about).head)}</div>` : ""}<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>`,
     actions: [btn(T("appr.allow"), "appr-confirm-yes", `data-id="${r.id}"`, "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
       `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
   };
@@ -3360,7 +3386,7 @@ DIALOGS["pane-choose"] = (d) => {
   return {
     title: esc(T("appr.chooseTitle")),
     sub: `${esc(n.agent)}${n.tool ? ` · ${esc(n.tool)}` : ""}`,
-    prose: `${n.tool ? `<pre style="margin:0 0 12px;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto">${esc(apprWhat(n))}</pre>` : ""}<div style="color:var(--text-2)">${esc(n.menu.question)}</div><div style="margin-top:8px;font-size:var(--fs-h3, 17px);color:var(--text)">${o.n}. ${esc(o.label)}</div><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.chooseNote"))}</div>`,
+    prose: `${aboutWords(n.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(n.about).head)}</div>` : ""}${n.tool ? `<pre style="margin:0 0 12px;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto">${esc(apprWhat(n))}</pre>` : ""}<div style="color:var(--text-2)">${esc(n.menu.question)}</div><div style="margin-top:8px;font-size:var(--fs-h3, 17px);color:var(--text)">${o.n}. ${esc(o.label)}</div><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.chooseNote"))}</div>`,
     actions: [btn(T("appr.choose"), "pane-choose-yes", "", "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
       `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
   };

@@ -706,6 +706,16 @@ async function refresh() {
   return state.data;
 }
 
+// the tool's own sentence, else the steps read off the command (src/describe.js)
+function aboutHead(a) {
+  if (!a) return "";
+  if (a.line) return a.line;
+  const tgt = (x) => t(x.temp ? (/^\$/.test(x.path) ? "about.temp" : "about.tmpPath") : "about.file.other", { path: x.path });
+  const steps = (a.steps || []).map((s) => (s.key === "rm" ? t("about.rm", { arg: s.targets.map(tgt).join(", ") }) : t(`about.${s.key}`, { arg: s.arg || "" }).trim())).join(t("about.then"));
+  const f = a.file;
+  return steps || (f ? t(f.kind === "edit" && f.edits ? "about.file.edits" : `about.file.${f.kind}`, f) : "");
+}
+
 // :allow / :deny / :pane [n] and :pick <option…> [n] answer what a session's
 // hook holds open. Allow asks once more: the same :allow again within 10 s.
 async function answerApproval(word, rest) {
@@ -1055,8 +1065,8 @@ function render() {
   const apprRows = [
     ...(appr.pending || []).map((r, i) => `${c.amber}◆ ${i + 1}${c.reset} ${c.fg}${r.agent}${c.reset} ${c.faint}·${c.reset} ${r.kind === "question"
       ? (r.input?.questions || []).map((q) => `${q.question} ${(q.options || []).map((o, k) => `${c.faint}${k + 1}${c.reset} ${o.label}`).join(" ")}`).join(" / ")
-      : `${r.tool} ${c.muted}${String(Array.isArray(r.input?.command) ? r.input.command.join(" ") : r.input?.command ?? r.input?.file_path ?? "")}${c.reset}`}`),
-    ...(appr.notices || []).map((n, k) => `${c.faint}◇ ${(appr.pending || []).length + k + 1} ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${n.tool ? ` · ${n.tool} ${String(Array.isArray(n.input?.command) ? n.input.command.join(" ") : n.input?.command ?? n.input?.file_path ?? "")}` : ""}${n.reason ? ` · ${t("appr.paneOnly", { why: n.reason })}` : ""}${!n.reason && n.menu ? ` · ${n.menu.question} ${n.menu.options.filter((o) => !o.typed && !o.standing).map((o) => `${o.n} ${o.label}`).join(" · ")}` : ""}${c.reset}`)
+      : `${r.tool} ${c.muted}${aboutHead(r.about) || String(Array.isArray(r.input?.command) ? r.input.command.join(" ") : r.input?.command ?? r.input?.file_path ?? "")}${c.reset}`}`),
+    ...(appr.notices || []).map((n, k) => `${c.faint}◇ ${(appr.pending || []).length + k + 1} ${n.agent} · ${t(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`)}${n.tool ? ` · ${n.tool} ${aboutHead(n.about) || String(Array.isArray(n.input?.command) ? n.input.command.join(" ") : n.input?.command ?? n.input?.file_path ?? "")}` : ""}${n.reason ? ` · ${t("appr.paneOnly", { why: n.reason })}` : ""}${!n.reason && n.menu ? ` · ${n.menu.question} ${n.menu.options.filter((o) => !o.typed && !o.standing).map((o) => `${o.n} ${o.label}`).join(" · ")}` : ""}${c.reset}`)
   ];
   if (apprRows.length) {
     for (const row of apprRows.slice(0, 4)) emit(pre + cut(row, outWidth));
