@@ -145,11 +145,33 @@ export async function prompt(target, message) {
   }
 }
 
-// Brings the agent's pane forward in herdr, for a prompt only the pane can answer.
+// Brings the agent's pane forward, for a prompt only the pane can answer. herdr
+// switches to the pane inside itself; the terminal app herdr is open in is
+// another window, often behind the browser that asked (10/13: the button said
+// "in front" and nothing moved), so that app is brought to the front too.
 export async function focus(target) {
   if (!target) throw new Error("SESSION_NOT_BOUND");
   await herdr(["agent", "focus", target]);
-  return { ok: true, target };
+  const app = await terminalApp().catch(() => "");
+  if (app) await run("open", ["-a", app]).catch(() => {});
+  return { ok: true, target, app: app ? app.split("/").pop().replace(/\.app$/, "") : "" };
+}
+
+// The app holding herdr's client: up from the `herdr` process to the first
+// ancestor that runs inside an .app bundle.
+async function terminalApp() {
+  const { stdout } = await run("ps", ["-axo", "pid=,ppid=,command="]);
+  const procs = new Map();
+  for (const line of stdout.split("\n")) {
+    const m = /^\s*(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+    if (m) procs.set(m[1], { ppid: m[2], command: m[3] });
+  }
+  const client = [...procs.entries()].find(([, p]) => /(^|\/)herdr$/.test(p.command.trim()));
+  for (let pid = client?.[1].ppid, hops = 0; pid && pid !== "0" && hops < 12; pid = procs.get(pid)?.ppid, hops++) {
+    const bundle = /^(.*?\.app)\/Contents\/MacOS\//.exec(procs.get(pid)?.command || "");
+    if (bundle) return bundle[1];
+  }
+  return "";
 }
 
 export async function notify(title, body) {

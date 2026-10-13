@@ -121,6 +121,14 @@ test("answered in the pane: the next tool call or the turn's end drops what was 
   assert.equal(A.list().pending.length, 0);
 });
 
+test("a tool that ran clears what the pane asked about it, at once", async () => {
+  A.notify({ pane: "w8:p1", type: "permission_prompt" }, agent);
+  const held = A.wait({ kind: "permission", pane: "w8:p1", session: "s8", tool: "Bash", input: { command: "touch y" } }, agent);
+  A.notify({ pane: "w8:p1", type: "done" }, agent);
+  assert.equal((await held).answeredInPane, true);
+  assert.equal(A.busy("w8:p1"), false);
+});
+
 test("pairing: a code once, then a key that answers", () => {
   const code = A.newPairCode();
   assert.match(code, /^\d{6}$/);

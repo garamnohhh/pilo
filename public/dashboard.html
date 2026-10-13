@@ -2037,7 +2037,8 @@ function convBlock(item, fromNewest) {
 
 function workFeed() {
   const f = state.feed;
-  if (!f.rows.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>`;
+  // what a session asks still shows on an empty desk
+  if (!f.rows.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>` + approvalsHtml();
   const top = f.done
     ? `<div class="d-lbl" style="padding:8px 0;text-align:center">that is the whole of it — ${f.rows.length} shown</div>`
     : `<div class="d-lbl" style="padding:8px 0;text-align:center">${f.loading ? "loading older…" : "scroll up for older"}</div>`;
@@ -3326,6 +3327,18 @@ DIALOGS["new-schedule"] = () => {
   };
 };
 
+DIALOGS["appr-confirm"] = (d) => {
+  const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === String(d.id));
+  if (!r) return { title: esc(T("appr.goneTitle")), sub: "", prose: esc(T("appr.gone")), actions: [btn(T("desk.act.close"), "close-dialog", "", "gn-btn-ghost")] };
+  return {
+    title: esc(T("appr.confirmTitle")),
+    sub: `${esc(r.agent)} · ${esc(r.tool)} · ${esc(r.cwd || "")}`,
+    prose: `<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>`,
+    actions: [btn(T("appr.allow"), "appr-confirm-yes", `data-id="${r.id}"`, "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
+      `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
+  };
+};
+
 DIALOGS.event = (d) => {
   const e = state.data.eventDetail;
   if (!e || String(e.id) !== String(d.id)) return { title: `event ${d.id}`, sub: "", prose: "loading…" };
@@ -3482,8 +3495,19 @@ const actions = {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
     if (!r) return;
     if (!apprKey()) return apprNeedsPair();
-    if (el.dataset.d === "allow" && !confirm(T("appr.confirm", { agent: r.agent, what: apprWhat(r).slice(0, 300) }))) return;
+    // Allow is asked once more, in the desk's own dialog: what it lets run, again
+    if (el.dataset.d === "allow") {
+      state.dlg = { kind: "appr-confirm", id: r.id };
+      render();
+      document.querySelector('[data-act="appr-confirm-yes"]')?.focus();
+      return;
+    }
     await apprSend(r.id, { decision: el.dataset.d });
+  },
+  async "appr-confirm-yes"(el) {
+    state.dlg = null;
+    render();
+    await apprSend(el.dataset.id, { decision: "allow" });
   },
   async "appr-pick"(el) {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
@@ -3508,7 +3532,10 @@ const actions = {
     await apprSend(r.id, { answers });
   },
   async "appr-focus"(el) {
-    try { await call("POST", `/api/agents/${el.dataset.id}/focus`); toast(T("appr.focused")); } catch (err) { toast(err.message, true); }
+    try {
+      const res = await call("POST", `/api/agents/${el.dataset.id}/focus`);
+      toast(T("appr.focused", { pane: res.target || "", app: res.app || "herdr" }));
+    } catch (err) { toast(err.message, true); }
   },
   async "go-approvals"() {
     state.tab = "work"; location.hash = "work"; render();
@@ -4024,6 +4051,12 @@ window.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !state.palette && !state.dlg && state.answering) {
     state.answering = null;
     render();
+  }
+  // the allow dialog: Enter says yes, Esc (below) says no
+  if (event.key === "Enter" && state.dlg?.kind === "appr-confirm" && !event.isComposing) {
+    event.preventDefault();
+    const yes = document.querySelector('[data-act="appr-confirm-yes"]');
+    if (yes) return actions["appr-confirm-yes"](yes);
   }
   if (event.key === "Escape" && (state.palette || state.dlg)) {
     state.palette = false;

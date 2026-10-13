@@ -12,6 +12,7 @@
 //   Notification       tells Pilo the pane is waiting
 //   SessionStart       ties the session id to the pane
 //   Stop               the turn is over
+//   PostToolUse(Failure) a tool ran: a prompt answered in the pane is gone
 // The last three wait for nothing and print nothing.
 //
 // Pilo copies this file to <home>/.pilo/hooks/ and finds its socket from there.
@@ -153,6 +154,8 @@ async function main() {
   if (event === "Notification") return void await tell(input.notification_type || "notice", { message: input.message || "" });
   if (event === "SessionStart") return void await tell("session", { source: input.source || "" });
   if (event === "Stop") return void await tell("stop");
+  // the tool ran, or failed: whatever the pane asked about it was answered there
+  if (event === "PostToolUse" || event === "PostToolUseFailure") return void await tell("done");
   if (event === "PreToolUse" && tool === "AskUserQuestion") {
     if (!pane) return;
     const res = await post("/api/hooks/wait", { ...base, kind: "question" }, 0);

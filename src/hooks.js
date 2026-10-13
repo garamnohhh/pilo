@@ -28,7 +28,9 @@ export const TARGETS = {
       ["PreToolUse", HOOK_TIMEOUT_S],
       ["Notification", 5],
       ["SessionStart", 5],
-      ["Stop", 5]
+      ["Stop", 5],
+      ["PostToolUse", 5],
+      ["PostToolUseFailure", 5]
     ]
   },
   codex: {

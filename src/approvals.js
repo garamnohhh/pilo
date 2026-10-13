@@ -83,7 +83,7 @@ export function notify(body, agent, now = Date.now()) {
   // A later tool call, the turn ending or a new session means whatever the pane
   // waited on is over. Answering in the pane does not end the hook — Claude
   // Code shows its own prompt beside it — so the request held here goes too.
-  if (!body.type || body.type === "tool" || body.type === "stop" || body.type === "session") {
+  if (!body.type || ["tool", "done", "stop", "session"].includes(body.type)) {
     let dropped = notices.delete(body.pane);
     for (const r of pending.values()) {
       if (r.pane === body.pane) { r.resolve({ decision: null, answeredInPane: true }); dropped = true; }
