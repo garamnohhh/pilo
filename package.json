@@ -34,9 +34,6 @@
     "public/",
     "migrations/"
   ],
-  "os": [
-    "darwin"
-  ],
   "engines": {
     "node": ">=20"
   },

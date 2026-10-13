@@ -10,6 +10,14 @@ while [[ -L "$SOURCE" ]]; do
 done
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
+# pilo runs on macOS (herdr, open, launchd paths). The package no longer says
+# so through npm's "os" field: that also stopped the site's Linux build from
+# installing the repository at all.
+if [[ "$(uname -s)" != "Darwin" && -z "${PILO_ANY_OS:-}" ]]; then
+  echo "pilo runs on macOS only." >&2
+  exit 1
+fi
+
 PILO_HOME_DIR="${PILO_HOME:-$HOME}/.pilo"
 PORT_FILE="$PILO_HOME_DIR/port"
 LOG_DIR="$PILO_HOME_DIR/logs"
