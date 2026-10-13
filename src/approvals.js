@@ -104,7 +104,10 @@ export function notify(body, agent, now = Date.now()) {
 
 export function list(now = Date.now()) {
   for (const [pane, n] of notices) if (now - n.at > NOTICE_MS) notices.delete(pane);
-  return { pending: [...pending.values()].map(view), notices: [...notices.values()] };
+  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()] };
+  // the panes that are asking, so a screen can mark their agents without a reload
+  out.busy = [...new Set([...out.pending.map((r) => r.pane), ...out.notices.filter((n) => busy(n.pane)).map((n) => n.pane)])];
+  return out;
 }
 
 // A pane Pilo should not type into: a request held open, or the pane said it

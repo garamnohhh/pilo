@@ -293,9 +293,11 @@
   #ubanner:empty { display: none }
   .d-ubanner { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--accent); font-size: var(--fs-small); color: var(--text-2) }
   .d-ubanner .d-ub-acts { margin-left: auto; display: flex; gap: 8px }
-  .d-appr { flex: none; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--warn, var(--accent)); padding: 10px 24px; max-height: 50vh; overflow-y: auto }
-  .d-appr-item { padding: 10px 0; border-top: var(--bw) solid var(--line); display: flex; flex-direction: column; gap: 8px }
-  .d-appr-item:first-of-type { border-top: 0 }
+  /* in the conversation, under what waits on you: one card per request, the red
+     bar of a decision because it is the user's to answer */
+  .d-appr { display: flex; flex-direction: column; gap: 22px }
+  .d-appr-who { display: block; margin-bottom: 6px }
+  .d-appr-item { padding: 12px 16px; border-left: 3px solid var(--err); background: var(--surface); display: flex; flex-direction: column; gap: 8px }
   .d-appr pre { margin: 0; font: 12px/1.5 var(--mono); color: var(--text); white-space: pre-wrap; word-break: break-all; max-height: 8em; overflow-y: auto }
   .d-appr-acts { display: flex; gap: 8px; flex-wrap: wrap }
   .d-mtabs, .d-msend, .d-mchips, .d-mneeds { display: none }
@@ -329,7 +331,7 @@
        header is that box. */
     .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
-    .d-ubanner, .d-appr { padding: 10px 16px }
+    .d-ubanner { padding: 10px 16px }
     .d-appr-acts .gn-btn { min-height: 44px; flex: 1 }
     .d-mneeds { display: inline }
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
@@ -374,7 +376,6 @@
   <span class="d-m" id="sync" style="font-size:11px;color:var(--text-3);flex:none">loading…</span>
 </div>
 <div id="ubanner"></div>
-<div id="approvals"></div>
 <div class="d-shell" id="shell">
   <div class="d-rail" id="rail"></div>
   <div class="d-strip" id="strip" hidden></div>
@@ -529,6 +530,7 @@ async function load() {
   const upd = await get("/api/update").catch(() => null);
   // back from an update: the page that loaded is the old one, so load the new
   if (upd && state.data.update?.current && upd.current !== state.data.update.current) return location.reload();
+  if (upd?.build && state.data.update?.build && upd.build !== state.data.update.build) return location.reload();
   state.data.update = upd;
   state.data.approvals = await get("/api/approvals").catch(() => null);
   refreshFeed();
@@ -791,6 +793,7 @@ function topstateHtml() {
     <span class="d-m d-top-wide" style="font-size:12px;color:var(--text-3)">${st.agents ?? 0} agents</span>
     ${waiting ? `<span class="d-m d-top-wide" style="font-size:12px;color:var(--warn)">${waiting} waiting</span>` : ""}
     ${st.failed?.total ? `<span class="d-m d-top-wide" style="font-size:12px;color:var(--err)">${st.failed.total} failed</span>` : ""}
+    ${(() => { const n = (state.data.approvals?.pending?.length || 0) + (state.data.approvals?.notices?.length || 0); return n ? `<button class="d-plain d-m" style="font-size:12px;color:var(--err)" data-act="go-approvals">◆ ${n} ${esc(T("appr.chip"))}</button>` : ""; })()}
     ${st.needsYou?.total ? `<button class="d-plain d-m d-mneeds" style="font-size:12px;color:var(--err)" data-act="needs-you">${st.needsYou.total} ${esc(T("desk.mobile.needs"))}</button>` : ""}
     ${usageHtml()}
     <button class="d-plain d-m d-top-wide" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
@@ -1000,7 +1003,6 @@ function render() {
   if (isWork) touched |= renderWorkPanes();
   touched |= paint("mtabs", mtabsHtml());
   touched |= paint("ubanner", updateBannerHtml());
-  touched |= paint("approvals", approvalsHtml());
   syncAgentTip();
   const viewChanged = paint("view", ((narrow() && mviews[state.tab]) || views[state.tab])());
   touched |= viewChanged | paint("dlg", dialogHtml() + paletteHtml());
@@ -1573,27 +1575,43 @@ function approvalsHtml() {
   const key = apprKey();
   const picks = state.apprPicks || {};
   const item = (r) => {
-    const head = `<div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(r.agent)} · ${esc(r.kind === "question" ? T("appr.question") : r.tool)} · ${esc(ago(r.at))}</div>`;
+    const head = "";
+    const who = `<span class="d-lbl d-appr-who">${esc(r.agent)} → you · ${esc(r.kind === "question" ? T("appr.question") : `${T("appr.asks")} · ${r.tool}`)} · ${esc(ago(r.at))}</span>`;
     if (r.kind === "question") {
       const qs = r.input?.questions || [];
-      return `<div class="d-appr-item">${head}${qs.map((q, qi) => {
+      return `<div>${who}<div class="d-appr-item">${qs.map((q, qi) => {
         const chosen = picks[r.id]?.[q.question] || [];
         return `<div style="font-size:var(--fs-body);color:var(--text)">${esc(q.question)}</div>
         <div class="d-appr-acts">${(q.options || []).map((o) => btn(esc(o.label), "appr-pick", `data-id="${r.id}" data-q="${qi}" data-label="${esc(o.label)}" title="${esc(o.description || "")}"`, chosen.includes(o.label) ? "gn-btn-brand" : "")).join("")}</div>`;
       }).join("")}
-        <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}"`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div>`;
+        <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}"`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
     }
-    return `<div class="d-appr-item">${head}<pre>${esc(apprWhat(r))}</pre>
-      <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div>`;
+    return `<div>${who}<div class="d-appr-item"><pre>${esc(apprWhat(r))}</pre>
+      <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
-  const notice = (n) => `<div class="d-appr-item"><div class="d-m" style="font-size:12px;color:var(--text-2)">${esc(n.agent)} · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</div>
+  const notice = (n) => `<div><span class="d-lbl d-appr-who">${esc(n.agent)} → you · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
     ${n.tool ? `<pre>${esc(apprWhat(n))}</pre>` : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
-    <div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div></div>`;
-  const pair = key || !pending.length ? "" : `<div class="d-appr-item"><div style="font-size:var(--fs-small);color:var(--warn, var(--text))">${esc(T("appr.unpaired"))}</div><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
+    <div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>
+    ${n.agentId ? `<div class="d-appr-acts">${btn(T("appr.openPane"), "appr-focus", `data-id="${n.agentId}"`)}</div>` : ""}</div></div>`;
+  const pair = key || !pending.length ? "" : `<div class="d-appr-item" style="border-left-color:var(--warn, var(--err))"><div style="font-size:var(--fs-small);color:var(--warn, var(--text))">${esc(T("appr.unpaired"))}</div><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
     <div class="d-appr-acts"><input id="appr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
-  return `<div class="d-appr"><div style="font-size:var(--fs-small);color:var(--text);font-weight:600">${esc(T("appr.title", { n: pending.length + notices.length }))}</div>
-    ${pair}${pending.map(item).join("")}${notices.map(notice).join("")}</div>`;
+  return `<div class="d-appr" id="approvals">${pair}${pending.map(item).join("")}${notices.map(notice).join("")}</div>`;
+}
+// The panes that are asking, marked on their agents as the event arrives, so
+// the tree turns ◆ before the rest of the page has loaded.
+function markAsking(busy) {
+  const asking = new Set(busy || []);
+  const seen = new Set();
+  const walk = (x) => {
+    if (!x || typeof x !== "object" || seen.has(x)) return;
+    seen.add(x);
+    if (Array.isArray(x)) return x.forEach(walk);
+    if ("herdrTarget" in x) x.waitingApproval = Boolean(x.herdrTarget) && asking.has(x.herdrTarget);
+    for (const v of Object.values(x)) if (v && typeof v === "object") walk(v);
+  };
+  walk(state.data.agents);
+  walk(state.data.tree);
 }
 function apprNeedsPair() {
   toast(T("appr.unpaired"), true);
@@ -2031,7 +2049,7 @@ function workFeed() {
   // Newest at the bottom, the way the TUI stacks them. What waits on the user comes
   // last of all, as the desk speaking to them now, whichever request it belongs to.
   const blocks = f.rows.map((item, i) => convBlock(item, i)).reverse().join("");
-  return banner + top + blocks + decisionBubbles().map(bubble).join("");
+  return banner + top + blocks + decisionBubbles().map(bubble).join("") + approvalsHtml();
 }
 
 // A number that grows whenever there is something new to read, so the feed
@@ -3489,6 +3507,13 @@ const actions = {
     const answers = Object.fromEntries(r.input.questions.map((q) => [q.question, picks[q.question].join(", ")]));
     await apprSend(r.id, { answers });
   },
+  async "appr-focus"(el) {
+    try { await call("POST", `/api/agents/${el.dataset.id}/focus`); toast(T("appr.focused")); } catch (err) { toast(err.message, true); }
+  },
+  async "go-approvals"() {
+    state.tab = "work"; location.hash = "work"; render();
+    $("approvals")?.scrollIntoView({ block: "end" });
+  },
   async "appr-pair"() {
     const code = ($("appr-code")?.value || "").trim();
     // the command itself typed into the box: it runs in the Mac's terminal
@@ -4136,6 +4161,12 @@ async function listen() {
   };
   stream.onmessage = () => soon();
   stream.addEventListener("ping", () => { sync.heard = Date.now(); });
+  stream.addEventListener("approvals", (e) => {
+    sync.heard = Date.now();
+    try { state.data.approvals = JSON.parse(e.data); } catch (err) { return; }
+    markAsking(state.data.approvals.busy);
+    render();
+  });
   stream.onerror = () => {
     sync.live = false;
     // A dropped connection is retried by the browser itself; a refused one is

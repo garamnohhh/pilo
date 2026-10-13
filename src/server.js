@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { existsSync, unlinkSync, chmodSync } from "node:fs";
+import { existsSync, unlinkSync, chmodSync, statSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 
 import { migrate, root } from "./db.js";
@@ -11,7 +11,8 @@ import { ensureHome, writePort, writePid, writeSocket, readPort, socketPath } fr
 import { startWatcher } from "./watcher.js";
 import { installMod } from "./sessionusage.js";
 import { startSpool } from "./spool.js";
-import { changed, openStream, listening } from "./changes.js";
+import { changed, openStream, listening, broadcast, onChange } from "./changes.js";
+import * as sketchybar from "./sketchybar.js";
 import { quotaReport } from "./quota.js";
 import * as update from "./update.js";
 import { saveUpload } from "./attachments.js";
@@ -65,8 +66,11 @@ async function readBody(req) {
 // release, then hands the restart to a shell that outlives it. While that runs
 // the screens read "installing" and the step; a failure stays on the screen.
 let updating = false;
+// The page's own build: an open dashboard reloads when the one on disk is newer,
+// so a fix reaches a tab that stayed open across a restart.
+const pageBuild = () => { try { return String(statSync(join(publicDir, "dashboard.html")).mtimeMs); } catch { return ""; } };
 async function updateStatus() {
-  return { ...(await update.status()), installing: updating };
+  return { ...(await update.status()), installing: updating, build: pageBuild() };
 }
 async function startUpdate() {
   if (updating) return updateStatus();
@@ -115,6 +119,7 @@ const routes = [
   ["GET", /^\/api\/agents\/(\d+)\/rules$/, (m) => buildRules(Number(m[1]))],
   ["POST", /^\/api\/agents\/(\d+)\/rules$/, (m) => api.applyRules(Number(m[1]))],
   ["GET", /^\/api\/agents\/(\d+)\/session$/, (m) => api.agentSession(Number(m[1]))],
+  ["POST", /^\/api\/agents\/(\d+)\/focus$/, (m) => api.focusAgent(Number(m[1]))],
 
   ["GET", /^\/api\/projects$/, () => api.listProjects()],
   ["POST", /^\/api\/projects$/, (_m, body) => api.createProject(body)],
@@ -283,7 +288,13 @@ installMod();
 // the hook in settings points at Pilo's home; keep that copy current
 installHookFile();
 
-approvals.setOnChange(changed);
+// an approval goes to the screens at once, with what it is about; the rest of
+// the page follows on the usual notice
+approvals.setOnChange(() => {
+  broadcast("approvals", approvals.list());
+  changed();
+});
+onChange(() => sketchybar.ping());
 approvals.tuiKey();
 
 const server = createServer((req, res) => {

@@ -145,6 +145,13 @@ export async function prompt(target, message) {
   }
 }
 
+// Brings the agent's pane forward in herdr, for a prompt only the pane can answer.
+export async function focus(target) {
+  if (!target) throw new Error("SESSION_NOT_BOUND");
+  await herdr(["agent", "focus", target]);
+  return { ok: true, target };
+}
+
 export async function notify(title, body) {
   try {
     await herdr(["notification", "show", title, "--body", body, "--position", "top-right", "--sound", "none"]);

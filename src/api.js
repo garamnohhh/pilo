@@ -212,6 +212,13 @@ export async function agentSession(id) {
   };
 }
 
+// "Open the pane": herdr brings it forward, for what only the pane can answer.
+export async function focusAgent(id) {
+  const agent = await one("SELECT herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
+  if (!agent?.target) throw Object.assign(new Error("no pane bound to that agent"), { status: 404 });
+  return herdr.focus(agent.target);
+}
+
 export const agentForPane = (pane) => (pane
   ? one("SELECT id, name, runtime FROM agents WHERE herdr_target = $1 AND archived_at IS NULL ORDER BY id LIMIT 1", [pane])
   : Promise.resolve(null));

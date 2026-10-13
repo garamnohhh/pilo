@@ -17,6 +17,15 @@ export function changed() {
   pending.unref?.();
 }
 
+// A named event goes out at once, with its payload: an approval a pane is
+// waiting on should not wait for the window above, or for a page to load
+// everything to find it.
+const named = new Set();
+export function broadcast(name, payload) {
+  const line = `event: ${name}\ndata: ${JSON.stringify(payload)}\n\n`;
+  for (const send of named) send(line);
+}
+
 export function onChange(hear) {
   listeners.add(hear);
   return () => listeners.delete(hear);
@@ -41,10 +50,13 @@ export function openStream(req, res) {
   req.socket.setTimeout?.(0);
   res.write("retry: 3000\n\n");
   const off = onChange(() => res.write("data: changed\n\n"));
+  const send = (line) => res.write(line);
+  named.add(send);
   const ping = setInterval(() => res.write("event: ping\ndata: .\n\n"), PING_MS);
   ping.unref?.();
   const close = () => {
     off();
+    named.delete(send);
     clearInterval(ping);
   };
   req.on("close", close);

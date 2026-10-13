@@ -1792,6 +1792,20 @@ async function listen() {
         const block = buffer.slice(0, end);
         buffer = buffer.slice(end + 2);
         if (/^data: changed/m.test(block)) soon();
+        // an approval comes with its payload and is drawn now, not after a load
+        else if (/^event: approvals/m.test(block)) {
+          try {
+            const data = JSON.parse(block.split("\n").find((l) => l.startsWith("data: ")).slice(6));
+            if (state.data) {
+              state.data.approvals = data;
+              const asking = new Set(data.busy || []);
+              const mark = (a) => { if (a && "herdrTarget" in a) a.waitingApproval = Boolean(a.herdrTarget) && asking.has(a.herdrTarget); };
+              const tree = state.data.tree || {};
+              [tree.pilo, ...(tree.pms || []), ...(tree.pms || []).flatMap((p) => p.children || []), ...(tree.orphanWorkers || [])].forEach(mark);
+              render();
+            }
+          } catch {}
+        }
       }
     }
   } catch {
