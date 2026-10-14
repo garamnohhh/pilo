@@ -1934,7 +1934,7 @@ function feedMessages(item, detail) {
   for (const [i, reply] of (full.replies || []).entries()) {
     // the bubble already says pilo; the word only has to say what kind of line it is
     const what = item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer";
-    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)}`, chip: item.source === "desk" ? what : i ? what : "",
+    msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)}`, chip: item.source === "desk" ? what : i ? (isNewReply(reply.createdAt) ? `${what} · ${T("card.new")}` : what) : "",
       kind: item.source === "desk" ? "note" : "answer", text: reply.body || "", inbox: item.id });
   }
   // The list row can carry the answers before a detail fetched earlier does.
@@ -1942,10 +1942,24 @@ function feedMessages(item, detail) {
     const carried = item.replies?.length ? item.replies : [{ at: item.repliedAt, body: item.finalReply }];
     for (const [i, reply] of carried.entries()) {
       msgs.push({ who: `pilo · ${hhmm(reply.at)}`,
-        chip: item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "",
+        chip: item.source === "desk" ? T("card.note") : i ? (isNewReply(reply.at) ? `${T("card.followUp")} · ${T("card.new")}` : T("card.followUp")) : "",
         kind: item.source === "desk" ? "note" : "answer", text: reply.body, inbox: item.id });
     }
   }
+  // Answered is not finished. While work is still out, or a result has come
+  // back that no answer has said yet, the conversation says so under the
+  // answer, in the colour of work that is moving, with who still has it.
+  if (state_.answered && item.source !== "desk") {
+    const open = Number(item.openCount || 0), late = Number(item.unreported || 0);
+    if (state_.leak) {
+      msgs.push({ who: `${state_.leak.agent || "pilo"} · ${T("card.leak")}`, kind: "attention", text: T(`leak.${state_.leak.kind}`, { task: state_.leak.taskId, agent: state_.leak.agent || "agent" }) });
+    } else if (open) {
+      msgs.push({ who: `${item.openBy || "pilo"} · ${T("card.going")}`, kind: "working", text: T("card.goingText", { n: open, who: item.openBy || "agent" }) });
+    } else if (late) {
+      msgs.push({ who: `pilo · ${T("card.going")}`, kind: "working", text: T("card.lateText", { n: late }) });
+    }
+  }
+
   // An open decision is answered in one place only: the card at the bottom of the
   // feed. Here it is a marker — no question, no button — or the user sees the same
   // question twice with two Answer buttons (#2473). Once answered, a quiet line
@@ -2036,13 +2050,27 @@ function convState(item, detail) {
   const replies = detail?.replies || [];
   const answered = replies.length > 0 || Boolean(item.finalReply) || detail?.status === "replied";
   const failed = item.status === "failed" || detail?.status === "failed";
-  return { answered, failed, needsReply: !answered && Boolean(item.needsReply) };
+  // answered, but not finished: work still out, or results no answer has said yet
+  const going = answered && (Number(item.openCount || 0) > 0 || Number(item.unreported || 0) > 0);
+  return { answered, failed, going, leak: item.leak || null, needsReply: !answered && Boolean(item.needsReply) };
 }
+
+// A follow-up the user has not seen: written after the page was last left.
+// The page is "left" when it goes to the background; the first visit counts
+// everything before it as seen.
+const SEEN_KEY = "pilo-seen-at";
+let seenAt = (() => { try { return Number(localStorage.getItem(SEEN_KEY)) || 0; } catch (err) { return 0; } })();
+if (!seenAt) { seenAt = Date.now(); try { localStorage.setItem(SEEN_KEY, String(seenAt)); } catch (err) { /* private window */ } }
+const markSeen = () => { try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch (err) { /* private window */ } };
+document.addEventListener("visibilitychange", () => { if (document.hidden) markSeen(); });
+window.addEventListener("pagehide", markSeen);
+const isNewReply = (at) => Boolean(at) && new Date(at).getTime() > seenAt;
 
 const convMood = (item, detail) => {
   const s = convState(item, detail);
   if (!s.answered && openDecisions(item, detail).length) return ERR;
-  return s.answered ? OK : s.needsReply || s.failed ? ERR : WARN;
+  if (s.leak) return ERR;
+  return s.answered ? (s.going ? WARN : OK) : s.needsReply || s.failed ? ERR : WARN;
 };
 
 // What waits on the user in one conversation. The detail has every decision, answered
@@ -2407,12 +2435,16 @@ const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", fi
 // as though its agent were busy, while the agent column beside it said stalled.
 // Nothing here can be mistaken for one of agentNote()'s words.
 const reqState = (i) => (i.needsReply ? "needs an answer"
+  : i.leak ? T(`leak.${i.leak.kind}.short`)
+  : i.status === "replied" && Number(i.openCount || 0) > 0 ? T("req.going", { n: Number(i.openCount) })
+  : i.status === "replied" && Number(i.unreported || 0) > 0 ? T("req.late", { n: Number(i.unreported) })
   // held: the rest of the work cannot move, and until #1769 that read as "open"
   : i.held ? T(i.held.reason === "limited" ? "held.limited" : "held.unbound",
       { done: i.doneCount ?? 0, total: i.taskCount ?? 0, who: i.held.agent,
         until: i.held.until ? new Date(i.held.until).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit", hour12: false }) : "" })
   : { queued: "not handed on", dispatched: "open", replied: "answered", failed: "failed" }[i.status] || i.status);
-const reqColor = (i) => (i.needsReply || i.status === "failed" ? ERR : i.held ? WARN : i.status === "replied" ? OK : WARN);
+const reqColor = (i) => (i.needsReply || i.leak || i.status === "failed" ? ERR : i.held ? WARN
+  : i.status === "replied" ? (Number(i.openCount || 0) > 0 || Number(i.unreported || 0) > 0 ? WARN : OK) : WARN);
 const isOpen = (i) => i.status !== "replied";
 
 // ---------- REQUESTS ----------

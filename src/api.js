@@ -659,6 +659,60 @@ const OPEN_ASK_TEXT = `COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.i
 const CARRIED_UP = `EXISTS (SELECT 1 FROM tasks ct
     WHERE ct.inbox_id = t.inbox_id AND ct.status = 'blocked' AND ct.relay_of = t.id)`;
 
+// A request's work that is still out. "holding" and "blocked" are not done:
+// they wait on something, and the request is not finished while they do.
+const OPEN_TASK = "'queued', 'running', 'holding', 'blocked'";
+const UNREPORTED_MIN = 30;
+const STALL_HOURS = 2;
+// The first way a request has slipped, for the screens and for the check below:
+//   unwoken   a result came back after the answer and the desk was never woken
+//   unanswered the desk was woken for it and has not written anything since
+//   stalled   work still out has not moved for hours (and is not parked on purpose)
+//   failed    the request reads as finished but some of its work failed
+const LEAK_SQL = `(SELECT json_build_object('kind', l.kind, 'taskId', l.id, 'agent', l.agent) FROM (
+    SELECT CASE WHEN EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'followup_woken') THEN 'unanswered' ELSE 'unwoken' END AS kind,
+           t.id, a.name AS agent, 1 AS rank, t.done_at AS at
+      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.inbox_id = i.id AND t.parent_task_id IS NULL AND t.status IN ('done', 'failed')
+       AND t.done_at > (SELECT max(f.created_at) FROM final_replies f WHERE f.inbox_id = i.id)
+       AND t.done_at < now() - interval '${UNREPORTED_MIN} minutes'
+    UNION ALL
+    SELECT 'stalled', t.id, a.name, 2, t.updated_at
+      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.inbox_id = i.id AND t.status IN ('queued', 'running')
+       AND greatest(t.updated_at, coalesce(t.progress_at, t.updated_at)) < now() - interval '${STALL_HOURS} hours'
+    UNION ALL
+    SELECT 'failed', t.id, a.name, 3, t.done_at
+      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
+     WHERE t.inbox_id = i.id AND t.status = 'failed'
+       AND EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)
+       AND NOT EXISTS (SELECT 1 FROM tasks o WHERE o.inbox_id = i.id AND o.status IN (${OPEN_TASK}))
+  ) l ORDER BY l.rank, l.at LIMIT 1)`;
+
+// Requests that slipped, counted by kind over the last `days`, with examples.
+export async function inboxLeaks(days = 14) {
+  const rows = await query(
+    `SELECT i.id, ${LEAK_SQL} AS leak FROM inbox i WHERE i.created_at > now() - ($1 || ' days')::interval ORDER BY i.id DESC`,
+    [String(Math.min(Math.max(Number(days) || 14, 1), 90))]
+  );
+  const kinds = {};
+  for (const r of rows) {
+    if (!r.leak) continue;
+    const k = (kinds[r.leak.kind] ||= { count: 0, examples: [] });
+    k.count++;
+    if (k.examples.length < 5) k.examples.push({ inbox: r.id, task: r.leak.taskId, agent: r.leak.agent });
+  }
+  // how often an answer went out while work was still out (the follow-up case)
+  const early = await one(
+    `SELECT count(*)::int AS n FROM inbox i
+      WHERE i.created_at > now() - ($1 || ' days')::interval
+        AND (SELECT min(f.created_at) FROM final_replies f WHERE f.inbox_id = i.id)
+          < (SELECT max(t.done_at) FROM tasks t WHERE t.inbox_id = i.id AND t.parent_task_id IS NULL)`,
+    [String(Math.min(Math.max(Number(days) || 14, 1), 90))]
+  );
+  return { days: Number(days) || 14, requests: rows.length, answeredEarly: early?.n ?? 0, kinds };
+}
+
 export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
   const rows = await query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.source, i.created_at AS "createdAt",
@@ -683,6 +737,15 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
         AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply",
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN ('done', 'failed')) AS "doneCount",
+       -- After an answer: what is still out, and what came back that no answer
+       -- has said yet. Together they tell "answered, still going" from "done".
+       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN (${OPEN_TASK})) AS "openCount",
+       (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+         WHERE t.inbox_id = i.id AND t.status IN (${OPEN_TASK})) AS "openBy",
+       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.parent_task_id IS NULL
+          AND t.status IN ('done', 'failed') AND t.done_at > (SELECT max(f.created_at) FROM final_replies f WHERE f.inbox_id = i.id)) AS unreported,
+       (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status = 'failed') AS "failedCount",
+       ${LEAK_SQL} AS leak,
        -- Work that has stopped for a reason the user is never told about: the
        -- agent is past its provider's ceiling, or has no session at all. A
        -- request used to sit at "dispatched" for hours with nothing to show but

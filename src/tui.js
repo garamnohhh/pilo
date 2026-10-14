@@ -412,9 +412,11 @@ function replyBlock(item, width, tagged, reply = null, index = 0) {
   const who = item.routed || "";
   const extra = who && tagged?.hidden && index === 0 ? ` ${c.green}${who}${c.reset}` : "";
   const later = index > 0 ? ` ${c.faint}${t("card.replyAgain", { at: kstClock(at) })}${c.reset}` : "";
+  // a follow-up that came in after the user last touched a key here
+  const fresh = index > 0 && at && new Date(at).getTime() > seenAt ? ` ${c.amberBright || c.amber}${t("card.new")}${c.reset}` : "";
   return cardBlock({
     box,
-    title: `${note ? badge("NOTE", t("feed.note")) : badge(index > 0 ? "FOLLOW_UP" : "FINAL_REPLY")}${extra}${later}`,
+    title: `${note ? badge("NOTE", t("feed.note")) : badge(index > 0 ? "FOLLOW_UP" : "FINAL_REPLY")}${extra}${later}${fresh}`,
     titleColor: "",
     right: took && index === 0 && !note ? `in-${item.id} · ${took}` : `in-${item.id}`,
     body: wrap(alignTables(body, box - 5), box - 5),
@@ -462,12 +464,29 @@ function decisionCard(d, width) {
   });
 }
 
+// Follow-ups newer than this are marked new; a key press moves it to now.
+let seenAt = Date.now();
+
+// Answered is not finished: work still out, a result no answer has said yet, or
+// a request that slipped. Null when the request is done.
+function stillGoing(item) {
+  if (!item.finalReply || item.source === "desk") return null;
+  const open = Number(item.openCount || 0), late = Number(item.unreported || 0);
+  if (item.leak) return { attention: true, who: item.leak.agent || "pilo", text: t(`leak.${item.leak.kind}`, { task: item.leak.taskId, agent: item.leak.agent || "agent" }) };
+  if (open) return { who: item.openBy || "", text: t("card.goingText", { n: open, who: item.openBy || "agent" }) };
+  if (late) return { who: "pilo", text: t("card.lateText", { n: late }) };
+  return null;
+}
+
 // the hour a limit lifts, as the user reads it
-function waitingBlock(item, width) {
+function waitingBlock(item, width, going = null) {
   const box = Math.max(24, width - 2);
   // Work finished and nobody wrote the answer. That is not progress, so it gets
   // its own card instead of a spinner that would never stop.
-  if (item.needsReply) {
+  if (going?.attention) {
+    return cardBlock({ box, title: t("card.leak"), titleColor: c.red, right: `in-${item.id}`, body: [going.text], surface: "reply", state: "attention" });
+  }
+  if (item.needsReply && !going) {
     const many = Number(item.taskCount || 0) > 1;
     return cardBlock({
       box,
@@ -487,13 +506,13 @@ function waitingBlock(item, width) {
   const text = Math.max(8, box - 5);
   // A request whose remaining work cannot move says so, rather than sitting on
   // the last progress note as though something were still happening.
-  const said = item.held
+  const said = going ? going.text : item.held
     ? t(item.held.reason === "limited" ? "held.limited" : "held.unbound", {
         done: item.doneCount ?? 0, total: item.taskCount ?? 0, who: item.held.agent,
         until: item.held.until ? kstClock(item.held.until) : ""
       })
     : item.progress || (item.routed ? t("card.waiting") : t("card.queued"));
-  const who = item.held ? item.held.agent : item.routed || "";
+  const who = going ? going.who : item.held ? item.held.agent : item.routed || "";
   const room = text - cols(who) - 1;
   const words = cut(said, Math.max(6, room));
   const gap = Math.max(1, text - cols(words) - cols(who));
@@ -1120,7 +1139,8 @@ function render() {
       // Colour alone would strand anyone without it, so the colourless build
       // swaps the glyph instead.
       const deciding = !item.finalReply && Boolean(item.decision);
-      const mood = item.finalReply ? "done" : item.needsReply || deciding ? "attention" : "working";
+      const going = stillGoing(item);
+      const mood = going?.attention ? "attention" : item.finalReply ? (going ? "working" : "done") : item.needsReply || deciding ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
       const markColour = pulseColour(mood);
       // Not every line in the feed is something the user typed. A note is the
@@ -1142,7 +1162,7 @@ function render() {
       actions.push(null);
       // The mark pulses whether or not the card is open, so a folded request
       // still keeps the clock running.
-      if (!item.finalReply && !item.needsReply && !deciding) waiting += 1;
+      if ((!item.finalReply && !item.needsReply && !deciding) || (going && !going.attention)) waiting += 1;
       if (!folded) {
         // The bar lines up with the question's badge, not with the ❯: the mark and
         // the space after it are the two columns the card is indented past. What
@@ -1156,6 +1176,7 @@ function render() {
           : [];
         const block = (answers.length
           ? answers.flatMap((reply, i) => (i ? [""] : []).concat(replyBlock(item, room + 2, tagged, reply, i)))
+            .concat(going ? ["", ...waitingBlock(item, room + 2, going)] : [])
           : deciding ? decisionBlock(item, room + 2) : waitingBlock(item, room + 2)).map((r) => CARD_INDENT + r);
         feed.push(...block);
         // only the header line folds, so clicking inside an answer does nothing;
@@ -1632,6 +1653,8 @@ const keylog = process.env.PILO_KEYLOG || "";
 // together here rather than decoded into "�" twice over.
 const decode = chunkDecoder();
 process.stdin.on("data", (raw) => {
+  // anything typed means what is on the screen has been seen
+  seenAt = Date.now();
   const chunk = decode(raw);
   // a read that carried nothing but the front of a character: wait for the rest,
   // and leave whatever is already in the carry on the timer it is already on
