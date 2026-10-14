@@ -59,6 +59,14 @@ test("the phone header is a sticky box with a solid background", () => {
   assert.doesNotMatch(top, /backdrop-filter|opacity/);
 });
 
+// The same rule tints the title bar of a desktop web app; a clear header let
+// the page show through it.
+test("the desk header is a sticky box with a solid background too", () => {
+  const wide = page.slice(0, page.indexOf("@container (max-width: 720px) {\n    /* The page never scrolls"));
+  const top = wide.slice(wide.indexOf("  .d-top {"), wide.indexOf("}", wide.indexOf("  .d-top {")));
+  for (const rule of ["position: sticky", "top: 0", "background-color: var(--bg)", "env(safe-area-inset-top)"]) assert.ok(top.includes(rule), rule);
+});
+
 // Safari 26 tints its bottom toolbar from a sticky box on the bottom edge, and
 // a light start gives the home screen app a white status bar.
 test("the tab bar tints Safari's toolbar and a light start picks the white status bar", () => {

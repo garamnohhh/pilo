@@ -46,6 +46,11 @@
   /* desk.css asks the container queries about .d-host; here the whole window is
      that container, which is what the handoff's artboard measured. */
   body { container-type: inline-size }
+  /* An installed app (a Safari web app on macOS 26, iOS 26) draws its title or
+     status bar as clear glass over the page, unless the top edge is a full-width
+     sticky or fixed box with a plain background colour: then WebKit tints the
+     bar with that colour. The desk header had no background of its own. */
+  .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); height: auto; min-height: calc(54px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top) }
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden; position: relative }
