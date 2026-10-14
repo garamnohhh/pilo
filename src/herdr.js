@@ -127,7 +127,9 @@ export async function sendKeys(target, ...keys) {
 // or changed hooks when it starts or resumes; a wake typed into that screen
 // is lost (10/8: qa and promo never got their tasks). Such a pane is reported
 // as waiting on a dialog, and the wake is tried again on the usual clock.
-const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/];
+// Claude asks the same way about a folder's new MCP servers; its Enter would
+// take the user's answer for them (10/14, relay-werner).
+const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/, /new MCP servers? found in this project/];
 export const inDialog = (screen) => DIALOGS.some((re) => re.test(String(screen || "").split("\n").slice(-25).join("\n")));
 
 export async function prompt(target, message) {

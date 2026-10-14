@@ -9,3 +9,9 @@ test("a codex pane showing the hooks review is not woken", () => {
   assert.equal(inDialog("› Ask Codex to do anything\n  ~/x · Ask for approval · 5h 83% left"), false);
   assert.equal(inDialog(""), false);
 });
+
+// What relay-werner's pane showed on 10/14 before its MCP servers were enabled.
+test("a claude pane asking about the folder's new MCP servers is not woken", () => {
+  assert.equal(inDialog("  2 new MCP servers found in this project\n  Select any you wish to enable.\n    [✔] relayroom\n  ❯    Enable selected\n Space to select · Esc to reject all"), true);
+  assert.equal(inDialog("  1 new MCP server found in this project"), true);
+});
