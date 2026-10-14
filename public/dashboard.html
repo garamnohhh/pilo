@@ -1634,7 +1634,7 @@ function markAsking(busy) {
 const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "pilo approvals": "pilo" };
 function aboutWords(a) {
   if (!a) return { head: "", sub: "", danger: "" };
-  const tgt = (t) => T(t.temp ? (/^\$/.test(t.path) ? "about.temp" : "about.tmpPath") : "about.file.other", { path: t.path });
+  const tgt = (t) => T(t.temp ? (t.made ? "about.temp" : "about.tmpPath") : "about.file.other", { path: t.path });
   const stepText = (s) => (s.key === "rm" ? T("about.rm", { arg: s.targets.map(tgt).join(", ") }) : T(`about.${s.key}`, { arg: s.arg || "" }).trim());
   const steps = (a.steps || []).map(stepText).join(T("about.then"));
   const f = a.file;

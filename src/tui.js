@@ -710,7 +710,7 @@ async function refresh() {
 function aboutHead(a) {
   if (!a) return "";
   if (a.line) return a.line;
-  const tgt = (x) => t(x.temp ? (/^\$/.test(x.path) ? "about.temp" : "about.tmpPath") : "about.file.other", { path: x.path });
+  const tgt = (x) => t(x.temp ? (x.made ? "about.temp" : "about.tmpPath") : "about.file.other", { path: x.path });
   const steps = (a.steps || []).map((s) => (s.key === "rm" ? t("about.rm", { arg: s.targets.map(tgt).join(", ") }) : t(`about.${s.key}`, { arg: s.arg || "" }).trim())).join(t("about.then"));
   const f = a.file;
   return steps || (f ? t(f.kind === "edit" && f.edits ? "about.file.edits" : `about.file.${f.kind}`, f) : "");

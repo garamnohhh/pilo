@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync } from "node:fs";
+import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
@@ -57,6 +57,38 @@ test("window-only: the list the user set, and nothing ordinary", () => {
   assert.equal(bash("ls | xargs rm -rf"), "rm -rf");
   assert.equal(bash("find . -name x -exec rm -rf {} +"), "rm -rf");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "select * from users" }), "");
+});
+
+test("rm -rf inside temporary folders goes ahead; anything else, or anything unclear, stays pane-only", () => {
+  const bash = (command) => A.windowOnly("Bash", { command });
+  const scratch = "/private/tmp/claude-501/-Users-x-repo/abc/scratchpad";
+  for (const ok of [
+    "rm -rf /tmp/x",
+    "rm -rf /private/tmp/build-123",
+    `rm -rf ${scratch}/boot1`,
+    'T=$(mktemp -d) && cd "$T" && rm -rf "$T"',
+    `S=${scratch}; rm -rf "\${S:?}/sb_backup_3229"; mkdir -p $S/x`,
+    `S=${scratch}; rm -rf $S/*`,
+    "rm -rf ~/.cache/uv",
+    `rm -rf ${(process.env.TMPDIR || "/var/folders/ab/cd/T/").replace(/\/$/, "")}/pilo-x`
+  ]) assert.equal(bash(ok), "", ok);
+  for (const bad of [
+    "rm -rf ~/x",
+    "rm -rf /tmp/../Users/x",
+    "rm -rf $UNKNOWN",
+    "rm -rf /tmp/x ~/y",
+    "rm -rf /tmp",
+    "rm -rf /tmp/*",
+    "rm -rf ~/.cache",
+    'T=$(mktemp -d); rm -rf "$T/../.."',
+    "rm -rf $(cat list)",
+    "sudo rm -rf /tmp/x"
+  ]) assert.notEqual(bash(bad), "", bad);
+  // a link in a temp folder that points out of it
+  const link = mkdtempSync(join(tmpdir(), "pilo-link-"));
+  symlinkSync(homedir(), join(link, "home"));
+  assert.equal(bash(`rm -rf ${join(link, "home")}/x`), "rm -rf");
+  assert.equal(bash(`rm -rf ${join(link, "plain")}`), "");
 });
 
 test("a request waits until answered, with the fingerprint it was shown", async () => {

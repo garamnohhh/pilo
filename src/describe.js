@@ -3,18 +3,12 @@
 // and that comes first; Codex writes none, so the command is read with a few
 // plain rules, no model call. The result is keys and values, put into words by
 // the screen in the user's language.
-import { heredocs, simpleCommands, words, windowOnly } from "../hooks/pilo-hook.mjs";
+import { heredocs, simpleCommands, words, windowOnly, tempVarsOf, isTempPath } from "../hooks/pilo-hook.mjs";
 
 const SKIP = new Set(["cd", "echo", "printf", "true", "false", "set", "export", "sleep", "wait", "test", "[", ":"]);
 const short = (s, n = 60) => (String(s).length > n ? String(s).slice(0, n - 1) + "…" : String(s));
 const base = (w) => String(w || "").split("/").pop();
 
-// VAR=$(mktemp …) in the same command: the folder it names was just made
-function tempVars(command) {
-  const vars = new Set();
-  for (const m of String(command).matchAll(/\b([A-Za-z_]\w*)=["']?\$\(\s*mktemp\b/g)) vars.add(m[1]);
-  return vars;
-}
 
 const VALUE_FLAGS = new Set(["-v", "-w", "-e", "-p", "-u", "--name", "--network", "--mount", "--env", "--workdir", "--volume", "--platform", "--user", "--entrypoint"]);
 
@@ -55,9 +49,10 @@ function step(segment, temps) {
     return { key: "run", arg: `${cmd} ${sub}` };
   }
   if (cmd === "rm") {
+    // the same test the hook uses, so a card never calls temporary what it does not
     const targets = plain.map((t) => {
       const v = /^\$\{?([A-Za-z_]\w*)/.exec(t);
-      return { path: short(t, 50), temp: Boolean(v && temps.has(v[1])) || /^(\/private)?\/tmp\/|^\$TMPDIR/.test(t) };
+      return { path: short(t, 50), temp: isTempPath(t, temps), made: Boolean(v && temps.made?.has(v[1])) };
     });
     return { key: "rm", targets };
   }
@@ -79,7 +74,9 @@ export function describe(tool, input = {}) {
   if (typeof input?.description === "string" && input.description.trim()) out.line = input.description.trim();
   const command = Array.isArray(input?.command) ? input.command.join(" ") : String(input?.command ?? "");
   if (command) {
-    const temps = tempVars(command);
+    const temps = tempVarsOf(command);
+    // which of them $(mktemp) just made, for "a temporary folder made just now"
+    temps.made = new Set([...String(command).matchAll(/\b([A-Za-z_]\w*)=["']?\$\(\s*mktemp\b/g)].map((m) => m[1]));
     const seen = new Set();
     for (const part of heredocs(command)) {
       for (const segment of simpleCommands(part)) {

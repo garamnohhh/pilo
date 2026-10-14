@@ -17,7 +17,11 @@ test("no line (Codex): steps read off the command, the temporary folder named as
   assert.deepEqual(a.steps.map((s) => s.key), ["mktemp", "git.clone", "read", "docker.run", "rm"]);
   assert.equal(a.steps[1].arg, "https://github.com/garamnohhh/pilo.git");
   assert.equal(a.steps[3].arg, "node:22-slim");
-  assert.deepEqual(a.danger, { rule: "rm -rf", targets: [{ path: "$T", temp: true }] });
+  // a folder this command made with mktemp is deleted without asking (10/14)
+  assert.deepEqual(a.steps.find((x) => x.key === "rm").targets, [{ path: "$T", temp: true, made: true }]);
+  assert.equal(a.danger, null);
+  const out = describe("Bash", { command: "rm -rf ~/x /tmp/y" });
+  assert.deepEqual(out.danger, { rule: "rm -rf", targets: [{ path: "~/x", temp: false, made: false }, { path: "/tmp/y", temp: true, made: false }] });
 });
 
 test("files: a new one, an edit, with how many lines", () => {

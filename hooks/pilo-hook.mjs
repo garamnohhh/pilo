@@ -19,7 +19,9 @@
 // It imports nothing outside node, reads only its stdin, and a Pilo that is off
 // or slow costs the session nothing: every failure prints nothing and exits 0.
 import { request } from "node:http";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { posix } from "node:path";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -60,25 +62,29 @@ export function words(segment) {
 }
 const base = (w) => String(w || "").split("/").pop();
 
-function commandRule(segment) {
+function commandRule(segment, ctx = { temps: new Set() }) {
   let w = words(segment);
   while (w.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(w[0])) w = w.slice(1);
   const cmd = base(w[0]);
   const args = w.slice(1);
   const flag = (re) => args.some((a) => re.test(a));
   if (cmd === "sudo") return "sudo";
-  if ((cmd === "env" || cmd === "command" || cmd === "exec" || cmd === "nohup" || cmd === "time") && args.length) return commandRule(args.join(" "));
+  if ((cmd === "env" || cmd === "command" || cmd === "exec" || cmd === "nohup" || cmd === "time") && args.length) return commandRule(args.join(" "), ctx);
   // commands that run another command they are given
-  if (cmd === "xargs") { const i = args.findIndex((a) => !a.startsWith("-")); if (i >= 0) return commandRule(args.slice(i).join(" ")); }
+  if (cmd === "xargs") { const i = args.findIndex((a) => !a.startsWith("-")); if (i >= 0) return commandRule(args.slice(i).join(" "), ctx); }
   if (cmd === "find") {
     const i = args.findIndex((a) => a === "-exec" || a === "-execdir" || a === "-ok");
-    if (i >= 0) { const hit = commandRule(args.slice(i + 1).join(" ")); if (hit) return hit; }
+    if (i >= 0) { const hit = commandRule(args.slice(i + 1).join(" "), ctx); if (hit) return hit; }
   }
   if (SHELLS.has(cmd)) {
     const i = args.indexOf("-c");
     if (i >= 0 && args[i + 1]) return check(args[i + 1]);
   }
-  if (cmd === "rm" && flag(/^-[a-zA-Z]*r|^--recursive$/) && flag(/^-[a-zA-Z]*f|^--force$/)) return "rm -rf";
+  if (cmd === "rm" && flag(/^-[a-zA-Z]*r|^--recursive$/) && flag(/^-[a-zA-Z]*f|^--force$/)) {
+    // a delete inside temporary folders only goes ahead (10/14, the user's call)
+    const targets = args.filter((a) => !a.startsWith("-"));
+    if (!targets.length || !targets.every((t) => isTempPath(t, ctx.temps))) return "rm -rf";
+  }
   if (cmd === "git" && args.includes("push") && flag(/^--force(-with-lease)?(=|$)|^-[a-zA-Z]*f$|^\+/)) return "git push --force";
   if (cmd === "git" && args.includes("reset") && args.includes("--hard")) return "git reset --hard";
   if (DB_CLIENTS.has(cmd)) return "database client";
@@ -137,10 +143,70 @@ export function simpleCommands(command) {
   return [...out.map((c) => c.replace(/^[\s({!]+/, "")).filter((c) => c.trim()), ...subs.flatMap(simpleCommands)];
 }
 
+// Temporary folders: /tmp, /private/tmp (agents' scratchpads live there),
+// $TMPDIR and ~/.cache, or a variable this same command set to one of them or
+// to $(mktemp …). Anything else, an unknown variable, a ".." that climbs out, a
+// glob straight under the root or a symlink that leads elsewhere is not.
+const TEMP_ROOTS = () => [
+  "/tmp", "/private/tmp", posix.join(homedir(), ".cache"),
+  ...(process.env.TMPDIR ? [process.env.TMPDIR.replace(/\/+$/, "")] : [])
+];
+
+export function tempVarsOf(command) {
+  const temps = new Set();
+  for (const m of String(command).matchAll(/(?:^|[\s;&|(])([A-Za-z_]\w*)=(?:"([^"]*)"|'([^']*)'|(\S*))/g)) {
+    const value = m[2] ?? m[3] ?? m[4] ?? "";
+    if (/^\$\(\s*mktemp\b/.test(value) || (!/[$`*?]/.test(value) && insideTemp(value))) temps.add(m[1]);
+  }
+  // a mktemp assignment whose $( … ) has spaces is cut by \S above
+  for (const m of String(command).matchAll(/\b([A-Za-z_]\w*)=["']?\$\(\s*mktemp\b/g)) temps.add(m[1]);
+  return temps;
+}
+
+function insideTemp(path) {
+  const p = posix.normalize(String(path).replace(/^~(?=\/|$)/, homedir()));
+  if (!p.startsWith("/")) return false;
+  return TEMP_ROOTS().some((root) => {
+    if (!p.startsWith(root + "/")) return false;
+    const first = p.slice(root.length + 1).split("/")[0];
+    return first && first !== ".." && !/[*?[\]{}]/.test(first);
+  });
+}
+
+// the longest part of the path that exists must not be a symlink out of a temp root
+function staysInside(path) {
+  let p = posix.normalize(String(path).replace(/^~(?=\/|$)/, homedir()));
+  while (p && p !== "/" && !existsSync(p)) p = posix.dirname(p);
+  if (!p || p === "/") return true;
+  try {
+    if (lstatSync(p).isSymbolicLink() || realpathSync(p) !== p) {
+      const real = realpathSync(p);
+      return TEMP_ROOTS().map((r) => { try { return realpathSync(r); } catch { return r; } }).some((r) => real === r || real.startsWith(r + "/"));
+    }
+  } catch { return false; }
+  return true;
+}
+
+export function isTempPath(target, temps = new Set()) {
+  const v = /^\$(?:\{([A-Za-z_]\w*)(?::[?-][^}]*)?\}|([A-Za-z_]\w*))(.*)$/.exec(target);
+  if (v) {
+    const name = v[1] || v[2];
+    const rest = v[3] || "";
+    // the variable itself, or a path below it: never "..", never a glob right under it
+    if (!temps.has(name)) return false;
+    if (rest && !rest.startsWith("/")) return false;
+    const parts = rest.split("/").filter(Boolean);
+    return !parts.includes("..");
+  }
+  if (/[$`]/.test(target)) return false;
+  return insideTemp(target) && staysInside(target);
+}
+
 function check(command) {
+  const ctx = { temps: tempVarsOf(command) };
   for (const part of heredocs(String(command))) {
     for (const segment of simpleCommands(part)) {
-      const hit = commandRule(segment);
+      const hit = commandRule(segment, ctx);
       if (hit) return hit;
     }
   }
