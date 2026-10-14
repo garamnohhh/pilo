@@ -272,54 +272,93 @@
   });
   setLang(root.getAttribute("data-lang") === "ko" ? "ko" : "en");
 
-  /* 페이지 안 목차. 지금 읽고 있는 절을 표시한다.
-     스크롤마다 계산하지 않고, 화면 위쪽 띠에 들어온 절만 관찰자가 알려준다.
-     주소의 해시로 바로 들어온 경우도 첫 계산에서 맞는 항목이 잡힌다. */
+  /* gn-toc:start - 페이지 안 목차(.gn-page-nav)의 지금 읽는 절 표시. 원본: design-system/toc.js
+     이 블록은 deploy.js · panels.js · 단독 HTML 문서에 글자 그대로 들어간다. 고치면 여기만 고치고
+     tools/check-toc.mjs --copies 로 사본이 같은지 확인한다(다르면 경고).
+
+     규칙(2026-10-14, task 3547):
+     - 목차를 누르거나 주소의 해시로 열면 그 항목이 바로 활성이고, 사용자가 다시 스크롤할 때까지 유지된다.
+       브라우저가 절을 scroll-margin-top 자리로 옮기면 절 윗변이 판정선에 소수점 차이로 걸쳐
+       바로 앞 절이 남던 문제(누른 항목이 아니라 그 앞 항목이 켜짐)를 이걸로 없앤다.
+     - 스크롤 중 판정선 = 그 절의 실제 scroll-margin-top + 2px. 선 위치를 css 와 따로 계산하지 않는다.
+       scroll-margin-top 이 0 인 문서는 --topbar-h(없으면 54) + 24.
+     - 페이지 끝에 닿으면 마지막 절(짧은 절이 판정선까지 못 올라오는 경우).
+     - 목차가 여럿이거나 숨은 탭 안에 있어도 보이는 목차만 계산. 다시 계산: window.gnToc.update().
+     - 목차 상자가 길어 안에서 스크롤되면 활성 항목을 상자 가운데로(바뀔 때만). */
   (function () {
-    var nav = document.querySelector(".gn-page-nav");
-    if (!nav || !window.IntersectionObserver) return;
-    var links = [].slice.call(nav.querySelectorAll('a[href^="#"]'));
-    if (!links.length) return;
-    var byId = {}, seen = {};
-    var targets = [];
-    links.forEach(function (a) {
-      var el = document.getElementById(a.getAttribute("href").slice(1));
-      if (!el) return;
-      byId[el.id] = a;
-      targets.push(el);
-    });
-    function mark(id) {
-      links.forEach(function (a) {
-        a.setAttribute("aria-current", a.getAttribute("href") === "#" + id ? "true" : "false");
-      });
+    if (window.gnToc) return;
+    var navs = [], pinned = null, ticking = false;
+    function collect() {
+      navs = [].slice.call(document.querySelectorAll(".gn-page-nav")).map(function (nav) {
+        var items = [];
+        [].slice.call(nav.querySelectorAll("a")).forEach(function (a) {
+          var href = a.getAttribute("href") || "", id = href.charAt(0) === "#" ? href.slice(1) : (a.dataset.sec || "");
+          var el = id && document.getElementById(decodeURIComponent(id));
+          if (el) items.push({ a: a, el: el, id: el.id });
+        });
+        return { nav: nav, items: items };
+      }).filter(function (n) { return n.items.length; });
     }
-    function current() {
-      /* 화면 위쪽에 가장 가까운, 이미 지나간 절 */
-      var best = null, bestTop = -Infinity;
-      var line = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 54) + 24;
-      for (var i = 0; i < targets.length; i++) {
-        var top = targets[i].getBoundingClientRect().top - line;
-        if (top <= 0 && top > bestTop) { bestTop = top; best = targets[i]; }
-      }
-      if (!best) best = targets[0];
-      /* 페이지 끝에 닿으면 마지막 절을 잡는다 — 짧은 절이 위쪽 띠에 못 들어오는 경우 */
-      if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 2) best = targets[targets.length - 1];
-      return best.id;
+    function visible(el) { return !!(el.offsetParent || el.getClientRects().length); }
+    function line(el) {
+      var m = parseFloat(getComputedStyle(el).scrollMarginTop) || 0;
+      if (!m) m = (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar-h")) || 54) + 24;
+      return m + 2;
     }
-    var ticking = false;
+    function pick(items) {
+      if (pinned) for (var i = 0; i < items.length; i++) if (items[i].id === pinned) return items[i];
+      var best = items[0];
+      items.forEach(function (t) { if (visible(t.el) && t.el.getBoundingClientRect().top <= line(t.el)) best = t; });
+      var doc = document.documentElement;
+      if (window.innerHeight + window.scrollY >= Math.max(doc.scrollHeight, document.body.scrollHeight) - 2) best = items[items.length - 1];
+      return best;
+    }
     function update() {
       ticking = false;
-      var id = current();
-      if (seen.id !== id) { seen.id = id; mark(id); }
+      navs.forEach(function (n) {
+        if (!visible(n.nav)) return;
+        var cur = pick(n.items);
+        n.items.forEach(function (t) {
+          var on = t === cur ? "true" : "false";
+          if (t.a.getAttribute("aria-current") !== on) t.a.setAttribute("aria-current", on);
+        });
+        /* a long nav scrolls in its own box: bring the marked entry into it, only on change */
+        if (cur === n.last) return;
+        n.last = cur;
+        var box = n.nav;
+        if (box.scrollHeight > box.clientHeight + 1)
+          box.scrollTop = Math.max(0, Math.min(box.scrollHeight - box.clientHeight, cur.a.offsetTop - box.offsetTop - (box.clientHeight - cur.a.offsetHeight) / 2));
+      });
     }
-    var io = new IntersectionObserver(function () {
-      if (!ticking) { ticking = true; requestAnimationFrame(update); }
-    }, { rootMargin: "-20% 0px -70% 0px", threshold: [0, 1] });
-    targets.forEach(function (t) { io.observe(t); });
-    window.addEventListener("scroll", function () {
-      if (!ticking) { ticking = true; requestAnimationFrame(update); }
-    }, { passive: true });
-    update();
-    window.__gnSpy = { targets: targets.length };
+    function soon() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+    function pin(id) {
+      var known = navs.some(function (n) { return n.items.some(function (t) { return t.id === id; }); });
+      pinned = known ? id : null; update();
+    }
+    function start() {
+      collect();
+      if (!navs.length) return;
+      document.addEventListener("click", function (e) {
+        var a = e.target.closest && e.target.closest(".gn-page-nav a");
+        if (!a) return;
+        var href = a.getAttribute("href") || "";
+        pin(href.charAt(0) === "#" ? decodeURIComponent(href.slice(1)) : (a.dataset.sec || ""));
+      });
+      window.addEventListener("hashchange", function () { pin(decodeURIComponent(location.hash.slice(1))); });
+      /* the reader scrolls again: let the position decide */
+      ["wheel", "touchmove", "keydown", "mousedown"].forEach(function (ev) {
+        window.addEventListener(ev, function (e) {
+          if (ev === "mousedown" && e.target.closest && e.target.closest(".gn-page-nav")) return;
+          if (pinned) { pinned = null; soon(); }
+        }, { passive: true });
+      });
+      window.addEventListener("scroll", soon, { passive: true });
+      window.addEventListener("resize", soon);
+      if (location.hash) pin(decodeURIComponent(location.hash.slice(1)));
+      update();
+    }
+    window.gnToc = { update: function () { collect(); update(); } };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
   })();
+  /* gn-toc:end */
 })();
