@@ -15,3 +15,4 @@
 
 - `.env*`, token, credential 생성/수정/노출 금지.
 - 사용자가 요청하지 않은 구현 금지.
+- 앱 아이콘(`public/icons/*`, manifest `icons`, favicon·apple-touch-icon 링크)은 사용자 승인 없이 변경 금지. `src/mobile.test.js` 가 해시로 고정.

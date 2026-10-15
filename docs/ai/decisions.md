@@ -46,3 +46,7 @@
 - `aliases` is stored as comma-separated TEXT for now.
 - One inbox row fans out to N tasks; worker branches hang off `parent_task_id`.
 - Site (pilo.garamnoh.workers.dev): no third-party requests, with one exception — the host's own measure, Cloudflare Web Analytics (beacon, no cookies), on every page (2026-10-08, same rule as the portfolio).
+
+## 2026-10-15
+
+- App icon is the ❯p set in `public/icons/app-*.png` (since 2026-09-10, 1f91350). It changes only with the user's approval (user, 10/15: "누가 자꾸 맘대로 뭘 바꾸냐"); `src/mobile.test.js` pins the files by hash and the manifest/link paths. The old black-P `icon-*.png` files stay unreferenced.

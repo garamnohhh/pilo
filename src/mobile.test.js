@@ -86,6 +86,25 @@ test("the tab bar tints Safari's toolbar and a light start picks the white statu
   assert.match(head, /setAttribute\("content", "default"\)/);
 });
 
+// The Dock showed the old black P after a reinstall (10/15) and the user asked
+// who keeps changing it. The icon changes only with the user's say-so: a new
+// hash here is that approval.
+test("the app icon is the approved ❯p and nothing else", async () => {
+  const { createHash } = await import("node:crypto");
+  const manifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+  assert.deepEqual(manifest.icons.map((i) => i.src), ["/icons/app-192.png", "/icons/app-512.png", "/icons/app-maskable-512.png"]);
+  const approved = {
+    "app-32.png": "d35ce01efa6fe1caa6c2e7bcdb086d6f6d0b957f", "app-64.png": "b1316012005f36bba394536d2fa183ea7f2fb7c4",
+    "app-180.png": "93354ee09a6299cf2c0b7a443b03279ac8d49f02", "app-192.png": "c8f12b8bbabcdb16f086d4f91341f81b36c466e5",
+    "app-512.png": "513085a9223e1612a003e19f37d9e7faf73a7c72", "app-maskable-512.png": "3aa2a9a78bda28043e7af516c5c0e92df78af83a"
+  };
+  for (const [file, sha] of Object.entries(approved)) {
+    assert.equal(createHash("sha1").update(readFileSync(new URL(`../public/icons/${file}`, import.meta.url))).digest("hex"), sha, file);
+  }
+  const links = [...page.matchAll(/<link rel="(?:icon|apple-touch-icon)"[^>]*href="([^"]+)"/g)].map((m) => m[1]);
+  assert.ok(links.length && links.every((h) => /^\/icons\/app-\d+\.png$/.test(h)), links.join(" "));
+});
+
 // A phone that cannot reach the Mac gets the offline screen, from a page the
 // service worker kept; the API is never answered from the cache.
 test("offline: the page is kept, the API is not, and the phone shows its own screen", () => {
