@@ -129,8 +129,12 @@ export async function sendKeys(target, ...keys) {
 // as waiting on a dialog, and the wake is tried again on the usual clock.
 // Claude asks the same way about a folder's new MCP servers; its Enter would
 // take the user's answer for them (10/14, relay-werner).
-const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/, /new MCP servers? found in this project/];
-export const inDialog = (screen) => DIALOGS.some((re) => re.test(String(screen || "").split("\n").slice(-25).join("\n")));
+// Only the bottom of the screen counts: a dialog sits there, and the same words
+// higher up are text the session printed (10/14: pilo-dev showed this test's
+// strings and never got its next task).
+const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/, /Space to select · Esc to reject all/];
+const bottom = (screen) => String(screen || "").split("\n").filter((l) => l.trim()).slice(-6).join("\n");
+export const inDialog = (screen) => DIALOGS.some((re) => re.test(bottom(screen)));
 
 export async function prompt(target, message) {
   if (!target) throw new Error("SESSION_NOT_BOUND");

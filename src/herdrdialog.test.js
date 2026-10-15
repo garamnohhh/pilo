@@ -13,5 +13,11 @@ test("a codex pane showing the hooks review is not woken", () => {
 // What relay-werner's pane showed on 10/14 before its MCP servers were enabled.
 test("a claude pane asking about the folder's new MCP servers is not woken", () => {
   assert.equal(inDialog("  2 new MCP servers found in this project\n  Select any you wish to enable.\n    [✔] relayroom\n  ❯    Enable selected\n Space to select · Esc to reject all"), true);
-  assert.equal(inDialog("  1 new MCP server found in this project"), true);
+});
+
+// pilo-dev's pane on 10/14: this file's strings in its output, its own input box below.
+test("dialog words a session printed above its input box are not a dialog", () => {
+  const printed = '  assert.equal(inDialog("  2 new MCP servers found in this project\\n Space to select · Esc to reject all"), true);\n  Hooks need review\n  Trust all and continue';
+  const box = "\n⏺ Done.\n\n────────\n❯ \n────────\n  ⏵⏵ auto mode on (shift+tab to cycle)\n  Opus 5.5 · pilo · 42% context";
+  assert.equal(inDialog(printed + box), false);
 });
