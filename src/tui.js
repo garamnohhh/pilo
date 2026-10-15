@@ -748,16 +748,12 @@ async function answerApproval(word, rest) {
   if (!r) return note(t("note.noBlocked"));
   let key = "";
   try { key = readFileSync(join(home, "approve-tui.key"), "utf8").trim(); } catch {}
-  // a risky request is answered here too, with the word typed: :allow allow
-  const typed = rest.some((w) => String(w).toLowerCase() === "allow");
   if (r.notice) {
     // the pane's own menu: :pick <number>, read again and typed by the server
     if (word !== "pick" || !r.menu || r.reason === "pilo approvals") return note(r.reason === "pilo approvals" ? t("appr.paneOnly", { why: r.reason }) : t("appr.inPane"), { sticky: true });
-    const label = r.menu.options.find((o) => o.n === (nums[0] || 1))?.label || "";
-    if (r.reason && !/^no\b/i.test(label) && !typed) return note(`${t("appr.risky", { why: r.reason })} — :pick ${nums[0] || 1} allow`, { sticky: true });
     const res = await fetch(`${base}/api/agents/${r.agentId}/choose`, {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ key, fingerprint: r.menu.fingerprint, n: nums[0] || 1, ...(typed ? { confirm: "allow" } : {}) })
+      body: JSON.stringify({ key, fingerprint: r.menu.fingerprint, n: nums[0] || 1 })
     }).catch(() => null);
     const data = await res?.json().catch(() => ({}));
     await refresh();
@@ -777,15 +773,13 @@ async function answerApproval(word, rest) {
     body = { answers };
   } else {
     if (r.kind === "question" && word !== "pane") return note("usage: :pick <option> — this one is a question");
-    if (word === "allow" && r.risk) {
-      if (!typed) return note(`${t("appr.risky", { why: r.risk })} — :allow ${which > 1 ? `${which} ` : ""}allow  (${String(r.input?.command ?? r.tool)})`, { sticky: true });
-      body = { decision: "allow", confirm: "allow" };
-    } else if (word === "allow" && !(state.apprConfirm?.id === r.id && Date.now() - state.apprConfirm.at < 10000)) {
+    if (word === "allow" && !(state.apprConfirm?.id === r.id && Date.now() - state.apprConfirm.at < 10000)) {
       state.apprConfirm = { id: r.id, at: Date.now() };
-      return note(t("appr.confirm", { agent: r.agent, what: String(r.input?.command ?? r.tool) }).replace("\n", " — ") + " :allow", { sticky: true });
+      // a risky one says what it does before the second :allow
+      return note((r.risk ? `${t("appr.risky", { why: r.risk })} ` : "") + t("appr.confirm", { agent: r.agent, what: String(r.input?.command ?? r.tool) }).replace("\n", " — ") + " :allow", { sticky: true });
     }
     state.apprConfirm = null;
-    body ||= { decision: word };
+    body = { decision: word };
   }
   const res = await fetch(`${base}/api/approvals/${r.id}`, {
     method: "POST", headers: { "content-type": "application/json" },

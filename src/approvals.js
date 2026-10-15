@@ -19,8 +19,6 @@ import { HOOK_TIMEOUT_S, windowOnly, paneOnly } from "../hooks/pilo-hook.mjs";
 import { describe } from "./describe.js";
 
 export { windowOnly, paneOnly };
-// what a risky Allow must carry: the word, typed by the user on that screen
-export const CONFIRM = "allow";
 // a little short of the hook's timeout, so the pane hears "no answer" from us
 export const MAX_WAIT_MS = (HOOK_TIMEOUT_S - 30) * 1000;
 const PAIR_MS = 5 * 60e3;
@@ -56,7 +54,7 @@ export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()
     id: ++seq, kind: body.kind === "question" ? "question" : "permission",
     agent: agent.name, agentId: agent.id, runtime: body.runtime || "", pane: body.pane, session: body.session || "",
     cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now,
-    // rm -rf, force push, sudo, a database, .env: Allow needs the word typed
+    // rm -rf, force push, sudo, a database, .env: the screens say so in red
     risk: why
   };
   item.fingerprint = fingerprint(item);
@@ -150,9 +148,6 @@ export function decide(id, body) {
     notices.set(item.pane, { pane: item.pane, agent: item.agent, agentId: item.agentId, type: "permission_prompt", message: "", at: Date.now(), tool: item.tool, input: item.input, reason: "" });
     onChange();
     onReturn(item.pane);
-  }
-  else if (item.kind === "permission" && body.decision === "allow" && item.risk && body.confirm !== CONFIRM) {
-    throw Object.assign(new Error(`${item.risk}: type "${CONFIRM}" to allow it`), { status: 428, code: "CONFIRM_NEEDED" });
   }
   else if (item.kind === "permission" && (body.decision === "allow" || body.decision === "deny")) item.resolve({ decision: body.decision });
   else if (item.kind === "question" && body.answers && typeof body.answers === "object") item.resolve({ decision: "answer", answers: body.answers });

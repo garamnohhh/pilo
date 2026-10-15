@@ -231,7 +231,7 @@ export function windowOnly(tool, input = {}) {
   return "";
 }
 
-// Risky requests are answered from Pilo's screens too, with the word typed out
+// Risky requests are answered from Pilo's screens too, like any other
 // (10/15, the user: the point is never leaving the dashboard or the TUI). The
 // one kept in the pane is a session reaching for Pilo's own approval door — the
 // pairing, the keys, the answer API — which would let it answer for itself.

@@ -141,8 +141,8 @@ you asked last week.
 - **Approvals** — with `pilo hooks install`, a session pilo runs asks its
   permission prompts and its multiple-choice questions on the dashboard, the
   terminal UI and the phone as well as in its own pane; the first answer from
-  either side wins. A few things always ask, whatever the mode, and their Allow
-  takes the word `allow` typed out: `rm -rf` outside temporary folders (`/tmp`,
+  either side wins. A few things always ask, whatever the mode, and their card
+  says in red what they do: `rm -rf` outside temporary folders (`/tmp`,
   `$TMPDIR`, `~/.cache`, or a folder the same command made with `mktemp`),
   `git push --force`, `git reset --hard`, `sudo`, database clients and writes,
   and reading `.env` or secrets. Only a session reaching for pilo's own

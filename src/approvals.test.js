@@ -114,15 +114,13 @@ test("not a Pilo pane, or Pilo's own approval door: answered in the pane at once
 });
 
 // 10/15, the user: answering from the dashboard or the TUI is the point, risky
-// commands included. Allow on one takes the word typed; Deny does not.
-test("a risky command waits on the screens and its Allow needs the word typed", async () => {
+// commands included, with the same buttons as any other (no word to type).
+test("a risky command waits on the screens and is answered like any other", async () => {
   const key = A.tuiKey();
   const answer = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "rm -rf build" } }, agent);
   const item = A.list().pending.find((x) => x.pane === "w9:p1");
   assert.equal(item.risk, "rm -rf");
-  assert.throws(() => A.decide(item.id, { key, decision: "allow", fingerprint: item.fingerprint }), /type "allow"/);
-  assert.throws(() => A.decide(item.id, { key, decision: "allow", confirm: "yes", fingerprint: item.fingerprint }), /type "allow"/);
-  A.decide(item.id, { key, decision: "allow", confirm: "allow", fingerprint: item.fingerprint });
+  A.decide(item.id, { key, decision: "allow", fingerprint: item.fingerprint });
   assert.deepEqual(await answer, { decision: "allow" });
   const denied = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "git reset --hard" } }, agent);
   const next = A.list().pending.find((x) => x.pane === "w9:p1");
