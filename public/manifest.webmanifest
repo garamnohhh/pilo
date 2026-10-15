@@ -5,6 +5,7 @@
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay"],
   "background_color": "#08090a",
   "theme_color": "#08090a",
   "orientation": "any",

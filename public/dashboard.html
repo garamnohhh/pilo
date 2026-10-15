@@ -51,6 +51,15 @@
      sticky or fixed box with a plain background colour: then WebKit tints the
      bar with that colour. The desk header had no background of its own. */
   .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); height: auto; min-height: calc(54px + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top) }
+  /* Chrome's installed app on macOS 26 draws its own title bar see-through,
+     whatever theme-color says. With the window controls overlay the header is
+     the title bar: it paints it, keeps clear of the traffic lights and Chrome's
+     buttons, and drags the window. */
+  @media (display-mode: window-controls-overlay) {
+    .d-top { -webkit-app-region: drag; app-region: drag; min-height: max(54px, env(titlebar-area-height, 0px));
+      padding-left: calc(env(titlebar-area-x, 0px) + 16px); padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 16px) }
+    .d-top :is(button, a, input, select, [data-act], [role="button"]) { -webkit-app-region: no-drag; app-region: no-drag }
+  }
   [hidden] { display: none !important }
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden; position: relative }

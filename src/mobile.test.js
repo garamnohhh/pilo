@@ -67,6 +67,15 @@ test("the desk header is a sticky box with a solid background too", () => {
   for (const rule of ["position: sticky", "top: 0", "background-color: var(--bg)", "env(safe-area-inset-top)"]) assert.ok(top.includes(rule), rule);
 });
 
+// Chrome's app window on macOS 26 kept a see-through title bar; the header
+// takes the title bar's place, clear of the window's own buttons.
+test("the installed app draws its own title bar", () => {
+  const manifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+  assert.deepEqual(manifest.display_override, ["window-controls-overlay"]);
+  const wco = page.slice(page.indexOf("@media (display-mode: window-controls-overlay)"));
+  for (const rule of ["app-region: drag", "env(titlebar-area-x", "env(titlebar-area-width", "app-region: no-drag"]) assert.ok(wco.includes(rule), rule);
+});
+
 // Safari 26 tints its bottom toolbar from a sticky box on the bottom edge, and
 // a light start gives the home screen app a white status bar.
 test("the tab bar tints Safari's toolbar and a light start picks the white status bar", () => {
