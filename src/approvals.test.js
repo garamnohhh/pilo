@@ -106,10 +106,28 @@ test("a request waits until answered, with the fingerprint it was shown", async 
   assert.throws(() => A.decide(item.id, { key, decision: "allow", fingerprint: item.fingerprint }), /no longer waiting/);
 });
 
-test("not a Pilo pane, or a window-only command: answered in the pane at once", async () => {
+test("not a Pilo pane, or Pilo's own approval door: answered in the pane at once", async () => {
   assert.equal((await A.wait({ kind: "permission", pane: "x", tool: "Bash", input: {} }, null)).decision, null);
-  const r = await A.wait({ kind: "permission", pane: "w1:p1", tool: "Bash", input: { command: "rm -rf /" } }, agent);
-  assert.equal(r.skipped, "rm -rf");
+  const r = await A.wait({ kind: "permission", pane: "w1:p1", tool: "Bash", input: { command: "pilo approvals pair" } }, agent);
+  assert.equal(r.skipped, "pilo approvals");
+  assert.equal(A.windowOnly("Bash", { command: "cat ~/.pilo/approve-tui.key" }), "pilo approvals", "the keys are the door too");
+});
+
+// 10/15, the user: answering from the dashboard or the TUI is the point, risky
+// commands included. Allow on one takes the word typed; Deny does not.
+test("a risky command waits on the screens and its Allow needs the word typed", async () => {
+  const key = A.tuiKey();
+  const answer = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "rm -rf build" } }, agent);
+  const item = A.list().pending.find((x) => x.pane === "w9:p1");
+  assert.equal(item.risk, "rm -rf");
+  assert.throws(() => A.decide(item.id, { key, decision: "allow", fingerprint: item.fingerprint }), /type "allow"/);
+  assert.throws(() => A.decide(item.id, { key, decision: "allow", confirm: "yes", fingerprint: item.fingerprint }), /type "allow"/);
+  A.decide(item.id, { key, decision: "allow", confirm: "allow", fingerprint: item.fingerprint });
+  assert.deepEqual(await answer, { decision: "allow" });
+  const denied = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "git reset --hard" } }, agent);
+  const next = A.list().pending.find((x) => x.pane === "w9:p1");
+  A.decide(next.id, { key, decision: "deny", fingerprint: next.fingerprint });
+  assert.deepEqual(await denied, { decision: "deny" });
 });
 
 test("moving on drops the old request: a new one from the session, or the hook hanging up", async () => {
@@ -232,8 +250,11 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
   assert.deepEqual([out.permissionDecision, out.updatedInput.answers, out.updatedInput.questions], ["allow", { Q: "A" }, [1]]);
   const danger = await runHook(["PreToolUse"], { tool_name: "Bash", tool_input: { command: "git push --force" } }, env);
   assert.equal(JSON.parse(danger.out).hookSpecificOutput.permissionDecision, "ask");
+  // a risky one is held for the screens like any other; only Pilo's own door stays in the pane
   const dangerPerm = await runHook(["PermissionRequest"], { tool_name: "Bash", tool_input: { command: "git push --force" } }, env);
-  assert.equal(dangerPerm.out, "");
+  assert.equal(JSON.parse(dangerPerm.out).hookSpecificOutput.decision.behavior, "deny");
+  const door = await runHook(["PermissionRequest"], { tool_name: "Bash", tool_input: { command: "pilo approvals pair" } }, env);
+  assert.equal(door.out, "");
   await runHook(["SessionStart"], { session_id: "abc", source: "startup" }, env);
   assert.deepEqual(seen.at(-1), ["/api/hooks/notify", { runtime: "claude", pane: "w9:p1", session: "abc", cwd: "", tool: "", input: {}, type: "session", source: "startup" }]);
   server.close();

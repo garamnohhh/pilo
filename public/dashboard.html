@@ -1602,18 +1602,19 @@ function approvalsHtml() {
         <div class="d-appr-acts">${qs.length > 1 || qs.some((q) => q.multiSelect) ? btn(T("appr.send"), "appr-send", `data-id="${r.id}"`, "gn-btn-brand") : ""}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
     }
     return `<div>${who}<div class="d-appr-item">${aboutHtml(r)}
+      ${r.risk ? `<div style="font-size:var(--fs-small);color:var(--err)">${esc(aboutWords(r.about).danger || T("appr.risky", { why: r.risk }))}</div>` : ""}
       <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
   const notice = (n) => `<div><span class="d-lbl d-appr-who">${esc(n.agent)} → you · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
     ${n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
-    ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.reason ? aboutWords(n.about).danger || T("appr.paneOnly", { why: n.reason }) : T("appr.inPane"))}</div>` : ""}
+    ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:${n.reason ? "var(--err)" : "var(--text-3)"}">${esc(n.reason ? (PANE_ONLY.has(n.reason) ? T("appr.paneOnly", { why: n.reason }) : aboutWords(n.about).danger || T("appr.risky", { why: n.reason })) : T("appr.inPane"))}</div>` : ""}
     ${menuHtml(n)}</div></div>`;
   // The pane's own numbered choice as buttons, when it could be read and the
   // request is not pane-only. A standing rule or a mode switch, or a choice that
   // wants words typed, stays in the pane. "Open the pane" is the last resort.
   function menuHtml(n) {
-    const m = !n.reason && n.menu;
+    const m = !PANE_ONLY.has(n.reason) && n.menu;
     const open = n.agentId ? btn(T("appr.openPane"), "appr-focus", `data-id="${n.agentId}"`, m ? "gn-btn-ghost" : "") : "";
     if (!m) return `<div class="d-appr-acts">${open}</div>`;
     const kept = m.options.filter((o) => o.standing || o.typed);
@@ -1668,6 +1669,16 @@ function aboutHtml(x) {
     ${w.sub ? `<div style="font-size:var(--fs-small);color:var(--text-2)">${esc(w.sub)}</div>` : ""}
     <details><summary style="cursor:pointer;font-size:var(--fs-small);color:var(--text-3)">${esc(T("about.raw"))}</summary><pre style="margin-top:6px">${esc(raw)}</pre></details>`;
 }
+// A risky request (rm -rf, force push, sudo, a database, .env) is answered here
+// too, with the word typed out: what it does, in red, and a box for "allow".
+const PANE_ONLY = new Set(["pilo approvals"]);
+function riskHtml(why, about) {
+  const danger = aboutWords(about).danger || T("appr.risky", { why });
+  return `<div style="margin-top:12px;padding:8px 12px;border-left:3px solid var(--err);color:var(--err);font-size:var(--fs-small)">${esc(danger)}</div>
+    <input id="appr-type" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="allow" aria-label="${esc(T("appr.typeAllow"))}" style="margin-top:8px;width:100%;box-sizing:border-box;font:16px var(--mono);padding:8px 10px;border:var(--bw) solid var(--err);background:var(--bg);color:var(--text)">
+    <div style="margin-top:4px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.typeAllow"))}</div>`;
+}
+const typedAllow = () => ($("appr-type")?.value || "").trim().toLowerCase() === "allow";
 function apprNeedsPair() {
   toast(T("appr.unpaired"), true);
   $("appr-code")?.focus();
@@ -3420,7 +3431,7 @@ DIALOGS["appr-confirm"] = (d) => {
   return {
     title: esc(T("appr.confirmTitle")),
     sub: `${esc(r.agent)} · ${esc(r.tool)} · ${esc(r.cwd || "")}`,
-    prose: `${aboutWords(r.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(r.about).head)}</div>` : ""}<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>`,
+    prose: `${aboutWords(r.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(r.about).head)}</div>` : ""}<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>${r.risk ? riskHtml(r.risk, r.about) : ""}`,
     actions: [btn(T("appr.allow"), "appr-confirm-yes", `data-id="${r.id}"`, "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
       `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
   };
@@ -3433,7 +3444,7 @@ DIALOGS["pane-choose"] = (d) => {
   return {
     title: esc(T("appr.chooseTitle")),
     sub: `${esc(n.agent)}${n.tool ? ` · ${esc(n.tool)}` : ""}`,
-    prose: `${aboutWords(n.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(n.about).head)}</div>` : ""}${n.tool ? `<pre style="margin:0 0 12px;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto">${esc(apprWhat(n))}</pre>` : ""}<div style="color:var(--text-2)">${esc(n.menu.question)}</div><div style="margin-top:8px;font-size:var(--fs-h3, 17px);color:var(--text)">${o.n}. ${esc(o.label)}</div><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.chooseNote"))}</div>`,
+    prose: `${aboutWords(n.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(n.about).head)}</div>` : ""}${n.tool ? `<pre style="margin:0 0 12px;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:30vh;overflow-y:auto">${esc(apprWhat(n))}</pre>` : ""}<div style="color:var(--text-2)">${esc(n.menu.question)}</div><div style="margin-top:8px;font-size:var(--fs-h3, 17px);color:var(--text)">${o.n}. ${esc(o.label)}</div><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.chooseNote"))}</div>${n.reason && !/^no\b/i.test(o.label) ? riskHtml(n.reason, n.about) : ""}`,
     actions: [btn(T("appr.choose"), "pane-choose-yes", "", "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
       `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
   };
@@ -3599,15 +3610,17 @@ const actions = {
     if (el.dataset.d === "allow") {
       state.dlg = { kind: "appr-confirm", id: r.id };
       render();
-      document.querySelector('[data-act="appr-confirm-yes"]')?.focus();
+      ($("appr-type") || document.querySelector('[data-act="appr-confirm-yes"]'))?.focus();
       return;
     }
     await apprSend(r.id, { decision: el.dataset.d });
   },
   async "appr-confirm-yes"(el) {
+    const risky = Boolean($("appr-type"));
+    if (risky && !typedAllow()) { $("appr-type").focus(); return toast(T("appr.typeAllow"), true); }
     state.dlg = null;
     render();
-    await apprSend(el.dataset.id, { decision: "allow" });
+    await apprSend(el.dataset.id, { decision: "allow", ...(risky ? { confirm: "allow" } : {}) });
   },
   async "appr-pick"(el) {
     const r = (state.data.approvals?.pending || []).find((x) => String(x.id) === el.dataset.id);
@@ -3638,16 +3651,18 @@ const actions = {
     if (!o) return;
     state.dlg = { kind: "pane-choose", agentId: n.agentId, n: o.n };
     render();
-    document.querySelector('[data-act="pane-choose-yes"]')?.focus();
+    ($("appr-type") || document.querySelector('[data-act="pane-choose-yes"]'))?.focus();
   },
   async "pane-choose-yes"() {
+    const risky = Boolean($("appr-type"));
+    if (risky && !typedAllow()) { $("appr-type").focus(); return toast(T("appr.typeAllow"), true); }
     const d = state.dlg;
     const n = (state.data.approvals?.notices || []).find((x) => x.agentId === d?.agentId);
     state.dlg = null;
     render();
     if (!n?.menu) return toast(T("appr.screenChanged"), true);
     try {
-      const res = await call("POST", `/api/agents/${n.agentId}/choose`, { key: apprKey(), fingerprint: n.menu.fingerprint, n: d.n });
+      const res = await call("POST", `/api/agents/${n.agentId}/choose`, { key: apprKey(), fingerprint: n.menu.fingerprint, n: d.n, ...(risky ? { confirm: "allow" } : {}) });
       toast(T("appr.chosen", { agent: n.agent, choice: `${res.n}. ${res.label}` }));
     } catch (err) { toast(/screen changed/.test(err.message) ? T("appr.screenChanged") : err.message, true); }
   },

@@ -38,7 +38,9 @@ export const HOOK_TIMEOUT_S = 86400;
 const SQL_WRITE = /\b(drop\s+(table|database|schema)|delete\s+from|update\s+\S+\s+set|truncate|insert\s+into|alter\s+table|grant|revoke)\b/i;
 const DB_CLIENTS = new Set(["psql", "mysql", "pg_restore", "dropdb", "mongosh", "sqlite3"]);
 const SHELLS = new Set(["sh", "bash", "zsh"]);
-const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)|\.pilo\/approv/;
+const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)/;
+// the device keys that answer approvals: Pilo's door, not a plain secret
+const PILO_KEYS = /\.pilo\/approv/;
 // Pilo's own approval doors: an agent opening them could answer for itself
 const PILO_DOOR = /\/api\/(approvals|agents\/\d+\/choose)/;
 
@@ -91,6 +93,7 @@ function commandRule(segment, ctx = { temps: new Set() }) {
   if (cmd === "pilo" && (args[0] === "approvals" || args[0] === "hooks")) return "pilo approvals";
   // reading the list is harmless; sending to it answers
   if (args.some((a) => PILO_DOOR.test(a)) && args.some((a) => /^(POST|PUT|PATCH|-d|--data.*|--json|-F|--form)$/i.test(a) || /^-X(POST|PUT|PATCH)?$/i.test(a))) return "pilo approvals";
+  if (args.some((a) => PILO_KEYS.test(a))) return "pilo approvals";
   if (args.some((a) => SECRET.test(a))) return ".env / secrets";
   return "";
 }
@@ -223,9 +226,16 @@ export function windowOnly(tool, input = {}) {
   if (/^mcp__/.test(name) && /postgres|sql|db/i.test(name) && SQL_WRITE.test(JSON.stringify(input || {}))) return "database write";
   if (PILO_DOOR.test(String(input?.url ?? ""))) return "pilo approvals";
   const path = String(input?.file_path ?? input?.path ?? input?.notebook_path ?? "");
+  if (PILO_KEYS.test(path)) return "pilo approvals";
   if (SECRET.test(path)) return ".env / secrets";
   return "";
 }
+
+// Risky requests are answered from Pilo's screens too, with the word typed out
+// (10/15, the user: the point is never leaving the dashboard or the TUI). The
+// one kept in the pane is a session reaching for Pilo's own approval door — the
+// pairing, the keys, the answer API — which would let it answer for itself.
+export const paneOnly = (why) => why === "pilo approvals";
 
 const home = dirname(dirname(fileURLToPath(import.meta.url)));
 function socket() {
@@ -293,11 +303,11 @@ async function main() {
     // too, so a prompt the pane shows next says what it is about
     await tell("tool", why ? { reason: why } : {});
     if (why) print({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask",
-      permissionDecisionReason: `Pilo: ${why} is answered in this window only` } });
+      permissionDecisionReason: paneOnly(why) ? `Pilo: ${why} is answered in this window only` : `Pilo: ${why} always asks (Pilo or this window)` } });
     return;
   }
   if (event === "PermissionRequest") {
-    if (why || !pane) return;
+    if (paneOnly(why) || !pane) return;
     const res = await post("/api/hooks/wait", { ...base, kind: "permission" }, 0);
     if (res?.decision === "allow") print({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } });
     else if (res?.decision === "deny") print({ hookSpecificOutput: { hookEventName: "PermissionRequest",

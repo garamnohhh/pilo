@@ -15,10 +15,12 @@ import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "./paths.js";
-import { HOOK_TIMEOUT_S, windowOnly } from "../hooks/pilo-hook.mjs";
+import { HOOK_TIMEOUT_S, windowOnly, paneOnly } from "../hooks/pilo-hook.mjs";
 import { describe } from "./describe.js";
 
-export { windowOnly };
+export { windowOnly, paneOnly };
+// what a risky Allow must carry: the word, typed by the user on that screen
+export const CONFIRM = "allow";
 // a little short of the hook's timeout, so the pane hears "no answer" from us
 export const MAX_WAIT_MS = (HOOK_TIMEOUT_S - 30) * 1000;
 const PAIR_MS = 5 * 60e3;
@@ -44,7 +46,7 @@ const view = ({ resolve, timer, ...r }) => ({ ...r, about: describe(r.tool, r.in
 export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()) {
   if (!agent) return Promise.resolve({ decision: null, skipped: "not a pilo agent" });
   const why = body.kind === "permission" ? windowOnly(body.tool, body.input) : "";
-  if (why) return Promise.resolve({ decision: null, skipped: why });
+  if (paneOnly(why)) return Promise.resolve({ decision: null, skipped: why });
   notices.delete(body.pane);
   // the same session asking again has moved on from what it asked before
   for (const old of pending.values()) {
@@ -53,7 +55,9 @@ export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()
   const item = {
     id: ++seq, kind: body.kind === "question" ? "question" : "permission",
     agent: agent.name, agentId: agent.id, runtime: body.runtime || "", pane: body.pane, session: body.session || "",
-    cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now
+    cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now,
+    // rm -rf, force push, sudo, a database, .env: Allow needs the word typed
+    risk: why
   };
   item.fingerprint = fingerprint(item);
   return new Promise((resolve) => {
@@ -146,6 +150,9 @@ export function decide(id, body) {
     notices.set(item.pane, { pane: item.pane, agent: item.agent, agentId: item.agentId, type: "permission_prompt", message: "", at: Date.now(), tool: item.tool, input: item.input, reason: "" });
     onChange();
     onReturn(item.pane);
+  }
+  else if (item.kind === "permission" && body.decision === "allow" && item.risk && body.confirm !== CONFIRM) {
+    throw Object.assign(new Error(`${item.risk}: type "${CONFIRM}" to allow it`), { status: 428, code: "CONFIRM_NEEDED" });
   }
   else if (item.kind === "permission" && (body.decision === "allow" || body.decision === "deny")) item.resolve({ decision: body.decision });
   else if (item.kind === "question" && body.answers && typeof body.answers === "object") item.resolve({ decision: "answer", answers: body.answers });

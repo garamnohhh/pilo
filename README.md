@@ -141,11 +141,14 @@ you asked last week.
 - **Approvals** — with `pilo hooks install`, a session pilo runs asks its
   permission prompts and its multiple-choice questions on the dashboard, the
   terminal UI and the phone as well as in its own pane; the first answer from
-  either side wins. A few things are answered in the pane only, whatever the
-  mode: `rm -rf` outside temporary folders (`/tmp`, `$TMPDIR`, `~/.cache`, or a
-  folder the same command made with `mktemp`), `git push --force`, `git reset --hard`, `sudo`, database
-  clients and writes, and reading `.env` or secrets. A phone answers once paired
-  with a code from `pilo approvals pair`, and Allow asks once more. The same
+  either side wins. A few things always ask, whatever the mode, and their Allow
+  takes the word `allow` typed out: `rm -rf` outside temporary folders (`/tmp`,
+  `$TMPDIR`, `~/.cache`, or a folder the same command made with `mktemp`),
+  `git push --force`, `git reset --hard`, `sudo`, database clients and writes,
+  and reading `.env` or secrets. Only a session reaching for pilo's own
+  approvals (`pilo approvals`, `pilo hooks`, the answer API, the device keys) is
+  answered in its pane alone. A phone answers once paired with a code from
+  `pilo approvals pair`, and Allow asks once more. The same
   hooks tell pilo when a pane is waiting, when a turn ends and which
   conversation a pane runs. Settings are backed up and the change shown before
   it is written; `pilo hooks remove` takes it out again.

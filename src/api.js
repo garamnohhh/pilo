@@ -235,7 +235,7 @@ export async function chooseInPane(id, body) {
   const agent = await one("SELECT id, name, herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", [id]);
   if (!agent?.target) throw Object.assign(new Error("no pane bound to that agent"), { status: 404 });
   const notice = approvals.noticeFor(agent.target);
-  if (notice?.reason) throw Object.assign(new Error(`${notice.reason}: answered in its pane only`), { status: 403 });
+  if (notice?.reason && approvals.paneOnly(notice.reason)) throw Object.assign(new Error(`${notice.reason}: answered in its pane only`), { status: 403 });
   const menu = parseMenu(await herdr.readPane(agent.target));
   if (!menu || menu.fingerprint !== body.fingerprint) {
     approvals.attachMenu(agent.target, menu);
@@ -244,6 +244,10 @@ export async function chooseInPane(id, body) {
   const option = menu.options.find((o) => o.n === Number(body.n));
   if (!option) throw Object.assign(new Error("no such option"), { status: 400 });
   if (option.standing || option.typed) throw Object.assign(new Error("that choice is made in the pane"), { status: 403 });
+  // a risky request's yes needs the word typed, as on a held card; its no does not
+  if (notice?.reason && !/^no\b/i.test(option.label) && body.confirm !== approvals.CONFIRM) {
+    throw Object.assign(new Error(`${notice.reason}: type "${approvals.CONFIRM}" to allow it`), { status: 428, code: "CONFIRM_NEEDED" });
+  }
   await herdr.sendKeys(agent.target, String(option.n));
   // a menu that only moved its pointer to the number takes Enter as well
   await new Promise((r) => setTimeout(r, 400));
