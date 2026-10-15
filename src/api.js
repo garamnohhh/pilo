@@ -261,7 +261,11 @@ export async function focusAgent(id) {
 }
 
 export const agentForPane = (pane) => (pane
-  ? one("SELECT id, name, runtime FROM agents WHERE herdr_target = $1 AND archived_at IS NULL ORDER BY id LIMIT 1", [pane])
+  // with the task it is on, so a card says what the request is for
+  ? one(`SELECT a.id, a.name, a.runtime, t.id AS "taskId", t.title AS "taskTitle" FROM agents a
+      LEFT JOIN LATERAL (SELECT id, title FROM tasks WHERE to_agent_id = a.id AND status IN ('running', 'queued')
+        ORDER BY status = 'running' DESC, updated_at DESC LIMIT 1) t ON true
+      WHERE a.herdr_target = $1 AND a.archived_at IS NULL ORDER BY a.id LIMIT 1`, [pane])
   : Promise.resolve(null));
 
 // Notification, SessionStart, Stop and every tool call, from hooks/pilo-hook.mjs.

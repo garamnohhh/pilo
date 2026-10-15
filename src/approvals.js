@@ -52,7 +52,7 @@ export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()
   }
   const item = {
     id: ++seq, kind: body.kind === "question" ? "question" : "permission",
-    agent: agent.name, agentId: agent.id, runtime: body.runtime || "", pane: body.pane, session: body.session || "",
+    agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", runtime: body.runtime || "", pane: body.pane, session: body.session || "",
     cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now,
     // rm -rf, force push, sudo, a database, .env: the screens say so in red
     risk: why
@@ -102,7 +102,7 @@ export function notify(body, agent, now = Date.now()) {
   if (body.type === "permission_prompt" && [...pending.values()].some((r) => r.pane === body.pane)) return { ok: true };
   const asked = lastTool.get(body.pane);
   const about = asked && now - asked.at < ASKED_MS && body.type === "permission_prompt" ? { tool: asked.tool, input: asked.input, reason: asked.reason } : {};
-  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, type: body.type, message: String(body.message || "").slice(0, 300), at: now, ...about });
+  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", type: body.type, message: String(body.message || "").slice(0, 300), at: now, ...about });
   onChange();
   return { ok: true };
 }

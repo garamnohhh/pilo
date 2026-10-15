@@ -31,6 +31,19 @@ test("window-only: the list the user set, and nothing ordinary", () => {
     assert.equal(bash(ok), "", ok);
   }
   assert.equal(A.windowOnly("Read", { file_path: "/w/app/src/env.js" }), "");
+  // infra, 10/15: names and sentences are not secret files; reading one, or a value, is
+  for (const ok of ["gh secret list -R Actibooky/hoban-chatbot | awk '{print $1,$2}'", "gh api orgs/Actibooky/actions/secrets",
+    "gh api repos/a/b/actions/secrets/DB_URL", "aws secretsmanager list-secrets", "kubectl get secrets",
+    "pilo task 3701 | python3 -c 'import sys; print(\"no secrets/here\")'", "pilo progress 9 \"checked the secrets/ list\"", "cat .env.example", "ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes ci uptime"]) {
+    assert.equal(bash(ok), "", ok);
+  }
+  for (const risky of ["ssh ci cat /home/u/app/.env.localServer", "ssh -i k ci 'cat /home/u/app/.env.localServer'", "cat secrets/prod.json", "cat ~/.aws/credentials", "cat ~/.ssh/id_ed25519",
+    "aws secretsmanager get-secret-value --secret-id x", "gcloud secrets versions access latest --secret=x", "kubectl get secret db -o yaml",
+    "security find-generic-password -s x -w", "gh gist create .env"]) {
+    assert.equal(bash(risky), ".env / secrets", risky);
+  }
+  assert.equal(A.windowOnly("Read", { file_path: "/w/certs/server.pem" }), ".env / secrets");
+  assert.equal(bash("ssh ci 'sudo reboot'"), "sudo");
   // what a command runs, not words it carries (10/12: a handoff note stopped a pane)
   assert.equal(bash("cat > handoff.md <<'EOF'\n- run pilo approvals pair on the Mac\n- never git push --force\nEOF"), "");
   assert.equal(bash('echo "git push --force and rm -rf are pane-only"'), "");

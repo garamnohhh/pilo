@@ -57,6 +57,9 @@ function step(segment, temps) {
     return { key: "rm", targets };
   }
   if (cmd === "mktemp") return { key: "mktemp" };
+  // "gh 실행" said nothing; the subcommand does (gh secret list)
+  if (cmd === "gh" || cmd === "aws" || cmd === "kubectl" || cmd === "gcloud") return { key: "run", arg: short([cmd, ...plain.slice(0, 2)].join(" ")) };
+  if (cmd === "ssh") return { key: "run", arg: short(`ssh ${plain[0] || ""}: ${plain.slice(1).join(" ")}`) };
   if (cmd === "curl" || cmd === "wget") return { key: "download", arg: short(plain.find((a) => /^https?:/.test(a)) || "") };
   if (/^python3?$/.test(cmd)) return { key: "python", arg: plain[0] && plain[0] !== "-" ? base(plain[0]) : "" };
   if (cmd === "node" || cmd === "swift" || cmd === "ruby" || cmd === "osascript") return { key: "script", arg: cmd };

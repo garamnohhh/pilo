@@ -38,7 +38,17 @@ export const HOOK_TIMEOUT_S = 86400;
 const SQL_WRITE = /\b(drop\s+(table|database|schema)|delete\s+from|update\s+\S+\s+set|truncate|insert\s+into|alter\s+table|grant|revoke)\b/i;
 const DB_CLIENTS = new Set(["psql", "mysql", "pg_restore", "dropdb", "mongosh", "sqlite3"]);
 const SHELLS = new Set(["sh", "bash", "zsh"]);
-const SECRET = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets?(\/|$)/;
+// A file that holds secret values, by its path. Words are not paths: "gh secret
+// list" and a report that says "secrets" read nothing (10/15: infra asked 15
+// times in 3 days, all of them names, a sentence or a list).
+const SECRET_FILE = /(^|\/)\.env(\.[\w.-]+)?$|(^|\/)secrets\/[^/]+|(^|\/)\.aws\/credentials$|(^|\/)id_(rsa|ed25519|ecdsa|dsa)$|\.(pem|p12|pfx)$|(^|\/)\.netrc$/;
+const SAMPLE = /\.(example|sample|template|dist)$/;
+const SECRET = { test: (a) => !/\s/.test(a) && SECRET_FILE.test(a) && !SAMPLE.test(a) };
+// commands that print a secret's value, not its name
+const SECRET_VALUE = [
+  ["aws", /^get-secret-value$/], ["gcloud", /^access$/], ["vault", /^(read|get)$/],
+  ["op", /^(read|get)$/], ["security", /^-w$/]
+];
 // the device keys that answer approvals: Pilo's door, not a plain secret
 const PILO_KEYS = /\.pilo\/approv/;
 // Pilo's own approval doors: an agent opening them could answer for itself
@@ -78,6 +88,12 @@ function commandRule(segment, ctx = { temps: new Set() }) {
     const i = args.findIndex((a) => a === "-exec" || a === "-execdir" || a === "-ok");
     if (i >= 0) { const hit = commandRule(args.slice(i + 1).join(" "), ctx); if (hit) return hit; }
   }
+  // ssh: its key file is used, not shown; what it runs on the host is judged as a command
+  if (cmd === "ssh") {
+    let i = 0;
+    for (; i < args.length && args[i].startsWith("-"); i++) if (/^-[bcDEeFIiJLlmOopQRSWw]$/.test(args[i])) i++;
+    return args.length > i + 1 ? check(args.slice(i + 1).join(" ")) : "";
+  }
   if (SHELLS.has(cmd)) {
     const i = args.indexOf("-c");
     if (i >= 0 && args[i + 1]) return check(args[i + 1]);
@@ -94,7 +110,10 @@ function commandRule(segment, ctx = { temps: new Set() }) {
   // reading the list is harmless; sending to it answers
   if (args.some((a) => PILO_DOOR.test(a)) && args.some((a) => /^(POST|PUT|PATCH|-d|--data.*|--json|-F|--form)$/i.test(a) || /^-X(POST|PUT|PATCH)?$/i.test(a))) return "pilo approvals";
   if (args.some((a) => PILO_KEYS.test(a))) return "pilo approvals";
-  if (args.some((a) => SECRET.test(a))) return ".env / secrets";
+  // gh cannot read a secret's value back; its "secrets" paths are names only
+  if (args.some((a) => SECRET.test(a) && !(cmd === "gh" && !/\.env|credentials|id_|\.pem/.test(a)))) return ".env / secrets";
+  if (SECRET_VALUE.some(([c, re]) => cmd === c && args.some((a) => re.test(a)))) return ".env / secrets";
+  if (cmd === "kubectl" && args.some((a) => /^secrets?(\/|$)/.test(a)) && args.some((a) => /^(-o|--output)/.test(a))) return ".env / secrets";
   return "";
 }
 

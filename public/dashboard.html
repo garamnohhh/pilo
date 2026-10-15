@@ -1590,8 +1590,7 @@ function approvalsHtml() {
   const key = apprKey();
   const picks = state.apprPicks || {};
   const item = (r) => {
-    const head = "";
-    const who = `<span class="d-lbl d-appr-who">${esc(r.agent)} → you · ${esc(r.kind === "question" ? T("appr.question") : `${T("appr.asks")} · ${r.tool}`)} · ${esc(ago(r.at))}</span>`;
+    const who = `${forHtml(r)}<span class="d-lbl d-appr-who">${esc(r.kind === "question" ? T("appr.question") : `${T("appr.asks")} · ${r.tool}`)} · ${esc(ago(r.at))}</span>`;
     if (r.kind === "question") {
       const qs = r.input?.questions || [];
       return `<div>${who}<div class="d-appr-item">${qs.map((q, qi) => {
@@ -1606,7 +1605,7 @@ function approvalsHtml() {
       <div class="d-appr-acts">${btn(T("appr.allow"), "appr", `data-id="${r.id}" data-d="allow"`, "gn-btn-brand")}${btn(T("appr.deny"), "appr", `data-id="${r.id}" data-d="deny"`)}${btn(T("appr.pane"), "appr", `data-id="${r.id}" data-d="pane"`, "gn-btn-ghost")}</div></div></div>`;
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
-  const notice = (n) => `<div><span class="d-lbl d-appr-who">${esc(n.agent)} → you · ${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
+  const notice = (n) => `<div>${forHtml(n)}<span class="d-lbl d-appr-who">${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
     ${n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
     ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:${n.reason ? "var(--err)" : "var(--text-3)"}">${esc(n.reason ? (PANE_ONLY.has(n.reason) ? T("appr.paneOnly", { why: n.reason }) : aboutWords(n.about).danger || T("appr.risky", { why: n.reason })) : T("appr.inPane"))}</div>` : ""}
     ${menuHtml(n)}</div></div>`;
@@ -1647,6 +1646,12 @@ function markAsking(busy) {
 // tool's own sentence when it wrote one, else the steps read off the command,
 // the file and how it changes, and why it is pane-only, naming what it deletes.
 // The command itself stays one click away.
+// Who asks and for which task, on top: the agent's own sentence alone did not
+// say (10/15: the user read infra's card as pilo-dev's and could not tell why).
+function forHtml(x) {
+  const task = x.taskId ? T("appr.forTask", { id: x.taskId, title: String(x.taskTitle || "").replace(/\s+/g, " ").slice(0, 80) }) : T("appr.noTask");
+  return `<div class="d-clip" style="font-size:var(--fs-body);color:var(--text)"><b>${esc(x.agent)}</b> <span style="color:var(--text-2)">· ${esc(task)}</span></div>`;
+}
 const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "pilo approvals": "pilo" };
 function aboutWords(a) {
   if (!a) return { head: "", sub: "", danger: "" };
@@ -1655,8 +1660,9 @@ function aboutWords(a) {
   const steps = (a.steps || []).map(stepText).join(T("about.then"));
   const f = a.file;
   const file = f ? T(f.kind === "edit" && f.edits ? "about.file.edits" : `about.file.${f.kind}`, f) : "";
-  const head = a.line || steps || file;
-  const sub = a.line ? [steps, file].filter(Boolean).join(" · ") : steps && file ? file : "";
+  // what it does, in the screen's language, first; the agent's own sentence under it
+  const head = steps || file || a.line;
+  const sub = [steps && file ? file : "", head !== a.line ? a.line : ""].filter(Boolean).join(" · ");
   const k = a.danger && RULE_KEY[a.danger.rule];
   const danger = k ? T(`why.${k}`, { targets: (a.danger.targets || []).map(tgt).join(", ") || "-" }) : "";
   return { head, sub, danger };
@@ -3428,7 +3434,7 @@ DIALOGS["appr-confirm"] = (d) => {
   if (!r) return { title: esc(T("appr.goneTitle")), sub: "", prose: esc(T("appr.gone")), actions: [btn(T("desk.act.close"), "close-dialog", "", "gn-btn-ghost")] };
   return {
     title: esc(T("appr.confirmTitle")),
-    sub: `${esc(r.agent)} · ${esc(r.tool)} · ${esc(r.cwd || "")}`,
+    sub: `${esc(r.agent)}${r.taskId ? ` · #${esc(r.taskId)}` : ""} · ${esc(r.tool)} · ${esc(r.cwd || "")}`,
     prose: `${aboutWords(r.about).head ? `<div style="margin-bottom:12px;color:var(--text)">${esc(aboutWords(r.about).head)}</div>` : ""}<pre style="margin:0;padding:12px 16px;border:var(--bw) solid var(--line);background:var(--bg);font:12px/1.55 var(--mono);color:var(--text);white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow-y:auto">${esc(apprWhat(r))}</pre><div style="margin-top:12px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("appr.confirmNote"))}</div>${r.risk ? riskHtml(r.risk, r.about) : ""}`,
     actions: [btn(T("appr.allow"), "appr-confirm-yes", `data-id="${r.id}"`, "gn-btn-brand"), btn(T("appr.cancel"), "close-dialog", "", "gn-btn-ghost"),
       `<span class="d-m" style="margin-left:auto;font-size:11px;color:var(--text-3)">Enter · Esc</span>`]
@@ -4242,7 +4248,8 @@ try {
     visualViewport.addEventListener("scroll", fit);
     fit();
   }
-  setLang(localStorage.getItem("pilo-lang") || "en");
+  // nothing chosen yet: the browser's language
+  setLang(localStorage.getItem("pilo-lang") || (/^ko\b/i.test(navigator.language || "") ? "ko" : "en"));
 } catch (err) {
   setTheme("dark");
 }
