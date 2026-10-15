@@ -1025,6 +1025,8 @@ const STATE_ICON = {
   gaveUp: () => ({ icon: "!", color: c.red }),
   // waiting on a person, not on work: a spinner here would be a lie
   blocked: () => ({ icon: "◆", color: c.blue }),
+  // parked on purpose: waiting on someone outside Pilo
+  holding: () => ({ icon: "◇", color: c.blue }),
   failed: () => ({ icon: "✕", color: c.red }),
   unbound: () => ({ icon: "○", color: c.faint }),
   idle: () => ({ icon: "●", color: c.green })

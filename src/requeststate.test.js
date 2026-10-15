@@ -53,12 +53,17 @@ test("slips: a late result nobody passed on, one passed on and not answered, sta
   await reply(stalled, 300);
   await task(stalled, "running", null, 200);
   const failed = await request("failed");
-  await task(failed, "failed", 90);
   await reply(failed, 30);
+  await task(failed, "failed", 20);
+  // relay-werner, 10/15: the send the user denied failed first, the answer came after and said so
+  const known = await request("failed, then answered");
+  await task(known, "failed", 90);
+  await reply(known, 30);
   assert.equal((await row(unwoken)).leak.kind, "unwoken");
   assert.equal((await row(unanswered)).leak.kind, "unanswered");
   assert.equal((await row(stalled)).leak.kind, "stalled");
   assert.equal((await row(failed)).leak.kind, "failed");
+  assert.equal((await row(known)).leak, null, "the answer was written knowing it failed");
   const report = await api.inboxLeaks(14);
   assert.deepEqual(Object.fromEntries(Object.entries(report.kinds).map(([k, v]) => [k, v.count])), { unwoken: 1, unanswered: 1, stalled: 1, failed: 1 });
 });

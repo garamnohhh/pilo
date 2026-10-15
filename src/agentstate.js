@@ -34,6 +34,7 @@ export function agentState(agent, now = Date.now()) {
   if (agent.status === "blocked") return "blocked";
   if (agent.status === "failed") return "failed";
   if (agent.status === "unbound") return "unbound";
+  if (agent.status === "holding") return "holding";
   if (agent.status === "running" || agent.sessionStatus === "working") return "running";
   return "idle";
 }

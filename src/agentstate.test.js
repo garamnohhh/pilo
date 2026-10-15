@@ -22,6 +22,8 @@ const AGENTS = {
   blocked: { status: "blocked", gaveUp: 0 },
   failed: { status: "failed", gaveUp: 0 },
   unbound: { status: "unbound", gaveUp: 0 },
+  // relay-werner, 10/15: asked Werner and parked the task until he answers
+  holding: { status: "holding", gaveUp: 0, sessionStatus: "idle" },
   limited: { status: "idle", gaveUp: 1, limitedUntil: later(30) },
   "limit expired": { status: "idle", gaveUp: 0, limitedUntil: ago(30) },
   // the task table still calls this one running: it holds a queued task nobody
@@ -44,6 +46,7 @@ test("every agent lands on one rung", () => {
   assert.equal(agentState(AGENTS.blocked, now), "blocked");
   assert.equal(agentState(AGENTS.failed, now), "failed");
   assert.equal(agentState(AGENTS.unbound, now), "unbound");
+  assert.equal(agentState(AGENTS.holding, now), "holding", "waiting outside Pilo is neither running nor stalled");
   assert.equal(agentState(AGENTS.limited, now), "limited", "a limit outranks everything else");
   assert.equal(agentState(AGENTS["limit expired"], now), "idle");
   assert.equal(agentState(AGENTS["gave up on the task it holds"], now), "gaveUp", "nobody is nudging it any more");

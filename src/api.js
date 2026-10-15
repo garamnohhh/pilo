@@ -76,6 +76,8 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
     WHEN a.herdr_target = '' OR s.status = 'gone' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
+    -- parked on purpose (pilo hold): waiting on someone outside Pilo, not working
+    WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'holding') THEN 'holding'
     -- the desk agent holds no tasks of its own; it is busy while a request is open
     WHEN a.role = 'pilo' AND EXISTS (
       SELECT 1 FROM inbox i
@@ -682,10 +684,13 @@ const LEAK_SQL = `(SELECT json_build_object('kind', l.kind, 'taskId', l.id, 'age
      WHERE t.inbox_id = i.id AND t.status IN ('queued', 'running')
        AND greatest(t.updated_at, coalesce(t.progress_at, t.updated_at)) < now() - interval '${STALL_HOURS} hours'
     UNION ALL
+    -- only a failure no answer came after: one the desk wrote past knew of it
+    -- (10/15: relay-werner's denied send kept in-3003 "slipped" under its answer)
     SELECT 'failed', t.id, a.name, 3, t.done_at
       FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
      WHERE t.inbox_id = i.id AND t.status = 'failed'
        AND EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)
+       AND t.done_at > (SELECT max(f.created_at) FROM final_replies f WHERE f.inbox_id = i.id)
        AND NOT EXISTS (SELECT 1 FROM tasks o WHERE o.inbox_id = i.id AND o.status IN (${OPEN_TASK}))
   ) l ORDER BY l.rank, l.at LIMIT 1)`;
 

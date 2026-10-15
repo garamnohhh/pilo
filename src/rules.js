@@ -147,6 +147,8 @@ ${roster}
 - **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
 - Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
+- **Waiting on someone outside Pilo** (a reply, a CI run): \`pilo hold N "what you wait on"\`, then \`pilo done N\` when it
+  arrives. A task left running reads as work in hand, and then as stalled.
 - **Restarting a codex worker: take its session from Pilo**, \`pilo api GET /api/agents/<id>/session\` — it gives the
   thread and the whole restart line. herdr's session id for a codex pane can be another thread (the auto-review one).
 - **Risky even if you can: ask first.** Deleting, push, deploy, posting anywhere public, writing to a database,
@@ -257,6 +259,8 @@ ${roster}
 
 - **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
+- **Pilo 밖의 답을 기다릴 때**(사람의 답, CI 등): \`pilo hold N "기다리는 것"\`, 오면 \`pilo done N\`. running 으로 두면
+  작업 중으로 보이다가 멈춘 것으로 보인다.
 - **codex worker 를 다시 띄울 때 세션은 Pilo 에서 받는다**: \`pilo api GET /api/agents/<id>/session\` 이 그 대화와
   재시작 명령 한 줄을 준다. herdr 가 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.
 - **할 수 있어도 위험한 작업은 먼저 확인한다.** 지우기·push·배포·외부 게시·DB 쓰기·계정·결제는 실행 전에
