@@ -66,6 +66,99 @@ a:hover { color: var(--accent); }
       <p class="gn-lead"  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px; text-wrap: pretty;"><span class="l-en">The same list is on the releases page, with the files to download.</span><span class="l-ko">같은 목록이 릴리스 페이지에도 있어요. 내려받을 파일은 그쪽에 있습니다.</span></p>
     </div>
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
+      <!-- 0.3.1 draft: date and LATEST move here when it is published -->
+      <div >
+        <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+          <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.1</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">unreleased</span>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
+<span class="l-en">Every approval answered from the dashboard, and cards that say who asks and why.</span>
+<span class="l-ko">모든 승인을 대시보드에서 답하고, 카드에 누가 왜 묻는지 나와요.</span>
+</p>
+        <div  style="border-top: 1px solid var(--line);">
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">approvals</span>
+<span class="l-ko">승인</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Risky requests (rm -rf, force push, sudo, a database, secrets) are answered from the dashboard, the phone and the terminal UI too, with one confirm. The card says in red what the command does and what it deletes. Only a session reaching for Pilo's own approvals is answered in its pane.</span>
+<span class="l-ko">위험 요청(rm -rf, 강제 push, sudo, DB, 비밀 파일)도 대시보드·폰·터미널 UI 에서 확인 한 번으로 답해요. 카드에 무엇을 하고 무엇을 지우는지 빨간 줄로 나와요. Pilo 승인 기능 자체를 건드리는 요청만 창에서 답해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">cards</span>
+<span class="l-ko">카드</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Each approval card opens with the agent and the task it is on, then what the command does in your language, before the agent's own sentence.</span>
+<span class="l-ko">승인 카드 맨 위에 어느 에이전트가 어느 작업 중에 묻는지, 그 아래 명령이 하는 일을 화면 언어로 보여 줘요. 에이전트가 쓴 문장은 그 아래.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">secrets</span>
+<span class="l-ko">비밀</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Pilo asks about secrets only when a secret file is read or a value is printed. gh secret list and other name-only lookups go ahead.</span>
+<span class="l-ko">비밀 파일을 읽거나 값을 출력할 때만 물어요. gh secret list 처럼 이름만 보는 조회는 그냥 진행해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">temp files</span>
+<span class="l-ko">임시 파일</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">rm -rf inside temporary folders (/tmp, $TMPDIR, ~/.cache) goes ahead without asking.</span>
+<span class="l-ko">임시 폴더(/tmp, $TMPDIR, ~/.cache) 안의 rm -rf 는 묻지 않고 진행해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">wake</span>
+<span class="l-ko">깨우기</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">A wake is no longer typed into Claude's "new MCP servers" prompt, which took the answer for you.</span>
+<span class="l-ko">Claude 의 'new MCP servers' 선택 화면에 깨우기 문장을 치지 않아요. 전에는 그게 답을 대신 눌렀어요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">inbox</span>
+<span class="l-ko">받은 요청</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">A request that was answered while work is still out is told apart from one that is finished. Work waiting on someone outside Pilo shows as holding, and a failure the answer already covered is no longer called a slip.</span>
+<span class="l-ko">답은 했지만 일이 아직 남은 요청과 끝난 요청을 구분해요. Pilo 밖 사람을 기다리는 일은 보류로 보여 주고, 답에서 이미 다룬 실패는 누락으로 치지 않아요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">mac app</span>
+<span class="l-ko">맥 앱</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The installed app draws its own title bar, so the window behind no longer shows through it.</span>
+<span class="l-ko">설치한 앱이 제목 표시줄을 직접 그려서 뒤 창이 비쳐 보이지 않아요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">language</span>
+<span class="l-ko">언어</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The dashboard starts in your browser's language until you pick one.</span>
+<span class="l-ko">언어를 고르기 전에는 브라우저 언어로 시작해요.</span>
+</span>
+        </div>
+        </div>
+      </div>
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.0</span>
