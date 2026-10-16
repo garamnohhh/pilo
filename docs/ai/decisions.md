@@ -50,3 +50,7 @@
 ## 2026-10-15
 
 - App icon is the ❯p set in `public/icons/app-*.png` (since 2026-09-10, 1f91350). It changes only with the user's approval (user, 10/15: "누가 자꾸 맘대로 뭘 바꾸냐"); `src/mobile.test.js` pins the files by hash and the manifest/link paths. The old black-P `icon-*.png` files stay unreferenced.
+
+## 2026-10-16
+
+- Approvals ask only before the very important things (user, 10/16: "모든 작업을 알아서 하는데 중요한일 아주아주 중요한 일만 확인한번 받고"): an irreversible delete (rm -rf outside temp and build folders), a remote repository, branch or release deleted, a database write, a cloud change (aws/gcloud/az verbs, terraform/pulumi/cdk/kubectl/helm), a force push over a shared branch or a bare one, a secret's value, posting from a logged-in browser, an outside message (RelayRoom/Slack/mail MCP tools), and Pilo's own approval door. sudo, git reset --hard, read-only database clients, push, tags, releases and deploys go ahead. Claude sessions run in bypassPermissions; a PreToolUse "ask" still holds there. Codex takes no "ask" from PreToolUse, so the hook waits on Pilo itself and denies anything but a yes.
