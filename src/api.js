@@ -529,7 +529,7 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
       runtime: agent.runtime || "",
       target: agent.herdr_target || "",
       hint: code === "SESSION_NOT_FOUND" ? "rebind the herdr session"
-        : code === "PANE_IN_DIALOG" ? "the session is showing a dialog (codex hooks review) — answer it in the pane; the wake retries"
+        : code === "PANE_IN_DIALOG" ? "the pane has a dialog or settings screen open (/permissions, hooks review): close it in the pane and the wake retries"
         : "check the herdr session"
     },
     runLog: [{ t: "00:00", text: `wake ${agent.name}` }, { t: "00:00", text: code }]

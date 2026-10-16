@@ -132,9 +132,19 @@ export async function sendKeys(target, ...keys) {
 // Only the bottom of the screen counts: a dialog sits there, and the same words
 // higher up are text the session printed (10/14: pilo-dev showed this test's
 // strings and never got its next task).
-const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/, /Space to select · Esc to reject all/];
-const bottom = (screen) => String(screen || "").split("\n").filter((l) => l.trim()).slice(-6).join("\n");
-export const inDialog = (screen) => DIALOGS.some((re) => re.test(bottom(screen)));
+// Claude's settings screens (/permissions, /model, /config, /hooks …) end in a
+// key line such as "Type to search · Esc to cancel"; a wake typed there is lost
+// (10/16: infra sat in /permissions and two wakes went into its search box).
+// Claude's own input box at the bottom, a ❯ line right under a rule, means no
+// screen is open, whatever words sit just above it.
+const DIALOGS = [/trust all · enter review · esc close/, /Hooks need review/, /Trust all and continue/, /Space to select · Esc to reject all/,
+  /Type to search/, /\bEsc to (cancel|close|go back|exit)\b/];
+const bottom = (screen) => String(screen || "").split("\n").filter((l) => l.trim()).slice(-6);
+const inputBox = (lines) => lines.some((l, i) => i > 0 && /^\s*❯/.test(l) && /^\s*─{8,}/.test(lines[i - 1]));
+export const inDialog = (screen) => {
+  const lines = bottom(screen);
+  return !inputBox(lines) && DIALOGS.some((re) => re.test(lines.join("\n")));
+};
 
 export async function prompt(target, message) {
   if (!target) throw new Error("SESSION_NOT_BOUND");
