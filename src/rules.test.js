@@ -88,11 +88,13 @@ test("a PM with workers is told to end its turn after handing down, not to wait"
 
 // Workers can run with the network and more paths now (the worker-net codex
 // profile); what they must not do on their own is said in their rules.
-test("every PM and worker is told to ask before anything risky", () => {
+// 10/16, the user: everything on its own, one check only for the very important ones
+test("every PM and worker is told to go on without asking, and which few get a card", () => {
   for (const role of ["pm", "worker"]) {
     const text = workerRules({ id: 9, name: "w", role }, "http://127.0.0.1:0", [], null);
     assert.match(text, /pilo block/);
-    assert.match(text, /Deleting, push, deploy|지우기·push·배포/);
+    assert.match(text, /without asking|묻지 않고/);
+    assert.match(text, /force push over a shared branch|공유 브랜치/);
   }
 });
 

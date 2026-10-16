@@ -151,8 +151,11 @@ ${roster}
   arrives. A task left running reads as work in hand, and then as stalled.
 - **Restarting a codex worker: take its session from Pilo**, \`pilo api GET /api/agents/<id>/session\` — it gives the
   thread and the whole restart line. herdr's session id for a codex pane can be another thread (the auto-review one).
-- **Risky even if you can: ask first.** Deleting, push, deploy, posting anywhere public, writing to a database,
-  anything touching an account or a payment — before running it, ask with \`pilo block\` and wait for the answer.
+- **Do the work to the end without asking.** Push, tags, releases, deploys, temporary deletes and installs go ahead.
+  Only the very important ones get one check, and Pilo's hook raises it as a card right before they run: a delete
+  that cannot be undone, a production database write, a cloud change, a force push over a shared branch, posting as
+  the user, a secret's value, payments, a message to someone outside. Run the command and let the card ask; when a
+  hook refuses one (Codex), ask with \`pilo block\` once and run it after the yes.
 - **\`pilo block\` only for what the user must decide.** The desk tells them for you. For a step only they can take — a
   restart, a permission — write exactly what is needed and what you do once it is done, so one answer is enough.
   When you are carrying a worker's question up, say which one: \`pilo block <your task> "…" --for <its task>\`. The
@@ -263,8 +266,10 @@ ${roster}
   작업 중으로 보이다가 멈춘 것으로 보인다.
 - **codex worker 를 다시 띄울 때 세션은 Pilo 에서 받는다**: \`pilo api GET /api/agents/<id>/session\` 이 그 대화와
   재시작 명령 한 줄을 준다. herdr 가 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.
-- **할 수 있어도 위험한 작업은 먼저 확인한다.** 지우기·push·배포·외부 게시·DB 쓰기·계정·결제는 실행 전에
-  \`pilo block\` 으로 확인을 받고, 답이 올 때까지 기다린다.
+- **묻지 않고 끝까지 한다.** push·태그·릴리스·배포·임시 삭제·설치는 그냥 진행한다. 아주 중요한 일만 한 번
+  확인하고, 그 확인은 실행 직전 Pilo 훅이 카드로 띄운다: 되돌릴 수 없는 삭제, 운영 DB 쓰기, 클라우드 변경, 공유 브랜치
+  강제 push, 사용자 계정으로 게시, 비밀 값, 결제, 회사 밖 사람에게 메시지. 명령은 그대로 실행하고 카드가 묻게 둔다.
+  훅이 막으면(Codex) \`pilo block\` 으로 한 번 묻고 답을 받은 뒤 실행한다.
 - **\`pilo block\` 은 사용자가 정해야 하는 것만.** 사용자에게는 데스크가 대신 말한다. 사용자만 할 수 있는 절차(재시작·권한 등)는
   무엇이 필요한지와 끝나면 무엇을 할지를 분명히 적어 답 한 번으로 이어지게 한다.
   worker 의 질문을 올려 보내는 경우에는 어느 것인지 밝힌다: \`pilo block <내 task> "…" --for <그 task>\`.
