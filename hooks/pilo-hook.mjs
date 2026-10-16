@@ -32,12 +32,26 @@ import { fileURLToPath } from "node:url";
 // back to the pane, or dropped because the session moved on.
 export const HOOK_TIMEOUT_S = 86400;
 
-// Never answered from outside the pane: a lost phone or a stale tap must not be
-// able to say yes to these. Judged on what a command runs — its command word and
+// The few things that are asked before they run (10/16, the user: "everything
+// on its own, only the very important ones get one check"): a delete that cannot
+// be undone, a production database write, a cloud change that costs or touches
+// DNS, firewalls or certificates, a force push over a shared branch, posting as
+// the user, a secret's value, and a message to someone outside. Judged on what a command runs — its command word and
 // arguments — not on words that only appear in a string or a heredoc it writes
 // (10/12: a handoff note that mentioned "pilo approvals" stopped a pane).
 const SQL_WRITE = /\b(drop\s+(table|database|schema)|delete\s+from|update\s+\S+\s+set|truncate|insert\s+into|alter\s+table|grant|revoke)\b/i;
-const DB_CLIENTS = new Set(["psql", "mysql", "pg_restore", "dropdb", "mongosh", "sqlite3"]);
+const DB_CLIENTS = new Set(["psql", "mysql", "mongosh"]);
+const MONGO_WRITE = /\.(insert|update|delete|replace|drop|remove|bulkWrite|createIndex)\w*\(/;
+// folders a build makes again: deleting one loses nothing
+const REBUILT = /(^|\/)(node_modules|dist|build|out|\.next|\.nuxt|\.turbo|\.parcel-cache|coverage|target|__pycache__|\.pytest_cache|\.venv|venv)\/?$/;
+// a force push over one of these rewrites history others share
+const SHARED = /^(main|master|trunk|develop|dev|staging|production|prod|release.*)$/;
+// cloud verbs that create, change or remove something (cost, DNS, firewall, certificates)
+const CLOUD_VERB = /^(create|delete|terminate|run-instances|update|modify|put|authorize|revoke|change|remove|deregister|register|attach|detach|reboot|stop|start|restore|purchase|associate|disassociate|import|request|deploy|set-iam-policy|add-iam-policy-binding|remove-iam-policy-binding|resize|reset|patch)/;
+const CLOUD_TOOLS = { terraform: /^(apply|destroy|import)$/, tofu: /^(apply|destroy|import)$/, pulumi: /^(up|update|destroy|import)$/, cdk: /^(deploy|destroy)$/,
+  kubectl: /^(delete|apply|create|replace|patch|scale|drain|edit|set|rollout)$/, helm: /^(install|upgrade|uninstall|delete|rollback)$/, eksctl: /^(create|delete|upgrade|scale)$/ };
+// messages that leave the company: RelayRoom, Slack, mail
+const OUTSIDE_MESSAGE = /^mcp__\w*?(relayroom|slack|gmail|mail|telegram|discord|kakao)\w*__\w*(send|reply|post)/i;
 const SHELLS = new Set(["sh", "bash", "zsh"]);
 // A file that holds secret values, by its path. Words are not paths: "gh secret
 // list" and a report that says "secrets" read nothing (10/15: infra asked 15
@@ -91,7 +105,8 @@ function commandRule(segment, ctx = { temps: new Set() }) {
   const cmd = base(w[0]);
   const args = w.slice(1);
   const flag = (re) => args.some((a) => re.test(a));
-  if (cmd === "sudo") return "sudo";
+  // sudo by itself is not on the list; what it runs is judged
+  if (cmd === "sudo") { let i = 0; for (; i < args.length && args[i].startsWith("-"); i++) if (/^-[ugCDhpRrTt]$/.test(args[i])) i++; return args.length > i ? commandRule(args.slice(i).join(" "), ctx) : ""; }
   if ((cmd === "env" || cmd === "command" || cmd === "exec" || cmd === "nohup" || cmd === "time") && args.length) return commandRule(args.join(" "), ctx);
   // commands that run another command they are given
   if (cmd === "xargs") { const i = args.findIndex((a) => !a.startsWith("-")); if (i >= 0) return commandRule(args.slice(i).join(" "), ctx); }
@@ -110,19 +125,38 @@ function commandRule(segment, ctx = { temps: new Set() }) {
     if (i >= 0 && args[i + 1]) return check(args[i + 1]);
   }
   if (cmd === "rm" && flag(/^-[a-zA-Z]*r|^--recursive$/) && flag(/^-[a-zA-Z]*f|^--force$/)) {
-    // a delete inside temporary folders only goes ahead (10/14, the user's call)
+    // a delete inside temporary folders, or of a folder a build makes, goes ahead (10/14, 10/16)
     const targets = args.filter((a) => !a.startsWith("-"));
-    if (!targets.length || !targets.every((t) => isTempPath(t, ctx.temps))) return "rm -rf";
+    if (!targets.length || !targets.every((t) => isTempPath(t, ctx.temps) || (REBUILT.test(t) && !t.split("/").includes("..")))) return "rm -rf";
   }
-  if (cmd === "git" && args.includes("push") && flag(/^--force(-with-lease)?(=|$)|^-[a-zA-Z]*f$|^\+/)) return "git push --force";
-  if (cmd === "git" && args.includes("reset") && args.includes("--hard")) return "git reset --hard";
-  if (DB_CLIENTS.has(cmd)) return "database client";
+  if (cmd === "git" && args.includes("push")) {
+    const rest = args.slice(args.indexOf("push") + 1);
+    const refs = rest.filter((a) => !a.startsWith("-")).slice(1);
+    if (rest.some((a) => /^(--delete|-d)$/.test(a)) || refs.some((r) => r.startsWith(":"))) return "delete remote";
+    const dest = (r) => r.replace(/^\+/, "").split(":").pop().replace(/^refs\/heads\//, "");
+    const forced = rest.some((a) => /^--force(-with-lease)?(=|$)|^-[a-zA-Z]*f$/.test(a));
+    // which branch a bare push goes to is not on the line: it asks
+    if (rest.some((a) => /^--(all|mirror)$/.test(a)) && forced) return "git push --force";
+    if (forced && (!refs.length || refs.some((r) => SHARED.test(dest(r))))) return "git push --force";
+    if (refs.some((r) => r.startsWith("+") && SHARED.test(dest(r)))) return "git push --force";
+  }
+  if (cmd === "gh" && (args[1] === "delete" || (args[0] === "api" && args.some((a, i) => /^(-X|--method)$/.test(args[i - 1] || "") && /^DELETE$/i.test(a) || /^-XDELETE$/i.test(a))))) return "delete remote";
+  if (cmd === "dropdb" || cmd === "pg_restore") return "database write";
+  if (DB_CLIENTS.has(cmd) && (SQL_WRITE.test(ctx.full || segment) || MONGO_WRITE.test(ctx.full || segment) || flag(/^(-f|--file)(=|$)/))) return "database write";
+  if (cmd === "aws") {
+    const [service, verb] = args.filter((a) => !a.startsWith("-"));
+    if (service === "s3") { if (/^(rm|rb|mb)$/.test(verb || "") || (verb === "sync" && flag(/^--delete$/))) return "cloud change"; }
+    else if (CLOUD_VERB.test(verb || "") && !/^(start-query|start-session|request-spot-price)/.test(verb)) return "cloud change";
+  }
+  if ((cmd === "gcloud" || cmd === "az") && args.some((a) => !a.startsWith("-") && /^(create|delete|update|deploy|set-iam-policy|add-iam-policy-binding|remove-iam-policy-binding|resize|stop|start|reset|patch|import|restore)$/.test(a))) return "cloud change";
+  if (CLOUD_TOOLS[cmd] && args.some((a) => !a.startsWith("-") && CLOUD_TOOLS[cmd].test(a))) return "cloud change";
   if (cmd === "pilo" && (args[0] === "approvals" || args[0] === "hooks")) return "pilo approvals";
   // reading the list is harmless; sending to it answers
   if (args.some((a) => PILO_DOOR.test(a)) && args.some((a) => /^(POST|PUT|PATCH|-d|--data.*|--json|-F|--form)$/i.test(a) || /^-X(POST|PUT|PATCH)?$/i.test(a))) return "pilo approvals";
   if (args.some((a) => PILO_KEYS.test(a))) return "pilo approvals";
-  // gh cannot read a secret's value back; its "secrets" paths are names only
-  if (args.some((a) => SECRET.test(a) && !(cmd === "gh" && !/\.env|credentials|id_|\.pem/.test(a)))) return ".env / secrets";
+  // gh cannot read a secret's value back; its "secrets" paths are names only.
+  // Loading a .env into a run shows nothing (source, --env-file).
+  if (cmd !== "source" && cmd !== "." && args.some((a, i) => SECRET.test(a) && !/^--env-file$/.test(args[i - 1] || "") && !(cmd === "gh" && !/\.env|credentials|id_|\.pem/.test(a)))) return ".env / secrets";
   if (SECRET_VALUE.some(([c, re]) => cmd === c && args.some((a) => re.test(a)))) return ".env / secrets";
   if (cmd === "kubectl" && args.some((a) => /^secrets?(\/|$)/.test(a)) && args.some((a) => /^(-o|--output)/.test(a))) return ".env / secrets";
   return "";
@@ -236,7 +270,7 @@ export function isTempPath(target, temps = new Set()) {
 }
 
 function check(command) {
-  const ctx = { temps: tempVarsOf(command) };
+  const ctx = { temps: tempVarsOf(command), full: String(command) };
   for (const part of heredocs(String(command))) {
     for (const segment of simpleCommands(part)) {
       const hit = commandRule(segment, ctx);
@@ -254,6 +288,7 @@ export function windowOnly(tool, input = {}) {
     if (hit) return hit;
   }
   if (/^mcp__/.test(name) && /postgres|sql|db/i.test(name) && SQL_WRITE.test(JSON.stringify(input || {}))) return "database write";
+  if (OUTSIDE_MESSAGE.test(name)) return "outside message";
   if (PILO_DOOR.test(String(input?.url ?? ""))) return "pilo approvals";
   const path = String(input?.file_path ?? input?.path ?? input?.notebook_path ?? "");
   if (PILO_KEYS.test(path)) return "pilo approvals";
@@ -336,6 +371,15 @@ async function main() {
     return;
   }
   const why = windowOnly(tool, toolInput);
+  if (event === "PreToolUse" && runtime === "codex") {
+    // Codex takes no "ask" from this hook, and with approval_policy "never" it
+    // asks nobody: Pilo holds the listed ones itself and anything but a yes stops it
+    if (!why) return;
+    const res = pane && !paneOnly(why) ? await post("/api/hooks/wait", { ...base, kind: "permission" }, 0) : null;
+    if (res?.decision !== "allow") print({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny",
+      permissionDecisionReason: `Pilo: ${why} needs the user's yes${res?.message ? ` (${res.message})` : ""}. Ask the user, then try again.` } });
+    return;
+  }
   if (event === "PreToolUse") {
     // a tool running means whatever the pane waited on is over; Pilo keeps it
     // too, so a prompt the pane shows next says what it is about

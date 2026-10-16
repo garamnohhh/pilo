@@ -1656,7 +1656,7 @@ function forHtml(x) {
   const task = x.taskId ? T("appr.forTask", { id: x.taskId, title: String(x.taskTitle || "").replace(/\s+/g, " ").slice(0, 80) }) : T("appr.noTask");
   return `<div class="d-clip" style="font-size:var(--fs-body);color:var(--text)"><b>${esc(x.agent)}</b> <span style="color:var(--text-2)">· ${esc(task)}</span></div>`;
 }
-const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "account write": "account", "pilo approvals": "pilo" };
+const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "delete remote": "remoteDelete", "database write": "db", "cloud change": "cloud", ".env / secrets": "secrets", "account write": "account", "outside message": "message", "pilo approvals": "pilo" };
 function aboutWords(a) {
   if (!a) return { head: "", sub: "", danger: "" };
   const tgt = (t) => T(t.temp ? (t.made ? "about.temp" : "about.tmpPath") : "about.file.other", { path: t.path });
@@ -1679,7 +1679,7 @@ function aboutHtml(x) {
     ${w.sub ? `<div style="font-size:var(--fs-small);color:var(--text-2)">${esc(w.sub)}</div>` : ""}
     <details><summary style="cursor:pointer;font-size:var(--fs-small);color:var(--text-3)">${esc(T("about.raw"))}</summary><pre style="margin-top:6px">${esc(raw)}</pre></details>`;
 }
-// A risky request (rm -rf, force push, sudo, a database, .env) is answered here
+// A risky request (rm -rf, force push, a database write, a cloud change, .env) is answered here
 // too, like any other; what it does stands out in red (10/15: typing "allow"
 // was too much, the user's call).
 const PANE_ONLY = new Set(["pilo approvals"]);

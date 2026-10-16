@@ -142,10 +142,15 @@ you asked last week.
   permission prompts and its multiple-choice questions on the dashboard, the
   terminal UI and the phone as well as in its own pane; the first answer from
   either side wins. A few things always ask, whatever the mode, and their card
-  says in red what they do: `rm -rf` outside temporary folders (`/tmp`,
-  `$TMPDIR`, `~/.cache`, or a folder the same command made with `mktemp`),
-  `git push --force`, `git reset --hard`, `sudo`, database clients and writes,
-  and reading `.env` or secrets. Only a session reaching for pilo's own
+  says in red what they do: `rm -rf` outside temporary folders and build
+  output (`/tmp`, `$TMPDIR`, `~/.cache`, a `mktemp` folder, `node_modules`,
+  `dist`), deleting a remote repository, branch or release, a force push over
+  `main` or another shared branch, database writes, cloud changes (`aws`,
+  `gcloud`, `terraform apply`, `kubectl apply` and the like), reading `.env` or
+  a secret's value, posting from a logged-in browser, and messages to people
+  outside (RelayRoom, Slack, mail). Everything else goes ahead. Codex, which
+  takes no "ask" from a hook, is held by pilo itself and stopped unless you
+  say yes. Only a session reaching for pilo's own
   approvals (`pilo approvals`, `pilo hooks`, the answer API, the device keys) is
   answered in its pane alone. A phone answers once paired with a code from
   `pilo approvals pair`, and Allow asks once more. The same

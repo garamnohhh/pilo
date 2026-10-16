@@ -15,19 +15,26 @@ const agent = { id: 7, name: "promo" };
 
 test("window-only: the list the user set, and nothing ordinary", () => {
   const bash = (command) => A.windowOnly("Bash", { command });
-  assert.equal(bash("rm -rf build"), "rm -rf");
-  assert.equal(bash("cd x && rm -r -f node_modules"), "rm -rf");
+  assert.equal(bash("rm -rf src"), "rm -rf");
+  assert.equal(bash("cd x && rm -r -f ~/notes"), "rm -rf");
   assert.equal(bash("git push --force origin main"), "git push --force");
-  assert.equal(bash("git push -f"), "git push --force");
-  assert.equal(bash("git reset --hard HEAD~1"), "git reset --hard");
-  assert.equal(bash("sudo launchctl kickstart x"), "sudo");
-  assert.equal(bash("psql $DATABASE_URL -c 'select 1'"), "database client");
+  assert.equal(bash("git push -f"), "git push --force", "a bare push: the branch is not on the line");
+  assert.equal(bash("git push origin +main"), "git push --force");
+  assert.equal(bash("psql $DATABASE_URL -c 'drop table users'"), "database write");
   assert.equal(bash("cat .env"), ".env / secrets");
   assert.equal(bash("pilo approvals pair"), "pilo approvals");
   assert.equal(bash("curl -X POST 127.0.0.1:48888/api/approvals/3"), "pilo approvals");
   assert.equal(A.windowOnly("Read", { file_path: "/w/app/.env.local" }), ".env / secrets");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "DELETE FROM users" }), "database write");
   for (const ok of ["rm build/out.js", "git push origin main", "npm test", "ls -la", "git reset --soft HEAD~1", "cat .envrc.example.md"]) {
+    assert.equal(bash(ok), "", ok);
+  }
+  // 10/16, the user: only the very important ones ask; the rest goes ahead
+  for (const ok of ["git push origin main v0.3.1", "git push --tags", "gh release create v1 -F notes.md", "npx wrangler deploy", "npm install x",
+    "rm -rf build node_modules dist", "rm -rf ./app/.next", "git reset --hard HEAD~1", "sudo launchctl kickstart x", "git push --force origin feat/x",
+    "git push -f origin HEAD:fix-1", "psql $DATABASE_URL -c 'select 1'", "sqlite3 local.db 'delete from t'", "aws s3 ls", "aws s3 cp out s3://b/ --recursive",
+    "aws ec2 describe-instances", "gcloud compute instances list", "terraform plan", "kubectl get pods", "helm list", "set -a; source .env; set +a",
+    "docker run --env-file .env app", "git branch -D old"]) {
     assert.equal(bash(ok), "", ok);
   }
   assert.equal(A.windowOnly("Read", { file_path: "/w/app/src/env.js" }), "");
@@ -51,19 +58,33 @@ test("window-only: the list the user set, and nothing ordinary", () => {
     "ego-browser nodejs <<'EOF'\nawait js(`document.querySelector('form').submit()`)\nEOF", "ego-browser nodejs <<'EOF'\nawait browserFetch('/api/comment', { method: 'POST' })\nEOF"]) {
     assert.equal(bash(write), "account write", write);
   }
-  assert.equal(bash("ssh ci 'sudo reboot'"), "sudo");
+  assert.equal(bash("ssh ci 'sudo reboot'"), "");
+  assert.equal(bash("ssh db 'psql -c \"truncate orders\"'"), "database write");
+  // the very important ones
+  for (const [cmd, rule] of [["git push origin --delete feat/x", "delete remote"], ["git push origin :feat/x", "delete remote"], ["gh repo delete a/b --yes", "delete remote"],
+    ["gh release delete v1", "delete remote"], ["gh api -X DELETE repos/a/b", "delete remote"], ["dropdb prod", "database write"], ["pg_restore -d prod dump", "database write"],
+    ["psql -f migrate.sql", "database write"], ["psql <<'EOF'\nALTER TABLE users ADD x int;\nEOF", "database write"], ["mongosh --eval 'db.users.deleteMany({})'", "database write"],
+    ["aws ec2 run-instances --image-id x", "cloud change"], ["aws route53 change-resource-record-sets --hosted-zone-id z", "cloud change"],
+    ["aws ec2 authorize-security-group-ingress --group-id g", "cloud change"], ["aws s3 rm s3://b/x --recursive", "cloud change"], ["aws s3 sync . s3://b --delete", "cloud change"],
+    ["gcloud compute firewall-rules create x", "cloud change"], ["gcloud dns record-sets update x", "cloud change"], ["terraform apply -auto-approve", "cloud change"],
+    ["terraform destroy", "cloud change"], ["kubectl apply -f k.yaml", "cloud change"], ["kubectl delete ns x", "cloud change"], ["helm upgrade x y", "cloud change"],
+    ["cdk deploy", "cloud change"], ["sudo rm -rf /srv/app", "rm -rf"], ["scp .env prod:/app/", ".env / secrets"]]) assert.equal(bash(cmd), rule, cmd);
+  for (const tool of ["mcp__relayroom__send", "mcp__relayroom__reply", "mcp__claude_ai_Slack__slack_send_message", "mcp__claude_ai_Gmail__send_email"]) {
+    assert.equal(A.windowOnly(tool, { text: "hi" }), "outside message", tool);
+  }
+  for (const tool of ["mcp__relayroom__inbox", "mcp__claude_ai_Slack__slack_read_channel"]) assert.equal(A.windowOnly(tool, {}), "", tool);
   // what a command runs, not words it carries (10/12: a handoff note stopped a pane)
   assert.equal(bash("cat > handoff.md <<'EOF'\n- run pilo approvals pair on the Mac\n- never git push --force\nEOF"), "");
   assert.equal(bash('echo "git push --force and rm -rf are pane-only"'), "");
   assert.equal(bash("git commit -m 'stop rm -rf, sudo and pilo approvals'"), "");
   assert.equal(A.windowOnly("Write", { file_path: "/w/notes.md", content: "pilo approvals pair; rm -rf /" }), "");
   // and still caught when they run, however they are wrapped
-  assert.equal(bash("bash -c 'rm -rf build'"), "rm -rf");
-  assert.equal(bash("bash <<'EOF'\nrm -rf build\nEOF"), "rm -rf");
+  assert.equal(bash("bash -c 'rm -rf src'"), "rm -rf");
+  assert.equal(bash("bash <<'EOF'\nrm -rf src\nEOF"), "rm -rf");
   assert.equal(bash("FOO=1 git push --force-with-lease"), "git push --force");
   assert.equal(bash("pilo api POST /api/approvals/3 '{}'"), "pilo approvals");
   assert.equal(bash("/opt/homebrew/bin/pilo approvals pair"), "pilo approvals");
-  assert.equal(bash("ls && env sudo true"), "sudo");
+  assert.equal(bash("ls && env sudo rm -rf ~/x"), "rm -rf");
   assert.equal(bash("curl -s 127.0.0.1:48888/api/approvals"), "", "reading the list answers nothing");
   assert.equal(bash("pilo api GET /api/approvals"), "");
   assert.equal(bash("pilo api POST /api/agents/3/choose '{}'"), "pilo approvals");
@@ -74,7 +95,7 @@ test("window-only: the list the user set, and nothing ordinary", () => {
   assert.equal(bash("cd a && rm -rf b"), "rm -rf");
   assert.equal(bash("echo $(rm -rf c)"), "rm -rf");
   assert.equal(bash('echo "$(rm -rf c)"'), "rm -rf", "a substitution runs even inside double quotes");
-  assert.equal(bash("echo `sudo id`"), "sudo");
+  assert.equal(bash("echo `sudo rm -rf ~/x`"), "rm -rf");
   assert.equal(bash("ls | xargs rm -rf"), "rm -rf");
   assert.equal(bash("find . -name x -exec rm -rf {} +"), "rm -rf");
   assert.equal(A.windowOnly("mcp__postgres__query", { sql: "select * from users" }), "");
@@ -103,7 +124,8 @@ test("rm -rf inside temporary folders goes ahead; anything else, or anything unc
     "rm -rf ~/.cache",
     'T=$(mktemp -d); rm -rf "$T/../.."',
     "rm -rf $(cat list)",
-    "sudo rm -rf /tmp/x"
+    "rm -rf ../build/..",
+    "rm -rf ~/projects"
   ]) assert.notEqual(bash(bad), "", bad);
   // a link in a temp folder that points out of it
   const link = mkdtempSync(join(tmpdir(), "pilo-link-"));
@@ -138,7 +160,7 @@ test("not a Pilo pane, or Pilo's own approval door: answered in the pane at once
 // commands included, with the same buttons as any other (no word to type).
 test("a risky command waits on the screens and is answered like any other", async () => {
   const key = A.tuiKey();
-  const answer = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "rm -rf build" } }, agent);
+  const answer = A.wait({ kind: "permission", pane: "w9:p1", session: "s9", tool: "Bash", input: { command: "rm -rf src" } }, agent);
   const item = A.list().pending.find((x) => x.pane === "w9:p1");
   assert.equal(item.risk, "rm -rf");
   A.decide(item.id, { key, decision: "allow", fingerprint: item.fingerprint });
@@ -236,7 +258,7 @@ test("settings: Pilo's hooks go beside the user's and come out alone", () => {
   assert.deepEqual(H.withPilo(added, "claude", "/h/pilo-hook.mjs"), added, "twice is once");
   assert.deepEqual(H.withoutPilo(added), mine);
   const codex = H.withPilo({}, "codex", "/h/pilo-hook.mjs");
-  assert.deepEqual(Object.keys(codex.hooks), ["PermissionRequest", "SessionStart", "Stop"]);
+  assert.deepEqual(Object.keys(codex.hooks), ["PermissionRequest", "PreToolUse", "SessionStart", "Stop"]);
   assert.match(codex.hooks.PermissionRequest[0].hooks[0].command, /--codex$/);
 });
 
@@ -288,6 +310,13 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
   assert.equal(JSON.parse((await runHook(["PermissionRequest", "--codex"], { tool_name: "Bash", tool_input: { command: post } }, cenv)).out).hookSpecificOutput.decision.behavior, "deny");
   // without the reviewer the pane would ask anyway, so Pilo holds it as before
   assert.equal(JSON.parse((await runHook(["PermissionRequest", "--codex"], { tool_name: "Bash", tool_input: { command: read } }, { ...env, CODEX_HOME: join(dir, "nocodex") })).out).hookSpecificOutput.decision.behavior, "deny");
+  // Codex takes no "ask" from PreToolUse and asks nobody with approval_policy
+  // "never": Pilo holds a listed one, and anything but a yes is a deny
+  assert.equal((await runHook(["PreToolUse", "--codex"], { tool_name: "Bash", tool_input: { command: "npm test" } }, cenv)).out, "");
+  const held = seen.length;
+  const codexDanger = JSON.parse((await runHook(["PreToolUse", "--codex"], { tool_name: "Bash", tool_input: { command: "terraform apply" } }, cenv)).out).hookSpecificOutput;
+  assert.equal(seen[held][0], "/api/hooks/wait");
+  assert.deepEqual([codexDanger.permissionDecision, /needs the user's yes/.test(codexDanger.permissionDecisionReason)], ["deny", true]);
   await runHook(["SessionStart"], { session_id: "abc", source: "startup" }, env);
   assert.deepEqual(seen.at(-1), ["/api/hooks/notify", { runtime: "claude", pane: "w9:p1", session: "abc", cwd: "", tool: "", input: {}, type: "session", source: "startup" }]);
   server.close();

@@ -37,6 +37,7 @@ export const TARGETS = {
     file: () => process.env.PILO_CODEX_HOOKS || join(homedir(), ".codex", "hooks.json"),
     events: [
       ["PermissionRequest", HOOK_TIMEOUT_S, "Waiting for an answer in Pilo"],
+      ["PreToolUse", HOOK_TIMEOUT_S],
       ["SessionStart", 5],
       ["Stop", 5]
     ],
