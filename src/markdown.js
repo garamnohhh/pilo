@@ -145,6 +145,14 @@ const SAFE_HREF = /^https?:\/\//i;
 // A link's text and a code span must not be read again by the passes that
 // follow, so each is parked under a sentinel and put back last. The sentinel is
 // stripped from the input first, so nothing written by an agent can forge one.
+// The composer's half of the same: a "<->" just typed outside a code span
+// becomes ↔, and the caret stays where it was.
+export function bothArrow(value, caret) {
+  const at = value.lastIndexOf("<->", caret);
+  if (at < 0 || at + 3 !== caret || (value.slice(0, at).split("`").length - 1) % 2) return null;
+  return { value: value.slice(0, at) + "↔" + value.slice(caret), caret: at + 1 };
+}
+
 function inlineHtml(escaped) {
   const parked = [];
   const park = (html) => `\u0000${parked.push(html) - 1}\u0000`;
@@ -156,6 +164,8 @@ function inlineHtml(escaped) {
   s = s.replace(/https?:\/\/[^\s<>"']+/g, (url) =>
     park(`<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>`));
 
+  // the sans font draws -> and <- as arrows but not <->, which came out "<→"
+  s = s.replace(/&lt;-&gt;/g, "↔");
   s = s.replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*\w])\*([^*\s][^*\n]*?)\*(?![*\w])/g, "$1<em>$2</em>");
   s = s.replace(/~~([^~\n]+)~~/g, "<del>$1</del>");

@@ -153,3 +153,14 @@ test("a numbered list keeps its numbers, and a follow-up's head comes off", () =
   assert.deepEqual(followHead("in-12 이어서 — 그거 다시"), { follow: "12", body: "그거 다시" });
   assert.deepEqual(followHead("no head here"), { follow: null, body: "no head here" });
 });
+
+// 10/16: the font turns -> and <- into arrows, not <->; code keeps what was typed
+test("<-> shows as ↔ outside code, and the composer turns it as it is typed", async () => {
+  const { bothArrow } = await import("./markdown.js");
+  const html = renderMarkdown("a <-> b, a -> b, `x <-> y`", (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"));
+  assert.match(html, /a ↔ b, a -&gt; b, <code class="md-code">x &lt;-&gt; y<\/code>/);
+  assert.deepEqual(bothArrow("a <->", 5), { value: "a ↔", caret: 3 });
+  assert.equal(bothArrow("`a <->", 6), null);
+  assert.equal(bothArrow("a <-", 4), null);
+});
+

@@ -405,7 +405,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { renderMarkdown, followHead } from "/markdown.js";
+import { renderMarkdown, followHead, bothArrow } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t, LANGS } from "/text.js";
 // The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
@@ -1170,7 +1170,11 @@ function restoreDraft() {
   if (box.value !== (state.draft || "")) box.value = state.draft || "";
   box.style.height = "auto";
   box.style.height = Math.min(160, box.scrollHeight) + "px";
-  box.oninput = () => fitDraft(box);
+  box.oninput = (event) => {
+    const turned = !event.isComposing && bothArrow(box.value, box.selectionStart);
+    if (turned) { box.value = turned.value; box.setSelectionRange(turned.caret, turned.caret); }
+    fitDraft(box);
+  };
   // The TUI's rule: two lines and 200 characters go in as they are, anything
   // longer becomes a marker. An image on the clipboard is uploaded.
   box.onpaste = (event) => {
