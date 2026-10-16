@@ -66,11 +66,11 @@ a:hover { color: var(--accent); }
       <p class="gn-lead"  style="font-size: 15px; line-height: 1.78; color: var(--text-2); margin: 0px; text-wrap: pretty;"><span class="l-en">The same list is on the releases page, with the files to download.</span><span class="l-ko">같은 목록이 릴리스 페이지에도 있어요. 내려받을 파일은 그쪽에 있습니다.</span></p>
     </div>
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
-      <!-- 0.3.1 draft: date and LATEST move here when it is published -->
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.1</span>
-          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">unreleased</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.16</span>
+          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
 <span class="l-en">Every approval answered from the dashboard, and cards that say who asks and why.</span>
@@ -109,6 +109,16 @@ a:hover { color: var(--accent); }
         </div>
         <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">codex</span>
+<span class="l-ko">codex</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">With Approve for me on, Codex's own reviewer answers ordinary requests again, before Pilo is asked. Browser actions that can post as you (click, type, submit) still come to you as a card.</span>
+<span class="l-ko">Approve for me 를 켠 Codex 세션은 일반 요청을 Codex 자체 검토가 먼저 답해요. 내 계정으로 올릴 수 있는 브라우저 동작(클릭·입력·전송)은 계속 카드로 와요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
 <span class="l-en">temp files</span>
 <span class="l-ko">임시 파일</span>
 </span>
@@ -123,8 +133,8 @@ a:hover { color: var(--accent); }
 <span class="l-ko">깨우기</span>
 </span>
           <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
-<span class="l-en">A wake is no longer typed into Claude's "new MCP servers" prompt, which took the answer for you.</span>
-<span class="l-ko">Claude 의 'new MCP servers' 선택 화면에 깨우기 문장을 치지 않아요. 전에는 그게 답을 대신 눌렀어요.</span>
+<span class="l-en">A wake is no longer typed into Claude's "new MCP servers" prompt, which took the answer for you, nor into an open settings screen such as /permissions: it waits and is sent again once the screen closes.</span>
+<span class="l-ko">Claude 의 'new MCP servers' 선택 화면에 깨우기 문장을 치지 않아요. 전에는 그게 답을 대신 눌렀어요. /permissions 같은 설정 화면이 열려 있으면 기다렸다가 닫힌 뒤 다시 보내요.</span>
 </span>
         </div>
         <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
@@ -149,6 +159,16 @@ a:hover { color: var(--accent); }
         </div>
         <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">arrows</span>
+<span class="l-ko">화살표</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">&lt;-&gt; shows as ↔ on the dashboard, as -&gt; and &lt;- already did, and turns into ↔ as you type it. Code is left as written.</span>
+<span class="l-ko">대시보드에서 &lt;-&gt; 가 ↔ 로 보여요(-&gt;, &lt;- 처럼). 입력창에서도 치는 순간 ↔ 로 바뀌어요. 코드 안은 그대로.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
 <span class="l-en">language</span>
 <span class="l-ko">언어</span>
 </span>
@@ -163,7 +183,6 @@ a:hover { color: var(--accent); }
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.0</span>
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.13</span>
-          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
 <span class="l-en">Installed with npm, and answers from the dashboard.</span>

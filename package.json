@@ -1,7 +1,7 @@
 {
   "name": "@garamnohhh/pilo",
-  "version": "0.3.0",
-  "description": "A local desk in front of the coding agents you already run — one conversation, every project, on your own Mac.",
+  "version": "0.3.1",
+  "description": "A local desk in front of the coding agents you already run - one conversation, every project, on your own Mac.",
   "type": "module",
   "license": "Apache-2.0",
   "homepage": "https://pilo.garamnoh.workers.dev",
