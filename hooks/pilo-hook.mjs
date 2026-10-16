@@ -16,7 +16,8 @@
 // The last three wait for nothing and print nothing.
 //
 // Pilo copies this file to <home>/.pilo/hooks/ and finds its socket from there.
-// It imports nothing outside node, reads only its stdin, and a Pilo that is off
+// It imports nothing outside node, reads only its stdin (and, for Codex, which
+// reviewer its config names), and a Pilo that is off
 // or slow costs the session nothing: every failure prints nothing and exits 0.
 import { request } from "node:http";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
@@ -53,6 +54,16 @@ const SECRET_VALUE = [
 const PILO_KEYS = /\.pilo\/approv/;
 // Pilo's own approval doors: an agent opening them could answer for itself
 const PILO_DOOR = /\/api\/(approvals|agents\/\d+\/choose)/;
+
+// A browser driven in the user's logged-in profile: reading pages goes ahead,
+// anything that clicks, types or sends can post as the user (10/16: promo's
+// read-only Reddit checks were held; posts must still be asked first).
+const BROWSERS = new Set(["ego-browser", "agent-browser", "playwright-cli"]);
+const BROWSER_WRITE = /\b(click|doubleClick|tap|fill\w*|type\w*|press\w*|dispatchKey|insertText|upload\w*|drag\w*|submit|setInputFiles|selectOption|check|uncheck)\s*\(|\bInput\.(dispatch|insert)|method\s*:\s*["'](POST|PUT|PATCH|DELETE)|\.(click|submit|requestSubmit)\(\)/;
+function browserWrite(command) {
+  const runs = heredocs(command).flatMap(simpleCommands).some((seg) => BROWSERS.has(base(words(seg)[0])));
+  return runs && BROWSER_WRITE.test(command) ? "account write" : "";
+}
 
 // Heredoc bodies come out, except one fed to a shell, which runs as commands.
 export function heredocs(command) {
@@ -239,7 +250,7 @@ export function windowOnly(tool, input = {}) {
   const name = String(tool || "");
   const command = Array.isArray(input?.command) ? input.command.join(" ") : String(input?.command ?? input?.cmd ?? "");
   if (command) {
-    const hit = check(command);
+    const hit = check(command) || browserWrite(command);
     if (hit) return hit;
   }
   if (/^mcp__/.test(name) && /postgres|sql|db/i.test(name) && SQL_WRITE.test(JSON.stringify(input || {}))) return "database write";
@@ -286,6 +297,14 @@ function post(path, body, timeoutMs) {
 
 const print = (out) => process.stdout.write(JSON.stringify(out));
 
+// ponytail: the top-level key only; a profile that changes the reviewer is not read
+export function codexAutoReview(file = join(process.env.CODEX_HOME || join(homedir(), ".codex"), "config.toml")) {
+  try {
+    const top = readFileSync(file, "utf8").split(/^\s*\[/m)[0];
+    return /^\s*approvals_reviewer\s*=\s*["']auto_review["']/m.test(top);
+  } catch { return false; }
+}
+
 async function main() {
   const event = process.argv[2] || "";
   const runtime = process.argv.includes("--codex") ? "codex" : "claude";
@@ -327,6 +346,10 @@ async function main() {
   }
   if (event === "PermissionRequest") {
     if (paneOnly(why) || !pane) return;
+    // Codex asks this hook before its own reviewer. With "Approve for me" the
+    // reviewer answers the ordinary ones, as it did before Pilo's hook was
+    // trusted (10/15 11:32); Pilo holds only what its rules name.
+    if (runtime === "codex" && !why && codexAutoReview()) return;
     const res = await post("/api/hooks/wait", { ...base, kind: "permission" }, 0);
     if (res?.decision === "allow") print({ hookSpecificOutput: { hookEventName: "PermissionRequest", decision: { behavior: "allow" } } });
     else if (res?.decision === "deny") print({ hookSpecificOutput: { hookEventName: "PermissionRequest",

@@ -1652,7 +1652,7 @@ function forHtml(x) {
   const task = x.taskId ? T("appr.forTask", { id: x.taskId, title: String(x.taskTitle || "").replace(/\s+/g, " ").slice(0, 80) }) : T("appr.noTask");
   return `<div class="d-clip" style="font-size:var(--fs-body);color:var(--text)"><b>${esc(x.agent)}</b> <span style="color:var(--text-2)">· ${esc(task)}</span></div>`;
 }
-const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "pilo approvals": "pilo" };
+const RULE_KEY = { "rm -rf": "rm", "git push --force": "forcePush", "git reset --hard": "resetHard", sudo: "sudo", "database client": "db", "database write": "db", ".env / secrets": "secrets", "account write": "account", "pilo approvals": "pilo" };
 function aboutWords(a) {
   if (!a) return { head: "", sub: "", danger: "" };
   const tgt = (t) => T(t.temp ? (t.made ? "about.temp" : "about.tmpPath") : "about.file.other", { path: t.path });

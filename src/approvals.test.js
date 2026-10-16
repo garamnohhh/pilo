@@ -43,6 +43,14 @@ test("window-only: the list the user set, and nothing ordinary", () => {
     assert.equal(bash(risky), ".env / secrets", risky);
   }
   assert.equal(A.windowOnly("Read", { file_path: "/w/certs/server.pem" }), ".env / secrets");
+  // a logged-in browser: reading goes ahead, clicking, typing or sending can post as the user
+  for (const read of ["ego-browser nodejs <<'EOF'\nawait openOrReuseTab('https://www.reddit.com/user/x/comments', { wait: true })\ncliLog(await snapshotText())\nEOF",
+    "ego-browser nodejs <<'EOF'\nconst p = (await (await taskSpace(52)).pages())[0]; console.log(await p.snapshot({scope:'full_page'}))\nEOF",
+    "grep -n 'click(' notes.md"]) assert.equal(bash(read), "", read);
+  for (const write of ["ego-browser nodejs <<'EOF'\nawait click('@21', { label: 'reply' })\nEOF", "ego-browser nodejs <<'EOF'\nawait fillInput('textarea', 'hi')\nEOF",
+    "ego-browser nodejs <<'EOF'\nawait js(`document.querySelector('form').submit()`)\nEOF", "ego-browser nodejs <<'EOF'\nawait browserFetch('/api/comment', { method: 'POST' })\nEOF"]) {
+    assert.equal(bash(write), "account write", write);
+  }
   assert.equal(bash("ssh ci 'sudo reboot'"), "sudo");
   // what a command runs, not words it carries (10/12: a handoff note stopped a pane)
   assert.equal(bash("cat > handoff.md <<'EOF'\n- run pilo approvals pair on the Mac\n- never git push --force\nEOF"), "");
@@ -266,6 +274,20 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
   assert.equal(JSON.parse(dangerPerm.out).hookSpecificOutput.decision.behavior, "deny");
   const door = await runHook(["PermissionRequest"], { tool_name: "Bash", tool_input: { command: "pilo approvals pair" } }, env);
   assert.equal(door.out, "");
+  // Codex with "Approve for me": its reviewer answers the ordinary ones, Pilo
+  // holds what its rules name (10/16, promo's read-only Reddit checks)
+  const codexHome = join(dir, "codex");
+  mkdirSync(codexHome, { recursive: true });
+  writeFileSync(join(codexHome, "config.toml"), 'approval_policy = "on-request"\napprovals_reviewer = "auto_review"\n[tui]\nx = 1\n');
+  const cenv = { ...env, CODEX_HOME: codexHome };
+  const read = "ego-browser nodejs <<'EOF'\nconst page = (await (await taskSpace(52)).pages())[0];\nconsole.log(await page.snapshot({scope:\"full_page\"}));\nEOF";
+  const before = seen.length;
+  assert.equal((await runHook(["PermissionRequest", "--codex"], { tool_name: "Bash", tool_input: { command: read } }, cenv)).out, "");
+  assert.equal(seen.length, before, "not held");
+  const post = "ego-browser nodejs <<'EOF'\nawait click('@21')\nawait typeText('nice post')\nEOF";
+  assert.equal(JSON.parse((await runHook(["PermissionRequest", "--codex"], { tool_name: "Bash", tool_input: { command: post } }, cenv)).out).hookSpecificOutput.decision.behavior, "deny");
+  // without the reviewer the pane would ask anyway, so Pilo holds it as before
+  assert.equal(JSON.parse((await runHook(["PermissionRequest", "--codex"], { tool_name: "Bash", tool_input: { command: read } }, { ...env, CODEX_HOME: join(dir, "nocodex") })).out).hookSpecificOutput.decision.behavior, "deny");
   await runHook(["SessionStart"], { session_id: "abc", source: "startup" }, env);
   assert.deepEqual(seen.at(-1), ["/api/hooks/notify", { runtime: "claude", pane: "w9:p1", session: "abc", cwd: "", tool: "", input: {}, type: "session", source: "startup" }]);
   server.close();
