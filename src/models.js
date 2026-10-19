@@ -266,11 +266,26 @@ export async function codexSessionInPane(pane, cwd) {
 // reasoning effort key. Without a pin they resume it as it was.
 export function resumeArgs(runtime, session, pin = null) {
   if (runtime === "codex") {
-    return ["resume", ...(session ? [session] : ["--last"]),
+    return ["resume", ...(session ? [session] : ["--last"]), ...permissionArgs("codex"),
       ...(pin?.model ? ["-m", pin.model] : []), ...(pin?.effort ? ["-c", `model_reasoning_effort="${pin.effort}"`] : [])];
   }
-  return [...(session ? ["--resume", session] : ["--continue"]),
+  return [...(session ? ["--resume", session] : ["--continue"]), ...permissionArgs("claude"),
     ...(pin?.model ? ["--model", pin.model] : []), ...(pin?.effort ? ["--effort", pin.effort] : [])];
+}
+
+// A resumed session comes back in the mode its own conversation last had (Claude:
+// the transcript's permission-mode line; Codex: the rollout's approval and
+// sandbox), not the default in the settings (10/19: every agent restarted after
+// the switch to bypass came back in auto mode). The home default is said out loud.
+export function permissionArgs(runtime) {
+  if (runtime === "codex") {
+    const text = read(codexConfigFile());
+    const policy = readTomlKey(text, "approval_policy"), sandbox = readTomlKey(text, "sandbox_mode");
+    return [...(policy ? ["-a", policy] : []), ...(sandbox ? ["-s", sandbox] : [])];
+  }
+  let mode = null;
+  try { mode = JSON.parse(read(claudeSettingsFile()) || "{}").permissions?.defaultMode || null; } catch {}
+  return mode ? ["--permission-mode", mode] : [];
 }
 
 // Whether herdr's word for a session means nothing is being worked on. "done" is

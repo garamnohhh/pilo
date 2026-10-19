@@ -209,9 +209,8 @@ export async function agentSession(id) {
     session,
     source: reported ? "hook" : "rollout",
     reportedAt: reportedAt || null,
-    restart: codex
-      ? `herdr agent start ${agent.name} --kind codex --pane ${agent.target} -- resume ${session} -p worker-net -c 'approvals_reviewer="user"'`
-      : `herdr agent start ${agent.name} --kind claude --pane ${agent.target} -- --resume ${session}`
+    // the home default, as every other restart (10/19); no worker profile of its own
+    restart: `herdr agent start ${agent.name} --kind ${codex ? "codex" : "claude"} --pane ${agent.target} -- ${models.resumeArgs(agent.runtime, session).join(" ")}`
   };
 }
 

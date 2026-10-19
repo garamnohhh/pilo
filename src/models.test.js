@@ -44,10 +44,23 @@ test("the tap wraps the status line that was there, and knows itself", () => {
 
 test("a pinned session starts again resuming the same conversation on its own model", async () => {
   const { resumeArgs } = await import("./models.js");
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const d = mkdtempSync(join(tmpdir(), "pilo-mode-"));
+  process.env.PILO_CLAUDE_SETTINGS = join(d, "none.json");
+  process.env.PILO_CODEX_CONFIG = join(d, "none.toml");
   assert.deepEqual(resumeArgs("claude", "abc", { model: "sonnet", effort: "low" }), ["--resume", "abc", "--model", "sonnet", "--effort", "low"]);
   assert.deepEqual(resumeArgs("claude", "abc"), ["--resume", "abc"]);
   assert.deepEqual(resumeArgs("codex", "u-1", { model: "gpt-5.6-luna", effort: "high" }), ["resume", "u-1", "-m", "gpt-5.6-luna", "-c", 'model_reasoning_effort="high"']);
   assert.deepEqual(resumeArgs("codex", ""), ["resume", "--last"]);
+  // a resumed session keeps its own last mode unless told: the home default goes on the line (10/19)
+  writeFileSync(process.env.PILO_CLAUDE_SETTINGS, '{"permissions": {"defaultMode": "bypassPermissions", "allow": []}}');
+  writeFileSync(process.env.PILO_CODEX_CONFIG, 'model = "x"\napproval_policy = "never"\nsandbox_mode = "danger-full-access"\n[profiles.p]\napproval_policy = "on-request"\n');
+  assert.deepEqual(resumeArgs("claude", "abc"), ["--resume", "abc", "--permission-mode", "bypassPermissions"]);
+  assert.deepEqual(resumeArgs("codex", "u-1"), ["resume", "u-1", "-a", "never", "-s", "danger-full-access"]);
+  delete process.env.PILO_CLAUDE_SETTINGS;
+  delete process.env.PILO_CODEX_CONFIG;
 });
 
 test("a session that finished its turn in an unviewed pane is idle; anything unclear is busy", async () => {
