@@ -1,6 +1,6 @@
 {
   "name": "@garamnohhh/pilo",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "A local desk in front of the coding agents you already run - one conversation, every project, on your own Mac.",
   "type": "module",
   "license": "Apache-2.0",
