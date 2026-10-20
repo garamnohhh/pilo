@@ -1,9 +1,14 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { existsSync } from "node:fs";
 import * as approvals from "./approvals.js";
 
 const run = promisify(execFile);
-const bin = process.env.PILO_HERDR || "/opt/homebrew/bin/herdr";
+// Homebrew puts herdr in /opt/homebrew on Apple silicon and /usr/local on Intel;
+// anywhere else, whatever PATH finds.
+const bin = process.env.PILO_HERDR
+  || ["/opt/homebrew/bin/herdr", "/usr/local/bin/herdr"].find((path) => existsSync(path))
+  || "herdr";
 
 // A call that never returns is worse than one that fails: the watcher waits on
 // it, and nothing else in Pilo moves. Time it out and let the caller record a
