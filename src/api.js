@@ -1616,7 +1616,8 @@ export async function setupState() {
     url: `http://127.0.0.1:${readPort()}/welcome`,
     lastRequest: first || null,
     answered: answered.n,
-    welcomeDone: (await getSetting("welcome", "")) === "done",
+    // "owners" once the owners step was skipped, "done" once setup was finished
+    welcome: await getSetting("welcome", ""),
     postgres: true,
     piloAgents: pilos,
     duplicatePilo: pilos.length > 1,

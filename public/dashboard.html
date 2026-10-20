@@ -523,8 +523,8 @@ const state = {
   // a task waiting on the user that the next message answers instead
   answering: null,
   // the first-run screen: the pane picked for the desk, names typed for owners,
-  // the instruction previews fetched, and whether owners were skipped
-  welcome: { desk: null, names: {}, previews: {}, open: null, skipOwners: false, sent: null }
+  // and the instruction previews fetched
+  welcome: { desk: null, names: {}, previews: {}, open: null, sent: null }
 };
 
 function emptyForm() {
@@ -2256,7 +2256,7 @@ const base = (cwd) => String(cwd || "").split("/").filter(Boolean).pop() || "age
 function welcomeSteps(setup) {
   const desk = setup.piloAgents?.length === 1 ? setup.piloAgents[0] : null;
   // open until every session has an owner or the reader moves on
-  const owners = state.welcome.skipOwners || (setup.pmCount > 0 && !(setup.free || []).length);
+  const owners = Boolean(setup.welcome) || setup.answered > 0 || (setup.pmCount > 0 && !(setup.free || []).length);
   const last = setup.lastRequest;
   const waiting = last && !last.answered && Date.now() - new Date(last.createdAt).getTime() > WAIT_MS;
   const ready = setup.herdrUp && setup.herdr;
@@ -3788,7 +3788,11 @@ const actions = {
     const name = $(`w-name-${pane.target}`)?.value.trim() || base(pane.cwd);
     await welcomeRegister(pane, name, "pm");
   },
-  async "w-owners-next"() { state.welcome.skipOwners = true; render(); },
+  async "w-owners-next"() {
+    await call("PUT", "/api/settings/welcome", { value: "owners" });
+    state.data.setup = await get("/api/setup");
+    render();
+  },
   async "w-first-send"() {
     const text = $("w-first")?.value.trim();
     if (!text) return;
