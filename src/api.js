@@ -3,7 +3,7 @@ import * as approvals from "./approvals.js";
 import { parseMenu } from "./panemenu.js";
 import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
-import { writeRules } from "./rules.js";
+import { writeRules, previewRules } from "./rules.js";
 import { paths, readPort, dataDir } from "./paths.js";
 import { spoolDir } from "./spool.js";
 import { usageReport } from "./usage.js";
@@ -1584,32 +1584,51 @@ export async function settingsAll() {
 }
 
 export async function saveSetting(key, value) {
-  const allowed = ["notifications", "tokens", "retention", "icons"];
+  const allowed = ["notifications", "tokens", "retention", "icons", "welcome"];
   if (!allowed.includes(key)) throw Object.assign(new Error("unknown setting"), { status: 400 });
   return setSetting(key, value);
 }
 
 export async function setupState() {
   const sessions = await herdr.sessions();
-  const pilos = await query("SELECT id, name, cwd, runtime, created_at AS \"createdAt\" FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
+  const pilos = await query("SELECT id, name, cwd, runtime, herdr_target AS \"herdrTarget\", created_at AS \"createdAt\" FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   const pms = await one("SELECT count(*)::int AS n FROM agents WHERE role = 'pm' AND archived_at IS NULL");
   // The panes nothing is registered against yet. The setup screen prints the
   // command to register the desk, and with one of these it can print the real
   // folder rather than a placeholder to be filled in.
   const taken = await query("SELECT herdr_target AS target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''");
   const held = new Set(taken.map((row) => row.target));
+  // The welcome screen's last step: the newest request and whether the desk has
+  // answered it yet. Any answer at all means the round trip works.
+  const first = await one(
+    `SELECT i.id, i.status, i.created_at AS "createdAt",
+       EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id) AS answered
+     FROM inbox i ORDER BY i.id DESC LIMIT 1`
+  );
+  const answered = await one("SELECT count(*)::int AS n FROM final_replies");
   return {
+    // herdr answering with no agent pane is a different fix from herdr not
+    // running: the first is "open claude in a pane", not "start herdr".
+    herdrUp: herdr.herdrHealth().ok,
     herdr: sessions.length > 0,
     sessions: sessions.length,
+    node: process.versions.node,
+    url: `http://127.0.0.1:${readPort()}/welcome`,
+    lastRequest: first || null,
+    answered: answered.n,
+    welcomeDone: (await getSetting("welcome", "")) === "done",
     postgres: true,
     piloAgents: pilos,
     duplicatePilo: pilos.length > 1,
     needsSetup: pilos.length !== 1,
     pmCount: pms.n,
     free: sessions.filter((x) => !held.has(x.target))
-      .map((x) => ({ target: x.target, cwd: x.cwd, runtime: x.runtime }))
+      .map((x) => ({ target: x.target, cwd: x.cwd, runtime: x.runtime, status: x.status }))
   };
 }
+
+// What registering a pane would write into its folder, before anything is written.
+export const setupPreview = (input) => previewRules(input);
 
 // ── schedules ────────────────────────────────────────────────────────────────
 // A standing job keeps one row here and nothing else: every run it fires becomes

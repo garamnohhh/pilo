@@ -89,12 +89,22 @@ The first run creates the database under `~/.pilo/data`, enables `pgvector` and
 applies the migrations. There is nothing to install first and no password to
 keep: the database is a directory only your account can read.
 
-### 1. Register the agents you already have open
+### 1. Finish setup in the browser
 
-Open the Agents tab and press **Add agent**. pilo lists the herdr panes it can
-see; you say which project each one owns, and it writes the instruction block
-into that folder's `CLAUDE.md` or `AGENTS.md`. The agent reads it on its next
-turn and knows how to report back.
+With no desk registered yet, `pilo` opens `http://127.0.0.1:48888/welcome` in
+your browser and says so in the terminal (`pilo --no-open` skips the browser;
+the terminal UI shows the same address). Four steps, each checking itself:
+
+| Step | What it asks of you |
+| --- | --- |
+| **Get ready** | Node 20+, herdr running, and a Claude Code or Codex session in a herdr pane. What is missing comes with the command to copy, and turns green on its own. |
+| **Pick your desk** | Which open session you talk to. One click. |
+| **Register the owners** | A project name for each other session. Preview the block pilo writes into that folder's `CLAUDE.md` or `AGENTS.md`, then write it. Optional. |
+| **Send a first request** | One request there and back, to see the desk answer. |
+
+![Welcome: four steps from install to a first answer](docs/screenshots/welcome.png)
+
+Owners can be added or changed later on the Agents tab (**Add agent**).
 
 ![Agents: the desk, its owners and their specialists](docs/screenshots/agents.png)
 

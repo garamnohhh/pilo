@@ -446,6 +446,25 @@ export async function buildRules(id) {
   };
 }
 
+// The block a pane would get if it were registered as asked, for the welcome
+// screen to show before the agent exists. Same text as buildRules writes.
+export async function previewRules({ name = "", role = "pm", runtime = "", cwd = "" } = {}) {
+  if (!cwd) throw Object.assign(new Error("cwd is required"), { status: 400 });
+  const agent = { id: "(given on registration)", name, role, runtime, cwd, aliases: "", specialty: "", reviewer: false, projectName: name };
+  const base = `http://127.0.0.1:${readPort()}`;
+  const agents = role === "pilo"
+    ? await query(
+      `SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.reviewer, a.parent_agent_id AS "parentAgentId",
+         p.name AS "projectName"
+       FROM agents a LEFT JOIN projects p ON p.id = a.project_id
+       WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role, a.name`)
+    : [];
+  const body = role === "pilo" ? piloRules(agent, base, agents) : workerRules(agent, base, [], null);
+  const file = join(cwd, ruleFile(agent));
+  const current = await readFile(file, "utf8").catch(() => null);
+  return { file, exists: current !== null, hasBlock: Boolean(current?.includes(BEGIN)), preview: body };
+}
+
 export async function writeRules(id) {
   const plan = await buildRules(id);
   const dir = plan.file.slice(0, plan.file.lastIndexOf("/"));

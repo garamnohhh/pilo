@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { workerRules } from "./rules.js";
+import { workerRules, previewRules } from "./rules.js";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { settleReviewer } from "./api.js";
 
 const pm = { id: 7, name: "atlas", role: "pm" };
@@ -101,4 +104,18 @@ test("every PM and worker is told to go on without asking, and which few get a c
 test("PMs are told to take a codex worker's session from Pilo, not herdr", () => {
   const text = workerRules({ id: 9, name: "w", role: "pm" }, "http://127.0.0.1:0", [], null);
   assert.match(text, /\/api\/agents\/<id>\/session/);
+});
+
+// The welcome screen shows what registering a pane would write, before the agent exists.
+test("a preview names the file the runtime reads and what would happen to it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "pilo-preview-"));
+  const codex = await previewRules({ name: "notes", role: "pm", runtime: "codex", cwd: dir });
+  assert.equal(codex.file, join(dir, "AGENTS.md"));
+  assert.equal(codex.exists, false);
+  assert.match(codex.preview, /PM agent/);
+  writeFileSync(join(dir, "CLAUDE.md"), "# mine\n<!-- pilo:begin -->\nold\n<!-- pilo:end -->\n");
+  const claude = await previewRules({ name: "notes", role: "pm", runtime: "claude", cwd: dir });
+  assert.equal(claude.file, join(dir, "CLAUDE.md"));
+  assert.deepEqual([claude.exists, claude.hasBlock], [true, true]);
+  await assert.rejects(previewRules({ role: "pm" }), /cwd is required/);
 });

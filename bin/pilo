@@ -74,9 +74,21 @@ stop_server() {
   rm -f "$PIDFILE"
 }
 
+# A first run (no desk registered yet) is finished in the browser: say where,
+# and open it unless --no-open or PILO_NO_OPEN says not to.
+welcome() {
+  curl -fsS "http://127.0.0.1:$(live_port)/api/setup" 2>/dev/null | grep -q '"piloAgents":\[\]' || return 0
+  local url="http://127.0.0.1:$(live_port)/welcome"
+  echo "Pilo is running. Finish setup in your browser: $url"
+  if [[ "${1:-}" != "--no-open" && -z "${PILO_NO_OPEN:-}" ]] && command -v open >/dev/null 2>&1; then
+    open "$url"
+  fi
+}
+
 case "${1:-tui}" in
-  tui|"")
+  tui|""|--no-open)
     ensure_server
+    welcome "${2:-${1:-}}"
     PILO_PORT="$(live_port)" PILO_LAUNCH_CWD="$LAUNCH_CWD" node "$ROOT/src/tui.js"
     ;;
   # start/stop/restart, as systemctl and brew services name them; up and serve

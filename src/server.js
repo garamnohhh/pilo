@@ -106,6 +106,7 @@ const routes = [
   ["GET", /^\/api\/quota$/, () => quotaReport()],
   ["GET", /^\/api\/usage$/, () => api.usageOverview()],
   ["GET", /^\/api\/setup$/, () => api.setupState()],
+  ["POST", /^\/api\/setup\/preview$/, (_m, body) => api.setupPreview(body)],
 
   ["GET", /^\/api\/sessions$/, () => api.listSessions()],
   ["GET", /^\/api\/agents$/, () => api.listAgents()],
@@ -184,7 +185,7 @@ async function serveStatic(res, pathname, headOnly = false) {
     res.end(headOnly ? undefined : await readFile(join(root, "src", pathname.slice(1))));
     return;
   }
-  let path = pathname === "/" || pathname === "/dashboard" ? "/dashboard.html" : pathname;
+  let path = pathname === "/" || pathname === "/dashboard" || pathname === "/welcome" ? "/dashboard.html" : pathname;
   path = normalize(path).replace(/^(\.\.[/\\])+/, "");
   const file = join(publicDir, path);
   if (!file.startsWith(publicDir) || !existsSync(file)) {

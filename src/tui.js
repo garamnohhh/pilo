@@ -574,17 +574,6 @@ function rolePaint(name, tree) {
   return BADGE.PM;
 }
 
-// The one command that registers the desk agent, with a real folder in it when
-// herdr has exactly one free pane — otherwise a placeholder to fill in.
-function deskCommand(setup) {
-  const free = setup.free || [];
-  // A folder from an open pane, so the line can be copied as it stands; the
-  // runtime is read off that pane, so it is not asked for here.
-  const pick = free.find((x) => x.runtime === "claude") || free[0];
-  const cwd = pick?.cwd || "<the folder of the session you talk to>";
-  return `pilo api POST /api/agents '{"name":"pilo","role":"pilo","cwd":"${cwd}","writeRules":true}'`;
-}
-
 function setupScreen(setup, width) {
   const rows = [];
   rows.push(`${c.amber}●${c.reset} ${c.strong}${t("setup.title")}${c.reset}`);
@@ -598,9 +587,10 @@ function setupScreen(setup, width) {
     rows.push("");
   }
   const steps = [
-    [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t("setup.herdrHint")],
+    // herdr up with no agent pane wants a pane opened, not herdr started
+    [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t(setup.herdrUp ? "setup.panesHint" : "setup.herdrHint")],
     [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo start"],
-    [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.deskHow"), deskCommand(setup)],
+    [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.deskHow"), setup.url],
     [t("setup.pm"), setup.pmCount > 0, t("setup.pmOk"), t("setup.register")]
   ];
   for (const [title, ok, desc, cmd, command] of steps) {
@@ -612,7 +602,7 @@ function setupScreen(setup, width) {
     if (!ok && command) for (const line of wrap(command, width - 6)) rows.push(`  ${c.fg}${line}${c.reset}`);
   }
   rows.push("");
-  rows.push(`${c.faint}${t("setup.open")}${c.reset}`);
+  rows.push(`${c.faint}${t("setup.open", { url: setup.url || "" })}${c.reset}`);
   return rows;
 }
 
@@ -1067,7 +1057,9 @@ function render() {
   emit(pre + line(outWidth));
 
   const running = tree.pms.filter((p) => p.status === "running").length;
-  const statusLeft = `${c.green}●${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : "not detected"}${c.reset}`;
+  // green only with a session to work with; herdr up and empty is amber
+  const herdrDot = setup.herdr ? `${c.green}●` : setup.herdrUp ? `${c.amber}●` : `${c.faint}○`;
+  const statusLeft = `${herdrDot}${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : setup.herdrUp ? "no agent panes" : "not running"}${c.reset}`;
   const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}${overview.stats.needsYou?.total ? ` · ${c.muted}needs you${c.reset} ${c.red}${overview.stats.needsYou.total}${c.reset}` : ""}`;
   const showTokens = settings.tokens?.showInTui !== false;
   const tokenPart = showTokens

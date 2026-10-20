@@ -381,6 +381,65 @@
     .d-frow { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important }
     .d-frow > * { grid-column: 1 !important; max-width: 100%; min-width: 0 }
   }
+
+  /* Welcome: the first-run checklist. One centred column, the width a form reads
+     at; finished steps fold to one line. Square corners, as everywhere. */
+  .w-col { max-width: 820px; margin: 0 auto; padding: 34px 0 48px }
+  .w-lede { margin: 6px 0 26px; color: var(--text-2) }
+  .w-step { border: var(--bw) solid var(--line); background: var(--surface); margin-bottom: 12px }
+  .w-step.on { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)) }
+  .w-step.stuck { border-color: color-mix(in srgb, var(--warn) 60%, var(--line)) }
+  .w-step.locked { opacity: .55 }
+  .w-sh { display: flex; align-items: center; gap: 12px; padding: 14px 18px }
+  .w-n { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border: var(--bw) solid var(--line); font: 12px var(--mono); color: var(--text-2) }
+  .w-step.done .w-n { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+  .w-step.on .w-n { border-color: var(--accent); color: var(--accent-text) }
+  .w-step.stuck .w-n { border-color: var(--warn); color: var(--warn) }
+  .w-st { font-weight: 600; flex: none }
+  .w-ss { margin-left: auto; font: 12px var(--mono); color: var(--text-3); text-align: right; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .w-sb { padding: 0 18px 18px 54px }
+  .w-check { display: grid; grid-template-columns: 18px 1fr; gap: 4px 10px; padding: 10px 0; border-top: var(--bw) solid var(--line-soft) }
+  .w-check:first-child { border-top: 0 }
+  .w-check > :nth-child(n+3) { grid-column: 2 }
+  .w-mark { font: 13px var(--mono); color: var(--text-3) }
+  .w-mark.ok { color: var(--accent-text) }
+  .w-why { color: var(--text-2); font-size: 13px }
+  .w-cmd { display: flex; align-items: center; gap: 10px; margin-top: 4px; padding: 8px 10px; border: var(--bw) solid var(--line); background: var(--bg); font: 12.5px var(--mono) }
+  .w-cmd code { flex: 1; overflow-x: auto; white-space: nowrap }
+  .w-live { margin-top: 10px; font: 11px var(--mono); color: var(--text-3) }
+  .w-live::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; background: var(--accent); animation: w-pulse 1.6s infinite }
+  @keyframes w-pulse { 50% { opacity: .25 } }
+  @media (prefers-reduced-motion: reduce) { .w-live::before { animation: none } }
+  .w-sess { display: grid; grid-template-columns: 18px auto minmax(0, 1fr); gap: 2px 10px; align-items: center; width: 100%; padding: 10px 12px; margin-bottom: 8px; border: var(--bw) solid var(--line); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer }
+  .w-sess[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-weak) }
+  .w-rad { width: 14px; height: 14px; border: var(--bw) solid var(--text-3) }
+  .w-sess[aria-pressed="true"] .w-rad { border: 4px solid var(--accent) }
+  .w-meta { font: 12px var(--mono); color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .w-sess .w-meta { grid-column: 2 / -1 }
+  .w-sess .w-tag { justify-self: end; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+  .w-tag { font: 11px var(--mono); color: var(--text-2); border: var(--bw) solid var(--line); padding: 1px 6px }
+  .w-tag.ok { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)) }
+  .w-owner { padding: 12px 0; border-top: var(--bw) solid var(--line-soft) }
+  .w-owner:first-of-type { border-top: 0 }
+  .w-orow { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: 10px; align-items: center }
+  .w-in { width: 100%; font: 13px var(--mono); color: var(--text); background: var(--bg); border: var(--bw) solid var(--line); padding: 7px 9px }
+  .w-pre { margin-top: 10px; border: var(--bw) solid var(--line); background: var(--bg) }
+  .w-pre .w-ph { display: flex; justify-content: space-between; gap: 10px; white-space: nowrap; overflow: hidden; padding: 7px 10px; border-bottom: var(--bw) solid var(--line); font: 11px var(--mono); color: var(--text-3) }
+  .w-pre pre { margin: 0; padding: 10px; max-height: 200px; overflow: auto; font: 12px/1.6 var(--mono); color: var(--text-2); white-space: pre-wrap }
+  .w-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px }
+  .w-ask { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: var(--bw) solid var(--line); background: var(--bg) }
+  .w-ask > span:first-child { color: var(--accent-text); font-family: var(--mono) }
+  .w-ask > div { flex: 1 }
+  .w-trail { margin-top: 12px; font: 12.5px/1.9 var(--mono); color: var(--text-2) }
+  .w-trail span { color: var(--text-3); margin-right: 10px }
+  .w-warn { margin-top: 12px; padding: 10px 12px; background: var(--warn-weak); font-size: 13px }
+  .w-warn b { color: var(--warn) }
+  .w-done { margin-bottom: 18px; padding: 16px 18px; background: var(--accent-weak); border: var(--bw) solid color-mix(in srgb, var(--accent) 40%, var(--line)) }
+  .w-done p { margin: 4px 0 0; color: var(--text-2) }
+  .w-nudge { display: flex; gap: 14px; align-items: center; padding: 14px 16px; border: var(--bw) solid color-mix(in srgb, var(--accent) 40%, var(--line)); background: var(--accent-weak) }
+  .w-nudge > div { flex: 1; color: var(--text-2) }
+  .w-nudge b { display: block; color: var(--text) }
+  @media (max-width: 720px) { .w-sb { padding-left: 18px } .w-orow { grid-template-columns: 1fr } .w-ss { display: none } }
 </style>
 </head>
 <body>
@@ -430,7 +489,7 @@ const RAIL = [
 // come back by putting the key back in RAIL.
 
 const state = {
-  tab: location.hash.slice(1).split("/")[0] || "work",
+  tab: location.hash.slice(1).split("/")[0] || (location.pathname === "/welcome" ? "welcome" : "work"),
   mReq: location.hash.slice(1).split("/")[0] === "inbox" ? location.hash.slice(1).split("/")[1] || null : null,
   data: {},
   form: emptyForm(),
@@ -462,7 +521,10 @@ const state = {
   // the request the next message follows up, shown above the composer
   followUp: null,
   // a task waiting on the user that the next message answers instead
-  answering: null
+  answering: null,
+  // the first-run screen: the pane picked for the desk, names typed for owners,
+  // the instruction previews fetched, and whether owners were skipped
+  welcome: { desk: null, names: {}, previews: {}, open: null, skipOwners: false, sent: null }
 };
 
 function emptyForm() {
@@ -2183,7 +2245,117 @@ function feedSize() {
     n + 1 + (folded(item.id, i) ? 0 : feedMessages(item, state.feed.detail[item.id]).length), 0);
 }
 
-views.work = () => `<div class="d-scroll d-pad d-workfeed" style="display:flex;flex-direction:column;gap:22px">${agentChipsHtml()}${workFeed()}</div>
+// ── welcome ───────────────────────────────────────────────────────────────────
+// The first run, in four steps that check themselves: what pilo needs, the desk,
+// the owners, and one request there and back. Everything here reads /api/setup,
+// which the page asks again every few seconds while this screen is open.
+const WAIT_MS = 120000;
+const home = (cwd) => String(cwd || "").replace(/^\/Users\/[^/]+/, "~");
+const base = (cwd) => String(cwd || "").split("/").filter(Boolean).pop() || "agent";
+
+function welcomeSteps(setup) {
+  const desk = setup.piloAgents?.length === 1 ? setup.piloAgents[0] : null;
+  // open until every session has an owner or the reader moves on
+  const owners = state.welcome.skipOwners || (setup.pmCount > 0 && !(setup.free || []).length);
+  const last = setup.lastRequest;
+  const waiting = last && !last.answered && Date.now() - new Date(last.createdAt).getTime() > WAIT_MS;
+  const ready = setup.herdrUp && setup.herdr;
+  return [
+    { done: ready, summary: ready ? T("welcome.s1.sum", { node: setup.node.split(".")[0], count: setup.sessions }) : "" },
+    { done: Boolean(desk), summary: desk ? T("welcome.s2.sum", { cwd: home(desk.cwd) }) : T("welcome.s2.found", { count: (setup.free || []).length }) },
+    { done: owners, summary: setup.pmCount > 0 ? T("welcome.s3.sum", { count: setup.pmCount }) : owners ? T("welcome.skipped") : "" },
+    { done: setup.answered > 0, stuck: Boolean(waiting), summary: setup.answered > 0 ? T("welcome.s4.sum") : waiting ? T("welcome.s4.waiting") : "" }
+  ];
+}
+
+const copyCmd = (cmd) => `<div class="w-cmd"><code>${esc(cmd)}</code>${btn(T("welcome.copy"), "w-copy", `data-value="${esc(cmd)}"`)}</div>`;
+
+function welcomeReady(setup) {
+  const check = (ok, title, why) => `<div class="w-check"><span class="w-mark ${ok ? "ok" : ""}">${ok ? "✓" : "○"}</span><div>${title}</div>${why}</div>`;
+  const herdrWhy = setup.herdrUp
+    ? `<div class="w-why">${T("welcome.herdr.up")}</div>`
+    : `<div class="w-why">${T("welcome.herdr.down")}</div>${copyCmd("brew install herdr")}${copyCmd("herdr")}`;
+  const paneWhy = setup.herdr
+    ? `<div class="w-why">${T("welcome.panes.ok", { count: setup.sessions })}</div>`
+    : `<div class="w-why">${T("welcome.panes.none")}</div>${copyCmd("claude")}${copyCmd("codex")}<div class="w-live">${T("welcome.watching")}</div>`;
+  return check(true, T("welcome.node"), `<div class="w-why">v${esc(setup.node)}</div>`)
+    + check(setup.herdrUp, T("welcome.herdr"), herdrWhy)
+    + (setup.herdrUp ? check(setup.herdr, T("welcome.panes"), paneWhy) : "");
+}
+
+function welcomeDesk(setup) {
+  const free = setup.free || [];
+  const pick = state.welcome.desk && free.some((x) => x.target === state.welcome.desk) ? state.welcome.desk : free[0]?.target;
+  const rows = free.map((x) => `<button class="w-sess" data-act="w-desk-pick" data-value="${esc(x.target)}" aria-pressed="${x.target === pick}">
+      <span class="w-rad"></span><div><b>${esc(x.target)}</b> · ${esc(x.runtime)}</div><span class="w-tag">${esc(home(x.cwd))}</span>
+      <div class="w-meta">${esc(x.status || "")}</div></button>`).join("");
+  return `<div class="w-why" style="margin-bottom:10px">${T("welcome.desk.why")}</div>${rows}
+    <div class="w-btns">${btn(T("welcome.desk.make", { target: esc(pick || "") }), "w-desk-make", `data-value="${esc(pick || "")}"`, "gn-btn-brand")}</div>`;
+}
+
+function welcomeOwners(setup) {
+  const free = setup.free || [];
+  const registered = (state.data.agents || []).filter((a) => a.role === "pm");
+  const done = registered.map((a) => `<div class="w-owner"><div class="w-orow">
+      <div style="min-width:0"><b>${esc(a.name)}</b> <span class="w-tag ok">${T("welcome.registered")}</span><div class="w-meta">${esc(a.herdrTarget || "")} · ${esc(a.runtime || "")} · ${esc(home(a.cwd))}</div></div></div></div>`).join("");
+  const open = free.map((x) => {
+    const name = state.welcome.names[x.target] ?? base(x.cwd);
+    const pv = state.welcome.previews[x.target];
+    const shown = state.welcome.open === x.target && pv;
+    return `<div class="w-owner"><div class="w-orow">
+        <div style="min-width:0"><b>${esc(name)}</b> <span class="w-tag">${T("welcome.new")}</span><div class="w-meta">${esc(x.target)} · ${esc(x.runtime)} · ${esc(home(x.cwd))}</div></div>
+        <input class="w-in" id="w-name-${esc(x.target)}" value="${esc(name)}" aria-label="${T("welcome.project")}">
+        ${btn(shown ? T("welcome.preview.hide") : T("welcome.preview"), "w-preview", `data-value="${esc(x.target)}"`)}</div>
+      ${shown ? `<div class="w-pre"><div class="w-ph"><span>${esc(home(pv.file))} · ${pv.hasBlock ? T("welcome.preview.replace") : pv.exists ? T("welcome.preview.append") : T("welcome.preview.create")}</span><span>${pv.preview.split("\n").length} ${T("welcome.lines")}</span></div><pre>${esc(pv.preview)}</pre></div>` : ""}
+      <div class="w-btns">${btn(T("welcome.write"), "w-owner-add", `data-value="${esc(x.target)}"`, "gn-btn-brand")}</div></div>`;
+  }).join("");
+  return `<div class="w-why" style="margin-bottom:6px">${T("welcome.owners.why")}</div>${done}${open}
+    ${free.length ? "" : `<div class="w-why">${T("welcome.owners.none")}</div>`}
+    <div class="w-btns">${btn(setup.pmCount > 0 ? T("welcome.next") : T("welcome.owners.skip"), "w-owners-next")}</div>`;
+}
+
+function welcomeFirst(setup) {
+  const last = setup.lastRequest;
+  const sent = state.welcome.sent || (last && !last.answered ? last.id : null);
+  if (!sent) {
+    return `<div class="w-why" style="margin-bottom:10px">${T("welcome.first.why")}</div>
+      <div class="w-ask"><span>❯</span><div><input class="w-in" id="w-first" value="${esc(T("welcome.first.example"))}"></div></div>
+      <div class="w-btns">${btn(T("welcome.first.send"), "w-first-send", "", "gn-btn-brand")}</div>`;
+  }
+  const stuck = last && !last.answered && Date.now() - new Date(last.createdAt).getTime() > WAIT_MS;
+  const desk = setup.piloAgents?.[0];
+  return `<div class="w-trail"><div><span>${time(last?.createdAt)}</span>${T("welcome.first.sent", { target: esc(desk?.herdrTarget || desk?.name || "") })}</div>
+      <div><span>${time(Date.now())}</span>${T("welcome.first.waiting")}</div></div>
+    ${stuck ? `<div class="w-warn"><b>${T("welcome.stuck.title")}</b> ${T("welcome.stuck.body")}</div>
+      <div class="w-btns">${btn(T("welcome.stuck.skip"), "w-finish")}</div>` : `<div class="w-live">${T("welcome.first.live")}</div>`}`;
+}
+
+views.welcome = () => {
+  const setup = state.data.setup;
+  if (!setup) return page("");
+  const steps = welcomeSteps(setup);
+  const bodies = [welcomeReady, welcomeDesk, welcomeOwners, welcomeFirst];
+  const current = steps.findIndex((x) => !x.done);
+  const all = current === -1;
+  const html = steps.map((st, i) => {
+    const cls = st.done ? "done" : i === current ? (st.stuck ? "stuck" : "on") : "locked";
+    const mark = st.done ? "✓" : st.stuck ? "!" : i + 1;
+    const summary = st.summary || (i > current ? T("welcome.after", { n: i }) : "");
+    return `<section class="w-step ${cls}"><div class="w-sh"><span class="w-n">${mark}</span><span class="w-st">${T(`welcome.s${i + 1}`)}</span><span class="w-ss">${esc(summary)}</span></div>
+      ${i === current ? `<div class="w-sb">${bodies[i](setup)}</div>` : ""}</section>`;
+  }).join("");
+  const done = all ? `<div class="w-done"><b>${T("welcome.done.title")}</b><p>${T("welcome.done.body")}</p><div class="w-btns">${btn(T("welcome.done.go"), "w-finish", "", "gn-btn-brand")}</div></div>` : "";
+  return `<div class="d-scroll d-pad"><div class="w-col"><h1 class="d-h2">${T("welcome.title")}</h1><p class="w-lede">${T("welcome.lede")}</p>${done}${html}</div></div>`;
+};
+
+// On Work, until there is a desk to take a request.
+const welcomeNudge = () => {
+  const setup = state.data.setup;
+  if (!setup || setup.piloAgents?.length) return "";
+  return `<div class="w-nudge"><div><b>${T("welcome.nudge.title")}</b>${T("welcome.nudge.body")}</div>${btn(T("welcome.nudge.go"), "w-open", "", "gn-btn-brand")}</div>`;
+};
+
+views.work = () => `<div class="d-scroll d-pad d-workfeed" style="display:flex;flex-direction:column;gap:22px">${welcomeNudge()}${agentChipsHtml()}${workFeed()}</div>
   <div class="d-composer">${followHtml()}<div class="d-cin">
     <span class="d-m" style="color:var(--accent-text);font-size:15px;line-height:1.62">❯</span>
     <textarea class="d-ta" id="draft" rows="1" placeholder="${T("desk.composer")}"></textarea>
@@ -3592,6 +3764,45 @@ function readProjectForm() {
 }
 
 const actions = {
+  async "w-open"() { state.tab = "welcome"; location.hash = "welcome"; render(); },
+  async "w-copy"(el) { await navigator.clipboard.writeText(el.dataset.value); toast(T("welcome.copied")); },
+  async "w-desk-pick"(el) { state.welcome.desk = el.dataset.value; render(); },
+  async "w-desk-make"(el) {
+    const pane = (state.data.setup.free || []).find((x) => x.target === el.dataset.value);
+    if (!pane) return;
+    await welcomeRegister(pane, "pilo", "pilo");
+  },
+  async "w-preview"(el) {
+    const target = el.dataset.value;
+    if (state.welcome.open === target) { state.welcome.open = null; render(); return; }
+    const pane = (state.data.setup.free || []).find((x) => x.target === target);
+    const name = $(`w-name-${target}`)?.value.trim() || base(pane.cwd);
+    state.welcome.names[target] = name;
+    state.welcome.previews[target] = await call("POST", "/api/setup/preview", { name, role: "pm", runtime: pane.runtime, cwd: pane.cwd });
+    state.welcome.open = target;
+    render();
+  },
+  async "w-owner-add"(el) {
+    const pane = (state.data.setup.free || []).find((x) => x.target === el.dataset.value);
+    if (!pane) return;
+    const name = $(`w-name-${pane.target}`)?.value.trim() || base(pane.cwd);
+    await welcomeRegister(pane, name, "pm");
+  },
+  async "w-owners-next"() { state.welcome.skipOwners = true; render(); },
+  async "w-first-send"() {
+    const text = $("w-first")?.value.trim();
+    if (!text) return;
+    const row = await call("POST", "/api/inbox", { userRequest: text });
+    state.welcome.sent = row?.id || true;
+    state.data.setup = await get("/api/setup");
+    render();
+  },
+  async "w-finish"() {
+    await call("PUT", "/api/settings/welcome", { value: "done" });
+    state.tab = "work";
+    location.hash = "work";
+    await load();
+  },
   async "update-check"() {
     state.data.update = await call("POST", "/api/update/check");
     render();
@@ -4130,6 +4341,18 @@ const actions = {
   }
 };
 
+// Register one pane as asked, pinned to that pane even when another session
+// shares its folder, then read the setup again so the step turns over.
+async function welcomeRegister(pane, name, role) {
+  // an owner reports to the desk, so the desk is its parent
+  const parentAgentId = role === "pm" ? state.data.setup.piloAgents?.[0]?.id : null;
+  const made = await call("POST", "/api/agents", { name, role, parentAgentId, cwd: pane.cwd, runtime: pane.runtime, projectName: role === "pm" ? name : "", writeRules: true });
+  if (made?.id) await call("POST", `/api/agents/${made.id}/rebind`, { target: pane.target });
+  if (made?.rules?.error) toast(made.rules.error, true);
+  state.welcome.open = null;
+  await load();
+}
+
 function wire() {
   document.querySelectorAll("[data-tab]").forEach((el) => {
     el.onclick = async () => {
@@ -4360,6 +4583,12 @@ setInterval(() => {
     listen();
   }
   if (Date.now() - sync.lastLoad >= (sync.live ? SAFETY_MS : FALLBACK_MS)) refresh();
+  // herdr panes come and go without the server hearing of it: the welcome
+  // screen asks for them itself while it is open
+  if (state.tab === "welcome" && Date.now() - (sync.setupAt || 0) >= 3000) {
+    sync.setupAt = Date.now();
+    get("/api/setup").then((setup) => { state.data.setup = setup; render(); }).catch(() => {});
+  }
 }, 1000);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refresh();
