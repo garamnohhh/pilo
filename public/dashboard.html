@@ -2274,7 +2274,7 @@ function welcomeReady(setup) {
   const check = (ok, title, why) => `<div class="w-check"><span class="w-mark ${ok ? "ok" : ""}">${ok ? "✓" : "○"}</span><div>${title}</div>${why}</div>`;
   const herdrWhy = setup.herdrUp
     ? `<div class="w-why">${T("welcome.herdr.up")}</div>`
-    : `<div class="w-why">${T("welcome.herdr.down")}</div>${copyCmd("brew install herdr")}${copyCmd("herdr")}`;
+    : `<div class="w-why">${T("welcome.herdr.down")}</div>${copyCmd("curl -fsSL https://herdr.dev/install.sh | sh")}${copyCmd("herdr")}`;
   const paneWhy = setup.herdr
     ? `<div class="w-why">${T("welcome.panes.ok", { count: setup.sessions })}</div>`
     : `<div class="w-why">${T("welcome.panes.none")}</div>${copyCmd("claude")}${copyCmd("codex")}<div class="w-live">${T("welcome.watching")}</div>`;

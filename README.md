@@ -70,7 +70,7 @@ Before the first run you need:
 
 | | |
 | --- | --- |
-| **[herdr](https://herdr.dev)** | the terminal workspace pilo watches: `brew install herdr` |
+| **[herdr](https://herdr.dev)** | the terminal workspace pilo watches: `curl -fsSL https://herdr.dev/install.sh | sh` (or `brew install herdr`) |
 | **At least one coding agent** | Claude Code or Codex, opened by you in a herdr pane |
 
 To update later, run `pilo update`, or press Install where the dashboard says a
