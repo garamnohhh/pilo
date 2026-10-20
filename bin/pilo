@@ -10,6 +10,13 @@ while [[ -L "$SOURCE" ]]; do
 done
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
 
+# The node beside this install comes first: the one npm put it next to, or the
+# private one the installer fetched into ~/.pilo/runtime. A Node manager
+# switching versions, or no Node on PATH at all, then changes nothing here.
+if [[ "$ROOT" == */lib/node_modules/* && -x "${ROOT%/lib/node_modules/*}/bin/node" ]]; then
+  PATH="${ROOT%/lib/node_modules/*}/bin:$PATH"
+fi
+
 # pilo runs on macOS (herdr, open, launchd paths). The package no longer says
 # so through npm's "os" field: that also stopped the site's Linux build from
 # installing the repository at all.

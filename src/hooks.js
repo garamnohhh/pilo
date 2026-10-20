@@ -77,7 +77,8 @@ export function withPilo(settings, kind, file = hookFile()) {
   const next = withoutPilo(settings);
   next.hooks = next.hooks || {};
   for (const [event, timeout, statusMessage] of target.events) {
-    const hook = { type: "command", command: `node "${file}" ${event}${target.flag || ""}`, timeout };
+    // the node running pilo, by path: Claude's shell may have no node on PATH
+    const hook = { type: "command", command: `"${process.execPath}" "${file}" ${event}${target.flag || ""}`, timeout };
     if (statusMessage) hook.statusMessage = statusMessage;
     next.hooks[event] = [...(Array.isArray(next.hooks[event]) ? next.hooks[event] : []), { hooks: [hook] }];
   }

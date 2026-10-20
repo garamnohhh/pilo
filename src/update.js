@@ -45,8 +45,11 @@ export function newest(tags) {
   return versions.sort(compare).pop() || null;
 }
 
+// npm comes from beside the node running this, so an update lands in the same
+// install even when there is no Node on PATH (the installer's private runtime).
+const env = () => ({ ...process.env, PATH: `${dirname(process.execPath)}:${process.env.PATH || ""}` });
 function run(cmd, args, timeout = 60000) {
-  return new Promise((resolve, reject) => execFile(cmd, args, { cwd: ROOT, timeout }, (err, out, errOut) =>
+  return new Promise((resolve, reject) => execFile(cmd, args, { cwd: ROOT, timeout, env: env() }, (err, out, errOut) =>
     err ? reject(new Error(String(errOut || err.message).trim().split("\n").pop())) : resolve(String(out))));
 }
 const git = (args, timeout) => run("git", args, timeout);

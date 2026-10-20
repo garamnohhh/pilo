@@ -52,28 +52,34 @@ on your own machine.
 ## Install
 
 ```bash
-npm install -g @garamnohhh/pilo
+curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
 ```
 
-That installs the `pilo` command. Nothing is compiled and nothing asks for sudo
-beyond what your Node setup already needs for global packages — pilo is a
-terminal tool, not an app bundle, so Gatekeeper and notarisation never come into
-it. (`curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh` does the same
-thing, if you would rather.)
+No Node.js needed. With Node 20 or newer already there, this is the plain
+`npm install -g @garamnohhh/pilo` (which you can also run yourself). Without it,
+pilo gets a private Node in `~/.pilo/runtime` (about 27 MB to download, 230 MB
+on disk), fetched from nodejs.org and checked against its published checksums.
+That Node runs pilo and nothing else: the Node on your PATH, nvm and the rest
+are not touched, and switching versions later does not break pilo. The command
+goes in `~/.local/bin`; the installer says so if that is not on your PATH yet.
+
+Nothing is compiled and nothing asks for sudo. pilo is a terminal tool, not an
+app bundle, so Gatekeeper and notarisation never come into it.
 
 Before the first run you need:
 
 | | |
 | --- | --- |
-| **Node.js 20 or newer** | runs the server, the TUI and the CLI |
-| **[herdr](https://herdr.dev)** | the terminal workspace pilo watches — `brew install herdr` |
+| **[herdr](https://herdr.dev)** | the terminal workspace pilo watches: `brew install herdr` |
 | **At least one coding agent** | Claude Code or Codex, opened by you in a herdr pane |
 
-To update later, run `pilo update` (or `npm install -g @garamnohhh/pilo@latest`),
-or press Install where the dashboard says a new release is out (System).
+To update later, run `pilo update`, or press Install where the dashboard says a
+new release is out (System). Running the installer again also moves the private
+Node to the newest LTS.
 
-To remove it: `npm uninstall -g @garamnohhh/pilo`. Your requests and their
-history stay in `~/.pilo` until you remove that too.
+To remove it: `npm uninstall -g @garamnohhh/pilo`, or for the private-Node install
+`rm -rf ~/.pilo/runtime ~/.local/bin/pilo`. Your requests and their history stay
+in `~/.pilo` until you remove that too.
 
 ## First run
 
