@@ -8,7 +8,8 @@ import * as approvals from "./approvals.js";
 const run = promisify(execFile);
 // herdr's own installer puts it in ~/.local/bin; Homebrew in /opt/homebrew on
 // Apple silicon and /usr/local on Intel; anywhere else, whatever PATH finds.
-const bin = process.env.PILO_HERDR
+// Looked up on each call: herdr may be installed after the server started.
+const bin = () => process.env.PILO_HERDR
   || [join(homedir(), ".local/bin/herdr"), "/opt/homebrew/bin/herdr", "/usr/local/bin/herdr"].find((path) => existsSync(path))
   || "herdr";
 
@@ -18,7 +19,7 @@ const bin = process.env.PILO_HERDR
 const TIMEOUT_MS = Number(process.env.PILO_HERDR_TIMEOUT_MS || 15000);
 
 async function herdr(args, timeout = TIMEOUT_MS) {
-  const { stdout } = await run(bin, args, { maxBuffer: 8 * 1024 * 1024, timeout });
+  const { stdout } = await run(bin(), args, { maxBuffer: 8 * 1024 * 1024, timeout });
   return stdout;
 }
 
