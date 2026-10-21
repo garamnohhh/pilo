@@ -440,7 +440,7 @@
   .w-nudge > div { flex: 1; color: var(--text-2) }
   .w-nudge b { display: block; color: var(--text) }
   @media (max-width: 720px) { .w-sb { padding-left: 18px } .w-orow { grid-template-columns: 1fr } .w-ss { display: none } }
-  .d-job { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
+  .d-job { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px }
   .d-jobraw summary { cursor: pointer; list-style: none }
   .d-jobraw summary::before { content: "▸ " }
   .d-jobraw[open] summary::before { content: "▾ " }
@@ -2067,7 +2067,7 @@ function feedMessages(item, detail) {
     const what = item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer";
     msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)}`, chip: item.source === "desk" ? what : i ? (isNewReply(reply.createdAt) ? `${what} · ${T("card.new")}` : what) : "",
       kind: item.source === "desk" ? "note" : "answer", text: reply.body || "", inbox: item.id,
-      quiet: item.source === "schedule" && quietReply(reply.body) });
+      job: item.source === "schedule", quiet: item.source === "schedule" && quietReply(reply.body) });
   }
   // The list row can carry the answers before a detail fetched earlier does.
   if (!(detail?.replies || []).length && item.finalReply) {
@@ -2137,7 +2137,7 @@ function feedMessages(item, detail) {
 const quietReply = (body) => { const text = String(body || "").trim(); return text.length > 0 && text.length <= 60 && !text.includes("\n"); };
 
 function bubble(m) {
-  if (m.kind === "job") return `<div class="d-job"><span class="d-lbl">⏱ ${esc(m.text)} · ${esc(m.who)}</span>
+  if (m.kind === "job") return `<div class="d-job"><span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2)">${esc(T("feed.scheduleChip"))}</span><span class="d-lbl">${esc(m.text)} · ${esc(m.who)}</span>
     <details class="d-jobraw"><summary class="d-lbl">${esc(T("feed.request"))}</summary><div class="md" style="font-size:var(--fs-small);color:var(--text-2)">${prose(m.raw)}</div></details></div>`;
   if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
     <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${m.chip
@@ -2148,7 +2148,9 @@ function bubble(m) {
   // uses: amber while something is still moving, red when it is waiting on you,
   // accent for the answer, and the plain rule for a result that is only history.
   // A note is not an answer to anything, and small type was all that said so.
-  const bar = { answer: "var(--accent)", note: INFO, working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
+  // a scheduled run's answer is grey: it came round on the hour, nobody asked
+  const bar = m.job && m.kind === "answer" ? "var(--text-2)"
+    : { answer: "var(--accent)", note: INFO, working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
   // Only a line about work that is moving pulses. The TUI holds the red one
   // still on purpose — it is waiting on you, and nothing is happening — and a
   // finished line has nothing to claim.
@@ -2221,9 +2223,13 @@ const openDecisions = (item, detail) => decisionsOf(item, detail).filter((d) => 
 // mark and who took it; the time is added here because a page of ten covers
 // more than one day and the reader asked to see when.
 function convHead(item, isFolded) {
-  const line = String(followHead(item.userRequest).body).split("\n").map((x) => x.trim()).filter(Boolean).join(" · ");
+  const job = item.source === "schedule";
+  const line = job ? item.scheduleName || firstLine(item.userRequest)
+    : String(followHead(item.userRequest).body).split("\n").map((x) => x.trim()).filter(Boolean).join(" · ");
+  // a scheduled run keeps red for trouble and is grey otherwise
+  const mood = convMood(item, state.feed.detail[item.id]);
   return `<button class="d-plain" style="display:flex;align-items:baseline;gap:10px;width:100%;padding:6px 0;cursor:pointer" data-act="toggle-conv" data-id="${item.id}">
-    <span class="d-m" style="color:${convMood(item, state.feed.detail[item.id])};flex:none">${isFolded ? "›" : "⌄"}</span>
+    <span class="d-m" style="color:${job && mood !== ERR ? "var(--text-2)" : mood};flex:none">${isFolded ? "›" : "⌄"}</span>
     <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">${hhmm(item.createdAt)}</span>
     ${routedChips(item)}
     <span class="d-clip" style="font-size:var(--fs-body);color:var(--text-2);text-align:left;min-width:0;flex:1">${isFolded ? esc(line) : ""}</span>

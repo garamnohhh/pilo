@@ -207,7 +207,8 @@ const CARD_INDENT = "    ";
 const SEPARATOR = "|";
 // One colour per state, worn by the question's mark and by the card's accent bar
 // so the two read as the same thing.
-const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80), note: fg(150, 178, 214) };
+// quiet: a scheduled run, in the screen's secondary grey rather than a state colour
+const STATE_COLOUR = { done: fg(62, 212, 156), working: fg(218, 184, 88), attention: fg(220, 104, 80), note: fg(150, 178, 214), quiet: fg(139, 150, 142) };
 // Work in flight pulses between that colour and a dimmer one; a finished or
 // stuck request holds still, because a blink is a claim that something is
 // happening right now.
@@ -422,7 +423,7 @@ function replyBlock(item, width, tagged, reply = null, index = 0) {
     body: wrap(alignTables(body, box - 5), box - 5),
     footer: note ? t("card.noteFooter") : t("card.replyFooter"),
     surface: "reply",
-    state: note ? "note" : "done"
+    state: note ? "note" : item.source === "schedule" ? "quiet" : "done"
   });
 }
 
@@ -1125,8 +1126,9 @@ function render() {
       // a follow-up's head on a line of its own, the user's words from the next
       const head = followHead(item.userRequest);
       // a scheduled run is the job's name, not the instruction it sends every hour
+      const tag = `[${t("feed.scheduleChip")}]`;
       const lines = item.source === "schedule"
-        ? [cut(`⏱ ${item.scheduleName || String(item.userRequest).split("\n")[0]}`, textWidth)]
+        ? [`${c.faint}${tag}${c.reset} ${cut(`${item.scheduleName || String(item.userRequest).split("\n")[0]} · ${kstClock(item.createdAt)}`, textWidth - cols(tag) - 1)}`]
         : [
           ...(head.follow ? [`${c.faint}↳ ${t("desk.follow.head", { id: head.follow })}${c.reset}`] : []),
           ...wrap(alignTables(head.body, textWidth), textWidth)
@@ -1140,7 +1142,8 @@ function render() {
       const going = stillGoing(item);
       const mood = going?.attention ? "attention" : item.finalReply ? (going ? "working" : "done") : item.needsReply || deciding ? "attention" : "working";
       const glyph = COLOR === "none" ? { done: "❯", working: "»", attention: "!" }[mood] : "❯";
-      const markColour = pulseColour(mood);
+      // a scheduled run keeps red for trouble and is grey otherwise
+      const markColour = item.source === "schedule" && mood !== "attention" ? STATE_COLOUR.quiet : pulseColour(mood);
       // Not every line in the feed is something the user typed. A note is the
       // desk speaking first and a scheduled job is an hour coming round, and
       // both used to be drawn as though the user had asked for them.
