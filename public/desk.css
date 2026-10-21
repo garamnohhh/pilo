@@ -105,7 +105,10 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   .d-rowbtn:hover { background: var(--bg-2) }
   .d-num { font-variant-numeric: tabular-nums; text-align: right }
 
-  .d-chip { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.12em; padding: 3px 7px; display: inline-block; white-space: nowrap }
+  /* One chip, everywhere: the same height, type and padding whatever it says or
+     wherever it sits, so a row of them lines up. Only the width follows the text. */
+  .d-chip { font-family: var(--font-mono); font-size: 10px; line-height: 1; letter-spacing: 0.1em; height: 18px; padding: 0 6px;
+    display: inline-flex; align-items: center; box-sizing: border-box; white-space: nowrap; vertical-align: middle }
   .d-seg { display: flex; border: var(--bw) solid var(--line) }
   .d-segopt { height: 30px; padding: 0 12px; border: none; background: transparent; color: var(--text-3); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; cursor: pointer; text-transform: uppercase }
   .d-segopt[aria-selected="true"] { background: var(--bg-2); color: var(--text) }

@@ -571,7 +571,7 @@ const KO = {
   "feed.note": "알림",
   "feed.scheduled": "예약",
   "feed.request": "요청 원문",
-  "feed.scheduleChip": "예약",
+  "feed.scheduleChip": "schedule",
   "card.noteFooter": "pilo 가 먼저 남긴 줄 · 기다리는 것 없음",
   "card.note": "알림",
   "card.followUp": "이어서",
