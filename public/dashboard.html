@@ -2232,6 +2232,7 @@ function convHead(item, isFolded) {
     <span class="d-m" style="color:${job && mood !== ERR ? "var(--text-2)" : mood};flex:none">${isFolded ? "›" : "⌄"}</span>
     <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">${hhmm(item.createdAt)}</span>
     ${routedChips(item)}
+    ${job && isFolded ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);flex:none">${esc(T("feed.scheduleChip"))}</span>` : ""}
     <span class="d-clip" style="font-size:var(--fs-body);color:var(--text-2);text-align:left;min-width:0;flex:1">${isFolded ? esc(line) : ""}</span>
     <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">in-${item.id}</span>
   </button>`;
