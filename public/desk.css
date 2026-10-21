@@ -110,7 +110,7 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   .d-chip { font-family: var(--font-mono); font-size: 10px; line-height: 1; letter-spacing: 0.1em; height: 18px; padding: 0 6px;
     display: inline-flex; align-items: center; box-sizing: border-box; white-space: nowrap; vertical-align: middle }
   .d-seg { display: flex; border: var(--bw) solid var(--line) }
-  .d-segopt { height: 30px; padding: 0 12px; border: none; background: transparent; color: var(--text-3); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; cursor: pointer; text-transform: uppercase }
+  .d-segopt { height: 30px; padding: 0 12px; white-space: nowrap; border: none; background: transparent; color: var(--text-3); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; cursor: pointer; text-transform: uppercase }
   .d-segopt[aria-selected="true"] { background: var(--bg-2); color: var(--text) }
   .d-segopt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px }
 
@@ -134,6 +134,13 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   .d-scrim { position: fixed; inset: 0; z-index: 400; display: flex; align-items: flex-start; justify-content: center; padding: 8vh 24px 24px; background: color-mix(in oklab, var(--bg) 74%, transparent); backdrop-filter: blur(3px) }
   .d-dlg { width: 560px; max-width: 100%; max-height: 84vh; display: flex; flex-direction: column; background: var(--surface); border: var(--bw) solid var(--line) }
   .d-dlg-wide { width: 900px }
+  .d-dlg-mid { width: 720px }
+  /* schedule: a choice, then the sentence its numbers go in */
+  .d-cadbox { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; min-width: 0 }
+  .d-cadline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: var(--fs-small); color: var(--text-2) }
+  .d-cadline .gn-select { width: auto; min-width: 0 }
+  .d-cadline > span { line-height: 1 }
+  .d-segopt:disabled { opacity: 0.35; cursor: not-allowed }
   .d-dlghead { display: flex; align-items: flex-start; gap: 16px; padding: 20px 24px; border-bottom: var(--bw) solid var(--line); flex: none }
   .d-dlgbody { padding: 24px; overflow-y: auto; min-height: 0 }
   .d-dlgfoot { display: flex; align-items: center; gap: 8px; padding: 16px 24px; border-top: var(--bw) solid var(--line); flex: none; flex-wrap: wrap }

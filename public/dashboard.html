@@ -381,6 +381,7 @@
     /* dialog fields: label over field, field full width */
     .d-frow { grid-template-columns: minmax(0, 1fr) !important; gap: 8px !important }
     .d-frow > * { grid-column: 1 !important; max-width: 100%; min-width: 0 }
+    .d-cadbox .d-seg { flex-wrap: wrap }
   }
 
   /* Welcome: the first-run checklist. One centred column, the width a form reads
@@ -1528,12 +1529,121 @@ function cadenceFields(cadence, weekdaysOnly = false) {
   };
 }
 
-// the two controls the dialog draws, and the day buttons beside them
+// the page composes and times a cadence too, for the line under the controls
+function composeCadence({ repeat = "", at = "", until = "", days = [], interval = 0 } = {}) {
+  const time = String(at).trim();
+  const clock = new RegExp(`^${CAD_TIME}$`).exec(time);
+  const n = Number(interval);
+  if (repeat === "every") {
+    if (!(n > 0)) throw bad("a minute count is needed");
+    return `every:${Math.round(n)}`;
+  }
+  if (!clock) throw bad("a time of day is needed, as HH:MM");
+  const hhmm = `${String(Number(clock[1])).padStart(2, "0")}:${clock[2]}`;
+  if (repeat === "daily" || repeat === "weekday") return `days:${repeat}@${hhmm}`;
+  if (repeat === "step") {
+    if (!(n > 0)) throw bad("a day count is needed");
+    return `days:${Math.round(n)}d@${hhmm}`;
+  }
+  if (repeat === "window") {
+    const end = new RegExp(`^${CAD_TIME}$`).exec(String(until).trim());
+    if (!end) throw bad("an end time is needed, as HH:MM");
+    if (!(n > 0)) throw bad("a minute count is needed");
+    const to = `${String(Number(end[1])).padStart(2, "0")}:${end[2]}`;
+    if (to < hhmm) throw bad("the window ends before it starts");
+    const picked = (Array.isArray(days) ? days : String(days).split(",")).map((d) => String(d).trim().toLowerCase()).filter(Boolean);
+    const ordered = CAD_DAYS.filter((d) => picked.includes(d));
+    if (!ordered.length) throw bad("pick at least one day");
+    const spec = ordered.length === 7 ? "daily" : ordered.join(",") === "mon,tue,wed,thu,fri" ? "weekday" : ordered.join(",");
+    return `days:${spec}@${hhmm}-${to}/${Math.round(n)}`;
+  }
+  if (repeat === "pick") {
+    const picked = (Array.isArray(days) ? days : String(days).split(",")).map((d) => String(d).trim().toLowerCase()).filter(Boolean);
+    const ordered = CAD_DAYS.filter((d) => picked.includes(d));
+    if (!ordered.length) throw bad("pick at least one day");
+    return `days:${ordered.join(",")}@${hhmm}`;
+  }
+  throw bad("unknown repeat");
+}
+
+function bad(message) {
+  return Object.assign(new Error(message), { status: 400 });
+}
+
+function nextRun(cadence, weekdaysOnly, from = new Date(), lastRun = null) {
+  const plan = parseCadence(cadence);
+  if (!plan) {
+    throw bad("cadence must be HH:MM, every:N, days:<daily|weekday|mon,thu|2d>@HH:MM, or days:<daily|weekday|mon,thu>@HH:MM-HH:MM/N");
+  }
+  if (plan.kind === "every") return new Date(from.getTime() + plan.minutes * 60000);
+  if (plan.kind === "window") {
+    const start = plan.hour * 60 + plan.minute, end = plan.endHour * 60 + plan.endMinute;
+    for (let i = 0; i < 8; i++) {
+      const day = new Date(from);
+      day.setDate(day.getDate() + i);
+      if (!plan.days.includes(day.getDay())) continue;
+      for (let m = start; m <= end; m += plan.minutes) {
+        const at = new Date(day);
+        at.setHours(0, m, 0, 0);
+        if (at > from) return at;
+      }
+    }
+  }
+
+  const weekend = (d) => d.getDay() === 0 || d.getDay() === 6;
+  const next = new Date(from);
+  next.setHours(plan.hour, plan.minute, 0, 0);
+
+  if (plan.kind === "step" && lastRun) {
+    const step = new Date(lastRun);
+    step.setHours(plan.hour, plan.minute, 0, 0);
+    while (step <= from) step.setDate(step.getDate() + plan.days);
+    return step;
+  }
+  // Every other form, and an N-day job that has never run, starts at the next
+  // time of day that has not gone by.
+  if (next <= from) next.setDate(next.getDate() + 1);
+  if (plan.kind === "at" && weekdaysOnly) while (weekend(next)) next.setDate(next.getDate() + 1);
+  if (plan.kind === "weekday") while (weekend(next)) next.setDate(next.getDate() + 1);
+  if (plan.kind === "pick") while (!plan.days.includes(next.getDay())) next.setDate(next.getDate() + 1);
+  return next;
+}
+
+// The dialog asks two things, which days and when on them, and says the answer
+// back as a sentence. The server still takes { repeat, at, until, days, interval }
+// and writes the cadence string; whenFromForm and formFromFields only translate.
 const cadenceSaid = (s) => describeCadence(s.cadence, s.weekdaysOnly, T);
-const REPEATS = () => [["daily", T("cadence.repeat.daily")], ["weekday", T("cadence.repeat.weekday")],
-  ["pick", T("cadence.repeat.pick")], ["step", T("cadence.repeat.step")], ["every", T("cadence.repeat.every")],
-  ["window", T("cadence.repeat.window")]];
+const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"];
+const DAY_MODES = ["daily", "weekday", "pick", "step"];
+const TIME_MODES = ["at", "every", "window"];
 const DAY_OPTIONS = () => CAD_DAYS.map((d) => [d, T(`cadence.day.${d}`)]);
+// "every N minutes" alone is every:N, which knows no days; a window has no
+// N-day form. Those day choices are greyed out rather than refused on save.
+const dayAllowed = (day, time) => time === "every" ? day === "daily" : !(time === "window" && day === "step");
+
+function formFromFields(f) {
+  const minutes = f.repeat === "every" || f.repeat === "window" ? f.interval : 60;
+  const hours = minutes % 60 === 0;
+  const all = f.days.length === 7, work = f.days.join(",") === WEEKDAYS.join(",");
+  return {
+    day: f.repeat === "every" ? "daily" : f.repeat === "window" ? (all ? "daily" : work ? "weekday" : "pick") : f.repeat,
+    days: f.repeat === "pick" || (f.repeat === "window" && !all && !work) ? f.days : WEEKDAYS,
+    step: f.repeat === "step" ? f.interval : 2,
+    time: f.repeat === "every" || f.repeat === "window" ? f.repeat : "at",
+    at: f.at, until: f.until || "18:00",
+    every: hours ? minutes / 60 : minutes, unit: hours ? "hour" : "min"
+  };
+}
+
+function whenFromForm(f) {
+  const minutes = Math.round(Number(f.every) * (f.unit === "hour" ? 60 : 1));
+  if (f.time === "every") return { repeat: "every", interval: minutes };
+  if (f.time === "window") {
+    const days = f.day === "daily" ? CAD_DAYS : f.day === "weekday" ? WEEKDAYS : f.days;
+    return { repeat: "window", at: f.at, until: f.until, days, interval: minutes };
+  }
+  return { repeat: f.day, at: f.at, days: f.day === "pick" ? f.days : [], interval: f.day === "step" ? Number(f.step) : 0 };
+}
 
 // the row the open dialog belongs to - the new-schedule dialog belongs to none
 function scheduleInDialog() {
@@ -1541,31 +1651,65 @@ function scheduleInDialog() {
   return (state.data.schedules || []).find((x) => String(x.id) === String(state.dlg.id)) || null;
 }
 
-// what the schedule dialog is showing right now: the row it opened, with
-// whatever the user has since clicked on top
+// what the dialog shows right now: the row it opened, with the clicks since on
+// top, and whatever is typed in the boxes this moment
 function cadenceForm(s) {
-  const base = cadenceFields(s?.cadence ?? "09:00", s?.weekdaysOnly);
-  const held = state.schedule || {};
-  return {
-    repeat: held.repeat ?? base.repeat,
-    at: held.at ?? base.at,
-    until: held.until ?? base.until,
-    days: held.days ?? base.days,
-    interval: held.interval ?? base.interval
-  };
+  const base = formFromFields(cadenceFields(s?.cadence ?? "09:00", s?.weekdaysOnly));
+  const f = { ...base, ...(state.schedule?.when || {}) };
+  const typed = (id, key) => { if ($(id)) f[key] = $(id).value.trim(); };
+  typed("s-at", "at"); typed("s-until", "until"); typed("s-every", "every"); typed("s-unit", "unit"); typed("s-step", "step");
+  return f;
 }
 
-// The repeat control decides which of the other two are worth drawing.
-function cadenceFieldsHtml(form) {
-  const rows = [{ label: T("cadence.field.repeat"), kind: "seg", act: "sched-repeat", value: form.repeat, options: REPEATS() }];
-  if (form.repeat === "pick" || form.repeat === "window") rows.push({ label: T("cadence.field.days"), kind: "segmulti", act: "sched-day", value: form.days, options: DAY_OPTIONS() });
-  if (form.repeat === "step" || form.repeat === "every" || form.repeat === "window") {
-    rows.push({ id: "s-interval", label: T("cadence.field.interval"), value: String(form.interval || (form.repeat === "step" ? 2 : form.repeat === "window" ? 60 : 30)),
-      hint: T(form.repeat === "step" ? "cadence.hint.step" : "cadence.hint.every") });
+// the sentence under a choice, with the boxes where its numbers go
+function cadenceSentence(key, slots) {
+  return T(key).split(/(\{\w+\})/).map((part) => {
+    const slot = /^\{(\w+)\}$/.exec(part);
+    return slot ? slots[slot[1]] : part.trim() ? `<span>${esc(part.trim())}</span>` : "";
+  }).join("");
+}
+const cadInput = (id, value, width) => `<input class="gn-input gn-input-sm gn-input-mono" id="${id}" value="${esc(value)}" data-cad style="width:${width}px">`;
+
+function cadencePreview(f) {
+  try {
+    const cadence = composeCadence(whenFromForm(f));
+    const next = nextRun(cadence, false);
+    const sameDay = next.toDateString() === new Date().toDateString();
+    return { ok: true, text: T("cadence.preview", { said: describeCadence(cadence, false, T), next: sameDay ? time(next) : stamp(next) }) };
+  } catch (err) {
+    return { ok: false, text: err.message };
   }
-  if (form.repeat !== "every") rows.push({ id: "s-at", label: T(form.repeat === "window" ? "cadence.field.from" : "cadence.field.at"), value: form.at, hint: T("cadence.hint.at") });
-  if (form.repeat === "window") rows.push({ id: "s-until", label: T("cadence.field.until"), value: form.until || "18:00", hint: T("cadence.hint.at") });
-  return rows;
+}
+
+function cadenceFieldsHtml(f) {
+  const seg = (act, value, modes, allowed = () => true) => `<span class="d-seg" style="justify-self:start">${modes.map((m) =>
+    `<button class="d-segopt" aria-selected="${value === m}" ${allowed(m) ? "" : "disabled"} data-act="${act}" data-value="${m}">${esc(T(`cadence.${act === "sched-daymode" ? "dayMode" : "timeMode"}.${m}`))}</button>`).join("")}</span>`;
+  const line = (inner) => `<span class="d-cadline">${inner}</span>`;
+  const unit = `<select class="gn-select gn-input-sm" id="s-unit" data-cad>${["min", "hour"].map((u) =>
+    `<option value="${u}" ${f.unit === u ? "selected" : ""}>${esc(T(`cadence.unit.${u}`))}</option>`).join("")}</select>`;
+  const slots = { at: cadInput("s-at", f.at, 76), from: cadInput("s-at", f.at, 76), to: cadInput("s-until", f.until, 76),
+    n: cadInput("s-every", f.every, 64), unit, step: cadInput("s-step", f.step, 56) };
+  const days = f.day === "pick"
+    ? line(`<span class="d-seg">${DAY_OPTIONS().map(([v, label]) =>
+      `<button class="d-segopt" aria-selected="${f.days.includes(v)}" data-act="sched-day" data-value="${v}">${esc(label)}</button>`).join("")}</span>`)
+    : f.day === "step" ? line(cadenceSentence("cadence.say.step", slots)) : "";
+  const when = line(cadenceSentence(`cadence.say.${f.time}`, slots));
+  const preview = cadencePreview(f);
+  return [
+    { label: T("cadence.field.days"), kind: "html", body: `<span class="d-cadbox">${seg("sched-daymode", f.day, DAY_MODES, (m) => dayAllowed(m, f.time))}${days}</span>` },
+    { label: T("cadence.field.when"), kind: "html", body: `<span class="d-cadbox">${seg("sched-timemode", f.time, TIME_MODES)}${when}</span>` },
+    { label: "", kind: "html", body: `<span id="s-preview" class="d-m" style="font-size:12px;color:${preview.ok ? "var(--text-2)" : ERR}">${esc(preview.text)}</span>` }
+  ];
+}
+
+// typing a number or a time redraws only the line under the controls, so the
+// box being typed in keeps its caret
+function refreshCadencePreview() {
+  const el = $("s-preview");
+  if (!el) return;
+  const preview = cadencePreview(cadenceForm(scheduleInDialog()));
+  el.textContent = preview.text;
+  el.style.color = preview.ok ? "var(--text-2)" : ERR;
 }
 
 // One word, from the list text.js already keeps: idle · running · stalled ·
@@ -3374,7 +3518,7 @@ function dialogHtml() {
   const dlg = make ? make(d) : { title: d.kind, sub: "" };
   const fields = (dlg.fields || []).filter(Boolean);
   return `<div class="d-scrim" data-act="close-dialog">
-    <div class="d-dlg${dlg.wide ? " d-dlg-wide" : ""}" data-keep="1">
+    <div class="d-dlg${dlg.wide ? " d-dlg-wide" : dlg.mid ? " d-dlg-mid" : ""}" data-keep="1">
       <div class="d-dlghead">
         <div style="min-width:0">
           <div class="d-clip" style="font-size:var(--fs-h2);letter-spacing:-0.02em">${dlg.title}</div>
@@ -3399,7 +3543,8 @@ const bannerHtml = (b) => `<div style="display:flex;align-items:flex-start;gap:1
   ${b.action || ""}</div>`;
 
 function fieldHtml(f) {
-  const body = f.kind === "textarea"
+  const body = f.kind === "html" ? f.body
+    : f.kind === "textarea"
     ? `<textarea class="gn-input" id="${f.id}" rows="3" style="height:auto;resize:vertical">${esc(f.value || "")}</textarea>`
     : f.kind === "select"
       ? `<select class="gn-select gn-input-sm" id="${f.id}" style="justify-self:start;min-width:180px">${(f.options || []).map(([v, label]) =>
@@ -3629,6 +3774,7 @@ DIALOGS.schedule = (d) => {
   const targets = (state.data.agents || []).filter((a) => a.role !== "system");
   const runs = String(state.runs.open) === String(s.id) ? state.runs.rows : [];
   return {
+    mid: true,
     title: esc(s.name),
     sub: `${esc(cadenceSaid(s))} · to ${esc(s.agent)} · ${s.enabled ? "on" : "off"}`,
     fields: [
@@ -3656,6 +3802,7 @@ DIALOGS["new-schedule"] = () => {
   const targets = (state.data.agents || []).filter((a) => a.role !== "system");
   const f = state.schedule;
   return {
+    mid: true,
     title: "New schedule",
     sub: "what you write is sent verbatim at that hour",
     fields: [
@@ -3802,18 +3949,11 @@ function keepDialogForm() {
 }
 
 function readScheduleForm(s = null) {
-  const form = cadenceForm(s);
   return {
     name: $("s-name").value.trim(),
     toAgentId: $("s-agent").value,
-    // the two controls, not the string: src/cadence.js writes that
-    when: {
-      repeat: form.repeat,
-      at: $("s-at") ? $("s-at").value.trim() : form.at,
-      until: $("s-until") ? $("s-until").value.trim() : form.until,
-      days: form.days,
-      interval: $("s-interval") ? Number($("s-interval").value.trim()) : form.interval
-    },
+    // the controls, not the string: src/cadence.js writes that
+    when: whenFromForm(cadenceForm(s)),
     request: $("s-request").value.trim(),
     onMiss: state.schedule.onMiss || "run"
   };
@@ -4066,31 +4206,28 @@ const actions = {
     toast("saved");
     await load();
   },
-  async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null, repeat: null, at: null, days: null, interval: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
-  async "new-schedule"() { state.dlg = { kind: "new-schedule" }; render(); },
+  async "open-schedule"(el) { state.schedule = { ...state.schedule, onMiss: null, when: null }; state.dlg = { kind: "schedule", id: el.dataset.id }; state.runs = { open: el.dataset.id, rows: await get(`/api/schedules/${el.dataset.id}/runs`) }; render(); },
+  async "new-schedule"() { state.schedule = { ...state.schedule, when: null }; state.dlg = { kind: "new-schedule" }; render(); },
   async "sched-miss"(el) { state.schedule = { ...state.schedule, onMiss: el.dataset.value }; render(); },
-  // The repeat control keeps whatever the other two are set to, so switching back
-  // and forth does not lose the hour that was typed.
-  async "sched-repeat"(el) {
-    const form = cadenceForm(scheduleInDialog());
-    const at = $("s-at") ? $("s-at").value.trim() : form.at;
-    const was = $("s-interval") ? Number($("s-interval").value.trim()) : form.interval;
-    // 45 minutes is not 45 days: the count only carries within its own kind
-    const repeat = el.dataset.value;
-    const interval = repeat === form.repeat ? was : repeat === "step" ? 2 : repeat === "window" ? 60 : 30;
-    const until = $("s-until") ? $("s-until").value.trim() : form.until;
-    // a window starts on working days, as most windows are
-    const days = repeat === "window" && !form.days.length ? ["mon", "tue", "wed", "thu", "fri"] : form.days;
-    state.schedule = { ...state.schedule, repeat, at, until, days, interval };
+  // A click keeps whatever is typed in the boxes, so switching back and forth
+  // does not lose the hour. A day choice the new time cannot take falls back to
+  // every day.
+  async "sched-daymode"(el) {
+    const f = cadenceForm(scheduleInDialog());
+    state.schedule = { ...state.schedule, when: { ...f, day: el.dataset.value } };
+    render();
+  },
+  async "sched-timemode"(el) {
+    const f = cadenceForm(scheduleInDialog());
+    const time = el.dataset.value;
+    state.schedule = { ...state.schedule, when: { ...f, time, day: dayAllowed(f.day, time) ? f.day : "daily" } };
     render();
   },
   async "sched-day"(el) {
-    const form = cadenceForm(scheduleInDialog());
+    const f = cadenceForm(scheduleInDialog());
     const day = el.dataset.value;
-    const days = form.days.includes(day) ? form.days.filter((d) => d !== day) : [...form.days, day];
-    state.schedule = { ...state.schedule, repeat: form.repeat, at: $("s-at") ? $("s-at").value.trim() : form.at,
-      until: $("s-until") ? $("s-until").value.trim() : form.until, days,
-      interval: $("s-interval") ? Number($("s-interval").value.trim()) : form.interval };
+    const days = f.days.includes(day) ? f.days.filter((d) => d !== day) : [...f.days, day];
+    state.schedule = { ...state.schedule, when: { ...f, days: CAD_DAYS.filter((d) => days.includes(d)) } };
     render();
   },
   async "save-job"(el) {
@@ -4464,6 +4601,7 @@ function wire() {
       el.click();
     };
   });
+  document.querySelectorAll("[data-cad]").forEach((el) => { el.oninput = refreshCadencePreview; });
   document.querySelectorAll("[data-act]").forEach((el) => {
     el.onclick = async (event) => {
       event.stopPropagation();

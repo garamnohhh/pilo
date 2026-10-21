@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseCadence, composeCadence, nextRun, describeCadence, usesWeekdayFlag, cadenceFields, inWindow } from "./cadence.js";
 import { LANGS } from "./text.js";
 
-// Friday 18:00 local — the weekend rules only show up from here.
+// Friday 18:00 local - the weekend rules only show up from here.
 const friday = new Date(2026, 8, 4, 18, 0, 0);
 const ko = (key, vars = {}) => String(LANGS.ko[key] ?? key).replace(/\{(\w+)\}/g, (_, n) => String(vars[n]));
 
@@ -33,7 +33,7 @@ test("nothing else is guessed at", () => {
 
 test("a weekday job skips the weekend, a picked-days job waits for its day", () => {
   assert.equal(nextRun("days:weekday@09:00", false, friday).getDay(), 1, "Monday");
-  assert.equal(nextRun("days:daily@09:00", true, friday).getDate(), 5, "Saturday — the flag has no say here");
+  assert.equal(nextRun("days:daily@09:00", true, friday).getDate(), 5, "Saturday - the flag has no say here");
   const picked = nextRun("days:mon,thu@18:30", false, friday);
   assert.equal(picked.getDay(), 1);
   assert.equal(picked.getHours(), 18);
@@ -97,16 +97,16 @@ test("the weekdays switch only speaks for the older daily time", () => {
   assert.equal(usesWeekdayFlag("every:30"), false);
 });
 
-// The dashboard cannot import this module — it is served by whichever server is
-// running, and an older one would 404 the import — so it keeps its own copy of
+// The dashboard cannot import this module - it is served by whichever server is
+// running, and an older one would 404 the import - so it keeps its own copy of
 // the ladder. This reads that copy and runs it against the same rows.
 test("the dashboard reads and says a cadence exactly as this does", async () => {
   const { readFileSync } = await import("node:fs");
   const page = readFileSync(new URL("../public/dashboard.html", import.meta.url), "utf8");
   const from = page.indexOf("const CAD_DAYS");
-  const to = page.indexOf("// the two controls the dialog draws");
+  const to = page.indexOf("// The dialog asks two things");
   assert.ok(from > 0 && to > from, "the dashboard still keeps its own copy");
-  const theirs = new Function(`${page.slice(from, to)}\nreturn { parseCadence, describeCadence, cadenceFields };`)();
+  const theirs = new Function(`${page.slice(from, to)}\nreturn { parseCadence, describeCadence, cadenceFields, composeCadence, nextRun };`)();
   const rows = ["days:daily@14:00", "days:weekday@09:00", "days:2d@14:00", "days:3d@07:05", "days:mon,thu@18:30",
     "09:00", "every:30", "every:2880", "every:90", "nonsense", "days:0d@09:00",
     "days:weekday@09:00-18:00/60", "days:mon,wed@10:00-12:30/45", "days:daily@08:00-08:00/5", "days:weekday@18:00-09:00/60"];
@@ -115,8 +115,41 @@ test("the dashboard reads and says a cadence exactly as this does", async () => 
       assert.deepEqual(theirs.parseCadence(cadence), parseCadence(cadence), cadence);
       assert.equal(theirs.describeCadence(cadence, weekdaysOnly, ko), describeCadence(cadence, weekdaysOnly, ko), cadence);
       assert.deepEqual(theirs.cadenceFields(cadence, weekdaysOnly), cadenceFields(cadence, weekdaysOnly), cadence);
+      if (parseCadence(cadence)) {
+        const when = new Date(2026, 9, 21, 13, 7);
+        assert.deepEqual(theirs.nextRun(cadence, weekdaysOnly, when), nextRun(cadence, weekdaysOnly, when), cadence);
+        const f = cadenceFields(cadence, weekdaysOnly);
+        assert.equal(theirs.composeCadence(f), composeCadence(f), cadence);
+      }
     }
   }
+});
+
+// 10/21: the dialog asks which days, then when on them, and translates that to
+// and from the fields the server composes. Every cadence a row can hold opens in
+// it and saves back to the same cadence, untouched.
+test("every cadence opens in the dialog and saves back unchanged", async () => {
+  const { readFileSync } = await import("node:fs");
+  const page = readFileSync(new URL("../public/dashboard.html", import.meta.url), "utf8");
+  const from = page.indexOf("const CAD_DAYS");
+  const to = page.indexOf("// the row the open dialog belongs to");
+  assert.ok(from > 0 && to > from);
+  const ui = new Function("T", `${page.slice(from, to)}\nreturn { cadenceFields, formFromFields, whenFromForm, dayAllowed };`)((k) => k);
+  const rows = ["days:daily@14:00", "days:weekday@09:00", "days:2d@14:00", "days:3d@07:05", "days:mon,thu@18:30",
+    "every:30", "every:2880", "every:90", "every:60", "days:weekday@09:00-18:00/60", "days:mon,wed@10:00-12:30/45",
+    "days:daily@08:00-20:00/120", "days:sun,sat@10:00-11:00/15", "days:daily@07:30-12:00/1440"];
+  for (const cadence of rows) {
+    const form = ui.formFromFields(ui.cadenceFields(cadence, false));
+    assert.ok(ui.dayAllowed(form.day, form.time), cadence);
+    assert.equal(composeCadence(ui.whenFromForm(form)), cadence, cadence);
+  }
+  // the older daily time keeps its meaning: weekdays when the flag was on
+  assert.equal(composeCadence(ui.whenFromForm(ui.formFromFields(ui.cadenceFields("09:00", true)))), "days:weekday@09:00");
+  assert.equal(composeCadence(ui.whenFromForm(ui.formFromFields(ui.cadenceFields("09:00", false)))), "days:daily@09:00");
+  // the choices that make no sense cannot be picked
+  assert.equal(ui.dayAllowed("weekday", "every"), false);
+  assert.equal(ui.dayAllowed("step", "window"), false);
+  assert.equal(ui.dayAllowed("pick", "window"), true);
 });
 
 // 10/21, the user: the mail-to-calendar job only in working hours, Monday to Friday.

@@ -1,7 +1,7 @@
 // When a standing job runs, in one string.
 //
 // "every:N" was the only way to say anything other than a daily time, and it
-// means "N minutes from the last time it went off" — no time of day at all, so a
+// means "N minutes from the last time it went off" - no time of day at all, so a
 // job meant for two in the afternoon drifted a little further every run and every
 // weekend it skipped. The day and the hour are now said separately:
 //
@@ -46,8 +46,8 @@ export function parseCadence(cadence) {
   return { kind: "pick", days: picked.map((d) => DAYS.indexOf(d)).sort((a, b) => a - b), ...clock };
 }
 
-// The dashboard sends the two controls it draws — what repeats, and at what time
-// — and the string is put together here, so only one file knows the shape.
+// The dashboard sends the two controls it draws - what repeats, and at what time
+// - and the string is put together here, so only one file knows the shape.
 export function composeCadence({ repeat = "", at = "", until = "", days = [], interval = 0 } = {}) {
   const time = String(at).trim();
   const clock = new RegExp(`^${TIME}$`).exec(time);
@@ -89,7 +89,7 @@ function bad(message) {
 }
 
 // The moment it goes off next. `lastRun` only matters to the N-day form, which
-// counts from the run it last made rather than from the clock right now — that is
+// counts from the run it last made rather than from the clock right now - that is
 // what keeps the time of day still.
 export function nextRun(cadence, weekdaysOnly, from = new Date(), lastRun = null) {
   const plan = parseCadence(cadence);
