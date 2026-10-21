@@ -64,7 +64,7 @@
   /* Work fills the main area: the feed scrolls, the composer stays put. */
   main.d-main { padding: 0; overflow: hidden; position: relative }
   /* The bar down the left of a line, and its pulse. The TUI flips this colour
-     to a dimmer one every 550 ms — a step, not a fade, and never to nothing —
+     to a dimmer one every 550 ms - a step, not a fade, and never to nothing -
      so a full cycle is 1.1s and the dim is 55% of the bright. The bar is its
      own element so only it moves; the words hold still. */
   .d-bar { width: 2px; flex: none; align-self: stretch }
@@ -162,7 +162,7 @@
   /* In a result the body is --text-2 and this is --text, so bold is told apart
      by colour as much as weight. An answer is already at --text and there is
      nothing brighter to move to, which is why bold read flat there: weight was
-     the only cue. 700 makes that cue carry — 35.7% more ink than 400 against
+     the only cue. 700 makes that cue carry - 35.7% more ink than 400 against
      600's 25.1%, measured on Korean at 15px. */
   .md strong { font-weight: 700; color: var(--text) }
   /* What an agent wrote reads the same wherever it is shown: the words in the
@@ -303,7 +303,7 @@
 
   /* Phone (the "Pilo Mobile" design): one column, a bar of four tabs at the
      bottom, the top bar down to what fits. Desktop and tablet never see any of
-     it — every rule sits under the 720px container query or is hidden by default. */
+     it - every rule sits under the 720px container query or is hidden by default. */
   /* a newer release: one line under the header, on every screen */
   #ubanner:empty { display: none }
   .d-ubanner { flex: none; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 24px; border-bottom: var(--bw) solid var(--line); background: var(--surface); box-shadow: inset 3px 0 0 0 var(--accent); font-size: var(--fs-small); color: var(--text-2) }
@@ -318,7 +318,7 @@
   .d-mtabs, .d-msend, .d-mchips, .d-mneeds { display: none }
   /* a header that wraps must not be squeezed under the content below it */
   .d-fill > .d-head { flex: none }
-  /* iOS Safari enlarges text it judges too small to read in a wide block — a
+  /* iOS Safari enlarges text it judges too small to read in a wide block - a
      table wider than the screen got bigger letters than the line above it.
      The desktop has no such step; this turns it off so both draw the same. */
   html { -webkit-text-size-adjust: 100%; text-size-adjust: 100% }
@@ -337,12 +337,12 @@
        keyboard leaves (--vvt/--vvh, set only while it is up), so the composer
        sits on the keyboard and nothing slides back under it afterwards. */
     html, body { overflow: hidden; overscroll-behavior: none }
-    /* top and bottom 0 is the web view itself — 100dvh read short in a home screen app */
+    /* top and bottom 0 is the web view itself - 100dvh read short in a home screen app */
     body { position: fixed; left: 0; right: 0; top: var(--vvt, 0px); bottom: var(--vvb, 0px); height: var(--vvh, auto) }
     /* iOS 26+ draws its own blur over the top of a home screen app ("scroll
        edge effect") and the header sat under it. WebKit leaves it out when the
        top edge is a full-width sticky or fixed box with a plain background
-       colour, and tints the status bar with that colour instead — so the
+       colour, and tints the status bar with that colour instead - so the
        header is that box. */
     .d-top { position: sticky; top: 0; z-index: 10; background-color: var(--bg); min-height: 48px; height: auto; gap: 10px; padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)) }
     #sync, .d-top-wide { display: none !important }
@@ -352,7 +352,7 @@
     .d-shell, .d-shell[data-work="on"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "main" "tabs" }
     .d-rail, .d-strip, .d-agents { display: none !important }
     /* Safari 26 colours its bottom toolbar from a sticky or fixed box with a
-       plain background colour on the bottom edge — the tab bar is that box */
+       plain background colour on the bottom edge - the tab bar is that box */
     .d-mtabs { display: grid; grid-area: tabs; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: var(--bw) solid var(--line); background-color: var(--bg-2); padding-bottom: max(0px, calc(env(safe-area-inset-bottom) - 18px)); position: sticky; bottom: 0; z-index: 10 }
     /* offline: no tabs to go anywhere, and the state sits by the wordmark */
     body[data-offline] .d-mtabs { display: none }
@@ -490,7 +490,7 @@ const RAIL = [
   ["system", "\u25CF", "\uEBA2", "system"]
 ];
 
-// "overview" is out of the rail — the numbers it carried are in the work strip
+// "overview" is out of the rail - the numbers it carried are in the work strip
 // and the runtime rows are on System. The view itself is left in place so it can
 // come back by putting the key back in RAIL.
 
@@ -574,8 +574,8 @@ const prose = (text) => renderMarkdown(text, esc);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Dates follow the dashboard language: an English screen should not say 오전.
 const loc = () => (state.lang === "ko" ? "ko-KR" : "en-US");
-const time = (v) => (v ? new Date(v).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit" }) : "—");
-const stamp = (v) => (v ? new Date(v).toLocaleString(loc(), { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
+const time = (v) => (v ? new Date(v).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit" }) : "-");
+const stamp = (v) => (v ? new Date(v).toLocaleString(loc(), { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" }) : "-");
 const stateColor = (s) => ({ failed: "var(--red)", down: "var(--red)", running: "var(--amber)", degraded: "var(--amber)", blocked: "var(--blue)", queued: "var(--faint)", archived: "var(--faint)", unbound: "var(--faint)" }[s] || "var(--green)");
 
 let toastTimer;
@@ -649,14 +649,14 @@ async function loadDetail() {
   }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
   if (state.tab === "usage" || state.tab === "more") state.data.usage = await get("/api/usage").catch(() => ({ unavailable: true }));
-  if (state.tab === "agents") state.data.models = await get("/api/models").catch(() => ({ missing: true }));
+  if (state.tab === "agents") state.data.models = await get("/api/models").catch((e) => ({ failed: e.message }));
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
   if (state.dlg?.kind === "schedule") state.runs = { open: state.dlg.id, rows: await get(`/api/schedules/${state.dlg.id}/runs`) };
 }
 
 // Ten conversations at a time. 787 of them are on this machine and a page of
-// ten costs about 45 KB, so the whole list would be some 3.5 MB — the newest
+// ten costs about 45 KB, so the whole list would be some 3.5 MB - the newest
 // ten, and ten more each time you reach the top, is what the reader can use.
 const PAGE = 10;
 const OPEN_BY_DEFAULT = 2;
@@ -665,8 +665,8 @@ const OPEN_BY_DEFAULT = 2;
 // first fifty conversations cost no request at all; past that, and whenever an
 // agent is picked, the server is asked for the next page.
 // Whether this request is one the agent took part in. The server answers this
-// properly — it can see who wrote the answer as well as who was handed the work
-// — and this is the same question asked of what is already in hand.
+// properly - it can see who wrote the answer as well as who was handed the work
+// - and this is the same question asked of what is already in hand.
 function feedMatches(row, agent) {
   if (!agent) return true;
   const names = routedNames(row);
@@ -685,8 +685,8 @@ async function withReplies(rows) {
   const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
   for (let i = 0; i < missing.length; i += 100) {
     const got = await get(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`).catch(() => []);
-    // A request can hold more than one answer — a follow-up written after work
-    // landed — and they arrive oldest first.
+    // A request can hold more than one answer - a follow-up written after work
+    // landed - and they arrive oldest first.
     const fetched = new Map();
     for (const reply of got) {
       const list = fetched.get(String(reply.id)) || [];
@@ -750,7 +750,7 @@ async function loadOlder() {
   const at = oldest ? pool.findIndex((row) => String(row.id) === String(oldest.id)) : -1;
   try {
     if (at >= 0 && at + 1 < pool.length) {
-      // Still inside the fifty rows load() holds — take the next ten from there.
+      // Still inside the fifty rows load() holds - take the next ten from there.
       f.rows = [...f.rows, ...pool.slice(at + 1, at + 1 + PAGE)];
     } else {
       render();
@@ -769,7 +769,7 @@ async function loadOlder() {
 }
 
 // A conversation the reader opened needs its tasks and its answer. An answered
-// one was treated as finished and never read again — but an answer is not the
+// one was treated as finished and never read again - but an answer is not the
 // end: work that lands afterwards is answered a second time, and that follow-up
 // stayed invisible until the page was reloaded. The list row carries the time of
 // the newest answer, so a held detail is kept only while it still matches.
@@ -840,8 +840,8 @@ function herdrFootHtml() {
   const wake = (state.data.system?.services || []).find((x) => x.name === "wake");
   const counts = /(\d+)\/(\d+) agents bound/.exec(wake?.detail || "");
   const tone = !wake ? DIM : wake.state === "running" ? OK : wake.state === "degraded" ? WARN : ERR;
-  const short = counts ? `${counts[1]}/${counts[2]}` : "—";
-  const tip = wake?.detail || "herdr — no reading yet";
+  const short = counts ? `${counts[1]}/${counts[2]}` : "-";
+  const tip = wake?.detail || "herdr - no reading yet";
   return `<button class="d-plain d-railfoot" data-tab="system" data-tip="${esc(tip)}" data-tone="${tone}" aria-label="${esc(tip)}">
       <span class="d-railstate"><span class="d-dot" style="background:${tone}"></span><span class="d-m">${esc(short)}</span></span>
       <span class="d-railtxt">herdr</span>
@@ -885,7 +885,7 @@ function topstateHtml() {
 }
 
 // A refresh used to rebuild #view whether or not anything in it had changed,
-// and a rebuilt element starts at scrollTop 0 — so every five seconds the page
+// and a rebuilt element starts at scrollTop 0 - so every five seconds the page
 // you were reading jumped back to the top. The fix is not to repaint at all
 // unless the html actually differs; the scroll memory below is only for the
 // times it really does.
@@ -921,7 +921,7 @@ function restoreScroll(saved) {
 }
 
 // Work is a conversation, so it follows its newest line the way a chat window
-// does — but only while you are already at the end of it. Scrolled up to read
+// does - but only while you are already at the end of it. Scrolled up to read
 // something, it stays where you left it and says how many lines came in.
 const END_SLACK = 48;
 const atEnd = (node) => node.scrollHeight - node.scrollTop - node.clientHeight <= END_SLACK;
@@ -1007,7 +1007,7 @@ function returnFields({ fields, focus }, keepFocus = true) {
   // A dialog that has just opened owns the keyboard. Putting the caret back where
   // it was is right for every other repaint and wrong for this one: ⌘K drew the
   // palette, focused it, and then this line handed the keys back to the composer
-  // behind it — which is where the typing went.
+  // behind it - which is where the typing went.
   if (!keepFocus) return;
   const el = focus && $(focus.id);
   if (!el || el === document.activeElement) return;
@@ -1147,8 +1147,8 @@ function render() {
 // The composer posts to the same endpoint the TUI does, so a line typed here
 // and a line typed there arrive as the same kind of request.
 //
-// Long pastes and images go in the TUI's way too. The draft holds a marker —
-// ⟦paste #1 · 40 lines · 2.3k chars⟧ or ⟦image #1 · 1280×720 · png 342KB⟧ — and
+// Long pastes and images go in the TUI's way too. The draft holds a marker -
+// ⟦paste #1 · 40 lines · 2.3k chars⟧ or ⟦image #1 · 1280×720 · png 342KB⟧ - and
 // sending swaps it back for the pasted text, or for the image's saved path, which
 // is what an agent can open. A marker is deleted as one piece.
 const composerPastes = new Map();
@@ -1176,7 +1176,7 @@ function imageMarker({ file, width, height, bytes, kind }) {
 }
 
 // A path only works on its own, so where a marker touched other text or another
-// marker a space keeps them apart — the same rule as expandImages in src/draft.js.
+// marker a space keeps them apart - the same rule as expandImages in src/draft.js.
 function expandDraft(text) {
   let out = text;
   for (const [token, value] of composerPastes) out = out.split(token).join(value);
@@ -1219,7 +1219,7 @@ async function attachImage(box, blob) {
 const imagesIn = (list) => [...(list || [])].filter((f) => String(f.type).startsWith("image/"));
 
 // "Ask a follow-up" names the request it follows. The name goes out as letters
-// at the front of the message — in-812 이어서 — so the desk can open that
+// at the front of the message - in-812 이어서 - so the desk can open that
 // request before it answers, with nothing new on the server.
 function followHtml() {
   const answering = state.answering;
@@ -1535,7 +1535,7 @@ const REPEATS = () => [["daily", T("cadence.repeat.daily")], ["weekday", T("cade
   ["window", T("cadence.repeat.window")]];
 const DAY_OPTIONS = () => CAD_DAYS.map((d) => [d, T(`cadence.day.${d}`)]);
 
-// the row the open dialog belongs to — the new-schedule dialog belongs to none
+// the row the open dialog belongs to - the new-schedule dialog belongs to none
 function scheduleInDialog() {
   if (state.dlg?.kind !== "schedule") return null;
   return (state.data.schedules || []).find((x) => String(x.id) === String(state.dlg.id)) || null;
@@ -1590,7 +1590,7 @@ function stalled(a) {
 function agentState(a) {
   if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
   // a give-up counts only while that work is still waiting, so it outranks the
-  // "running" the queued task puts on the row — see src/agentstate.js
+  // "running" the queued task puts on the row - see src/agentstate.js
   if (a.gaveUp > 0) return "gaveUp";
   if (a.waitingApproval) return "blocked";
   if (a.status === "running" && stalled(a)) return "stalled";
@@ -1609,13 +1609,13 @@ const agentNote = (a) => T(`state.${agentState(a)}`);
 // The work tree has no room for the word, so the mark carries it. A working agent
 // spins the TUI's braille, ⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏, a frame every 120 ms, as a CSS keyframe on
 // ::before so nothing is redrawn for it. The states that share a colour get
-// shapes of their own — the TUI's where it has one — so no two read the same:
+// shapes of their own - the TUI's where it has one - so no two read the same:
 // stalled ◌ against limited ‖ (both amber), failed ✕ · no answer ! · unbound ○
 // (all red), blocked ◆. Idle keeps the plain dot.
 const MARK = { holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
   const key = agentState(a);
-  // "running" is held work or a pane herdr says is working — the TUI spins for
+  // "running" is held work or a pane herdr says is working - the TUI spins for
   // both, and a still dot under the word "running" read as a contradiction
   if (key === "running") return `<span class="d-spin" style="color:${colour}" aria-hidden="true"></span>`;
   if (MARK[key]) return `<span class="d-spin-still" style="color:${colour}" aria-hidden="true">${MARK[key]}</span>`;
@@ -1682,7 +1682,7 @@ function agentTreeHtml(rows = treeRows(), st = state.data.overview?.stats || {})
 // (and More on a phone) has the version, a check and the install button.
 const updateWhy = (u) => (u.kind && !["ok", "npm"].includes(u.kind) ? T(`update.${u.kind}`) : "");
 // Permissions and questions a session holds open through its Pilo hook. They
-// wait here until answered — no clock — and leave when the session moves on.
+// wait here until answered - no clock - and leave when the session moves on.
 // Answering needs this device's key (pilo approvals pair); Allow asks once more.
 const apprKey = () => { try { return localStorage.getItem("pilo-approve-key") || ""; } catch (err) { return ""; } };
 const apprWhat = (r) => r.kind === "question"
@@ -1727,7 +1727,7 @@ function approvalsHtml() {
       <div style="font-size:var(--fs-body);color:var(--text)">${esc(m.question)}</div>
       <div class="d-appr-acts">${m.options.filter((o) => !o.standing && !o.typed).map((o) =>
         btn(`${o.n}. ${esc(o.label)}`, "appr-choose", `data-id="${n.agentId}" data-n="${o.n}"`, o.n === 1 ? "gn-btn-brand" : "")).join("")}${open}</div>
-      ${kept.length ? `<div class="d-clip" style="font-size:var(--fs-small);color:var(--text-3)" title="${esc(kept.map((o) => `${o.n}. ${o.label}`).join("\n"))}">${esc(kept.map((o) => o.n).join(", "))} — ${esc(T("appr.standing"))}</div>` : ""}`;
+      ${kept.length ? `<div class="d-clip" style="font-size:var(--fs-small);color:var(--text-3)" title="${esc(kept.map((o) => `${o.n}. ${o.label}`).join("\n"))}">${esc(kept.map((o) => o.n).join(", "))} - ${esc(T("appr.standing"))}</div>` : ""}`;
   }
   const pair = key || !pending.length ? "" : `<div class="d-appr-item" style="border-left-color:var(--warn, var(--err))"><div style="font-size:var(--fs-small);color:var(--warn, var(--text))">${esc(T("appr.unpaired"))}</div><div style="font-size:var(--fs-small);color:var(--text-2)">${esc(T("appr.pair"))}</div>
     <div class="d-appr-acts"><input id="appr-code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="123456" style="flex:1;min-width:0;font:13px var(--mono);padding:8px 10px;border:var(--bw) solid var(--line);background:var(--bg);color:var(--text)">${btn(T("appr.pairBtn"), "appr-pair", "", "gn-btn-brand")}</div></div>`;
@@ -1826,7 +1826,7 @@ function updateRows(compact = false) {
   const u = state.data.update;
   if (!u) return "";
   const checked = u.checkOff ? T("update.off") : u.checkedAt ? T("update.checkedAt", { at: stamp(u.checkedAt) }) : T("update.none");
-  const latest = u.latest ? `${u.latest}${u.available ? "" : ` · ${T("update.upToDate")}`}` : "—";
+  const latest = u.latest ? `${u.latest}${u.available ? "" : ` · ${T("update.upToDate")}`}` : "-";
   const why = updateWhy(u);
   const row = (k, v, sub = "") => compact
     ? `<div class="m-row" style="min-height:48px"><span style="font-size:var(--fs-body);flex:1">${esc(k)}</span><span class="d-m" style="font-size:13px">${esc(v)}</span></div>`
@@ -1966,7 +1966,7 @@ mviews.more = () => {
       ${note ? `<div class="d-m" style="margin-top:6px;font-size:11px;color:var(--text-3)">${esc(note)}</div>` : ""}</div>`;
   };
   const age = (m) => (m == null ? "" : T("usage.read", { age: ageText(m) }));
-  const none = (why) => `<div style="padding:12px 16px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("usage.none"))}${why ? ` — ${esc(why)}` : ""}</div>`;
+  const none = (why) => `<div style="padding:12px 16px;font-size:var(--fs-small);color:var(--text-3)">${esc(T("usage.none"))}${why ? ` - ${esc(why)}` : ""}</div>`;
   const claude = c.missing ? none(c.missing) : (c.windows || []).map((w) => bar(
     w.group === "session" ? T("usage.five") : w.model ? T("usage.weekOf", { model: w.model }) : T("usage.week"),
     w.percent, resetText(w.resetsAt), "var(--rt-claude)")).join("") || none("");
@@ -2048,7 +2048,7 @@ const hhmm = (iso) => {
 function feedMessages(item, detail) {
   const full = detail || item;
   const state_ = convState(item, detail);
-  // A note has no question above it — the desk spoke first — and a scheduled job
+  // A note has no question above it - the desk spoke first - and a scheduled job
   // says so rather than posing as something the user typed.
   // A scheduled run is one line, the job's name: the instruction it sends is
   // long, the same every hour, and only folded out when someone wants it.
@@ -2064,8 +2064,8 @@ function feedMessages(item, detail) {
   for (const task of full.tasks || []) {
     const agent = task.agent || "agent";
     // A note is news only while its task is still open. What the task finally
-    // reported is not shown here at all: Work is the conversation — the
-    // question, what is happening, and the answer — and each PM's and worker's
+    // reported is not shown here at all: Work is the conversation - the
+    // question, what is happening, and the answer - and each PM's and worker's
     // result is on the Requests screen beside the rest of the trace.
     if (!state_.answered && task.progress && !["done", "failed", "canceled"].includes(task.status)) {
       msgs.push({ who: `${agent} · working${task.progressAt ? ` · ${hhmm(task.progressAt)}` : ""}`, kind: "working", text: task.progress });
@@ -2105,7 +2105,7 @@ function feedMessages(item, detail) {
   }
 
   // An open decision is answered in one place only: the card at the bottom of the
-  // feed. Here it is a marker — no question, no button — or the user sees the same
+  // feed. Here it is a marker - no question, no button - or the user sees the same
   // question twice with two Answer buttons (#2473). Once answered, a quiet line
   // keeps what was asked and what they said.
   for (const d of decisionsOf(item, detail)) {
@@ -2117,7 +2117,7 @@ function feedMessages(item, detail) {
 
   // Until the answer lands the conversation says what it is waiting for, in the
   // TUI's own words. Agents rarely leave a progress note, and without this the
-  // dashboard showed the question and then nothing at all — which is what the
+  // dashboard showed the question and then nothing at all - which is what the
   // TUI's card was for. The ladder is the TUI's: writing the reply beats a
   // note, and a note beats the general word for waiting.
   if (!state_.answered) {
@@ -2164,7 +2164,7 @@ function bubble(m) {
   const bar = m.job && m.kind === "answer" ? "var(--text-2)"
     : { answer: "var(--accent)", note: INFO, working: WARN, waiting: WARN, attention: ERR, decision: ERR }[m.kind] || "var(--line)";
   // Only a line about work that is moving pulses. The TUI holds the red one
-  // still on purpose — it is waiting on you, and nothing is happening — and a
+  // still on purpose - it is waiting on you, and nothing is happening - and a
   // finished line has nothing to claim.
   const live = m.kind === "working" || m.kind === "waiting";
   const follow = (m.kind === "answer" || m.kind === "note") && m.inbox
@@ -2183,7 +2183,7 @@ function bubble(m) {
 }
 
 // Who took it. The desk agent answers some requests itself, and those carry no
-// agent name — the TUI calls that PILO, so this does too.
+// agent name - the TUI calls that PILO, so this does too.
 const routedNames = (item) => String(item.routed || "").split(", ").filter(Boolean);
 
 function routedChips(item) {
@@ -2263,9 +2263,9 @@ function convBlock(item, fromNewest) {
 function workFeed() {
   const f = state.feed;
   // what a session asks still shows on an empty desk
-  if (!f.rows.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet — type below</div>` + approvalsHtml();
+  if (!f.rows.length) return `<div class="d-lbl" style="padding:8px 0">nothing yet - type below</div>` + approvalsHtml();
   const top = f.done
-    ? `<div class="d-lbl" style="padding:8px 0;text-align:center">that is the whole of it — ${f.rows.length} shown</div>`
+    ? `<div class="d-lbl" style="padding:8px 0;text-align:center">that is the whole of it - ${f.rows.length} shown</div>`
     : `<div class="d-lbl" style="padding:8px 0;text-align:center">${f.loading ? "loading older…" : "scroll up for older"}</div>`;
   const banner = f.agent
     ? `<div style="display:flex;align-items:center;gap:10px;padding:8px 0">
@@ -2451,7 +2451,7 @@ views.overview = () => {
             <span style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.title || t.request || "(untitled)")}</span>
             ${t.progress && !["done", "failed"].includes(t.status) ? `<span style="display:block;margin-top:3px;font:11px var(--mono);color:var(--amber);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">진행 · ${esc(t.progress)}</span>` : ""}
           </span>
-          <span class="mono" style="font-size:11px">${esc(t.agent || "—")}</span>
+          <span class="mono" style="font-size:11px">${esc(t.agent || "-")}</span>
           <span class="mono" style="font-size:11px;color:${stateColor(t.status)}">${esc(t.status)}</span>
           <span class="mono" style="font-size:11px">${fmtTokens(Number(t.tokensIn) + Number(t.tokensOut))}</span>
         </div>`).join("") : `<div class="empty">no tasks yet</div>`}
@@ -2548,7 +2548,7 @@ views.agents = () => {
           <span class="gn-ladder-plate" data-role="${role.toLowerCase()}">${role}</span>
           <span class="gn-ladder-twist">${canFold ? (folded ? "+" : "−") : ""}</span>
           <span class="gn-ladder-name">${esc(a.name)}</span>
-          ${a.reviewer ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);margin-left:6px" title="reviewer — its PM hands it checks">REVIEW</span>` : ""}
+          ${a.reviewer ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);margin-left:6px" title="reviewer - its PM hands it checks">REVIEW</span>` : ""}
           ${runtimeMark(a.runtime)}
           <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
           <span class="d-dot${agentState(a) === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
@@ -2556,8 +2556,8 @@ views.agents = () => {
           <button class="gn-btn gn-btn-sm gn-btn-ghost" style="margin-right:8px;flex:none" data-act="open-agent" data-id="${a.id}">open</button>
         </span></div>`;
     }).join("")}</div>` +
-    `<div class="d-hint">A child row starts where its parent's plate ends. Click a PM row anywhere to fold its workers. open holds everything about one agent — rules, binding, waking, removal.
-      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet — Add agent picks one up.` : ""}</div>` +
+    `<div class="d-hint">A child row starts where its parent's plate ends. Click a PM row anywhere to fold its workers. open holds everything about one agent - rules, binding, waking, removal.
+      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet - Add agent picks one up.` : ""}</div>` +
     modelsHtml()
   );
 };
@@ -2567,23 +2567,23 @@ views.agents = () => {
 const MODEL_FROM = { session: "this session", pane: "its pane", global: "global file" };
 let tapOn = false;
 // Why a change is still waiting, in herdr's and Pilo's own terms.
-const waitReason = (r) => !r.bound ? "waits — no session bound"
-  : r.openTasks > 0 ? `waits — ${r.openTasks} open task${r.openTasks > 1 ? "s" : ""}`
+const waitReason = (r) => !r.bound ? "waits - no session bound"
+  : r.openTasks > 0 ? `waits - ${r.openTasks} open task${r.openTasks > 1 ? "s" : ""}`
   : r.sessionState === "working" ? "waits until the session is idle"
-  : `waits — session reads "${r.sessionState || "unknown"}"`;
+  : `waits - session reads "${r.sessionState || "unknown"}"`;
 function modelState(r, global) {
   if (r.system) return ["not changed here", "var(--text-3)"];
   if (r.pending?.kind === "restart") {
-    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started — checking" }[r.pending.step];
+    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started - checking" }[r.pending.step];
     return [step || (r.busy ? "restarts once the session is idle" : "waiting its turn to restart"), WARN];
   }
   if (r.pending?.kind === "pin") {
-    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started — checking" }[r.pending.step];
+    const step = { leaving: "leaving, to start again", starting: "starting again", checking: "started - checking" }[r.pending.step];
     return [step || (r.busy ? "restarts once the session is idle" : "about to restart"), WARN];
   }
   if (r.pin && !r.pending) return [`kept on ${[r.pin.model, r.pin.effort].filter(Boolean).join(" · ")}`, INFO];
   if (r.pending) {
-    if (r.pending.typedAt) return tapOn ? ["typed — confirmed on its next reply", INFO] : ["typed — turn on reading to confirm it", WARN];
+    if (r.pending.typedAt) return tapOn ? ["typed - confirmed on its next reply", INFO] : ["typed - turn on reading to confirm it", WARN];
     return [r.busy ? waitReason(r) : "about to be typed", WARN];
   }
   if (r.runtime === "codex" && r.source === "pane" && global.codex.model && r.model !== global.codex.model) return ["changes on its next start", WARN];
@@ -2611,7 +2611,10 @@ function modelsHtml() {
   const m = state.data.models;
   if (!m) return `<div style="margin-top:48px">${rule("models", "loading…")}</div>`;
   tapOn = Boolean(m.tap?.on);
-  if (m.missing) return `<div style="margin-top:48px">${rule("models")}<div class="d-hint">The server running now is older than this screen — start Pilo again to see and change models.</div></div>`;
+  // only a 404 means a server from before models; anything else says what went wrong
+  if (m.failed) return `<div style="margin-top:48px">${rule("models")}<div class="d-hint">${m.failed === "not found"
+    ? "The server running now is older than this screen - start Pilo again to see and change models."
+    : `Could not read models: ${esc(m.failed)}`}</div></div>`;
   // the picker's own names when the server read Claude Code's catalogue; an older
   // server sends bare aliases and no labels
   const opts = (list, current, labels = {}) => list.map((v) => `<option value="${esc(v)}" ${v === current ? "selected" : ""}>${esc(labels[v] || v)}</option>`).join("");
@@ -2621,21 +2624,21 @@ function modelsHtml() {
       <span style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;min-width:0">
         <select class="gn-select gn-input-sm" id="m-${runtime}-model" style="width:auto;min-width:150px">${opts(models_, global.model, runtime === "claude" ? m.choices.claude.labels : {})}</select>
         <select class="gn-select gn-input-sm" id="m-${runtime}-effort" style="width:auto;min-width:96px">${opts(efforts, global.effort)}</select>
-        <span class="d-m" style="font-size:11px;color:var(--text-3)">now ${esc(global.model || "—")} · ${esc(global.effort || "—")} · ${note}</span>
+        <span class="d-m" style="font-size:11px;color:var(--text-3)">now ${esc(global.model || "-")} · ${esc(global.effort || "-")} · ${note}</span>
       </span>
       ${btn(runtime === "claude" ? "Apply to every Claude agent" : "Apply from next start", "models-all", `data-runtime="${runtime}"`)}
     </div>`;
   return `<div style="margin-top:48px">
     ${rule("models", `Claude reading ${m.tap.on ? "on" : "off"}`)}
     <div class="d-hint" style="margin-top:8px">Claude: typed into each idle session (a working one waits), and its own status line confirms it on the next reply. Codex: from each session's next start. A different model or effort uses the usage limits at a different rate.
-      ${m.tap.on ? "" : "Claude's real model and effort are read through its status line — turning that on wraps the status line you have and changes nothing you see."}
+      ${m.tap.on ? "" : "Claude's real model and effort are read through its status line - turning that on wraps the status line you have and changes nothing you see."}
       ${btn(m.tap.on ? "Stop reading" : "Read from the sessions", "model-tap", `data-on="${m.tap.on ? "0" : "1"}"`, "gn-btn-ghost")}</div>
     <div class="d-list" style="margin-top:16px">
       ${bulk("claude", m.choices.claude.models, m.choices.claude.efforts, m.global.claude, "every new session and each idle one")}
       ${bulk("codex", m.choices.codex.map((c) => c.model), codexEfforts, m.global.codex, "next start")}
       <div class="d-tr" style="grid-template-columns:72px minmax(0,1fr) auto;gap:12px;align-items:center;min-height:52px">
         <span class="d-lbl">restart</span>
-        <span class="d-m" style="font-size:11px;color:var(--text-3)">every idle session starts again on the install there is now — the same conversation, the same model. A new model that needs a newer Claude Code only appears after this.</span>
+        <span class="d-m" style="font-size:11px;color:var(--text-3)">every idle session starts again on the install there is now - the same conversation, the same model. A new model that needs a newer Claude Code only appears after this.</span>
         ${btn("Restart idle sessions", "models-restart")}
       </div>
     </div>
@@ -2648,10 +2651,10 @@ function modelsHtml() {
         const [word, tone] = modelState(r, m.global);
         return `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 64px minmax(0,1.2fr) 72px 110px minmax(0,1.4fr) 132px">
           <span class="d-clip" style="font-size:var(--fs-body)">${esc(r.name)}</span>
-          <span style="display:flex;align-items:center">${runtimeMark(r.runtime) || esc(r.runtime || "—")}</span>
-          <span class="d-m d-clip" style="font-size:12px">${esc(r.model || "—")}</span>
-          <span class="d-m" style="font-size:12px">${esc(r.effort || "—")}</span>
-          <span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(r.runtime ? MODEL_FROM[r.source] || "—" : "no session")}</span>
+          <span style="display:flex;align-items:center">${runtimeMark(r.runtime) || esc(r.runtime || "-")}</span>
+          <span class="d-m d-clip" style="font-size:12px">${esc(r.model || "-")}</span>
+          <span class="d-m" style="font-size:12px">${esc(r.effort || "-")}</span>
+          <span class="d-m" style="font-size:11px;color:var(--text-3)">${esc(r.runtime ? MODEL_FROM[r.source] || "-" : "no session")}</span>
           <span class="d-m d-clip" style="font-size:11px;color:${tone}">${esc(word)}</span>
           <span style="display:flex;justify-content:flex-end;gap:6px">${r.pending
             ? (r.pending.step ? "" : btn("Cancel", "model-cancel", `data-id="${r.id}"`, "gn-btn-ghost"))
@@ -2677,7 +2680,7 @@ function dayLabel(at) {
 }
 
 function ago(at) {
-  if (!at) return "—";
+  if (!at) return "-";
   const diff = (Date.now() - new Date(at)) / 1000;
   if (diff < 60) return "just now";
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
@@ -2698,7 +2701,7 @@ const firstLine = (text) => {
 const inFlight = (t) => t.progress && !["done", "failed"].includes(t.status);
 const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", final_reply: "answer" };
 // A request's own state, which is not an agent's. The two used to share the
-// word "working" — a request open because one abandoned task never closed read
+// word "working" - a request open because one abandoned task never closed read
 // as though its agent were busy, while the agent column beside it said stalled.
 // Nothing here can be mistaken for one of agentNote()'s words.
 const reqState = (i) => (i.needsReply ? "needs an answer"
@@ -2772,7 +2775,7 @@ views.inbox = () => {
           <div class="d-list">${detail.tasks.filter(inFlight).map((t) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${WARN}">${esc(t.agent || "agent")} · ${ago(t.progressAt)}</span>
             <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
-        ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written — <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
+        ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written - <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
         <div style="display:flex;gap:8px;margin-top:24px">
           ${btn("Ask a follow-up", "follow-request", `data-id="${detail.id}"`)}
           ${btn("See the events", "go-events", "", "gn-btn-ghost")}
@@ -2809,9 +2812,9 @@ views.schedules = () => {
   const all = state.data.schedules || [];
   const list = all.filter((s) => s.kind !== "system");
   const jobs = all.filter((s) => s.kind === "system");
-  // 09.10 09:00 — the columns are narrow and a locale string wraps in them.
+  // 09.10 09:00 - the columns are narrow and a locale string wraps in them.
   const when = (iso) => {
-    if (!iso) return "—";
+    if (!iso) return "-";
     const d = new Date(iso);
     return `${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")} ${hhmm(iso)}`;
   };
@@ -2843,7 +2846,7 @@ views.schedules = () => {
           <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)">watcher</span>
           <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(cadenceSaid(s))}</span>
           <span class="d-m" style="font-size:12px;color:var(--text-3)">${esc(when(s.lastRunAt))}</span>
-          <span class="d-m d-clip" style="font-size:12px;color:${s.enabled ? jobResultColor(s.lastResult) : "var(--text-3)"}">${esc(s.enabled ? s.lastResult || "—" : "off")}</span>
+          <span class="d-m d-clip" style="font-size:12px;color:${s.enabled ? jobResultColor(s.lastResult) : "var(--text-3)"}">${esc(s.enabled ? s.lastResult || "-" : "off")}</span>
           <span class="d-num"><span class="d-dot" style="background:${s.enabled ? OK : DIM};margin-left:auto"></span></span>
         </button>`).join("")}
       </div>
@@ -2907,7 +2910,7 @@ views.artifacts = () => {
         <span class="d-m d-clip" style="font-size:12px;color:var(--text-2)">${esc(f.agent)}</span>
         <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${hhmm(f.createdAt)}</span>
       </button>`;
-    }).join("") : `<div class="d-tr"><span class="d-lbl">no files yet — they arrive with an agent's report</span></div>`}</div>
+    }).join("") : `<div class="d-tr"><span class="d-lbl">no files yet - they arrive with an agent's report</span></div>`}</div>
     <div class="d-hint">A click opens the diff in a wide dialog. "Only mine" is switched off: nothing in pilo records who owns a file.</div>`
   );
 };
@@ -2968,7 +2971,7 @@ views.commands = () => {
       ${group("in the terminal", TUI_COMMANDS, ":")}
       ${group("in an agent session", CLI_COMMANDS, "pilo ")}
     </div>
-    <div class="d-hint">Both lists come from src/commands.js — the TUI help, the CLI usage and this page read the same file.</div>`
+    <div class="d-hint">Both lists come from src/commands.js - the TUI help, the CLI usage and this page read the same file.</div>`
   );
 };
 
@@ -3006,7 +3009,7 @@ views.settings = () => {
               <span class="d-seg">${[7, 14, 30, 90].map((d) =>
                 `<button class="d-segopt" aria-selected="${Number(retention[key]) === d}" data-act="retention" data-key="${key}" data-days="${d}">${d}d</button>`).join("")}</span>
             </div>`).join("")}</div>
-          <div class="d-hint">Requests, answers and files are never deleted — ${esc(retention.failureEventDays)} days is only how long a failure event stays.</div></div>
+          <div class="d-hint">Requests, answers and files are never deleted - ${esc(retention.failureEventDays)} days is only how long a failure event stays.</div></div>
       </div>
       <div class="d-stack" style="min-width:0">
         <div><div class="d-lblrule"><span class="d-lbl">rules sent to every agent</span></div>
@@ -3025,17 +3028,17 @@ views.settings = () => {
 
 // ---------- SYSTEM ----------
 // Usage: what the account has left, from the files Claude Code, the desktop app
-// and Codex keep (src/usage.js). Each source stands alone — one that is missing
+// and Codex keep (src/usage.js). Each source stands alone - one that is missing
 // or unreadable says so in its own place and the rest still show.
 const ageText = (m) => (m >= 90 ? `${Math.round(m / 60)}h` : `${Math.round(m)}m`);
 const pctColour = (p) => (p >= 90 ? ERR : p >= 70 ? WARN : OK);
 const resetText = (at) => (at ? `↻ ${stamp(at)}` : "");
-// Each runtime's bar is in its own colour — the one its mark and the TUI use —
+// Each runtime's bar is in its own colour - the one its mark and the TUI use -
 // so Claude and Codex read apart at a glance. The limit warning is not a fill
 // colour any more: Claude's orange and the error red are 1.07:1 apart on the
 // dark ground, so a full Claude bar would have looked like any other. It goes on
 // the figure and a word under the bar instead. share: a part of what was used,
-// not how close a limit is — never a warning.
+// not how close a limit is - never a warning.
 function usageBar(label, percent, { note = "", dim = false, fill = "var(--text-2)", share = false } = {}) {
   const p = Math.max(0, Math.min(100, Number(percent) || 0));
   const warn = !dim && !share && p >= 70 ? pctColour(p) : "";
@@ -3048,10 +3051,10 @@ function usageBar(label, percent, { note = "", dim = false, fill = "var(--text-2
     </span>
     <span class="d-m d-num" style="font-size:13px;text-align:right;${warn ? `color:${warn};font-weight:var(--w-strong)` : `color:${dim ? "var(--text-3)" : "var(--text)"}`}">${p}%</span></div>`;
 }
-const noReading = (why) => `<div class="d-list"><div class="d-tr"><span class="d-lbl">${esc(T("usage.none"))}${why ? ` — ${esc(why)}` : ""}</span></div></div>`;
+const noReading = (why) => `<div class="d-list"><div class="d-tr"><span class="d-lbl">${esc(T("usage.none"))}${why ? ` - ${esc(why)}` : ""}</span></div></div>`;
 // The last day of both five-hour figures on one time axis. Claude is a solid
 // line in its colour, Codex a dashed one in its own, so the two part without
-// colour too; the legend names both. A stretch with no reading is left blank —
+// colour too; the legend names both. A stretch with no reading is left blank -
 // a line drawn through it, or a missing series drawn at 0, would read as "used
 // nothing".
 const TREND_GAP_MS = 30 * 60 * 1000;
@@ -3074,7 +3077,7 @@ function trendChart(series, now = Date.now()) {
   const grid = [0, 50, 100].map((p) => `<line x1="0" x2="${W}" y1="${y(p)}" y2="${y(p)}" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>`).join("");
   const legend = series.map((s) => `<span style="display:inline-flex;align-items:center;gap:6px">
       <svg width="22" height="6" aria-hidden="true"><line x1="0" x2="22" y1="3" y2="3" stroke="${s.colour}" stroke-width="2"${s.dash ? ` stroke-dasharray="${s.dash}"` : ""}/></svg>
-      <span>${esc(s.name)}${s.none ? ` — ${esc(s.none)}` : ""}</span></span>`).join("");
+      <span>${esc(s.name)}${s.none ? ` - ${esc(s.none)}` : ""}</span></span>`).join("");
   const clock = (t) => new Date(t).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit", hour12: false });
   return `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:96px;display:block" role="img" aria-label="${esc(T("usage.trend"))}">${grid}${lines}</svg>
     <div class="d-m" style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:4px"><span>${clock(t0)}</span><span>${clock(now - 12 * 3600e3)}</span><span>${clock(now)}</span></div>
@@ -3085,12 +3088,12 @@ function trendChart(series, now = Date.now()) {
 function sessionUsageHtml(mod) {
   if (!mod) return "";
   const rows = (mod.sessions || []).slice(0, 12);
-  const name = (cwd) => String(cwd || "").split("/").filter(Boolean).slice(-2).join("/") || "—";
+  const name = (cwd) => String(cwd || "").split("/").filter(Boolean).slice(-2).join("/") || "-";
   return `<div>${rule(T("usage.sessions"), esc(rows.length ? T("usage.sessionsMod") : ""))}
     ${rows.length ? `<div class="d-list">${rows.map((r) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 5rem 4rem 4.5rem">
         <span class="d-m d-clip" style="font-size:12px" title="${esc(r.cwd)}">${esc(name(r.cwd))}</span>
         <span class="d-m d-clip" style="font-size:11px;color:var(--text-3)">${esc(r.model)}</span>
-        <span class="d-m d-num" style="font-size:12px;text-align:right">${r.context == null ? "—" : `${r.context}%`}</span>
+        <span class="d-m d-num" style="font-size:12px;text-align:right">${r.context == null ? "-" : `${r.context}%`}</span>
         <span class="d-m d-num" style="font-size:11px;color:var(--text-3);text-align:right">${ago(r.at)}</span></div>`).join("")}</div>`
       : `<div class="d-hint">${esc(T("usage.sessionsOff"))} <span class="d-m">CLAUDE_CODE_PLUGIN_DIRS=${esc(mod.dir)}</span></div>`}</div>`;
 }
@@ -3128,7 +3131,7 @@ views.usage = () => {
             const has = (src) => !src.missing && (src.samples || []).length > 0;
             const series = [
               { name: "Claude", colour: "var(--rt-claude)", dash: "", samples: has(d) ? d.samples : [],
-                none: d.missing ? `${T("usage.desktop")} — ${d.missing}` : has(d) ? "" : T("usage.noTrend") },
+                none: d.missing ? `${T("usage.desktop")} - ${d.missing}` : has(d) ? "" : T("usage.noTrend") },
               { name: "Codex", colour: "var(--rt-codex)", dash: "5 3", samples: has(ct) ? ct.samples : [],
                 none: ct.missing ? ct.missing : has(ct) ? "" : T("usage.noTrend") }
             ];
@@ -3141,7 +3144,7 @@ views.usage = () => {
           </div>
           <div class="d-list">${(tokens.agents || []).map((a) => `<div class="d-tr" style="grid-template-columns:minmax(0,1fr) 64px 5rem 4rem">
             <span class="d-clip" style="font-size:var(--fs-body)">${esc(a.name)}</span>
-            <span style="display:flex;align-items:center">${runtimeMark(a.runtime) || esc(a.runtime || "—")}</span>
+            <span style="display:flex;align-items:center">${runtimeMark(a.runtime) || esc(a.runtime || "-")}</span>
             <span class="d-m d-num" style="font-size:12px;text-align:right">${fmtTokens(a.in + a.out)}</span>
             <span class="d-m d-num" style="font-size:11px;color:var(--text-3);text-align:right">${a.tasks} ${esc(T("usage.tasks"))}</span></div>`).join("")
             || `<div class="d-tr"><span class="d-lbl">${esc(T("usage.noTokens"))}</span></div>`}</div></div>
@@ -3204,7 +3207,7 @@ views.system = () => {
               ${btn("Log", "open-event", `data-id="${f.id}"`, "gn-btn-ghost")}
             </span></div>`).join("")}</div></div>`
           : `<div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.wakeFailures")}</span></div>
-             <div class="d-list"><div class="d-tr"><span class="d-lbl">none — every agent is reachable</span></div></div></div>`}
+             <div class="d-list"><div class="d-tr"><span class="d-lbl">none - every agent is reachable</span></div></div></div>`}
         <div><div class="d-lblrule"><span class="d-lbl">commands</span></div>
           <div class="d-list">${(sys.commands || []).map((c) => `<div class="d-tr" style="grid-template-columns:120px minmax(0,1fr);min-height:34px">
             <span class="d-m" style="font-size:12px">${esc(c.cmd)}</span>
@@ -3213,7 +3216,7 @@ views.system = () => {
             <span class="d-m d-clip" style="margin-left:auto;font-size:11px;color:var(--text-3)">~/.pilo/logs/pilo.log</span></div>
           <div style="display:flex;gap:8px;margin-top:12px">${btn("Open the log", "open-log", "", "gn-btn-ghost")}</div>
           <div class="d-hint">Nothing serves the log to the browser yet, so the button says where it is instead of showing made-up lines.
-            Restarting the server is deliberately not a button here — it would cut off whatever is running.</div></div>
+            Restarting the server is deliberately not a button here - it would cut off whatever is running.</div></div>
       </div>
     </div>`
   );
@@ -3354,7 +3357,7 @@ async function askNow(text) {
   state.sending = true;
   try {
     const row = await call("POST", "/api/inbox", { userRequest: text.trim() });
-    toast(`sent — in-${row.id}`);
+    toast(`sent - in-${row.id}`);
     if (state.feed.agent) { state.feed.agent = ""; state.feed.rows = []; state.feed.done = false; }
     await load();
     refreshFeed();
@@ -3452,7 +3455,7 @@ DIALOGS.agent = (d) => {
   const role = a.role.toUpperCase();
   const projects = state.data.projects || [];
   const pms = state.data.tree?.pms || [];
-  const parent = a.role === "pilo" ? "—" : a.role === "pm" || a.role === "system" ? "pilo"
+  const parent = a.role === "pilo" ? "-" : a.role === "pm" || a.role === "system" ? "pilo"
     : (pms.find((p) => String(p.id) === String(a.parentAgentId)) || { name: "pilo" }).name;
   return {
     title: esc(a.name),
@@ -3465,19 +3468,19 @@ DIALOGS.agent = (d) => {
     fields: [
       { id: "d-name", label: "name", value: a.name },
       { id: "d-session", label: "session", kind: "read", value: a.herdrTarget || "not bound",
-        hint: "herdr picks this up from the pane's cwd — Bind again re-reads it" },
+        hint: "herdr picks this up from the pane's cwd - Bind again re-reads it" },
       { label: "role", kind: "seg", act: "dlg-role", value: d.role || a.role,
         options: [["pilo", "PILO", a.role !== "pilo"], ["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
-        hint: a.role === "system" ? "a system agent is never handed work — it only reads the machine" : "one PILO overall" },
-      { label: "runtime", kind: "read", value: a.runtime || "—", mark: runtimeMark(a.runtime), hint: "read from herdr" },
+        hint: a.role === "system" ? "a system agent is never handed work - it only reads the machine" : "one PILO overall" },
+      { label: "runtime", kind: "read", value: a.runtime || "-", mark: runtimeMark(a.runtime), hint: "read from herdr" },
       a.role === "pilo" || a.role === "system" ? null
         : { id: "d-project", label: "project", kind: "select", value: a.projectId || "",
-            options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
+            options: [["", "-"], ...projects.map((p) => [p.id, p.name])] },
       { label: "reports to", kind: "note", value: parent },
       { id: "d-cwd", label: "cwd", value: a.cwd, place: "~/work/notes" },
       (d.role || a.role) === "worker"
         ? { id: "d-reviewer", label: "reviewer", kind: "switch", value: a.reviewer,
-            hint: "its PM hands it a check before calling work done — the mark counts, not the name" }
+            hint: "its PM hands it a check before calling work done - the mark counts, not the name" }
         : null,
       { id: "d-specialty", label: "what it looks after", kind: "textarea", value: a.specialty },
       { id: "d-aliases", label: "aliases", value: a.aliases, place: "@d, dd" },
@@ -3506,13 +3509,13 @@ DIALOGS.model = (d) => {
   const global = codex ? m.global.codex : m.global.claude;
   return {
     title: esc(r.name),
-    sub: `now ${esc(r.model || "—")} · ${esc(r.effort || "—")} · read from ${esc(MODEL_FROM[r.source] || "—")}${r.pin ? ` · kept on ${esc([r.pin.model, r.pin.effort].filter(Boolean).join(" · "))}` : ""}`,
+    sub: `now ${esc(r.model || "-")} · ${esc(r.effort || "-")} · read from ${esc(MODEL_FROM[r.source] || "-")}${r.pin ? ` · kept on ${esc([r.pin.model, r.pin.effort].filter(Boolean).join(" · "))}` : ""}`,
     fields: [
       { id: "ma-model", label: "model", kind: "select", value: r.pin?.model || (modelsList.includes(r.model) ? r.model : global.model), options: modelsList.map((v) => [v, (!codex && m.choices.claude.labels?.[v]) || v]) },
       { id: "ma-effort", label: "effort", kind: "select", value: r.pin?.effort || r.effort || global.effort, options: efforts.map((v) => [v, v]) }
     ],
     prose: (codex ? "" : "Change now: typed into this session once it is idle and confirmed on its next reply; the global default is put back, so a later restart reads it again.\n")
-      + "Keep: when the session is idle it leaves and starts again in the same pane, resuming the same conversation on this model — the binding and its rules stay. A change for everyone leaves it alone until the pin is removed.",
+      + "Keep: when the session is idle it leaves and starts again in the same pane, resuming the same conversation on this model - the binding and its rules stay. A change for everyone leaves it alone until the pin is removed.",
     actions: [
       btn(T("desk.act.cancel"), "close-dialog", "", "gn-btn-ghost"),
       r.pin ? btn("Remove pin", "unpin-model", `data-id="${r.id}"`, "gn-btn-ghost") : "",
@@ -3531,7 +3534,7 @@ DIALOGS["add-agent"] = () => {
   const pms = state.data.tree?.pms || [];
   const pmHere = pms.find((p) => String(p.projectId) === String(projectId));
   // The desk has to be registered before anything else can hang off it, and this
-  // was the only screen the setup checklist pointed at — with no way to make one.
+  // was the only screen the setup checklist pointed at - with no way to make one.
   // The choice appears while there is no desk and goes once there is: a second
   // one is refused by the server anyway.
   const noDesk = !state.data.tree?.pilo;
@@ -3540,17 +3543,17 @@ DIALOGS["add-agent"] = () => {
   return {
     title: "Add agent",
     sub: noDesk
-      ? "no desk agent yet — this is the one you talk to"
-      : free.length ? "pick a pane herdr already has open" : "no free herdr session — open one and refresh",
+      ? "no desk agent yet - this is the one you talk to"
+      : free.length ? "pick a pane herdr already has open" : "no free herdr session - open one and refresh",
     fields: [
       { id: "f-project", label: "project", kind: "select", value: projectId,
-        options: [["", "—"], ...projects.map((p) => [p.id, p.name])] },
+        options: [["", "-"], ...projects.map((p) => [p.id, p.name])] },
       { label: "role", kind: "seg", act: "form-role", value: role,
         options: noDesk
           ? [["pilo", "PILO"], ["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]]
           : [["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
-        hint: noDesk ? "the desk reads every request and answers you — register it first, one only"
-          : pmHere ? `this project's PM is ${pmHere.name} — a new agent here is a worker` : "no PM on this project yet" },
+        hint: noDesk ? "the desk reads every request and answers you - register it first, one only"
+          : pmHere ? `this project's PM is ${pmHere.name} - a new agent here is a worker` : "no PM on this project yet" },
       { id: "f-target", label: "session", kind: "select", value: chosen?.target || "",
         options: free.length ? free.map((x) => [x.target, `${x.target} · ${x.runtime} · ${x.cwdShort}`]) : [["", "none free"]] },
       { id: "f-name", label: "name", value: f.name || chosen?.suggestedName || "" },
@@ -3580,7 +3583,7 @@ DIALOGS.rules = () => {
   const system = (state.data.agents || []).filter((a) => a.role === "system" && !seen.has(String(a.id)));
   const left = [
     ...agents.filter((a) => a.role !== "system" && !a.cwd).map((a) => [a.name, `${a.role} · no folder, so there is no file to write into`, DIM]),
-    ...agents.filter((a) => a.role === "system").concat(system).map((a) => [a.name, "system · Pilo's own errand runner — takes no instructions", DIM])
+    ...agents.filter((a) => a.role === "system").concat(system).map((a) => [a.name, "system · Pilo's own errand runner - takes no instructions", DIM])
   ];
   if (!r) return {
     title: "Rules",
@@ -3598,7 +3601,7 @@ DIALOGS.rules = () => {
   };
   return {
     wide: true,
-    title: `Rules — ${esc(r.agent.name)}`,
+    title: `Rules - ${esc(r.agent.name)}`,
     sub: `${esc(r.file)} · ${r.exists ? (r.hasBlock ? "replaces the pilo block" : "appends to the file") : "creates the file"}`,
     code: r.preview,
     actions: [
@@ -3617,7 +3620,7 @@ DIALOGS.schedule = (d) => {
     fields: [{ id: "s-cadence", label: "every", value: s.cadence, hint: "every:N minutes" }],
     prose: esc(SYSTEM_JOBS[s.name]?.[1] || ""),
     traceLabel: "last run",
-    trace: s.lastRunAt || s.lastResult ? [[s.lastRunAt ? new Date(s.lastRunAt).toLocaleString(loc()) : "—", s.lastResult || "—", jobResultColor(s.lastResult)]] : [],
+    trace: s.lastRunAt || s.lastResult ? [[s.lastRunAt ? new Date(s.lastRunAt).toLocaleString(loc()) : "-", s.lastResult || "-", jobResultColor(s.lastResult)]] : [],
     actions: [
       btn(s.enabled ? "Turn off" : "Turn on", "toggle-schedule", `data-id="${s.id}" data-on="${s.enabled ? "0" : "1"}"`, "gn-btn-ghost"),
       right(T("desk.act.save"), "save-job", `data-id="${s.id}"`, "gn-btn-brand")
@@ -3999,7 +4002,7 @@ const actions = {
     const who = runtime === "claude" ? "every Claude agent (each once it is idle)" : "every Codex agent from its next start";
     if (!confirm(`${runtime}: ${model} · ${effort} for ${who}? The global ${runtime === "claude" ? "~/.claude/settings.json" : "~/.codex/config.toml"} changes too (a copy is kept).`)) return;
     const res = await call("POST", "/api/models", { runtime, scope: "all", model, effort });
-    toast(`${runtime} → ${model} · ${effort} — ${res.applied}${res.skipped?.length ? ` · kept: ${res.skipped.join(", ")}` : ""}`);
+    toast(`${runtime} → ${model} · ${effort} - ${res.applied}${res.skipped?.length ? ` · kept: ${res.skipped.join(", ")}` : ""}`);
     await loadDetail();
     render();
   },
@@ -4030,7 +4033,7 @@ const actions = {
   async "unpin-model"(el) {
     await call("POST", `/api/models/pin/${el.dataset.id}`, { off: true });
     state.dlg = null;
-    toast("pin removed — its next start reads the global file");
+    toast("pin removed - its next start reads the global file");
     await loadDetail();
     render();
   },
@@ -4110,7 +4113,7 @@ const actions = {
     state.draft = s?.request || "";
     state.tab = "work";
     location.hash = "work";
-    toast("the prompt is in the box — press enter to send it");
+    toast("the prompt is in the box - press enter to send it");
     render();
   },
   async "open-event"(el) {
@@ -4136,7 +4139,7 @@ const actions = {
   async "ask-project"(el) {
     const p = (state.data.projects || []).find((x) => String(x.id) === String(el.dataset.id));
     state.dlg = null;
-    state.draft = state.draft || `${p?.name || ""} — `;
+    state.draft = state.draft || `${p?.name || ""} - `;
     state.tab = "work";
     location.hash = "work";
     render();
@@ -4307,21 +4310,21 @@ const actions = {
     state.form = emptyForm();
     state.dlg = null;
     if (res.target) toast(`${form.name} · ${role} · ${res.target}`);
-    else toast(`${form.name} registered — no session matched ${form.cwd}`, true);
+    else toast(`${form.name} registered - no session matched ${form.cwd}`, true);
     await load();
   },
   async "delete-agent"(el) {
     if (!confirm("이 agent를 삭제할까요? 과거 기록은 그대로 남습니다.")) return;
     await call("DELETE", `/api/agents/${el.dataset.id}`);
     state.dlg = null;
-    toast("agent removed — its record stays");
+    toast("agent removed - its record stays");
     await load();
   },
   async "rebind"(el) {
     const res = await call("POST", `/api/agents/${el.dataset.id}/rebind`, {});
     state.candidates = res.candidates || [];
     state.editing = state.editing || el.dataset.id;
-    toast(res.target ? `세션 재바인딩: ${res.target}` : `후보 ${state.candidates.length}개 — 하나를 고르세요`, !res.target);
+    toast(res.target ? `세션 재바인딩: ${res.target}` : `후보 ${state.candidates.length}개 - 하나를 고르세요`, !res.target);
     await load();
   },
   async "wake"(el) {
@@ -4335,7 +4338,7 @@ const actions = {
   },
   async "dismiss-wake"(el) {
     await call("POST", `/api/agents/${el.dataset.id}/dismiss-wake`, {});
-    toast("확인 처리됨 — 기록은 Events에 남습니다");
+    toast("확인 처리됨 - 기록은 Events에 남습니다");
     await load();
   },
   async "open-inbox"(el) {
@@ -4376,14 +4379,14 @@ const actions = {
     const on = el.dataset.on === "1";
     await call("POST", `/api/schedules/${el.dataset.id}`, { enabled: on });
     state.dlg = null;
-    toast(on ? "예약을 켰습니다" : "예약을 껐습니다 — 켜기 전까지 돌지 않습니다");
+    toast(on ? "예약을 켰습니다" : "예약을 껐습니다 - 켜기 전까지 돌지 않습니다");
     await load();
   },
   async "delete-schedule"(el) {
     if (!confirm("이 예약을 삭제할까요? 지난 실행 기록은 그대로 남습니다.")) return;
     await call("DELETE", `/api/schedules/${el.dataset.id}`);
     state.dlg = null;
-    toast("schedule removed — past runs stay");
+    toast("schedule removed - past runs stay");
     await load();
   },
   async "delete-project"(el) {
@@ -4568,11 +4571,11 @@ try {
   if (narrow()) render();
   // the desktop opened from the kept copy with no server says what the old
   // offline page said, and the clock below brings the desk in once it is up
-  else $("view").innerHTML = `<div style="margin:auto;text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--text-3)">서버가 꺼져 있습니다 — 터미널에서 <code>pilo start</code></div>`;
+  else $("view").innerHTML = `<div style="margin:auto;text-align:center;font-family:var(--font-mono);font-size:13px;color:var(--text-3)">서버가 꺼져 있습니다 - 터미널에서 <code>pilo start</code></div>`;
 }
 // Refreshing. The server says when something changed (/api/stream) and the page
 // loads then. The clock is only a safety net: thirty seconds while the stream is
-// up, the old five while it is not — an older server without the route, or a
+// up, the old five while it is not - an older server without the route, or a
 // stream something in between refuses, still leaves a page that keeps up.
 // Notices that arrive together, or while a load is running, become one more
 // load, not one each.

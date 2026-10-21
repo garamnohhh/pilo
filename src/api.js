@@ -1838,6 +1838,10 @@ export async function modelOverview() {
      FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
      WHERE a.archived_at IS NULL ORDER BY a.role = 'pilo' DESC, a.name`
   );
+  // each pane read is a herdr call of about 1.6 s; one after another, five Codex
+  // panes ran past the dashboard worker's 8 s limit and the screen said "older server"
+  const panes = new Map(await Promise.all(agents.filter((a) => a.runtime === "codex")
+    .map(async (a) => [a.id, await herdr.readPane(a.target)])));
   const rows = [];
   for (const a of agents) {
     const session = live.find((x) => x.target && x.target === a.target);
@@ -1848,7 +1852,7 @@ export async function modelOverview() {
       if (seen) { model = seen.model; effort = seen.effort; source = "session"; }
       else { model = claude.model; effort = claude.effort; }
     } else if (a.runtime === "codex") {
-      const shown = models.codexModelOnPane(await herdr.readPane(a.target));
+      const shown = models.codexModelOnPane(panes.get(a.id));
       model = shown || codex.model;
       // the pane never shows effort; a pinned session that came back on its pinned
       // model was started with its pinned effort too

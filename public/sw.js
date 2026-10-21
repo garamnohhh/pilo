@@ -2,7 +2,7 @@
 // is asleep or off there is nothing to answer, so the page itself has to be on
 // the phone already: every page and file that loads is kept, and served from
 // here when the network does not answer in time. The API is never served from
-// here — a request either reaches the server or fails at once, so the page can
+// here - a request either reaches the server or fails at once, so the page can
 // say it is offline instead of showing old numbers as if they were live.
 const SHELL = "pilo-shell-v3";
 const WAIT_MS = 4000; // a Mac that sleeps does not refuse, it just never answers
@@ -46,7 +46,7 @@ const late = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // The network first, so a Mac that answers always gives the newest page; what
 // came back is kept. No answer within WAIT_MS, or a refusal, and the kept copy
-// is used — if there is one; with none, the network is all there is.
+// is used - if there is one; with none, the network is all there is.
 async function kept(request, key) {
   const cache = await caches.open(SHELL);
   // With the Pilo server stopped the Mac still answers: tailscale serve sends

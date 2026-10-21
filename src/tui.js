@@ -27,7 +27,7 @@ const launchCwd = process.env.PILO_LAUNCH_CWD || process.cwd();
 
 // Colour comes in three grades. Truecolor gets the palette as designed; a
 // 256-colour terminal gets the nearest cube entry; NO_COLOR (or a terminal that
-// says nothing at all) gets shape only — the layout never depends on colour.
+// says nothing at all) gets shape only - the layout never depends on colour.
 const NO_COLOR = process.env.NO_COLOR !== undefined && process.env.NO_COLOR !== "";
 const TRUECOLOR = /truecolor|24bit/i.test(process.env.COLORTERM || "");
 const TERM = process.env.TERM || "";
@@ -78,7 +78,7 @@ const c = {
 // The 6x6x6 cube collapses these dark tints onto the same entry, so the
 // 256-colour badges pick their own indices rather than being derived.
 // The badge used to be a fill with pale letters on it. The fill is gone and the
-// colour it carried is now the letters' own — the same three hues, lifted until
+// colour it carried is now the letters' own - the same three hues, lifted until
 // each clears 5.5:1 on a dark terminal, because the tones that read on a filled
 // chip disappear on the background. Widths do not move: the fill hugged the
 // letters and never added padding of its own.
@@ -95,7 +95,7 @@ const BADGE = {
 };
 
 // The badge used to be small caps. No terminal font we ship against has those
-// letters — JetBrains Mono Nerd Font carries none of them — so every one of them
+// letters - JetBrains Mono Nerd Font carries none of them - so every one of them
 // was drawn by whatever fallback the terminal happened to pick, which is why the
 // same badge looked right in one terminal and wrong in the next. Plain capitals
 // are in every font; the colour already says which role it is.
@@ -105,7 +105,7 @@ const ASCII = process.argv.includes("--ascii");
 // one is guaranteed: a brand glyph where the icon font genuinely has one, a
 // three-letter small-caps label otherwise, and plain capitals under --ascii or
 // NO_COLOR. Icons are opt-in (PILO_ICONS=on) because nothing in a terminal can
-// tell us whether the font in use actually carries them — a missing glyph draws
+// tell us whether the font in use actually carries them - a missing glyph draws
 // a blank box, and a label is never wrong.
 //
 // Codepoints: codicon claude/openai/copilot came with Nerd Fonts 3.5.0
@@ -113,7 +113,7 @@ const ASCII = process.argv.includes("--ascii");
 // Brand colours, taken from the makers' own pages rather than from memory:
 // #d97757 is Anthropic's on anthropic.com, #4285f4 a stop in Gemini's own
 // gradient on gemini.google.com, #f9f8f7 grok.com's light theme-color. OpenAI's
-// and GitHub's marks are monochrome — the codicons are drawn in currentColor —
+// and GitHub's marks are monochrome - the codicons are drawn in currentColor -
 // so they get the light end of their own black-and-white palette. Every one of
 // them clears 5:1 against a dark terminal, so none needed brightening.
 const RUNTIME = {
@@ -153,7 +153,7 @@ const RUNTIME = {
 const ICONS_BY_ENV = process.env.PILO_ICONS !== "off";
 const iconsWanted = () => {
   // What :icons said this run, then what the last run saved, then the
-  // environment — which now defaults to on, so PILO_ICONS=off is the way to
+  // environment - which now defaults to on, so PILO_ICONS=off is the way to
   // start without them. The poll that refreshes the settings must not undo a
   // toggle the user can see on screen, so the session's own answer comes first.
   const saved = state.data?.settings?.icons;
@@ -198,7 +198,7 @@ const BAR = "▌";
 const CARD_INDENT = "    ";
 // The tree's name and badge are two different things, so a short stroke stands
 // between them. Measured in the terminal's own font at 32px, the box-drawing
-// rule inks 48.6px — taller than the cell, which is why rows looked joined —
+// rule inks 48.6px - taller than the cell, which is why rows looked joined -
 // while U+01C0 inks 23.3px and sits on the baseline, touching neither edge. The
 // half-rules (╵ ╷) are shorter still but attach to the cell edge, which is the
 // same problem again. Its advance is one cell and it is outside the East Asian
@@ -217,7 +217,7 @@ const pulseColour = (which) =>
   which === "working" && !state.pulse ? PULSE_DIM : STATE_COLOUR[which] || STATE_COLOUR.done;
 
 // the pulse timer's handle, kept here because the first frame can be drawn
-// before the rest of this file has been evaluated — see pulseWhile
+// before the rest of this file has been evaluated - see pulseWhile
 let pulseTimer = null;
 
 const state = {
@@ -237,7 +237,7 @@ const state = {
   unfolded: new Set(),
   // a task waiting on the user that the next line answers, picked by clicking its card
   answering: null,
-  // the request the next line follows up — the dashboard's chip, in the TUI
+  // the request the next line follows up - the dashboard's chip, in the TUI
   follow: null,
   hits: new Map(),
   rowCount: 0,
@@ -272,7 +272,7 @@ const tokens = (n) => (n >= 1000 ? (n / 1000).toFixed(1) + "k" : String(n || 0))
 
 // The five-hour window, per runtime, beside the token count. The weekly figure
 // is left out on purpose: it moves slowly, and the line is already full.
-// A reading nobody has refreshed in half an hour is drawn faint — the number
+// A reading nobody has refreshed in half an hour is drawn faint - the number
 // itself is still true, it is just older than the work.
 // Past this the reading is drawn faint and carries its own age, because a
 // percentage with no date on it is the one thing worse than no percentage:
@@ -321,8 +321,8 @@ async function withReplies(rows) {
   const missing = rows.filter((row) => row.hasReply && replyBodies.get(String(row.id))?.at !== row.repliedAt).map((row) => row.id);
   for (let i = 0; i < missing.length; i += 100) {
     const got = await api(`/api/replies?ids=${missing.slice(i, i + 100).join(",")}`, []);
-    // A request can be answered more than once — the desk comes back when work
-    // lands after its first answer — and they arrive oldest first.
+    // A request can be answered more than once - the desk comes back when work
+    // lands after its first answer - and they arrive oldest first.
     const fetched = new Map();
     for (const reply of got) {
       const list = fetched.get(String(reply.id)) || [];
@@ -369,15 +369,15 @@ function elapsed(from, to) {
 
 // One card shape for both states, so a request that is still running looks like
 // the same thing it will become. The card is a painted surface: an accent bar
-// down the left edge, a tint carried to the card's full width — padding included,
-// or the background would stop where the text does — and a blank tinted row above
+// down the left edge, a tint carried to the card's full width - padding included,
+// or the background would stop where the text does - and a blank tinted row above
 // and below for breathing room.
 function cardBlock({ box, title, titleColor, right, body, footer, surface, state = "done" }) {
   const paint = { ...(CARD[surface] || CARD.reply), accent: STATE_COLOUR[state] || STATE_COLOUR.done };
   // The accent bar owns the first column and the tint carries to the card's full
   // width; two spaces of padding on each side keep the text off both edges.
   const text = Math.max(8, box - 5);
-  // A reset inside the content — a badge ends with one — would drop the tint for
+  // A reset inside the content - a badge ends with one - would drop the tint for
   // the rest of the row, so every reset re-asserts it.
   const keep = (t) => (paint.tint ? String(t).split(c.reset).join(c.reset + paint.tint) : String(t));
   const line = (content, colour = c.fg) =>
@@ -500,7 +500,7 @@ function waitingBlock(item, width, going = null) {
       state: "attention"
     });
   }
-  // Work in flight: one line — what the agent last said about it, and who is
+  // Work in flight: one line - what the agent last said about it, and who is
   // holding it, pushed to the right edge. The bar itself does the pulsing now,
   // so the line starts at the same column as any other card's text.
   const paint = { ...CARD.waiting, accent: pulseColour("working") };
@@ -616,7 +616,7 @@ function railRows(tree, width, actions = [], spins = []) {
     return rows;
   }
 
-  // One line per agent: status dot, name, and the badge right behind the name —
+  // One line per agent: status dot, name, and the badge right behind the name -
   // its position follows the name's length rather than lining up in a column.
   // The status word sits at the right edge, workers included: the dot alone left
   // idle, unbound and "no answer" to be told apart by a glyph most people never learn.
@@ -640,7 +640,7 @@ function railRows(tree, width, actions = [], spins = []) {
     // It costs the two columns the plain gap did, plus its own.
     const sepWidth = cols(SEPARATOR) + 2;
     // dot + space, then the separator before the badge, then whatever the status
-    // word needs on the right — the name gives up whatever is left.
+    // word needs on the right - the name gives up whatever is left.
     const room = width - indent - (indent ? 2 : 0) - cols(icon.icon) - 1 - sepWidth - markWidth - tagWidth - stateWidth;
     const label = cut(name, Math.max(4, room));
     const used = indent + (indent ? 2 : 0) + cols(icon.icon) + 1 + markWidth + cols(label) + sepWidth + tagWidth;
@@ -763,11 +763,11 @@ async function answerApproval(word, rest) {
     if (Object.values(answers).some((v) => !v)) return note("usage: :pick <option per question…> [request]");
     body = { answers };
   } else {
-    if (r.kind === "question" && word !== "pane") return note("usage: :pick <option> — this one is a question");
+    if (r.kind === "question" && word !== "pane") return note("usage: :pick <option> - this one is a question");
     if (word === "allow" && !(state.apprConfirm?.id === r.id && Date.now() - state.apprConfirm.at < 10000)) {
       state.apprConfirm = { id: r.id, at: Date.now() };
       // a risky one says what it does before the second :allow
-      return note((r.risk ? `${t("appr.risky", { why: r.risk })} ` : "") + t("appr.confirm", { agent: r.agent, what: String(r.input?.command ?? r.tool) }).replace("\n", " — ") + " :allow", { sticky: true });
+      return note((r.risk ? `${t("appr.risky", { why: r.risk })} ` : "") + t("appr.confirm", { agent: r.agent, what: String(r.input?.command ?? r.tool) }).replace("\n", " - ") + " :allow", { sticky: true });
     }
     state.apprConfirm = null;
     body = { decision: word };
@@ -906,8 +906,8 @@ let lastTerminalPaste = 0;
 // It is put back together first: macOS hands over a file name one letter per
 // jamo, and while the draft draws either form the same, a backspace on the
 // decomposed one takes a vowel off and leaves half a syllable behind. The
-// composed form is the same name to the file system — the file on disk is
-// written that way — and one character to everything downstream.
+// composed form is the same name to the file system - the file on disk is
+// written that way - and one character to everything downstream.
 function insertPasted(raw) {
   const text = raw.normalize("NFC");
   const lines = text.split("\n").length;
@@ -919,7 +919,7 @@ function insertPasted(raw) {
   render();
 }
 
-// fromKey: a paste key the terminal did not paste for — Ctrl+V, or a Cmd+V it
+// fromKey: a paste key the terminal did not paste for - Ctrl+V, or a Cmd+V it
 // did not recognise (Ghostty under the Korean input source). Then text on the
 // clipboard is ours to put in. An empty terminal paste is the other trigger,
 // and there the terminal has already handled any text.
@@ -975,7 +975,7 @@ async function copyOut(label, text) {
   const file = join(homedir(), ".pilo", "last-copy.txt");
   try {
     writeFileSync(file, text);
-    return note(`clipboard unavailable — saved to ${file}`, { sticky: true });
+    return note(`clipboard unavailable - saved to ${file}`, { sticky: true });
   } catch (err) {
     return note(`copy failed: ${err.message}`, { sticky: true });
   }
@@ -1006,7 +1006,7 @@ function scrollBy(rows) {
   render();
 }
 
-// The dot comes off the same rung as the word next to it — the tree used to draw
+// The dot comes off the same rung as the word next to it - the tree used to draw
 // a green idle dot beside "no answer", and the dashboard a red "!" for the same
 // agent. The shapes are the dashboard's, so the two screens read alike.
 const STATE_ICON = {
@@ -1095,7 +1095,7 @@ function render() {
   let waiting = 0;
 
   if (setup.needsSetup) {
-    // The screen is drawn inside the chat pane, so it is measured by that pane —
+    // The screen is drawn inside the chat pane, so it is measured by that pane -
     // it used to be handed the whole width and have its longest lines cut off.
     rows = setupScreen(setup, mainWidth).map((r) => "  " + r);
   } else {
@@ -1269,7 +1269,7 @@ function render() {
   for (let i = 0; i < visible; i++) {
     // The tree goes first and the answer text last. Anything the width model
     // misjudges then only moves the tail of its own row, where nothing lines up
-    // against anything — the rail and its divider are past caring by then.
+    // against anything - the rail and its divider are past caring by then.
     if (!railWidth) emit(pre + cut(shown[i] || "", mainWidth));
     else {
       emit(pre + `${pad(cut(rail[i] || "", railWidth), railWidth)} ${c.line}│${c.reset} ${cut(shown[i] || "", mainWidth)}`);
@@ -1282,7 +1282,7 @@ function render() {
   // Everything below the feed keeps the divider so the rail reaches the bottom.
   let railTail = visible;
   // Rows under the feed carry rail content too, so their clicks must be recorded
-  // as well — otherwise the register box draws but does nothing.
+  // as well - otherwise the register box draws but does nothing.
   const withRail = (text) => {
     if (!railWidth) return text;
     const action = railActions[railTail] || null;
@@ -1448,7 +1448,7 @@ async function command(parsed) {
     if (!rows.length) return note(t("note.noSchedules"));
     return note(
       rows
-        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${describeCadence(s.cadence, s.weekdaysOnly, t)} → ${s.agent || "watcher"} · ${s.kind === "system" ? (s.lastResult || "—") : new Date(s.nextRunAt).toLocaleString()}`)
+        .map((s) => `${s.id} ${s.enabled ? "" : "(off) "}${describeCadence(s.cadence, s.weekdaysOnly, t)} → ${s.agent || "watcher"} · ${s.kind === "system" ? (s.lastResult || "-") : new Date(s.nextRunAt).toLocaleString()}`)
         .join("  │  ")
     );
   }
@@ -1504,7 +1504,7 @@ async function command(parsed) {
     if (target === "default") {
       state.folded.clear();
       state.unfolded.clear();
-      return note(`back to the default — newest ${OPEN_BY_DEFAULT} open`);
+      return note(`back to the default - newest ${OPEN_BY_DEFAULT} open`);
     }
     if (target && target !== "all") {
       if (!ids.includes(target)) return note(`in-${target} not found`, { sticky: true });
@@ -1605,7 +1605,7 @@ function probeAmbiguous() {
       process.stdin.off("data", onData);
       // Three answers, in the order the glyphs were printed: the arrow stands for
       // ambiguous text, the rule for the box drawing the layout is made of, and
-      // the icon for the Private Use Area — one cell in a Nerd Font "Mono"
+      // the icon for the Private Use Area - one cell in a Nerd Font "Mono"
       // build, two in a normal one, and the terminal is the only one who knows.
       if (seen.length >= 2) setAmbiguousWidth(seen[0] - 1, seen[1] - seen[0], seen[2] ? seen[2] - seen[1] : 1);
       process.stdout.write("\x1b[H\x1b[2K");
@@ -1628,8 +1628,8 @@ process.stdin.setRawMode(true);
 // Ask for the kitty keyboard protocol so the terminal can tell Shift+Enter apart
 // from Enter. Terminals without it ignore the request and Ctrl+J still works.
 // Flags 1 + 4: disambiguate, and report the base-layout key beside the typed
-// one, so Cmd+V under the Korean input source arrives as ESC[12621::118;9u —
-// a V — rather than as a character Pilo has no way to recognise.
+// one, so Cmd+V under the Korean input source arrives as ESC[12621::118;9u -
+// a V - rather than as a character Pilo has no way to recognise.
 // Push the current title so it can be restored, then name the tab.
 // iTerm draws "title (job)", so a title of our own would read "Pilo (Pilo)".
 // Clear the title and let the process name alone name the tab.
@@ -1650,7 +1650,7 @@ let carryTimer = null;
 // PILO_KEYLOG=<file> writes every raw read to that file, one JSON string a
 // line, so the bytes a terminal really sent can be looked at instead of guessed.
 const keylog = process.env.PILO_KEYLOG || "";
-// Bytes in, characters out — a character split across two reads is put back
+// Bytes in, characters out - a character split across two reads is put back
 // together here rather than decoded into "�" twice over.
 const decode = chunkDecoder();
 process.stdin.on("data", (raw) => {
@@ -1689,8 +1689,8 @@ process.stdin.on("data", (raw) => {
   }
 });
 
-// Escape cancels whatever the next line was pointed at — a follow-up or an answer
-// to a waiting task — and otherwise does nothing.
+// Escape cancels whatever the next line was pointed at - a follow-up or an answer
+// to a waiting task - and otherwise does nothing.
 function onEscape() {
   if (!state.answering && !state.follow) return;
   state.answering = null;
@@ -1738,7 +1738,7 @@ keys.on("keypress", async (ch, key) => {
   }
   if (next.action === "paste-end") {
     state.pasting = false;
-    // composed here too, before the path is looked for on disk — see insertPasted
+    // composed here too, before the path is looked for on disk - see insertPasted
     const text = state.pasteBuffer.normalize("NFC");
     state.pasteBuffer = "";
     if (text) lastTerminalPaste = Date.now();
@@ -1780,7 +1780,7 @@ process.stdout.on("resize", render);
 
 // Data when the server says something changed, frames on demand. The stream is
 // the dashboard's: /api/stream sends "changed" and a ping every 20 s. The clock
-// stays as a net — every 30 s while the stream is live, every 2.5 s when there is
+// stays as a net - every 30 s while the stream is live, every 2.5 s when there is
 // no stream (a server from before it, or one that is down).
 const POLL_MS = 2500;
 const SAFETY_MS = 30000;
