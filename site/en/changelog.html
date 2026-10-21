@@ -68,9 +68,71 @@ a:hover { color: var(--accent); }
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+          <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.3</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.21</span>
+          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
+<span class="l-en">Schedules that run in a window, a schedule dialog that reads back as a sentence, and approval cards for subagents.</span>
+<span class="l-ko">시간대 창으로 도는 예약, 문장으로 읽히는 예약 창, 하위 에이전트 승인 카드.</span>
+</p>
+        <div  style="border-top: 1px solid var(--line);">
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">schedules</span>
+<span class="l-ko">스케줄</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">A schedule can run in a window: every N minutes between two times, on chosen days. The schedule dialog asks two things, which days and then when, says the result back as a sentence with the next run, and greys out combinations that make no sense.</span>
+<span class="l-ko">예약을 시간대 창으로 돌릴 수 있어요: 고른 요일, 두 시각 사이 N분마다. 예약 창은 요일과 시각 두 가지만 묻고, 결과를 다음 실행 시각과 함께 한 문장으로 보여줘요. 말이 안 되는 조합은 흐리게 막아요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">runs</span>
+<span class="l-ko">실행 줄</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">A scheduled run shows its job's name with a grey mark and a schedule chip, folded or not, and a run that found nothing to change stays quiet.</span>
+<span class="l-ko">예약 실행은 작업 이름과 회색 표시, 예약 칩으로 보여요(접혀 있어도). 바뀐 게 없는 실행은 조용히 넘어가요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">approvals</span>
+<span class="l-ko">승인</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Subagents asking at the same time each keep their own request, and the main agent finishing its turn no longer drops them. A numbered prompt no hook reported, such as Claude's own dangerous-command check, still becomes a card with its choices, and the agent shows as waiting on you instead of stalled.</span>
+<span class="l-ko">하위 에이전트가 동시에 물어도 요청이 각자 남고, 메인 에이전트가 턴을 끝내도 지워지지 않아요. 훅이 알리지 않은 번호 선택 창(Claude 자체 위험 명령 확인 등)도 선택지 카드로 떠요. 이때 상태는 멈춤이 아니라 승인 대기.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">dashboard</span>
+<span class="l-ko">대시보드</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The dashboard never reloads by itself: it offers a reload and keeps what you were typing. Models load in under two seconds with several Codex workers, and Models and Usage say what failed instead of always blaming an old server. One chip size everywhere.</span>
+<span class="l-ko">대시보드가 스스로 새로고침하지 않아요. 새로고침을 제안하고 쓰던 글은 그대로 둬요. Codex 워커가 여럿이어도 모델 칸이 2초 안에 떠요. 모델·사용량 칸은 실패하면 항상 옛 서버 탓 대신 무엇이 실패했는지 보여줘요. 칩 크기 하나로 통일.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">fixes</span>
+<span class="l-ko">수정</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The stalled-task nudge names its agent instead of a literal {agent}.</span>
+<span class="l-ko">멈춘 작업 알림에 {agent} 글자 대신 에이전트 이름이 들어가요.</span>
+</span>
+        </div>
+        </div>
+      </div>
+      <div >
+        <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.2</span>
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.20</span>
-          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
 <span class="l-en">Setup in the browser, an install that needs no Node, and approvals only for what matters.</span>
