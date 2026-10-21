@@ -1737,6 +1737,7 @@ function agentState(a) {
   // "running" the queued task puts on the row - see src/agentstate.js
   if (a.gaveUp > 0) return "gaveUp";
   if (a.waitingApproval) return "blocked";
+  if (a.wakeWaiting) return "wakeWaiting";
   if (a.status === "running" && stalled(a)) return "stalled";
   if (a.status === "blocked") return "blocked";
   if (a.status === "failed") return "failed";
@@ -1746,7 +1747,7 @@ function agentState(a) {
   return "idle";
 }
 
-const TONE = { limited: () => WARN, gaveUp: () => ERR, stalled: () => WARN, blocked: () => INFO, holding: () => INFO, failed: () => ERR, unbound: () => ERR, running: () => WARN, idle: () => OK };
+const TONE = { limited: () => WARN, wakeWaiting: () => WARN, gaveUp: () => ERR, stalled: () => WARN, blocked: () => INFO, holding: () => INFO, failed: () => ERR, unbound: () => ERR, running: () => WARN, idle: () => OK };
 const agentTone = (a) => TONE[agentState(a)]();
 const agentNote = (a) => T(`state.${agentState(a)}`);
 
@@ -1756,7 +1757,7 @@ const agentNote = (a) => T(`state.${agentState(a)}`);
 // shapes of their own - the TUI's where it has one - so no two read the same:
 // stalled ◌ against limited ‖ (both amber), failed ✕ · no answer ! · unbound ○
 // (all red), blocked ◆. Idle keeps the plain dot.
-const MARK = { holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
+const MARK = { wakeWaiting: "◷", holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
   const key = agentState(a);
   // "running" is held work or a pane herdr says is working - the TUI spins for

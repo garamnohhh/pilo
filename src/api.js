@@ -55,6 +55,11 @@ const AGENT_COLUMNS = `a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId
       AND e.created_at > now() - interval '1 day'
       AND COALESCE(t.status, i.status) IN ('queued', 'running', 'blocked', 'dispatched')) AS "gaveUp",
   a.limited_until AS "limitedUntil",
+  -- work handed over that no wake has reached yet: its last wake failed (a
+  -- dialog, a busy pane) and the watcher is trying again
+  EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'queued'
+    AND (SELECT e.type FROM events e WHERE e.task_id = t.id AND e.type IN ('wake_sent', 'wake_failed')
+          ORDER BY e.created_at DESC LIMIT 1) = 'wake_failed') AS "wakeWaiting",
   a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note, a.reviewer,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
@@ -547,6 +552,10 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
     },
     runLog: [{ t: "00:00", text: `wake ${agent.name}` }, { t: "00:00", text: code }]
   });
+  // a dialog retries every minute until it closes: say so once, not every minute
+  if (code === "PANE_IN_DIALOG" && await one(
+    `SELECT 1 AS hit FROM events WHERE type = 'wake_failed' AND agent_id = $1 AND payload->>'code' = 'PANE_IN_DIALOG'
+       AND created_at > now() - interval '30 minutes' AND id <> (SELECT max(id) FROM events WHERE agent_id = $1)`, [agent.id])) return;
   const context = inboxId
     ? await one("SELECT user_request AS request FROM inbox WHERE id = $1", [inboxId])
     : null;

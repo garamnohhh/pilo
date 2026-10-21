@@ -30,6 +30,8 @@ export function agentState(agent, now = Date.now()) {
   // its pane is asking for a permission or an answer, as its hooks just said:
   // that is the user's to give, the same as a decision
   if (agent.waitingApproval) return "blocked";
+  // handed work its wake has not reached: the watcher is trying again
+  if (agent.wakeWaiting) return "wakeWaiting";
   if (agent.status === "running" && stalled(agent, now)) return "stalled";
   if (agent.status === "blocked") return "blocked";
   if (agent.status === "failed") return "failed";

@@ -16,6 +16,11 @@ const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // 90 seconds forever. Delays grow, and after GIVE_UP attempts we stop and say so.
 const BACKOFF_SECONDS = [90, 300, 900, 3600];
 const GIVE_UP = 6;
+// A pane with a dialog open is busy, not broken: the wake is tried again once the
+// pane goes idle, or a minute on, and never counts toward the backoff or the
+// give-up. 10/21: hoban's three dialog failures pushed #4424's next wake to 15
+// minutes out, and it sat idle with two tasks queued until the desk woke it.
+const DIALOG_RETRY_SECONDS = 60;
 
 // The watcher's own jobs are rows on the Schedules screen: off stops the job,
 // every:N sets its minutes. No row (a database before migration 013) runs on the
@@ -41,14 +46,27 @@ async function shouldWake(column, id, agentId = null) {
   // nowhere. #2272 had five, the last 42 seconds before pirep-dev came back on a
   // fresh session, and the next was an hour away.
   const row = await one(
-    `SELECT count(*)::int AS attempts, max(created_at) AS last
-     FROM events
-     WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1
-       AND created_at > GREATEST(
-         COALESCE((SELECT max(created_at) FROM events WHERE type = 'task_answered' AND ${column} = $1), to_timestamp(0)),
-         COALESCE((SELECT max(created_at) FROM events WHERE type = 'session_started' AND agent_id = $2), to_timestamp(0)))`,
+    `WITH tries AS (
+       SELECT created_at, type = 'wake_failed' AND payload->>'code' = 'PANE_IN_DIALOG' AS dialog
+       FROM events
+       WHERE type IN ('wake_sent', 'wake_failed', 'wake_gave_up') AND ${column} = $1
+         AND created_at > GREATEST(
+           COALESCE((SELECT max(created_at) FROM events WHERE type = 'task_answered' AND ${column} = $1), to_timestamp(0)),
+           COALESCE((SELECT max(created_at) FROM events WHERE type = 'session_started' AND agent_id = $2), to_timestamp(0))))
+     SELECT (SELECT count(*)::int FROM tries WHERE NOT dialog) AS attempts,
+       (SELECT max(created_at) FROM tries WHERE NOT dialog) AS last,
+       (SELECT dialog FROM tries ORDER BY created_at DESC LIMIT 1) AS dialog,
+       (SELECT max(created_at) FROM tries) AS tried,
+       (SELECT status = 'idle' AND since > (SELECT max(created_at) FROM tries) FROM agent_sessions WHERE agent_id = $2) AS idle_since,
+       (SELECT status = 'blocked' FROM agent_sessions WHERE agent_id = $2) AS blocked`,
     [id, agentId]
   );
+  if (row?.dialog) {
+    // still asking: the card is up, and another try would only fail again
+    if (row.blocked) return { wake: false, attempts: row.attempts };
+    if (row.idle_since) return { wake: true, attempts: row.attempts };
+    return { wake: Date.now() - new Date(row.tried).getTime() >= DIALOG_RETRY_SECONDS * 1000, attempts: row.attempts };
+  }
   const attempts = row?.attempts || 0;
   if (!attempts) return { wake: true, attempts };
   if (attempts >= GIVE_UP) return { wake: false, attempts, giveUp: true };

@@ -1013,6 +1013,7 @@ const STATE_ICON = {
   running: (spin) => ({ icon: SPINNER[spin % SPINNER.length], color: c.amber, spin: true }),
   // work that stopped moving keeps its place in the tree but stops pretending to move
   stalled: () => ({ icon: "◌", color: c.amberDim }),
+  wakeWaiting: () => ({ icon: "◷", color: c.amberDim }),
   limited: () => ({ icon: "‖", color: c.amber }),
   gaveUp: () => ({ icon: "!", color: c.red }),
   // waiting on a person, not on work: a spinner here would be a lie
