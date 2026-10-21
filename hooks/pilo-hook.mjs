@@ -354,7 +354,9 @@ async function main() {
   const pane = process.env.HERDR_PANE_ID || "";
   const tool = input.tool_name || "";
   const toolInput = input.tool_input || {};
-  const base = { runtime, pane, session: input.session_id || "", cwd: input.cwd || "", tool, input: toolInput };
+  // agent_id is set when a subagent (Task/Agent tool) runs the tool: several can
+  // ask at once in one pane, and one's tool call says nothing about another's
+  const base = { runtime, pane, session: input.session_id || "", agentId: input.agent_id || "", cwd: input.cwd || "", tool, input: toolInput };
 
   const tell = (type, extra = {}) => (pane ? post("/api/hooks/notify", { ...base, type, ...extra }, 1500) : null);
   if (event === "Notification") return void await tell(input.notification_type || "notice", { message: input.message || "" });

@@ -46,14 +46,15 @@ export function wait(body, agent, gone = new Promise(() => {}), now = Date.now()
   const why = body.kind === "permission" ? windowOnly(body.tool, body.input) : "";
   if (paneOnly(why)) return Promise.resolve({ decision: null, skipped: why });
   notices.delete(body.pane);
-  // the same session asking again has moved on from what it asked before
+  // the same session asking again has moved on from what it asked before; a
+  // subagent beside it is another asker (10/21: hoban's two subagents)
   for (const old of pending.values()) {
-    if (old.pane === body.pane && old.session === (body.session || "")) old.resolve({ decision: null, superseded: true });
+    if (old.pane === body.pane && old.session === (body.session || "") && old.agentKey === (body.agentId || "")) old.resolve({ decision: null, superseded: true });
   }
   const item = {
     id: ++seq, kind: body.kind === "question" ? "question" : "permission",
     agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", runtime: body.runtime || "", pane: body.pane, session: body.session || "",
-    cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now,
+    cwd: body.cwd || "", tool: body.tool || "", input: body.input ?? {}, at: now, agentKey: body.agentId || "",
     // rm -rf, force push, sudo, a database, .env: the screens say so in red
     risk: why
   };
@@ -84,14 +85,22 @@ const ASKED_MS = 10 * 60e3;
 
 export function notify(body, agent, now = Date.now()) {
   if (!agent || !body.pane) return { ok: true };
-  if (body.type === "tool" && body.tool) lastTool.set(body.pane, { tool: body.tool, input: body.input ?? {}, reason: body.reason || "", at: now });
+  // by asker: a subagent's tool says nothing about what another one asks
+  const asker = `${body.pane}\u001f${body.agentId || ""}`;
+  if (body.type === "tool" && body.tool) lastTool.set(asker, { tool: body.tool, input: body.input ?? {}, reason: body.reason || "", at: now });
   // A later tool call, the turn ending or a new session means whatever the pane
-  // waited on is over. Answering in the pane does not end the hook — Claude
-  // Code shows its own prompt beside it — so the request held here goes too.
+  // waited on is over. Answering in the pane does not end the hook - Claude
+  // Code shows its own prompt beside it - so the request held here goes too.
+  // Only for the one that moved on: subagents run beside each other and beside
+  // the main agent, and Stop is the main agent's (10/21: one subagent's tool
+  // calls dropped another's card, and the pane sat on its prompt as "stalled").
   if (!body.type || ["tool", "done", "stop", "session"].includes(body.type)) {
-    let dropped = notices.delete(body.pane);
+    const key = body.type === "stop" ? "" : body.agentId || "";
+    const mine = (x) => body.type === "session" || (x.agentKey || "") === key;
+    const n = notices.get(body.pane);
+    let dropped = Boolean(n && mine(n)) && notices.delete(body.pane);
     for (const r of pending.values()) {
-      if (r.pane === body.pane) { r.resolve({ decision: null, answeredInPane: true }); dropped = true; }
+      if (r.pane === body.pane && mine(r)) { r.resolve({ decision: null, answeredInPane: true }); dropped = true; }
     }
     if (dropped) onChange();
     return { ok: true };
@@ -100,9 +109,9 @@ export function notify(body, agent, now = Date.now()) {
   // permission prompt for a request held here is already on the screens
   if (body.type === "idle_prompt") return { ok: true };
   if (body.type === "permission_prompt" && [...pending.values()].some((r) => r.pane === body.pane)) return { ok: true };
-  const asked = lastTool.get(body.pane);
+  const asked = lastTool.get(asker);
   const about = asked && now - asked.at < ASKED_MS && body.type === "permission_prompt" ? { tool: asked.tool, input: asked.input, reason: asked.reason } : {};
-  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", type: body.type, message: String(body.message || "").slice(0, 300), at: now, ...about });
+  notices.set(body.pane, { pane: body.pane, agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", type: body.type, message: String(body.message || "").slice(0, 300), at: now, agentKey: body.agentId || "", ...about });
   onChange();
   return { ok: true };
 }
@@ -117,10 +126,14 @@ export function list(now = Date.now()) {
 
 // What the pane's screen shows for a notice: its numbered choice, read by
 // api.js after the prompt is drawn. Null when nothing could be read.
-export function attachMenu(pane, menu) {
+export function attachMenu(pane, menu, screen = "") {
   const n = notices.get(pane);
   if (!n) return false;
   n.menu = menu || null;
+  // the tool borrowed for the notice must be the one on the screen; when it is
+  // not, the screen's own lines say what is asked
+  const first = String(n.input?.command ?? n.input?.file_path ?? n.input?.url ?? "").split("\n")[0].trim().slice(0, 40);
+  if (n.tool && screen && first && !screen.includes(first)) { delete n.tool; delete n.input; delete n.reason; }
   onChange();
   return true;
 }
@@ -132,9 +145,23 @@ export const keyAllowed = (key) => keyOk(key);
 export const busy = (pane) => [...pending.values()].some((r) => r.pane === pane) ||
   ["permission_prompt", "elicitation_dialog", "returned"].includes(notices.get(pane)?.type);
 
+// herdr says the pane is blocked on something Pilo holds nothing for: a prompt
+// no hook told it about (Claude's own "Dangerous rm" check, an old hook copy, a
+// session without hooks). The screen's menu becomes the notice, answered from
+// the screens with the same numbered buttons.
+export function noticeFromScreen(pane, agent, menu, now = Date.now()) {
+  if (!agent || !menu || busy(pane)) return false;
+  notices.set(pane, { pane, agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", type: "permission_prompt",
+    message: "", at: now, agentKey: "", screen: true, menu });
+  onChange();
+  return true;
+}
+
 // The pane's own prompt was answered: herdr says it is idle or done now.
 export function settle(pane, status) {
-  if ((status === "idle" || status === "done") && notices.delete(pane)) onChange();
+  // one read off the screen is over as soon as the pane works again
+  const over = status === "idle" || status === "done" || (status === "working" && notices.get(pane)?.screen);
+  if (over && notices.delete(pane)) onChange();
 }
 
 export function decide(id, body) {

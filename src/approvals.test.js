@@ -234,6 +234,46 @@ test("a tool that ran clears what the pane asked about it, at once", async () =>
   assert.equal(A.busy("w8:p1"), false);
 });
 
+// 10/21, hoban: two subagents asked at once, and the other one's tool calls (and
+// the main agent's Stop) dropped the held request, so the pane sat on its own
+// prompt and the screens called the agent "stalled".
+test("subagents side by side: one's tool calls and the main Stop leave another's request held", async () => {
+  const sub = { kind: "permission", pane: "w10:p1", session: "s10", agentId: "a1", tool: "Bash", input: { command: "rm -f shots/*" } };
+  const held = A.wait(sub, agent);
+  const other = A.wait({ ...sub, agentId: "a2", input: { command: "ls" } }, agent);
+  assert.equal(A.list().pending.filter((r) => r.pane === "w10:p1").length, 2, "a second asker supersedes nothing");
+  A.notify({ pane: "w10:p1", type: "tool", agentId: "a2" }, agent);
+  A.notify({ pane: "w10:p1", type: "done", agentId: "a2" }, agent);
+  assert.equal((await other).answeredInPane, true);
+  A.notify({ pane: "w10:p1", type: "stop" }, agent);
+  A.notify({ pane: "w10:p1", type: "tool" }, agent);
+  assert.equal(A.list().pending.filter((r) => r.pane === "w10:p1").length, 1, "still held");
+  A.notify({ pane: "w10:p1", type: "done", agentId: "a1" }, agent);
+  assert.equal((await held).answeredInPane, true);
+});
+
+test("a prompt no hook told Pilo about: the screen's menu becomes the card, gone once the pane works", () => {
+  const menu = { question: "Do you want to proceed?", context: ["Dangerous rm operation on statically-unresolvable target: x/*"], options: [{ n: 1, label: "Yes" }, { n: 2, label: "No" }], fingerprint: "f" };
+  assert.equal(A.noticeFromScreen("w11:p1", agent, menu), true);
+  assert.equal(A.busy("w11:p1"), true);
+  assert.deepEqual(A.list().notices.find((n) => n.pane === "w11:p1").menu.options.map((o) => o.label), ["Yes", "No"]);
+  assert.equal(A.noticeFromScreen("w11:p1", agent, menu), false, "once");
+  A.settle("w11:p1", "working");
+  assert.equal(A.busy("w11:p1"), false);
+});
+
+test("a notice borrows only its own asker's tool, and only what the screen shows", () => {
+  A.notify({ pane: "w12:p1", type: "tool", agentId: "a1", tool: "Bash", input: { command: "rm -f shots/*" } }, agent);
+  A.notify({ pane: "w12:p1", type: "tool", agentId: "a2", tool: "Bash", input: { command: "ls phone" } }, agent);
+  A.notify({ pane: "w12:p1", type: "permission_prompt", agentId: "a1" }, agent);
+  assert.equal(A.noticeFor("w12:p1").input.command, "rm -f shots/*");
+  A.notify({ pane: "w12:p1", type: "session" }, agent);
+  A.notify({ pane: "w12:p1", type: "permission_prompt", agentId: "a2" }, agent);
+  const menu = { question: "Do you want to proceed?", context: [], options: [{ n: 1, label: "Yes" }, { n: 2, label: "No" }], fingerprint: "g" };
+  A.attachMenu("w12:p1", menu, "cd x && rm -f shots/*\nDo you want to proceed?");
+  assert.equal(A.noticeFor("w12:p1").tool, undefined, "ls phone is not on the screen");
+});
+
 test("pairing: a code once, then a key that answers", () => {
   const code = A.newPairCode();
   assert.match(code, /^\d{6}$/);
@@ -318,7 +358,7 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
   assert.equal(seen[held][0], "/api/hooks/wait");
   assert.deepEqual([codexDanger.permissionDecision, /needs the user's yes/.test(codexDanger.permissionDecisionReason)], ["deny", true]);
   await runHook(["SessionStart"], { session_id: "abc", source: "startup" }, env);
-  assert.deepEqual(seen.at(-1), ["/api/hooks/notify", { runtime: "claude", pane: "w9:p1", session: "abc", cwd: "", tool: "", input: {}, type: "session", source: "startup" }]);
+  assert.deepEqual(seen.at(-1), ["/api/hooks/notify", { runtime: "claude", pane: "w9:p1", session: "abc", agentId: "", cwd: "", tool: "", input: {}, type: "session", source: "startup" }]);
   server.close();
   const away = await runHook(["PermissionRequest"], { tool_name: "Bash", tool_input: { command: "npm test" } }, { ...env, PILO_SOCKET: join(dir, "none.sock") });
   assert.deepEqual(away, { code: 0, out: "" });

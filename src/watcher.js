@@ -1,9 +1,10 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import * as approvals from "./approvals.js";
+import { parseMenu } from "./panemenu.js";
 import { t } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached, probeReason, readProbe, writeProbe } from "./quota.js";
-import { recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER, createNote } from "./api.js";
+import { agentForPane, recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER, createNote } from "./api.js";
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
@@ -379,6 +380,10 @@ export async function pumpSessions() {
   for (const agent of agents) {
     const session = live.find((s) => s.target === agent.herdr_target);
     if (session) approvals.settle(agent.herdr_target, session.status);
+    if (session?.status === "blocked" && !approvals.busy(agent.herdr_target)) {
+      const menu = parseMenu(await herdr.readPane(agent.herdr_target));
+      if (menu) approvals.noticeFromScreen(agent.herdr_target, await agentForPane(agent.herdr_target), menu);
+    }
     // back from gone: a new session, which has heard none of the wakes before it
     if (session && before.get(String(agent.id)) === SESSION_GONE) {
       await logEvent({ type: "session_started", title: `${agent.name || "agent"}: session back in ${agent.herdr_target}`, agentId: agent.id, payload: { target: agent.herdr_target } });
