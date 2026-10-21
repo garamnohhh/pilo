@@ -8,6 +8,7 @@ import { agentForPane, recordWakeFailure, dueSchedules, runSchedule, systemJob, 
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
+import { deskWait } from "./deskwait.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -110,7 +111,8 @@ const WAKE_CAP_PER_HOUR = Number(process.env.PILO_WAKE_CAP || 30);
 
 async function overCap(agentId) {
   const row = await one(
-    `SELECT count(*)::int AS n FROM events
+    // a bundle is one send however many items it carried
+    `SELECT count(DISTINCT COALESCE(payload->>'bundle', id::text))::int AS n FROM events
      WHERE type = 'wake_sent' AND agent_id = $1 AND created_at > now() - interval '1 hour'`,
     [agentId]
   );
@@ -156,6 +158,64 @@ async function wake(agent, message, { taskId = null, inboxId = null }) {
   }
 }
 
+// The desk is told everything in one message per tick: new requests, results,
+// follow-ups, decisions, held work. One wake per item ran it past the hourly cap
+// on a busy afternoon (10/21: wake_suppressed several times, an answer late with
+// every result already in). Items gather here and flushDesk() sends them; while
+// the desk is mid-turn they wait for its Stop hook, at most DESK_HOLD_MS.
+let deskBox = new Map();
+const DESK_HOLD_MS = Number(process.env.PILO_DESK_HOLD_MS || 5 * 60 * 1000);
+
+function deskWake(message, { taskId = null, inboxId = null, after = null } = {}) {
+  if (!deskBox.has(message)) deskBox.set(message, { message, taskId, inboxId, after });
+}
+
+export function bundleMessage(items) {
+  if (items.length === 1) return items[0].message;
+  return `${t("wake.batch", { n: items.length })} ${items.map((x, i) => `(${i + 1}) ${x.message}`).join(" ")}`;
+}
+
+function waitFor(reason, items) {
+  if (deskWait.reason !== reason) deskWait.since = new Date().toISOString();
+  deskWait.reason = reason;
+  deskWait.inboxIds = [...new Set(items.map((x) => x.inboxId).filter(Boolean))];
+}
+
+async function flushDesk() {
+  const items = [...deskBox.values()];
+  deskBox = new Map();
+  if (!items.length) { deskWait.reason = null; deskWait.since = null; deskWait.inboxIds = []; return; }
+  const desk = await one(
+    `SELECT a.id, a.name, a.herdr_target, a.limited_until > now() AS limited, s.status AS session
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.role = 'pilo' AND a.archived_at IS NULL`);
+  if (!desk?.herdr_target) return;
+  if (desk.limited) return waitFor("limited", items);
+  if (desk.session === "working") {
+    const since = deskWait.reason === "working" ? new Date(deskWait.since).getTime() : Date.now();
+    if (Date.now() - since < DESK_HOLD_MS) return waitFor("working", items);
+  }
+  if (await overCap(desk.id)) {
+    if (deskWait.reason !== "cap") await logEvent({ type: "wake_suppressed",
+      title: t("event.suppressed", { agent: desk.name, cap: WAKE_CAP_PER_HOUR }), agentId: desk.id,
+      payload: { cap: WAKE_CAP_PER_HOUR, items: items.length } });
+    return waitFor("cap", items);
+  }
+  const bundle = `b${Date.now()}`;
+  try {
+    await herdr.prompt(desk.herdr_target, bundleMessage(items));
+  } catch (err) {
+    for (const x of items) await recordWakeFailure(desk, err.message, x.taskId, x.inboxId);
+    return;
+  }
+  for (const x of items) {
+    await logEvent({ type: "wake_sent", title: t("event.woken", { agent: desk.name }), agentId: desk.id,
+      taskId: x.taskId, inboxId: x.inboxId, payload: { target: desk.herdr_target, message: x.message, bundle } });
+    if (x.after) await x.after();
+  }
+  deskWait.reason = null; deskWait.since = null; deskWait.inboxIds = [];
+}
+
 async function pumpInbox() {
   const pilo = await one("SELECT id, name, herdr_target, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   if (!pilo) return;
@@ -171,7 +231,7 @@ async function pumpInbox() {
       await recordWakeFailure(pilo, "SESSION_NOT_BOUND", null, row.id);
       continue;
     }
-    await wake(pilo, t("wake.inbox", { id: row.id, agent: pilo.name }), { inboxId: row.id });
+    deskWake(t("wake.inbox", { id: row.id, agent: pilo.name }), { inboxId: row.id });
   }
 }
 
@@ -227,7 +287,7 @@ async function pumpResults() {
     );
     if (woken.n >= GIVE_UP) continue;
     if (woken.n && Date.now() - new Date(woken.last).getTime() < BACKOFF_SECONDS[Math.min(woken.n - 1, 3)] * 1000) continue;
-    await wake(pilo, t("wake.result", { id: row.id }), { inboxId: row.id });
+    deskWake(t("wake.result", { id: row.id }), { inboxId: row.id });
   }
 }
 
@@ -489,19 +549,20 @@ async function pumpFollowups() {
     [String(FOLLOWUP_WINDOW_HOURS)]
   );
   for (const task of late) {
-    const sent = await wake(pilo, t("wake.followup", { id: task.inboxId, task: task.id, agent: task.agent || "agent" }),
-      { taskId: task.id, inboxId: task.inboxId });
-    if (!sent) continue;
     // Two guards, and the second is the one that keeps a busy day quiet: the
     // moment the desk writes the follow-up, every task that finished before it
-    // drops out of the query above. This one only says "asked once per task".
-    await logEvent({
-      type: "followup_woken",
-      title: t("event.followup", { id: task.inboxId, task: task.id }),
-      taskId: task.id,
-      inboxId: task.inboxId,
-      agentId: pilo.id,
-      payload: { agent: task.agent || "agent" }
+    // drops out of the query above. This one only says "asked once per task",
+    // and is written once the bundle carrying it has actually gone.
+    deskWake(t("wake.followup", { id: task.inboxId, task: task.id, agent: task.agent || "agent" }), {
+      taskId: task.id, inboxId: task.inboxId,
+      after: () => logEvent({
+        type: "followup_woken",
+        title: t("event.followup", { id: task.inboxId, task: task.id }),
+        taskId: task.id,
+        inboxId: task.inboxId,
+        agentId: pilo.id,
+        payload: { agent: task.agent || "agent" }
+      })
     });
   }
 }
@@ -621,14 +682,15 @@ async function pumpHeld() {
     );
     if (seen?.held === now) continue;
     const until = row.until ? kst(row.until).slice(11) : "";
-    await logEvent({
-      type: "request_held",
-      title: t("event.held", { id: row.id, who: row.who }),
+    deskWake(t(until ? "wake.heldUntil" : "wake.held", { id: row.id, done: row.done, total: row.total, who: row.who, until }), {
       inboxId: row.id,
-      payload: { held: now, done: row.done, total: row.total, who: row.who, until: row.until }
+      after: () => logEvent({
+        type: "request_held",
+        title: t("event.held", { id: row.id, who: row.who }),
+        inboxId: row.id,
+        payload: { held: now, done: row.done, total: row.total, who: row.who, until: row.until }
+      })
     });
-    await wake(pilo, t(until ? "wake.heldUntil" : "wake.held",
-      { id: row.id, done: row.done, total: row.total, who: row.who, until }), { inboxId: row.id });
   }
 }
 
@@ -646,10 +708,12 @@ async function pumpDecisions() {
   if (!waiting.length) return;
   const desk = await one("SELECT id, name, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   for (const task of waiting) {
-    if (!task.woken && desk?.herdr_target && !pending.has(desk.id)) {
-      await wake(desk, t("wake.blocked", { id: task.id, inbox: task.inbox_id }), { taskId: task.id, inboxId: task.inbox_id });
-      await logEvent({ type: "decision_woken", title: `desk woken for #${task.id}`, taskId: task.id, inboxId: task.inbox_id,
-        agentId: desk.id, payload: {} });
+    if (!task.woken && desk?.herdr_target) {
+      deskWake(t("wake.blocked", { id: task.id, inbox: task.inbox_id }), {
+        taskId: task.id, inboxId: task.inbox_id,
+        after: () => logEvent({ type: "decision_woken", title: `desk woken for #${task.id}`, taskId: task.id, inboxId: task.inbox_id,
+          agentId: desk.id, payload: {} })
+      });
     }
     if (reminderDue(task.blockedAt, task.rounds)) {
       const title = t("event.reminded", { id: task.id, agent: task.agent || "agent" });
@@ -918,6 +982,7 @@ export const tick = serialize(async () => {
     await pumpQuota();
     await pumpSessions();
     await pumpNotice();
+    await flushDesk();
   } catch (err) {
     console.error("watcher:", err.message);
   }

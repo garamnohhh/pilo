@@ -1,3 +1,4 @@
+import { deskWait } from "./deskwait.js";
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as approvals from "./approvals.js";
 import { parseMenu } from "./panemenu.js";
@@ -769,6 +770,7 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
         AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id AND t.status NOT IN ('done', 'failed'))
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id)) AS "needsReply",
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN ('done', 'failed')) AS "doneCount",
+       (SELECT max(t.done_at) FROM tasks t WHERE t.inbox_id = i.id) AS "lastDoneAt",
        -- After an answer: what is still out, and what came back that no answer
        -- has said yet. Together they tell "answered, still going" from "done".
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN (${OPEN_TASK})) AS "openCount",
@@ -813,6 +815,9 @@ export async function listInbox(limit = 50, before = null, agent = "", { replies
      ORDER BY i.id DESC LIMIT $1`,
     [Math.min(Number(limit) || 50, 100), before ? String(before) : null, agent || ""]
   );
+  // the desk has news for this request it has not been given yet: busy, capped, at its limit
+  for (const row of rows)
+    if (deskWait.reason && deskWait.inboxIds.includes(Number(row.id))) row.deskWaiting = { reason: deskWait.reason, since: deskWait.since };
   if (replies) return rows;
   return rows.map(({ finalReply, ...row }) => ({ ...row, finalReply: null, hasReply: Boolean(finalReply) }));
 }

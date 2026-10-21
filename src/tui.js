@@ -475,6 +475,7 @@ function stillGoing(item) {
   const open = Number(item.openCount || 0), late = Number(item.unreported || 0);
   if (item.leak) return { attention: true, who: item.leak.agent || "pilo", text: t(`leak.${item.leak.kind}`, { task: item.leak.taskId, agent: item.leak.agent || "agent" }) };
   if (open) return { who: item.openBy || "", text: t("card.goingText", { n: open, who: item.openBy || "agent" }) };
+  if (item.deskWaiting) return { who: "pilo", text: t(`desk.wait.${item.deskWaiting.reason}`) };
   if (late) return { who: "pilo", text: t("card.lateText", { n: late }) };
   return null;
 }

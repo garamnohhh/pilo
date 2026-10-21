@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serialize, probeWorthTrying, probeBackoffMs, jobSetting, reminderDue } from "./watcher.js";
+import { serialize, probeWorthTrying, probeBackoffMs, jobSetting, reminderDue, bundleMessage } from "./watcher.js";
 
 // The bug this exists for: a herdr call hung for 78 minutes, setInterval kept
 // firing on the clock, and every waiting tick read the same "not woken yet"
@@ -98,4 +98,18 @@ test("a session coming back from gone resets the wake clock", async () => {
 // never refreshed; misses now back off 5, 10, 20, 40, 60 minutes.
 test("a usage probe that misses waits longer each time, up to an hour", () => {
   assert.deepEqual([0, 1, 2, 3, 4, 5, 9].map((n) => probeBackoffMs(n) / 60000), [0, 5, 10, 20, 40, 60, 60]);
+});
+
+// 10/21: one wake per item ran the desk past 30 an hour, and results sat while
+// it was capped. Everything due in a tick now goes in one message, and every
+// wake to the desk goes through that box.
+test("the desk gets one message per tick, every item in it", async () => {
+  const { readFileSync } = await import("node:fs");
+  assert.equal(bundleMessage([{ message: "[pilo:result] #1" }]), "[pilo:result] #1");
+  const two = bundleMessage([{ message: "[pilo:result] #1" }, { message: "[pilo:followup] in-2" }]);
+  assert.match(two, /^\[pilo:batch\] 2 /);
+  assert.match(two, /\(1\) \[pilo:result\] #1 \(2\) \[pilo:followup\] in-2$/);
+  const src = readFileSync(new URL("./watcher.js", import.meta.url), "utf8");
+  assert.doesNotMatch(src, /await wake\((pilo|desk),/);
+  assert.match(src, /count\(DISTINCT COALESCE\(payload->>'bundle', id::text\)\)/);
 });

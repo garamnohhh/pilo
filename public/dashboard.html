@@ -2247,8 +2247,10 @@ function feedMessages(item, detail) {
       msgs.push({ who: `${state_.leak.agent || "pilo"} · ${T("card.leak")}`, kind: "attention", text: T(`leak.${state_.leak.kind}`, { task: state_.leak.taskId, agent: state_.leak.agent || "agent" }) });
     } else if (open) {
       msgs.push({ who: `${item.openBy || "pilo"} · ${T("card.going")}`, kind: "working", text: T("card.goingText", { n: open, who: item.openBy || "agent" }) });
+    } else if (item.deskWaiting) {
+      msgs.push({ who: `pilo · ${T("card.deskWait")}`, kind: "working", text: T(`desk.wait.${item.deskWaiting.reason}`) });
     } else if (late) {
-      msgs.push({ who: `pilo · ${T("card.going")}`, kind: "working", text: T("card.lateText", { n: late }) });
+      msgs.push({ who: `pilo · ${T("card.arrived")}`, kind: "working", text: T("card.lateText", { n: late }) });
     }
   }
 
@@ -2269,7 +2271,11 @@ function feedMessages(item, detail) {
   // TUI's card was for. The ladder is the TUI's: writing the reply beats a
   // note, and a note beats the general word for waiting.
   if (!state_.answered) {
-    if (state_.needsReply) {
+    if (item.deskWaiting) {
+      msgs.push({ who: `pilo · ${T("card.deskWait")}`, kind: "working", text: T(`desk.wait.${item.deskWaiting.reason}`) });
+    } else if (state_.needsReply && state_.wrapping) {
+      msgs.push({ who: `pilo · ${T("card.arrived")}`, kind: "working", text: T("card.arrivedText") });
+    } else if (state_.needsReply) {
       msgs.push({
         who: `${item.routed || "pilo"} · ${T("card.needsReply")}`,
         kind: "attention",
@@ -2352,8 +2358,12 @@ function convState(item, detail) {
   const failed = item.status === "failed" || detail?.status === "failed";
   // answered, but not finished: work still out, or results no answer has said yet
   const going = answered && (Number(item.openCount || 0) > 0 || Number(item.unreported || 0) > 0);
-  return { answered, failed, going, leak: item.leak || null, needsReply: !answered && Boolean(item.needsReply) };
+  // every result is in and the desk is writing: for a few minutes that is work
+  // moving, not a request that slipped; past WRAP_MS it is red again
+  const wrapping = Boolean(item.deskWaiting) || (Boolean(item.lastDoneAt) && Date.now() - new Date(item.lastDoneAt).getTime() < WRAP_MS);
+  return { answered, failed, going, wrapping, leak: item.leak || null, needsReply: !answered && Boolean(item.needsReply) };
 }
+const WRAP_MS = 10 * 60e3;
 
 // A follow-up the user has not seen: written after the page was last left.
 // The page is "left" when it goes to the background; the first visit counts
@@ -2370,7 +2380,7 @@ const convMood = (item, detail) => {
   const s = convState(item, detail);
   if (!s.answered && openDecisions(item, detail).length) return ERR;
   if (s.leak) return ERR;
-  return s.answered ? (s.going ? WARN : OK) : s.needsReply || s.failed ? ERR : WARN;
+  return s.answered ? (s.going ? WARN : OK) : (s.needsReply && !s.wrapping) || s.failed ? ERR : WARN;
 };
 
 // What waits on the user in one conversation. The detail has every decision, answered
@@ -2852,7 +2862,8 @@ const STAGE = { inbox: "request", dispatch: "handed on", pm_result: "result", fi
 // word "working" - a request open because one abandoned task never closed read
 // as though its agent were busy, while the agent column beside it said stalled.
 // Nothing here can be mistaken for one of agentNote()'s words.
-const reqState = (i) => (i.needsReply ? "needs an answer"
+const reqState = (i) => (i.deskWaiting ? T("req.deskWait")
+  : i.needsReply ? (convState(i).wrapping ? T("req.arrived") : "needs an answer")
   : i.leak ? T(`leak.${i.leak.kind}.short`)
   : i.status === "replied" && Number(i.openCount || 0) > 0 ? T("req.going", { n: Number(i.openCount) })
   : i.status === "replied" && Number(i.unreported || 0) > 0 ? T("req.late", { n: Number(i.unreported) })
@@ -2861,7 +2872,7 @@ const reqState = (i) => (i.needsReply ? "needs an answer"
       { done: i.doneCount ?? 0, total: i.taskCount ?? 0, who: i.held.agent,
         until: i.held.until ? new Date(i.held.until).toLocaleTimeString(loc(), { hour: "2-digit", minute: "2-digit", hour12: false }) : "" })
   : { queued: "not handed on", dispatched: "open", replied: "answered", failed: "failed" }[i.status] || i.status);
-const reqColor = (i) => (i.needsReply || i.leak || i.status === "failed" ? ERR : i.held ? WARN
+const reqColor = (i) => ((i.needsReply && !convState(i).wrapping) || i.leak || i.status === "failed" ? ERR : i.held ? WARN
   : i.status === "replied" ? (Number(i.openCount || 0) > 0 || Number(i.unreported || 0) > 0 ? WARN : OK) : WARN);
 const isOpen = (i) => i.status !== "replied";
 
