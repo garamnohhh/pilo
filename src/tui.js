@@ -1124,10 +1124,13 @@ function render() {
       const textWidth = mainWidth - 6 - (tagged.width + 1);
       // a follow-up's head on a line of its own, the user's words from the next
       const head = followHead(item.userRequest);
-      const lines = [
-        ...(head.follow ? [`${c.faint}↳ ${t("desk.follow.head", { id: head.follow })}${c.reset}`] : []),
-        ...wrap(alignTables(head.body, textWidth), textWidth)
-      ];
+      // a scheduled run is the job's name, not the instruction it sends every hour
+      const lines = item.source === "schedule"
+        ? [cut(`⏱ ${item.scheduleName || String(item.userRequest).split("\n")[0]}`, textWidth)]
+        : [
+          ...(head.follow ? [`${c.faint}↳ ${t("desk.follow.head", { id: head.follow })}${c.reset}`] : []),
+          ...wrap(alignTables(head.body, textWidth), textWidth)
+        ];
       const shownLines = folded ? lines.slice(0, 2) : lines;
       // The state of a request lives in its own mark rather than in a word: green
       // once answered, amber while the work is out, red when it needs a person.
@@ -1141,7 +1144,7 @@ function render() {
       // Not every line in the feed is something the user typed. A note is the
       // desk speaking first and a scheduled job is an hour coming round, and
       // both used to be drawn as though the user had asked for them.
-      const spoke = item.source === "desk" ? badge("NOTE", t("feed.note")) : item.source === "schedule" ? `${c.faint}${badgeText(t("feed.scheduled"))}${c.reset}` : "";
+      const spoke = item.source === "desk" ? badge("NOTE", t("feed.note")) : "";
       const question = shownLines.map((x, i) => {
         const mark = i ? " " : markColour + glyph + c.reset;
         const tag = i ? " ".repeat(tagged.width) : tagged.text;

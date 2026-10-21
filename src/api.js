@@ -127,6 +127,13 @@ function summarize(text, limit = 90) {
   return flat.length > limit ? flat.slice(0, limit) + "…" : flat;
 }
 
+// One short line with nothing else in it: what a scheduled run says when there
+// was nothing to do. The screens draw it small and it rings nothing.
+export const quietReply = (body) => {
+  const text = String(body || "").trim();
+  return text.length > 0 && text.length <= 60 && !text.includes("\n");
+};
+
 export async function notifyRule(when, title, body) {
   const rules = (await getSetting("notifications", [])) || [];
   const rule = rules.find((r) => r.when === when);
@@ -724,6 +731,7 @@ export async function inboxLeaks(days = 14) {
 export async function listInbox(limit = 50, before = null, agent = "", { replies = true } = {}) {
   const rows = await query(
     `SELECT i.id, i.user_request AS "userRequest", i.status, i.source, i.created_at AS "createdAt",
+       (SELECT s.name FROM schedules s WHERE s.id = i.schedule_id) AS "scheduleName",
        (SELECT string_agg(DISTINCT a.name, ', ') FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.inbox_id = i.id) AS routed,
        (SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id) AS "taskCount",
        (SELECT string_agg(DISTINCT p.name, ', ') FROM tasks t
@@ -824,7 +832,8 @@ export async function countInbox(agent = "") {
 
 export async function inboxDetail(id) {
   const row = await one(
-    `SELECT id, user_request AS "userRequest", status, source, created_at AS "createdAt" FROM inbox WHERE id = $1`,
+    `SELECT id, user_request AS "userRequest", status, source, created_at AS "createdAt",
+       (SELECT s.name FROM schedules s WHERE s.id = inbox.schedule_id) AS "scheduleName" FROM inbox WHERE id = $1`,
     [id]
   );
   if (!row) throw Object.assign(new Error("inbox item not found"), { status: 404 });
@@ -879,11 +888,11 @@ export async function inboxDetail(id) {
   return { ...row, tasks, replies, events, trace, decisions };
 }
 
-export async function createInbox(userRequest, cwd = "", source = "user") {
+export async function createInbox(userRequest, cwd = "", source = "user", scheduleId = null) {
   if (!userRequest.trim()) throw Object.assign(new Error("empty request"), { status: 400 });
   const row = await one(
-    "INSERT INTO inbox (user_request, cwd, source) VALUES ($1, $2, $3) RETURNING id, created_at",
-    [userRequest, cwd, source === "schedule" || source === "desk" ? source : "user"]
+    "INSERT INTO inbox (user_request, cwd, source, schedule_id) VALUES ($1, $2, $3, $4) RETURNING id, created_at",
+    [userRequest, cwd, source === "schedule" || source === "desk" ? source : "user", scheduleId]
   );
   await logEvent({ type: "inbox_created", title: userRequest.slice(0, 60), inboxId: row.id, payload: { cwd, source } });
   return { id: row.id, createdAt: row.created_at };
@@ -1236,18 +1245,23 @@ export async function saveFinalReply(inboxId, input) {
   );
   await query("UPDATE inbox SET status = 'replied', updated_at = now() WHERE id = $1", [inboxId]);
   const context = await one(
-    `SELECT i.user_request AS request,
+    `SELECT i.user_request AS request, i.source,
+       (SELECT s.name FROM schedules s WHERE s.id = i.schedule_id) AS "scheduleName",
        (SELECT string_agg(DISTINCT p.name, ', ') FROM tasks t
           JOIN agents a2 ON a2.id = t.to_agent_id JOIN projects p ON p.id = a2.project_id
         WHERE t.inbox_id = i.id) AS project
      FROM inbox i WHERE i.id = $1`,
     [inboxId]
   );
-  await notifyRule(
-    "final_reply saved",
-    `Pilo · ${context?.project || "reply"} done in-${inboxId}`,
-    `${summarize(context?.request, 45)} → ${summarize(input.body, 70)}`
-  );
+  // A standing job that came back with a line ("no change") is not news worth a
+  // sound; one with something to say still is, under the job's name.
+  if (!(context?.source === "schedule" && quietReply(input.body))) {
+    await notifyRule(
+      "final_reply saved",
+      `Pilo · ${context?.scheduleName || context?.project || "reply"} done in-${inboxId}`,
+      `${summarize(context?.scheduleName || context?.request, 45)} → ${summarize(input.body, 70)}`
+    );
+  }
   await logEvent({
     type: "final_reply",
     title: (input.body || "").slice(0, 60),
@@ -1769,7 +1783,7 @@ export async function runSchedule(schedule) {
       [schedule.lastTaskId]);
     if (open) return advance("previous run still open");
   }
-  const inbox = await createInbox(schedule.request, "", "schedule");
+  const inbox = await createInbox(schedule.request, "", "schedule", schedule.id);
   // A job aimed at the desk arrives the way anything from the user arrives — as a
   // request it routes or answers itself. Anyone else gets a task, as usual.
   const desk = await one("SELECT role FROM agents WHERE id = $1", [schedule.toAgentId]);

@@ -4,7 +4,7 @@ import { workerRules, previewRules } from "./rules.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { settleReviewer } from "./api.js";
+import { settleReviewer, quietReply } from "./api.js";
 
 const pm = { id: 7, name: "atlas", role: "pm" };
 const worker = (id, name, reviewer = false) => ({ id, name, role: "worker", reviewer, specialty: "x" });
@@ -118,4 +118,13 @@ test("a preview names the file the runtime reads and what would happen to it", a
   assert.equal(claude.file, join(dir, "CLAUDE.md"));
   assert.deepEqual([claude.exists, claude.hasBlock], [true, true]);
   await assert.rejects(previewRules({ role: "pm" }), /cwd is required/);
+});
+
+// 10/21, the user: a scheduled run that comes back with "no change" should not ring.
+test("a one-line short answer is quiet, anything with more to say is not", () => {
+  assert.equal(quietReply("변경 없음"), true);
+  assert.equal(quietReply("No new mail. Calendar unchanged."), true);
+  assert.equal(quietReply(""), false, "no answer is not a quiet answer");
+  assert.equal(quietReply("Added 2 events:\n- 10:00 standup\n- 14:00 review"), false);
+  assert.equal(quietReply("x".repeat(61)), false);
 });

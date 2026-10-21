@@ -440,6 +440,11 @@
   .w-nudge > div { flex: 1; color: var(--text-2) }
   .w-nudge b { display: block; color: var(--text) }
   @media (max-width: 720px) { .w-sb { padding-left: 18px } .w-orow { grid-template-columns: 1fr } .w-ss { display: none } }
+  .d-job { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px }
+  .d-jobraw summary { cursor: pointer; list-style: none }
+  .d-jobraw summary::before { content: "▸ " }
+  .d-jobraw[open] summary::before { content: "▾ " }
+  .d-jobraw[open] { flex-basis: 100% }
 </style>
 </head>
 <body>
@@ -2033,9 +2038,14 @@ function feedMessages(item, detail) {
   const state_ = convState(item, detail);
   // A note has no question above it — the desk spoke first — and a scheduled job
   // says so rather than posing as something the user typed.
-  const msgs = item.source === "desk" ? [] : [{
-    who: `${item.source === "schedule" ? "pilo" : "you"} · ${hhmm(item.createdAt)}`,
-    chip: item.source === "schedule" ? T("feed.scheduled") : followHead(item.userRequest).follow ? T("desk.follow.head", { id: followHead(item.userRequest).follow }) : "",
+  // A scheduled run is one line, the job's name: the instruction it sends is
+  // long, the same every hour, and only folded out when someone wants it.
+  const msgs = item.source === "desk" ? [] : item.source === "schedule" ? [{
+    kind: "job", who: hhmm(item.createdAt), raw: item.userRequest,
+    text: item.scheduleName || full.scheduleName || firstLine(item.userRequest).slice(0, 60)
+  }] : [{
+    who: `you · ${hhmm(item.createdAt)}`,
+    chip: followHead(item.userRequest).follow ? T("desk.follow.head", { id: followHead(item.userRequest).follow }) : "",
     kind: "you",
     text: followHead(item.userRequest).body
   }];
@@ -2056,7 +2066,8 @@ function feedMessages(item, detail) {
     // the bubble already says pilo; the word only has to say what kind of line it is
     const what = item.source === "desk" ? T("card.note") : i ? T("card.followUp") : "answer";
     msgs.push({ who: `${reply.agent || "pilo"} · ${hhmm(reply.createdAt)}`, chip: item.source === "desk" ? what : i ? (isNewReply(reply.createdAt) ? `${what} · ${T("card.new")}` : what) : "",
-      kind: item.source === "desk" ? "note" : "answer", text: reply.body || "", inbox: item.id });
+      kind: item.source === "desk" ? "note" : "answer", text: reply.body || "", inbox: item.id,
+      quiet: item.source === "schedule" && quietReply(reply.body) });
   }
   // The list row can carry the answers before a detail fetched earlier does.
   if (!(detail?.replies || []).length && item.finalReply) {
@@ -2121,7 +2132,13 @@ function feedMessages(item, detail) {
 // which reads well beside a narrow column of prose. Here the conversation is
 // the whole screen, and the reader asked for the width back: the cap is gone
 // and only .d-pad's 28px keeps the text off the edge.
+// One short line with nothing else in it, the same rule the server uses to keep
+// a scheduled run's "no change" from ringing.
+const quietReply = (body) => { const text = String(body || "").trim(); return text.length > 0 && text.length <= 60 && !text.includes("\n"); };
+
 function bubble(m) {
+  if (m.kind === "job") return `<div class="d-job"><span class="d-lbl">⏱ ${esc(m.text)} · ${esc(m.who)}</span>
+    <details class="d-jobraw"><summary class="d-lbl">${esc(T("feed.request"))}</summary><div class="md" style="font-size:var(--fs-small);color:var(--text-2)">${prose(m.raw)}</div></details></div>`;
   if (m.kind === "you") return `<div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end">
     <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${m.chip
       ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2)">${esc(m.chip)}</span>` : ""}</span>
@@ -2147,7 +2164,7 @@ function bubble(m) {
     <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${chip}${follow ? `<span style="margin-left:6px">${follow}</span>` : ""}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
-      <div class="md md-said" style="flex:1;min-width:0;padding:8px 0 8px 14px;font-size:var(--fs-body);line-height:1.62">${prose(m.text)}</div>
+      <div class="md md-said" style="flex:1;min-width:0;padding:${m.quiet ? "2px 0 2px 14px" : "8px 0 8px 14px"};font-size:${m.quiet ? "var(--fs-small);color:var(--text-2)" : "var(--fs-body)"};line-height:1.62">${prose(m.text)}</div>
     </div></div>`;
 }
 
