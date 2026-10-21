@@ -520,7 +520,7 @@ const state = {
   lang: "en",
   palette: false,
   palQuery: "",
-  draft: "",
+  draft: (() => { try { return localStorage.getItem("pilo-draft") || ""; } catch (err) { return ""; } })(),
   sending: false,
   fold: {},
   // the request the next message follows up, shown above the composer
@@ -609,9 +609,10 @@ async function load() {
   keepRecords(inbox);
   // an older server has no such route; the screens then simply say nothing
   const upd = await get("/api/update").catch(() => null);
-  // back from an update: the page that loaded is the old one, so load the new
-  if (upd && state.data.update?.current && upd.current !== state.data.update.current) return location.reload();
-  if (upd?.build && state.data.update?.build && upd.build !== state.data.update.build) return location.reload();
+  // A newer page or release is on disk: say so and let the reader reload when
+  // they are ready. Reloading by itself threw away whatever was being typed.
+  if (upd && state.data.update?.current && upd.current !== state.data.update.current) state.stale = true;
+  if (upd?.build && state.data.update?.build && upd.build !== state.data.update.build) state.stale = true;
   state.data.update = upd;
   state.data.approvals = await get("/api/approvals").catch(() => null);
   refreshFeed();
@@ -1188,8 +1189,14 @@ function expandDraft(text) {
   return out;
 }
 
+// The composer's words outlive a reload: kept in this browser until sent.
+function saveDraft(value) {
+  try { value ? localStorage.setItem("pilo-draft", value) : localStorage.removeItem("pilo-draft"); } catch (err) { /* private window */ }
+}
+
 function fitDraft(box) {
   state.draft = box.value;
+  saveDraft(box.value);
   box.style.height = "auto";
   box.style.height = Math.min(160, box.scrollHeight) + "px";
 }
@@ -1299,6 +1306,7 @@ function restoreDraft() {
         if (key) { state.feed.open.add(key); state.feed.shut.delete(key); delete state.feed.detail[key]; }
         state.answering = null;
         state.draft = "";
+        saveDraft("");
         box.value = "";
         composerPastes.clear();
         composerImages.clear();
@@ -1317,6 +1325,7 @@ function restoreDraft() {
       await call("POST", "/api/inbox", { userRequest: text });
       state.followUp = null;
       state.draft = "";
+      saveDraft("");
       box.value = "";
       composerPastes.clear();
       composerImages.clear();
@@ -1795,6 +1804,8 @@ async function apprSend(id, body) {
   render();
 }
 function updateBannerHtml() {
+  if (state.stale && !state.staleDismissed) return `<div class="d-ubanner"><span>${esc(T("page.stale"))}</span>
+    <span class="d-ub-acts">${btn(T("page.reload"), "page-reload", "", "gn-btn-brand")}${btn(T("page.dismiss"), "page-dismiss", "", "gn-btn-ghost")}</span></div>`;
   const u = state.data.update;
   if (!u) return "";
   if (u.installing || u.step) return `<div class="d-ubanner">${esc(T("update.installing", { latest: u.latest || "", step: u.step || "…" }))}</div>`;
@@ -3857,6 +3868,8 @@ const actions = {
     location.hash = "work";
     await load();
   },
+  async "page-reload"() { location.reload(); },
+  async "page-dismiss"() { state.staleDismissed = true; render(); },
   async "update-check"() {
     state.data.update = await call("POST", "/api/update/check");
     render();
@@ -3864,12 +3877,12 @@ const actions = {
   async "update-install"() {
     state.data.update = await call("POST", "/api/update/install");
     render();
-    // the server goes away and comes back on the new release; load() notices the
-    // new version and reloads the page
+    // the server goes away and comes back on the new release; the banner then
+    // offers the reload rather than doing it
     const poll = setInterval(async () => {
       const u = await get("/api/update").catch(() => null);
       if (!u) return;
-      if (u.current !== state.data.update?.current) { clearInterval(poll); return location.reload(); }
+      if (u.current !== state.data.update?.current) { clearInterval(poll); state.stale = true; state.data.update = u; render(); return; }
       state.data.update = { ...state.data.update, ...u };
       if (!u.installing && !u.step) clearInterval(poll);
       render();
