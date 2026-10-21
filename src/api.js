@@ -11,7 +11,7 @@ import { t } from "./text.js";
 import { terms, likePattern, sinceDate, kst, pieces, DEFAULT_LIMIT, MAX_LIMIT } from "./history.js";
 import { pickResults, withResults } from "./reply.js";
 import * as models from "./models.js";
-import { nextRun, composeCadence, usesWeekdayFlag } from "./cadence.js";
+import { nextRun, composeCadence, usesWeekdayFlag, inWindow } from "./cadence.js";
 import { groupDecisions, sameQuestion } from "./decisions.js";
 
 // A task is looked up by id alone, so "not found" can only mean the server that
@@ -1757,6 +1757,9 @@ export async function runSchedule(schedule) {
   if (usesWeekdayFlag(schedule.cadence) && schedule.weekdaysOnly && (now.getDay() === 0 || now.getDay() === 6)) {
     return advance("weekend");
   }
+  // A window's slot caught up outside the window (after a sleep, a weekend) is
+  // not made: the job was asked for during those hours only.
+  if (!inWindow(schedule.cadence, now)) return advance("outside hours");
   // Slept through it: a report that only matters at the hour is dropped, one that
   // matters whenever you next look is still worth running.
   const lateMinutes = (now - due) / 60000;

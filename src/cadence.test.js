@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseCadence, composeCadence, nextRun, describeCadence, usesWeekdayFlag, cadenceFields } from "./cadence.js";
+import { parseCadence, composeCadence, nextRun, describeCadence, usesWeekdayFlag, cadenceFields, inWindow } from "./cadence.js";
 import { LANGS } from "./text.js";
 
 // Friday 18:00 local — the weekend rules only show up from here.
@@ -108,7 +108,8 @@ test("the dashboard reads and says a cadence exactly as this does", async () => 
   assert.ok(from > 0 && to > from, "the dashboard still keeps its own copy");
   const theirs = new Function(`${page.slice(from, to)}\nreturn { parseCadence, describeCadence, cadenceFields };`)();
   const rows = ["days:daily@14:00", "days:weekday@09:00", "days:2d@14:00", "days:3d@07:05", "days:mon,thu@18:30",
-    "09:00", "every:30", "every:2880", "every:90", "nonsense", "days:0d@09:00"];
+    "09:00", "every:30", "every:2880", "every:90", "nonsense", "days:0d@09:00",
+    "days:weekday@09:00-18:00/60", "days:mon,wed@10:00-12:30/45", "days:daily@08:00-08:00/5", "days:weekday@18:00-09:00/60"];
   for (const cadence of rows) {
     for (const weekdaysOnly of [true, false]) {
       assert.deepEqual(theirs.parseCadence(cadence), parseCadence(cadence), cadence);
@@ -116,4 +117,33 @@ test("the dashboard reads and says a cadence exactly as this does", async () => 
       assert.deepEqual(theirs.cadenceFields(cadence, weekdaysOnly), cadenceFields(cadence, weekdaysOnly), cadence);
     }
   }
+});
+
+// 10/21, the user: the mail-to-calendar job only in working hours, Monday to Friday.
+test("a window runs on its grid from start to end, on its days only", () => {
+  const job = "days:weekday@09:00-18:00/60";
+  const at = (d, h, m) => new Date(2026, 9, d, h, m, 0); // 2026-10-19 is a Monday
+  const next = (from) => nextRun(job, false, from);
+  assert.deepEqual(next(at(21, 8, 30)), at(21, 9, 0), "before the window: its start");
+  assert.deepEqual(next(at(21, 9, 0)), at(21, 10, 0), "on the grid, never off the hour");
+  assert.deepEqual(next(at(21, 17, 59)), at(21, 18, 0), "the end is a slot");
+  assert.deepEqual(next(at(21, 18, 0)), at(22, 9, 0), "after the end: tomorrow's start");
+  assert.deepEqual(next(at(23, 18, 30)), at(26, 9, 0), "Friday evening: Monday");
+  assert.deepEqual(next(at(24, 10, 0)), at(26, 9, 0), "Saturday: Monday");
+  assert.equal(describeCadence(job, false, ko), "평일 09:00-18:00, 1시간마다");
+  assert.equal(composeCadence({ repeat: "window", at: "9:00", until: "18:00", days: ["mon", "tue", "wed", "thu", "fri"], interval: 60 }), job);
+  assert.equal(composeCadence({ repeat: "window", at: "10:00", until: "12:30", days: ["wed", "mon"], interval: 45 }), "days:mon,wed@10:00-12:30/45");
+  assert.throws(() => composeCadence({ repeat: "window", at: "18:00", until: "09:00", days: ["mon"], interval: 60 }), /ends before/);
+  assert.equal(parseCadence("days:weekday@18:00-09:00/60"), null);
+  assert.deepEqual(cadenceFields(job), { repeat: "window", at: "09:00", days: ["mon", "tue", "wed", "thu", "fri"], interval: 60, until: "18:00" });
+  assert.equal(usesWeekdayFlag(job), false);
+});
+
+test("a slot caught up outside its window is not run", () => {
+  const job = "days:weekday@09:00-18:00/60";
+  assert.equal(inWindow(job, new Date(2026, 9, 21, 13, 0)), true);
+  assert.equal(inWindow(job, new Date(2026, 9, 21, 18, 10)), true, "a late tick just past the end");
+  assert.equal(inWindow(job, new Date(2026, 9, 21, 19, 0)), false, "after a sleep, in the evening");
+  assert.equal(inWindow(job, new Date(2026, 9, 24, 10, 0)), false, "Saturday");
+  assert.equal(inWindow("every:60", new Date(2026, 9, 24, 3, 0)), true, "no window, no limit");
 });

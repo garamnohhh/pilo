@@ -9,6 +9,7 @@
 //   days:weekday@09:00   Monday to Friday at nine
 //   days:mon,thu@18:30   those days, at half six
 //   days:2d@14:00        every other day, still at two
+//   days:weekday@09:00-18:00/60   Monday to Friday, on the hour from nine to six
 //
 // The two older forms are still read and still mean what they meant: "09:00" is
 // a daily time the weekdays_only flag may narrow, and "every:N" is N minutes
@@ -22,6 +23,17 @@ export function parseCadence(cadence) {
   if (every && Number(every[1]) > 0) return { kind: "every", minutes: Number(every[1]) };
   const at = new RegExp(`^${TIME}$`).exec(text);
   if (at) return { kind: "at", hour: Number(at[1]), minute: Number(at[2]) };
+  // A window: runs every N minutes from its start to its end, on the days named.
+  // The grid is anchored to the start, so a slot never drifts off the hour.
+  const win = new RegExp(`^days:([a-z,]+)@${TIME}-${TIME}/(\\d+)$`).exec(text);
+  if (win) {
+    const [, spec, h1, m1, h2, m2, n] = win;
+    const set = spec === "daily" ? [0, 1, 2, 3, 4, 5, 6] : spec === "weekday" ? [1, 2, 3, 4, 5]
+      : [...new Set(spec.split(",").filter(Boolean))].map((d) => DAYS.indexOf(d)).sort((a, b) => a - b);
+    const start = Number(h1) * 60 + Number(m1), end = Number(h2) * 60 + Number(m2);
+    if (!set.length || set.includes(-1) || !(Number(n) > 0) || end < start) return null;
+    return { kind: "window", spec, days: set, hour: Number(h1), minute: Number(m1), endHour: Number(h2), endMinute: Number(m2), minutes: Number(n) };
+  }
   const days = new RegExp(`^days:([a-z0-9,]+)@${TIME}$`).exec(text);
   if (!days) return null;
   const [, spec, hour, minute] = days;
@@ -36,7 +48,7 @@ export function parseCadence(cadence) {
 
 // The dashboard sends the two controls it draws — what repeats, and at what time
 // — and the string is put together here, so only one file knows the shape.
-export function composeCadence({ repeat = "", at = "", days = [], interval = 0 } = {}) {
+export function composeCadence({ repeat = "", at = "", until = "", days = [], interval = 0 } = {}) {
   const time = String(at).trim();
   const clock = new RegExp(`^${TIME}$`).exec(time);
   const n = Number(interval);
@@ -50,6 +62,18 @@ export function composeCadence({ repeat = "", at = "", days = [], interval = 0 }
   if (repeat === "step") {
     if (!(n > 0)) throw bad("a day count is needed");
     return `days:${Math.round(n)}d@${hhmm}`;
+  }
+  if (repeat === "window") {
+    const end = new RegExp(`^${TIME}$`).exec(String(until).trim());
+    if (!end) throw bad("an end time is needed, as HH:MM");
+    if (!(n > 0)) throw bad("a minute count is needed");
+    const to = `${String(Number(end[1])).padStart(2, "0")}:${end[2]}`;
+    if (to < hhmm) throw bad("the window ends before it starts");
+    const picked = (Array.isArray(days) ? days : String(days).split(",")).map((d) => String(d).trim().toLowerCase()).filter(Boolean);
+    const ordered = DAYS.filter((d) => picked.includes(d));
+    if (!ordered.length) throw bad("pick at least one day");
+    const spec = ordered.length === 7 ? "daily" : ordered.join(",") === "mon,tue,wed,thu,fri" ? "weekday" : ordered.join(",");
+    return `days:${spec}@${hhmm}-${to}/${Math.round(n)}`;
   }
   if (repeat === "pick") {
     const picked = (Array.isArray(days) ? days : String(days).split(",")).map((d) => String(d).trim().toLowerCase()).filter(Boolean);
@@ -70,9 +94,22 @@ function bad(message) {
 export function nextRun(cadence, weekdaysOnly, from = new Date(), lastRun = null) {
   const plan = parseCadence(cadence);
   if (!plan) {
-    throw bad("cadence must be HH:MM, every:N, or days:<daily|weekday|mon,thu|2d>@HH:MM");
+    throw bad("cadence must be HH:MM, every:N, days:<daily|weekday|mon,thu|2d>@HH:MM, or days:<daily|weekday|mon,thu>@HH:MM-HH:MM/N");
   }
   if (plan.kind === "every") return new Date(from.getTime() + plan.minutes * 60000);
+  if (plan.kind === "window") {
+    const start = plan.hour * 60 + plan.minute, end = plan.endHour * 60 + plan.endMinute;
+    for (let i = 0; i < 8; i++) {
+      const day = new Date(from);
+      day.setDate(day.getDate() + i);
+      if (!plan.days.includes(day.getDay())) continue;
+      for (let m = start; m <= end; m += plan.minutes) {
+        const at = new Date(day);
+        at.setHours(0, m, 0, 0);
+        if (at > from) return at;
+      }
+    }
+  }
 
   const weekend = (d) => d.getDay() === 0 || d.getDay() === 6;
   const next = new Date(from);
@@ -91,6 +128,17 @@ export function nextRun(cadence, weekdaysOnly, from = new Date(), lastRun = null
   if (plan.kind === "weekday") while (weekend(next)) next.setDate(next.getDate() + 1);
   if (plan.kind === "pick") while (!plan.days.includes(next.getDay())) next.setDate(next.getDate() + 1);
   return next;
+}
+
+// Whether a moment falls inside a window's days and hours. A slot is let through
+// up to `graceMin` past the window's end, for a server that ticked a little late;
+// a run caught up after a sleep outside the window is not made.
+export function inWindow(cadence, at = new Date(), graceMin = 15) {
+  const plan = parseCadence(cadence);
+  if (plan?.kind !== "window") return true;
+  const mins = at.getHours() * 60 + at.getMinutes();
+  return plan.days.includes(at.getDay())
+    && mins >= plan.hour * 60 + plan.minute && mins <= plan.endHour * 60 + plan.endMinute + graceMin;
 }
 
 // The weekdays_only switch only has a say over the older forms. A new one carries
@@ -113,6 +161,13 @@ export function describeCadence(cadence, weekdaysOnly, t) {
     return t("cadence.minutes", { n });
   }
   const time = `${String(plan.hour).padStart(2, "0")}:${String(plan.minute).padStart(2, "0")}`;
+  if (plan.kind === "window") {
+    const to = `${String(plan.endHour).padStart(2, "0")}:${String(plan.endMinute).padStart(2, "0")}`;
+    const days = plan.spec === "daily" ? t("cadence.allDays") : plan.spec === "weekday" ? t("cadence.weekdays")
+      : plan.days.map((d) => t(`cadence.day.${DAYS[d]}`)).join("·");
+    const every = plan.minutes % 60 === 0 ? t("cadence.hours", { n: plan.minutes / 60 }) : t("cadence.minutes", { n: plan.minutes });
+    return t("cadence.window", { days, from: time, to, every });
+  }
   if (plan.kind === "at") return t(weekdaysOnly ? "cadence.weekday" : "cadence.daily", { time });
   if (plan.kind === "weekday") return t("cadence.weekday", { time });
   if (plan.kind === "daily") return t("cadence.daily", { time });
@@ -132,8 +187,9 @@ export function cadenceFields(cadence, weekdaysOnly = false) {
   return {
     repeat: plan.kind === "at" ? (weekdaysOnly ? "weekday" : "daily") : plan.kind,
     at: time,
-    days: plan.kind === "pick" ? plan.days.map((d) => DAYS[d]) : [],
-    interval: plan.kind === "every" ? plan.minutes : plan.kind === "step" ? plan.days : 0
+    days: plan.kind === "pick" || plan.kind === "window" ? plan.days.map((d) => DAYS[d]) : [],
+    interval: plan.kind === "every" || plan.kind === "window" ? plan.minutes : plan.kind === "step" ? plan.days : 0,
+    ...(plan.kind === "window" ? { until: `${String(plan.endHour).padStart(2, "0")}:${String(plan.endMinute).padStart(2, "0")}` } : {})
   };
 }
 
