@@ -649,7 +649,7 @@ async function loadDetail() {
     await loadOpenDetails();
   }
   if (state.tab === "schedules") state.data.recentRuns = await recentRuns();
-  if (state.tab === "usage" || state.tab === "more") state.data.usage = await get("/api/usage").catch(() => ({ unavailable: true }));
+  if (state.tab === "usage" || state.tab === "more") state.data.usage = await get("/api/usage").catch((e) => ({ unavailable: true, failed: e.message }));
   if (state.tab === "agents") state.data.models = await get("/api/models").catch((e) => ({ failed: e.message }));
   if (state.dlg?.kind === "event") state.data.eventDetail = await get(`/api/events/${state.dlg.id}`);
   if (state.dlg?.kind === "artifact") state.data.artifactDetail = await get(`/api/artifacts/${state.dlg.id}`);
@@ -2065,6 +2065,9 @@ function mtabsHtml() {
       <span class="d-mtab-g" aria-hidden="true">${glyph}</span><span class="d-mtab-l">${esc(T(label)).toUpperCase()}</span></button>`).join("");
 }
 
+// only a 404 means a server from before usage; anything else says what went wrong
+const usageFailed = (u) => !u.failed || u.failed === "not found" ? T("usage.oldServer") : T("usage.failed", { why: u.failed });
+
 function agentChipsHtml() {
   const names = (state.data.tree?.pms || []).map((p) => p.name);
   const f = state.feed.agent;
@@ -2119,7 +2122,7 @@ mviews.more = () => {
     typeof x.five === "number" ? bar(T("usage.five"), x.five, gone(x.fiveResetsAt) ? T("usage.passed") : resetText(x.fiveResetsAt), "var(--rt-codex)") : "",
     typeof x.week === "number" ? bar(T("usage.week"), x.week, gone(x.weekResetsAt) ? T("usage.passed") : resetText(x.weekResetsAt), "var(--rt-codex)") : ""].join("") || none("");
   const usage = !state.data.usage ? `<div class="m-box">${none("loading…")}</div>`
-    : u.unavailable ? `<div class="m-box">${none(T("usage.oldServer"))}</div>`
+    : u.unavailable ? `<div class="m-box">${none(usageFailed(u))}</div>`
     : `<div class="m-box">${mHead(`CLAUDE${c.plan ? ` · ${c.plan}` : ""}`, age(c.ageMin))}${claude}</div>
        <div class="m-box">${mHead(`CODEX${x.plan ? ` · ${x.plan}` : ""}`, age(x.ageMin))}${codex}</div>`;
   const services = (state.data.system?.services || []).map((v) => `<div class="m-row" style="min-height:48px">
@@ -3245,7 +3248,7 @@ function sessionUsageHtml(mod) {
 views.usage = () => {
   const u = state.data.usage;
   if (!u) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">loading…</div>`);
-  if (u.unavailable) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">${esc(T("usage.oldServer"))}</div>`);
+  if (u.unavailable) return page(pageHead(T("desk.title.usage"), "") + `<div class="d-hint">${esc(usageFailed(u))}</div>`);
   const c = u.claude || {}, x = u.codex || {}, d = u.desktop || {};
   const age = (m) => (m == null ? "" : T("usage.read", { age: ageText(m) }));
   const now = Date.now();

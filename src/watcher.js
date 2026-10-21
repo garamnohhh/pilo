@@ -259,7 +259,7 @@ async function pumpStalled() {
     // Opened and still queued is the reporting slip; never opened is a wake that
     // did not land, and the first words say which one it is.
     const message = task.opened
-      ? t("wake.nudge", { id: task.id })
+      ? t("wake.nudge", { id: task.id, agent: agent.name })
       : t("wake.task", { id: task.id, agent: agent.name });
     (await wake(agent, message, { taskId: task.id, inboxId: task.inbox_id }) ? nudged : held).push(`#${task.id}`);
   }
