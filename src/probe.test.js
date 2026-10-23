@@ -37,7 +37,24 @@ test("a miss with a reason is noted once, kept on the figure, and cleared by a r
   assert.equal(notes.length, 2, "a new reason is worth a note");
   assert.equal(await probeOutcome(false, null, "w7:p8", { note }), "rate", "a miss with nothing on screen keeps the last reason");
   assert.equal(await probeOutcome(true, null, "w7:p8", { note }), null);
-  assert.equal(existsSync(probeFile()), false, "a reading that lands clears it");
+  assert.equal(readProbe().reason, undefined, "a reading that lands clears the reason");
+  assert.equal(await probeOutcome(false, "rate", "w7:p8", { note }), "rate");
+  assert.equal(notes.length, 2, "the same reason after a good reading stays quiet (#4648)");
+  const later = Date.now() + 13 * 3600e3;
+  assert.equal(await probeOutcome(false, "rate", "w7:p8", { note, now: later }), "rate");
+  assert.equal(notes.length, 3, "after the quiet window it is told again");
+});
+
+test("the desktop app's samples are a figure of their own", async () => {
+  const { desktopQuota } = await import("./quota.js");
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const f = join(mkdtempSync(join(tmpdir(), "pilo-desk-")), "plan-usage-history.json");
+  const now = Date.now();
+  writeFileSync(f, JSON.stringify({ samples: [{ t: now - 3 * 60e3, u: { fh: 3, sd: 62 } }] }));
+  assert.deepEqual(desktopQuota(f, now), { percent: 3, resetsAt: "", week: 62, weekResetsAt: "", ageMin: 3, source: "desktop" });
+  assert.equal(desktopQuota(join(f, "missing"), now), null);
 });
 
 test("only a faint figure carries the reason", () => {

@@ -17,10 +17,28 @@ let cache = { at: 0, value: {} };
 function claudeQuota() {
   const fromCache = cacheQuota();
   const live = newestLimits();
-  if (!live) return fromCache;
-  const liveAge = Math.round((Date.now() - live.at) / 60000);
-  if (fromCache && !fromCache.unknown && fromCache.ageMin <= liveAge) return fromCache;
-  return { percent: live.percent, resetsAt: live.resetsAt, week: live.week, weekResetsAt: live.weekResetsAt, ageMin: liveAge, source: "session" };
+  const liveAge = live ? Math.round((Date.now() - live.at) / 60000) : Infinity;
+  let best = fromCache && !fromCache.unknown ? fromCache : null;
+  if (live && (!best || liveAge < best.ageMin)) {
+    best = { percent: live.percent, resetsAt: live.resetsAt, week: live.week, weekResetsAt: live.weekResetsAt, ageMin: liveAge, source: "session" };
+  }
+  // The Claude desktop app's own samples (every 15 minutes while it runs), as
+  // SketchyBar reads them: a /login can drop Claude Code's cache, and then this
+  // is the only figure on the Mac (#4648). No reset time in it, so it goes "?"
+  // once it is old.
+  const desk = desktopQuota();
+  if (desk && (!best || desk.ageMin < best.ageMin)) best = desk;
+  return best || fromCache;
+}
+
+export function desktopQuota(file = join(homedir(), "Library", "Application Support", "Claude", "plan-usage-history.json"), now = Date.now()) {
+  try {
+    const last = (JSON.parse(readFileSync(file, "utf8"))?.samples || []).at(-1);
+    if (!last || typeof last.u?.fh !== "number" || typeof last.t !== "number") return null;
+    return { percent: last.u.fh, resetsAt: "", week: typeof last.u.sd === "number" ? last.u.sd : null, weekResetsAt: "", ageMin: Math.round((now - last.t) / 60000), source: "desktop" };
+  } catch {
+    return null;
+  }
 }
 
 function cacheQuota() {
@@ -58,7 +76,7 @@ export function readProbe() {
 }
 export function writeProbe(state) {
   try {
-    if (!state || !state.reason) rmSync(probeFile(), { force: true });
+    if (!state || (!state.reason && !state.notedAt)) rmSync(probeFile(), { force: true });
     else writeFileSync(probeFile(), JSON.stringify(state));
   } catch {
     // the figure still shows; only the reason is lost

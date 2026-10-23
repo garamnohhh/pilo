@@ -2389,7 +2389,9 @@ const decisionsOf = (item, detail) => detail?.decisions
   || (item.decision ? [{ ...item.decision, open: true }] : []);
 const openDecisions = (item, detail) => decisionsOf(item, detail).filter((d) => d.open);
 
-// The folded row. The TUI clips the question to two lines and shows the state
+// The folded row. The arrow takes the row's colour: a desk note its note band
+// (INFO), so a folded note still reads as one (#4648); others their state.
+// The TUI clips the question to two lines and shows the state
 // mark and who took it; the time is added here because a page of ten covers
 // more than one day and the reader asked to see when.
 function convHead(item, isFolded) {
@@ -2399,7 +2401,7 @@ function convHead(item, isFolded) {
   // a scheduled run keeps red for trouble and is grey otherwise
   const mood = convMood(item, state.feed.detail[item.id]);
   return `<button class="d-plain" style="display:flex;align-items:baseline;gap:10px;width:100%;padding:6px 0;cursor:pointer" data-act="toggle-conv" data-id="${item.id}">
-    <span class="d-m" style="color:${job && mood !== ERR ? "var(--text-2)" : mood};flex:none">${isFolded ? "›" : "⌄"}</span>
+    <span class="d-m" style="color:${item.source === "desk" ? INFO : job && mood !== ERR ? "var(--text-2)" : mood};flex:none">${isFolded ? "›" : "⌄"}</span>
     <span class="d-m" style="font-size:11px;color:var(--text-3);flex:none">${hhmm(item.createdAt)}</span>
     ${routedChips(item)}
     ${job && isFolded ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);flex:none">${esc(T("feed.scheduleChip"))}</span>` : ""}

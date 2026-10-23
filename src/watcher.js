@@ -370,18 +370,23 @@ export function probeWorthTrying(lost, pane, now = Date.now()) {
 }
 
 // The reason a probe missed goes on the usage figure until a reading lands, and
-// into one desk note per reason: the same reason again says nothing new.
-export async function probeOutcome(fresh, reason, pane, { note = createNote } = {}) {
+// into one desk note per reason per quiet window: the same reason again, even
+// after a reading landed in between, says nothing new for PROBE_NOTE_QUIET_MS
+// (the rate note came back three times one morning, #4648).
+const PROBE_NOTE_QUIET_MS = Number(process.env.PILO_PROBE_NOTE_QUIET_MS || 12 * 3600 * 1000);
+export async function probeOutcome(fresh, reason, pane, { note = createNote, now = Date.now() } = {}) {
   const held = readProbe();
+  const notedAt = held.notedAt || {};
   if (fresh) {
-    if (held.reason) writeProbe(null);
+    if (held.reason) writeProbe({ notedAt });
     return null;
   }
   if (!reason) return held.reason || null;
-  writeProbe({ reason, pane, at: new Date().toISOString(), noted: held.noted === reason ? reason : held.noted });
-  if (held.noted !== reason) {
+  const quiet = now - new Date(notedAt[reason] || 0).getTime() < PROBE_NOTE_QUIET_MS;
+  writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt });
+  if (!quiet) {
     await note({ body: t(reason === "login" ? "note.probeLogin" : "note.probeRate", { pane }) }).catch(() => {});
-    writeProbe({ reason, pane, at: new Date().toISOString(), noted: reason });
+    writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt: { ...notedAt, [reason]: new Date(now).toISOString() } });
   }
   return reason;
 }
