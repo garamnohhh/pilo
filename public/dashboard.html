@@ -152,6 +152,9 @@
   .md .md-quote { margin: 0 0 12px; padding: 2px 0 2px 12px; border-left: 2px solid var(--line); color: var(--text-3) }
   .md .md-rule { margin: 14px 0; border-top: var(--bw) solid var(--line) }
   .md .md-code { font-family: var(--font-mono); font-size: 0.92em; padding: 1px 5px; background: var(--bg-2); color: var(--text) }
+  /* a file path in an answer: its name, a click copies the whole path (title shows it) */
+  .md .md-path { font: inherit; font-family: var(--font-mono); font-size: 0.92em; padding: 1px 6px; border: 1px solid var(--line); background: var(--bg-2); color: var(--accent); cursor: copy }
+  .md .md-path:hover { border-color: var(--accent) }
   .md .md-pre { margin: 0; padding: 10px 14px; white-space: pre; overflow-x: auto; font-size: 12.5px; line-height: 1.75 }
   .md .gn-code { margin: 0 0 12px }
   /* A wide table or a long line scrolls inside its own block, never the page. */
@@ -471,7 +474,7 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { renderMarkdown, followHead, bothArrow } from "/markdown.js";
+import { renderMarkdown, followHead, bothArrow, setDocs } from "/markdown.js";
 import { TUI_COMMANDS, CLI_COMMANDS } from "/commands.js";
 import { t, LANGS } from "/text.js";
 // The rail, from the design handoff. Each row is [screen, plain glyph, codicon]:
@@ -607,6 +610,7 @@ async function load() {
     get("/api/sessions"), get("/api/agents"), get("/api/schedules"), get("/api/quota").catch(() => ({}))
   ]);
   state.data = { ...state.data, overview, tree, projects, inbox, events, artifacts, settings, system, setup, sessions, agents, schedules, quota };
+  setDocs(system?.docs);   // file chips in answers read relative paths against the docs root
   state.offline = false;
   keepRecords(inbox);
   // an older server has no such route; the screens then simply say nothing
@@ -3988,6 +3992,12 @@ function readProjectForm() {
 const actions = {
   async "w-open"() { state.tab = "welcome"; location.hash = "welcome"; render(); },
   async "w-copy"(el) { await navigator.clipboard.writeText(el.dataset.value); toast(T("welcome.copied")); },
+  async "copy-path"(el) {
+    await navigator.clipboard.writeText(el.dataset.path);
+    const name = el.textContent;
+    el.textContent = T("path.copied");
+    setTimeout(() => { el.textContent = name; }, 1200);
+  },
   async "w-desk-pick"(el) { state.welcome.desk = el.dataset.value; render(); },
   async "w-desk-make"(el) {
     const pane = (state.data.setup.free || []).find((x) => x.target === el.dataset.value);

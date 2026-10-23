@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -63,6 +63,16 @@ export function readPort() {
   } catch {
     return Number(process.env.PILO_PORT || 48888);
   }
+}
+
+// Where the user's documents live (config: docs_root = "/path"). A relative path
+// in an answer that starts with one of its top folders is read against it, so a
+// file chip can copy the whole path. Unset: relative paths are left as written.
+export function docsRoot() {
+  const root = configValue("docs_root").replace(/\/+$/, "");
+  let top = [];
+  try { if (root) top = readdirSync(root, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.name.startsWith(".")).map((d) => d.name); } catch {}
+  return { root, top, home: homedir() };
 }
 
 export function paths() {

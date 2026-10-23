@@ -153,16 +153,51 @@ export function bothArrow(value, caret) {
   return { value: value.slice(0, at) + "↔" + value.slice(caret), caret: at + 1 };
 }
 
+// File paths in an answer show as a chip with the file's name; a click copies the
+// whole path (pasted into a browser's address bar, or a viewer's open box). An
+// absolute path (/Users/…, ~/…) is copied as it is, ~ made the home folder; a
+// relative one only when it starts in the docs root (config docs_root), which
+// is put in front. Paths in fenced code blocks are left alone: those are
+// commands to copy as they stand. A path alone in inline code becomes a chip.
+let docs = { root: "", top: [], home: "" };
+export function setDocs(next) { docs = { root: next?.root || "", top: next?.top || [], home: next?.home || "" }; }
+
+const PATH_END = String.raw`\.[A-Za-z0-9]{1,8}`;
+function pathRe() {
+  const rel = docs.root && docs.top.length
+    ? `|(?:${docs.top.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})/`
+    : "";
+  return new RegExp(String.raw`(?<![\w/.])((?:/(?:Users|home|Volumes|private|tmp|opt|var)/|~/${rel})[^\s<>"'\`|&]*?${PATH_END})(?=$|[\s),.;:!?」）\]]|&lt;|&quot;)`, "g");
+}
+function fullPath(p) {
+  if (p.startsWith("~/")) return docs.home ? `${docs.home}/${p.slice(2)}` : p;
+  if (p.startsWith("/")) return p;
+  return `${docs.root}/${p}`;
+}
+function pathChip(p) {
+  const parts = p.split("/").filter(Boolean);
+  const file = parts.at(-1) || p;
+  // index.html and the like say nothing alone: the folder goes with them
+  const name = /^(index|readme)\./i.test(file) && parts.length > 1 ? `${parts.at(-2)}/${file}` : file;
+  const full = fullPath(p);
+  return `<button type="button" class="md-path" data-act="copy-path" data-path="${full}" title="${full}">${name}</button>`;
+}
+
 function inlineHtml(escaped) {
   const parked = [];
   const park = (html) => `\u0000${parked.push(html) - 1}\u0000`;
   let s = escaped.replace(/\u0000/g, "");
+  const re = pathRe();
 
-  s = s.replace(/`([^`\n]+)`/g, (_, code) => park(`<code class="md-code">${code}</code>`));
+  s = s.replace(/`([^`\n]+)`/g, (_, code) => {
+    const alone = new RegExp(`^${re.source}$`).exec(code.trim());
+    return park(alone ? pathChip(alone[1]) : `<code class="md-code">${code}</code>`);
+  });
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (whole, label, href) =>
     (SAFE_HREF.test(href) ? park(`<a href="${href}" target="_blank" rel="noreferrer noopener">${label}</a>`) : whole));
   s = s.replace(/https?:\/\/[^\s<>"']+/g, (url) =>
     park(`<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>`));
+  s = s.replace(re, (_, p) => park(pathChip(p)));
 
   // the sans font draws -> and <- as arrows but not <->, which came out "<→"
   s = s.replace(/&lt;-&gt;/g, "↔");

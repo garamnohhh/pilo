@@ -5,7 +5,7 @@ import { parseMenu } from "./panemenu.js";
 import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
 import { writeRules, previewRules } from "./rules.js";
-import { paths, readPort, dataDir } from "./paths.js";
+import { paths, readPort, dataDir, docsRoot } from "./paths.js";
 import { spoolDir } from "./spool.js";
 import { usageReport } from "./usage.js";
 import { t } from "./text.js";
@@ -1536,6 +1536,7 @@ export async function systemStatus() {
       { name: "dashboard", detail: `http://127.0.0.1:${port}/dashboard`, state: "running" }
     ],
     paths: paths(),
+    docs: docsRoot(),
     sessions,
     wakeFailures: failures,
     commands: [

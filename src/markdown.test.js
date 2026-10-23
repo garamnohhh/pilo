@@ -164,3 +164,25 @@ test("<-> shows as ↔ outside code, and the composer turns it as it is typed", 
   assert.equal(bothArrow("a <-", 4), null);
 });
 
+
+test("file paths become chips that copy the whole path", async () => {
+  const { setDocs } = await import("./markdown.js");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  setDocs({ root: "/K", top: ["SideProjects"], home: "/Users/g" });
+  const rel = renderMarkdown("see `SideProjects/p/outputs/x/index.html` now", esc);
+  assert.match(rel, /data-path="\/K\/SideProjects\/p\/outputs\/x\/index.html"[^>]*>x\/index.html</);
+  assert.match(renderMarkdown("at /Users/g/a/b.md, ok", esc), /data-path="\/Users\/g\/a\/b.md"[^>]*>b.md</);
+  assert.match(renderMarkdown("~/x/y.png", esc), /data-path="\/Users\/g\/x\/y.png"/);
+  assert.doesNotMatch(renderMarkdown("src/api.js stays", esc), /md-path/, "a repo path is not a docs path");
+  assert.doesNotMatch(renderMarkdown("```\n/Users/g/a.md\n```", esc), /md-path/, "code blocks stay as written");
+  setDocs({ root: "", top: [], home: "" });
+  assert.doesNotMatch(renderMarkdown("SideProjects/p/a.md", esc), /md-path/, "no docs root: relative paths stay text");
+});
+
+test("a placeholder path is not a file", async () => {
+  const { setDocs } = await import("./markdown.js");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  setDocs({ root: "/K", top: ["SideProjects"], home: "/Users/g" });
+  assert.doesNotMatch(renderMarkdown("write /tmp/pilo-brief-<n>.md first", esc), /md-path/);
+  setDocs({ root: "", top: [], home: "" });
+});
