@@ -371,10 +371,10 @@ const EN = {
   "event.progress": "{agent} progress #{id}",
   "event.dismissed": "{agent} wake failures dismissed",
   "event.probeLost": "usage probe pane {pane} is gone - the usage figure will go stale until it is back",
-  "note.probeLogin": "Claude usage is not refreshing: the usage-probe pane ({pane}) has to sign in again. Run /login in that pane.",
-  "note.probeRate": "Claude usage is not refreshing: the usage endpoint answers the usage-probe pane ({pane}) \"rate limited\". It is asked less often until it answers.",
+  "note.probeLogin": "Claude usage % is not updating: the usage-probe session (the one that reads the %) was signed out. Run /login in usage-probe and it updates again.",
+  "note.probeRate": "Claude usage % is not updating for a while: the check that reads the % was asked too often, so Claude turned it away for now. This is not your Claude usage limit. Pilo asks less often and, once an answer comes back, it is back to normal with no further note.",
   "quota.reason.login": "login needed",
-  "quota.reason.rate": "rate limited",
+  "quota.reason.rate": "check paused",
 
   // wake messages, which the instruction files quote verbatim
   "wake.inbox": "[pilo:inbox] request #{id} - for {agent}. read it with 'pilo inbox {id}'.",
@@ -918,10 +918,10 @@ const KO = {
   "event.progress": "{agent} 진행 #{id}",
   "event.dismissed": "{agent} wake 실패 확인 처리",
   "event.probeLost": "사용량 probe 창 {pane} 이 사라짐 - 다시 붙이기 전까지 사용량 값이 낡아감",
-  "note.probeLogin": "Claude 사용량이 갱신되지 않음: usage-probe 창({pane})의 로그인이 풀림. 그 창에서 /login 필요.",
-  "note.probeRate": "Claude 사용량이 갱신되지 않음: 사용량 요청이 usage-probe 창({pane})에 '요청 제한'으로 막힘. 풀릴 때까지 간격을 늘려 다시 시도.",
+  "note.probeLogin": "Claude 사용량 % 가 갱신되지 않음: % 를 읽어 오는 usage-probe 세션의 로그인이 풀림. usage-probe 에서 /login 하면 다시 갱신됨.",
+  "note.probeRate": "Claude 사용량 % 가 잠시 갱신되지 않음: % 를 읽어 오는 조회가 너무 잦아 Claude 가 잠깐 거절함(Claude 사용 한도와는 무관). 조회 간격을 늘려 다시 시도하고, 다시 받아지면 따로 알림 없이 정상으로 돌아감.",
   "quota.reason.login": "로그인 필요",
-  "quota.reason.rate": "요청 제한",
+  "quota.reason.rate": "조회 잠시 거절",
 
   "wake.inbox": "[pilo:inbox] 요청 도착 #{id} - {agent} 앞. 'pilo inbox {id}' 로 확인.",
   "wake.task": "[pilo:task] 작업 도착 #{id} - {agent} 앞. 'pilo task {id}' 로 읽고 'pilo done {id}' 로 보고.",

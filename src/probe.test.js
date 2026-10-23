@@ -30,7 +30,8 @@ test("a miss with a reason is noted once, kept on the figure, and cleared by a r
   assert.equal(await probeOutcome(false, "login", "w7:p8", { note }), "login");
   assert.equal(await probeOutcome(false, "login", "w7:p8", { note }), "login");
   assert.equal(notes.length, 1, "the same reason again says nothing new");
-  assert.match(notes[0], /w7:p8/);
+  assert.match(notes[0], /\/login/);
+  assert.doesNotMatch(notes[0], /w7:p8/, "no pane id in a note for the user");
   assert.equal(readProbe().reason, "login");
   assert.equal(await probeOutcome(false, "rate", "w7:p8", { note }), "rate");
   assert.equal(notes.length, 2, "a new reason is worth a note");
