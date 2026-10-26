@@ -209,10 +209,10 @@ function inlineHtml(escaped) {
 }
 
 // A follow-up is stored as typed, with the head the screens put in front of it:
-// "follow-up to in-2466 — …" (or the Korean "in-2466 이어서 — …"). The screens show
+// "follow-up to in-2466 - …" (or the Korean "in-2466 이어서 - …"; before 10-21 the dash was —). The screens show
 // that head on a line of its own and the user's words from the start, so a list
 // the user began with "1." starts there too. What is stored never changes.
-const FOLLOW_HEAD = /^(?:follow-up to in-(\d+)|in-(\d+) 이어서) — /;
+const FOLLOW_HEAD = /^(?:follow-up to in-(\d+)|in-(\d+) 이어서) [—-] /;
 export function followHead(text) {
   const s = String(text ?? "");
   const m = FOLLOW_HEAD.exec(s);

@@ -152,6 +152,9 @@ test("a numbered list keeps its numbers, and a follow-up's head comes off", () =
   assert.doesNotMatch(html, /start=/);
   assert.deepEqual(followHead("in-12 이어서 — 그거 다시"), { follow: "12", body: "그거 다시" });
   assert.deepEqual(followHead("no head here"), { follow: null, body: "no head here" });
+  // since 10-21 the prefix is written with "-", and the "1." the user began with still starts a list
+  assert.deepEqual(followHead("follow-up to in-4126 - 1. 4번 항목\n2. b"), { follow: "4126", body: "1. 4번 항목\n2. b" });
+  assert.deepEqual(followHead("in-12 이어서 - 그거 다시"), { follow: "12", body: "그거 다시" });
 });
 
 // 10/16: the font turns -> and <- into arrows, not <->; code keeps what was typed
