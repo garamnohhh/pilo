@@ -2,7 +2,7 @@ import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import * as approvals from "./approvals.js";
 import { parseMenu } from "./panemenu.js";
-import { t } from "./text.js";
+import { t, tUser } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached, probeReason, readProbe, writeProbe } from "./quota.js";
 import { agentForPane, recordWakeFailure, dueSchedules, runSchedule, systemJob, systemJobRan, notifyRule, setLimited, noteRestart, WAITS_ON_WORKER, createNote } from "./api.js";
 import { changed } from "./changes.js";
@@ -385,7 +385,7 @@ export async function probeOutcome(fresh, reason, pane, { note = createNote, now
   const quiet = now - new Date(notedAt[reason] || 0).getTime() < PROBE_NOTE_QUIET_MS;
   writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt });
   if (!quiet) {
-    await note({ body: t(reason === "login" ? "note.probeLogin" : "note.probeRate", { pane }) }).catch(() => {});
+    await note({ body: tUser(reason === "login" ? "note.probeLogin" : "note.probeRate", { pane }) }).catch(() => {});
     writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt: { ...notedAt, [reason]: new Date(now).toISOString() } });
   }
   return reason;

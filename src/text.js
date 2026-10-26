@@ -1108,6 +1108,14 @@ export const LANGS = { en: EN, ko: KO };
 // The dashboard imports this file too, where there is no process to read.
 const wanted = typeof process === "undefined" ? "" : process.env.PILO_LANG || "";
 export const lang = LANGS[wanted] ? wanted : "en";
+// What the server writes for the user to read (notes) is Korean unless PILO_LANG
+// says otherwise; agent-facing words keep `lang` (in-4089).
+export const userLang = LANGS[wanted] ? wanted : "ko";
+
+export function tUser(key, vars = {}) {
+  const line = LANGS[userLang][key] ?? EN[key] ?? key;
+  return String(line).replace(/\{(\w+)\}/g, (_, name) => (vars[name] === undefined ? `{${name}}` : String(vars[name])));
+}
 
 // t("card.needsReplyMany", { count: 3 }). Unknown keys come back as the key
 // itself, which is louder in a screenshot than an empty string.
