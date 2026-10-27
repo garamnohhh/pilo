@@ -80,6 +80,23 @@ export function readDesktop(file, now = Date.now()) {
   };
 }
 
+export function withNewest(c, best) {
+  const out = { ...c, source: "cache" };
+  if (!best?.source || best.percent == null || !(best.ageMin < (c.ageMin ?? Infinity))) return out;
+  // the five hours is the session window, the week the one not scoped to a model
+  // (older files key them five_hour / seven_day, newer ones by kind)
+  const set = (group, key, percent, resetsAt) => {
+    if (typeof percent !== "number") return;
+    const i = out.windows.findIndex((w) => w.group === group && !w.model);
+    if (i >= 0) out.windows[i] = { ...out.windows[i], percent, resetsAt: resetsAt || out.windows[i].resetsAt };
+    else out.windows.push({ key, group, model: null, percent, resetsAt: resetsAt || null, active: false });
+  };
+  out.windows = [...(c.windows || [])];
+  set("session", "five_hour", best.percent, best.resetsAt);
+  set("weekly", "seven_day", best.week, best.weekResetsAt);
+  return { ...out, ageMin: best.ageMin, source: best.source };
+}
+
 // Each source on its own: a thrown error, a missing file and a changed shape all
 // come back as { missing } for that one source only.
 function attempt(read) {
@@ -104,6 +121,10 @@ export function usageReport({ home = homedir(), now = Date.now(), maxAgeMs = CAC
     codexTrend: attempt(() => ({ samples: codexTrend(now) })),
     at: new Date(now).toISOString()
   };
+  // Claude's figure from wherever it is newest (#4846): a session's own report
+  // (pilo-usage mod) or the desktop app's sample over Claude Code's /usage cache,
+  // with the source named so the screen can say where the % came from
+  if (!value.claude.missing) value.claude = withNewest(value.claude, readQuota(now)?.claude);
   // the desktop file is only worth reading while the app keeps writing it
   if (!value.desktop.missing) {
     try { value.desktop.ageMin = Math.round((now - statSync(desktopFile).mtimeMs) / 60000); } catch {}

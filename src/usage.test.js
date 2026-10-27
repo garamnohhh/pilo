@@ -122,3 +122,14 @@ test("no Codex at all is no reading, not zero", async () => {
     process.env.HOME = before;
   }
 });
+
+test("Claude's figure from the newest source, named (#4846)", async () => {
+  const { withNewest } = await import("./usage.js");
+  const cache = { plan: "Max", windows: [{ key: "five_hour", group: "session", model: null, percent: 10, resetsAt: "r1", active: false }], ageMin: 40 };
+  assert.equal(withNewest(cache, null).source, "cache");
+  assert.equal(withNewest(cache, { percent: 50, ageMin: 50, source: "session" }).windows[0].percent, 10, "an older reading does not win");
+  const s = withNewest(cache, { percent: 55, resetsAt: "", week: 20, weekResetsAt: "w", ageMin: 2, source: "session" });
+  assert.equal(s.source, "session");
+  assert.equal(s.ageMin, 2);
+  assert.deepEqual(s.windows.map((w) => [w.key, w.percent, w.resetsAt]), [["five_hour", 55, "r1"], ["seven_day", 20, "w"]]);
+});

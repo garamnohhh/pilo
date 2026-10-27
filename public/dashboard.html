@@ -2128,7 +2128,7 @@ mviews.more = () => {
     typeof x.week === "number" ? bar(T("usage.week"), x.week, gone(x.weekResetsAt) ? T("usage.passed") : resetText(x.weekResetsAt), "var(--rt-codex)") : ""].join("") || none("");
   const usage = !state.data.usage ? `<div class="m-box">${none("loading…")}</div>`
     : u.unavailable ? `<div class="m-box">${none(usageFailed(u))}</div>`
-    : `<div class="m-box">${mHead(`CLAUDE${c.plan ? ` · ${c.plan}` : ""}`, age(c.ageMin))}${claude}</div>
+    : `<div class="m-box">${mHead(`CLAUDE${c.plan ? ` · ${c.plan}` : ""}`, [age(c.ageMin), c.source ? T(`usage.from.${c.source}`) : ""].filter(Boolean).join(" · "))}${claude}</div>
        <div class="m-box">${mHead(`CODEX${x.plan ? ` · ${x.plan}` : ""}`, age(x.ageMin))}${codex}</div>`;
   const services = (state.data.system?.services || []).map((v) => `<div class="m-row" style="min-height:48px">
       <span class="d-dot" style="background:${stateColor(v.state)}"></span>
@@ -3286,7 +3286,7 @@ views.usage = () => {
   return page(pageHead(T("desk.title.usage"), "") +
     `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:48px;align-items:start">
       <div class="d-stack" style="min-width:0">
-        <div>${rule(`Claude${c.plan ? ` · ${esc(c.plan)}` : ""}`, esc(age(c.ageMin)))}${claudeHtml}</div>
+        <div>${rule(`Claude${c.plan ? ` · ${esc(c.plan)}` : ""}`, esc([age(c.ageMin), c.source ? T(`usage.from.${c.source}`) : ""].filter(Boolean).join(" · ")))}${claudeHtml}</div>
         <div>${rule(`Codex${x.plan ? ` · ${esc(x.plan.charAt(0).toUpperCase() + x.plan.slice(1))}` : ""}`, esc(age(x.ageMin)))}${codexHtml}</div>
       </div>
       <div class="d-stack" style="min-width:0">

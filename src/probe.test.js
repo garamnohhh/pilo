@@ -34,8 +34,10 @@ test("a miss with a reason is noted once, kept on the figure, and cleared by a r
   assert.doesNotMatch(notes[0], /w7:p8/, "no pane id in a note for the user");
   if (!process.env.PILO_LANG) assert.match(notes[0], /로그인/, "a note for the user is Korean by default (in-4089)");
   assert.equal(readProbe().reason, "login");
-  assert.equal(await probeOutcome(false, "rate", "w7:p8", { note }), "rate");
-  assert.equal(notes.length, 2, "a new reason is worth a note");
+  assert.equal(await probeOutcome(false, "rate", "w7:p8", { note, misses: 1 }), "rate");
+  assert.equal(notes.length, 1, "one passing refusal says nothing (#4846)");
+  assert.equal(await probeOutcome(false, "rate", "w7:p8", { note, misses: 3 }), "rate");
+  assert.equal(notes.length, 2, "a refusal that held three tries is worth a note");
   assert.equal(await probeOutcome(false, null, "w7:p8", { note }), "rate", "a miss with nothing on screen keeps the last reason");
   assert.equal(await probeOutcome(true, null, "w7:p8", { note }), null);
   assert.equal(readProbe().reason, undefined, "a reading that lands clears the reason");

@@ -222,7 +222,8 @@ export function claudeAgeMin() {
   // a session that reported after its turn is as good as a /usage, so the
   // probe stays quiet while sessions are working
   const live = newestLimits();
-  return Math.min(cache, live ? (Date.now() - live.at) / 60000 : Infinity);
+  const desk = desktopQuota();
+  return Math.min(cache, live ? (Date.now() - live.at) / 60000 : Infinity, desk ? desk.ageMin : Infinity);
 }
 
 // A missing file, a changed format, a machine with neither tool: all the same

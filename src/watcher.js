@@ -346,9 +346,12 @@ async function pumpStalled() {
 
 // The five-hour figure on the status line only moves when some Claude session
 // asks for it, and /usage is a local command: no model, no tokens. So the system
-// agent — a pane Pilo keeps for its own errands — is asked every few minutes,
-// and the panel it opens is closed again a tick later. Nobody else is typed into.
-const QUOTA_STALE_MIN = Number(process.env.PILO_QUOTA_STALE_MIN || 6);
+// agent — a pane Pilo keeps for its own errands — is asked, and the panel it
+// opens is closed again a tick later. Nobody else is typed into. The figure the
+// pilo-usage mod and the desktop app bring in costs no request, so /usage is the
+// fallback: only once the newest figure from anywhere is 30 minutes old, however
+// short the job's own minutes are (every:1 had Claude turn the endpoint away, #4846).
+const QUOTA_STALE_MIN = Number(process.env.PILO_QUOTA_STALE_MIN || 30);
 let probe = { pane: "", askedAt: 0 };
 // The pane the probe runs in can go away — closed by hand, or lost with a herdr
 // restart — and a prompt to a pane that is not there fails every three seconds
@@ -374,7 +377,10 @@ export function probeWorthTrying(lost, pane, now = Date.now()) {
 // after a reading landed in between, says nothing new for PROBE_NOTE_QUIET_MS
 // (the rate note came back three times one morning, #4648).
 const PROBE_NOTE_QUIET_MS = Number(process.env.PILO_PROBE_NOTE_QUIET_MS || 12 * 3600 * 1000);
-export async function probeOutcome(fresh, reason, pane, { note = createNote, now = Date.now() } = {}) {
+// A refusal is told only once it has held through three tries in a row (about
+// 35 minutes with the backoff): one passing refusal fixes itself (#4846).
+const RATE_NOTE_MISSES = 3;
+export async function probeOutcome(fresh, reason, pane, { note = createNote, now = Date.now(), misses = RATE_NOTE_MISSES } = {}) {
   const held = readProbe();
   const notedAt = held.notedAt || {};
   if (fresh) {
@@ -384,7 +390,7 @@ export async function probeOutcome(fresh, reason, pane, { note = createNote, now
   if (!reason) return held.reason || null;
   const quiet = now - new Date(notedAt[reason] || 0).getTime() < PROBE_NOTE_QUIET_MS;
   writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt });
-  if (!quiet) {
+  if (!quiet && (reason !== "rate" || misses >= RATE_NOTE_MISSES)) {
     await note({ body: tUser(reason === "login" ? "note.probeLogin" : "note.probeRate", { pane }) }).catch(() => {});
     writeProbe({ reason, pane, at: new Date(now).toISOString(), notedAt: { ...notedAt, [reason]: new Date(now).toISOString() } });
   }
@@ -405,14 +411,15 @@ async function pumpQuota() {
       // the pane went away; the next round will find another
     }
     const fresh = claudeAgeMin() < minutes;
-    await probeOutcome(fresh, probeReason(screen), pane);
+    await probeOutcome(fresh, probeReason(screen), pane, { misses: probeMiss.count + 1 });
     probeMiss = fresh ? { count: 0, at: 0 } : { count: probeMiss.count + 1, at: Date.now() };
     await noteJob("usage-probe", fresh ? "probe ok"
       : `asked, figure not refreshed yet — next try in ${probeBackoffMs(probeMiss.count) / 60000} min`);
     return;
   }
   if (probe.askedAt) return;
-  const job = jobSetting(await systemJob("usage-probe"), QUOTA_STALE_MIN);
+  const setting = jobSetting(await systemJob("usage-probe"), QUOTA_STALE_MIN);
+  const job = { ...setting, minutes: Math.max(setting.minutes, QUOTA_STALE_MIN) };
   if (!job.on) return;
   if (claudeAgeMin() < job.minutes) { probeMiss = { count: 0, at: 0 }; return; }
   if (Date.now() - probeMiss.at < probeBackoffMs(probeMiss.count)) return;
