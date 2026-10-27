@@ -9,6 +9,7 @@ import { CLI_COMMANDS } from "./commands.js";
 import { cols } from "./width.js";
 import { t } from "./text.js";
 import { describeCadence } from "./cadence.js";
+import { headlessTables } from "./markdown.js";
 
 function resolveSocket() {
   if (process.env.PILO_SOCKET) return process.env.PILO_SOCKET;
@@ -144,6 +145,13 @@ async function file(taskId, payload) {
   }
 }
 
+// '| … |' rows saved without a header and a '|---|' line (#4897). They are drawn as a
+// headerless table anyway; the warning is so the next report carries its header.
+function tableWarning(text) {
+  const n = headlessTables(text);
+  return n ? "\n" + t("cli.headlessTable", { n }) : "";
+}
+
 // What a bare number names here: a task, a request, or nothing at all — and
 // when nothing, the server's own words on which Pilo answered.
 async function whatIs(id, requestFirst) {
@@ -226,9 +234,10 @@ const commands = {
     const { rest, opts } = flags(args.filter((arg) => arg !== "--with-results"));
     const [inboxId, ...text] = rest;
     if (!inboxId || (!text.length && !attach && !opts.file)) throw new Error("usage: pilo reply <inboxId> <text> [--with-results] | --file <path>");
-    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: body(text, opts), withResults: attach });
+    const said = body(text, opts);
+    const res = await call("POST", `/api/inbox/${inboxId}/reply`, { body: said, withResults: attach });
     const saved = t("cli.replySaved", { id: res.id, inbox: inboxId });
-    return out(res.attached?.length ? saved + t("cli.replyAttached", { agents: res.attached.join(", ") }) : saved);
+    return out((res.attached?.length ? saved + t("cli.replyAttached", { agents: res.attached.join(", ") }) : saved) + tableWarning(said));
   },
 
   async history(args) {
@@ -269,8 +278,9 @@ const commands = {
     const { rest, opts } = flags(args);
     const [taskId, ...text] = rest;
     if (!taskId || (!text.length && !opts.file)) throw new Error("usage: pilo done <taskId> <report> | --file <path>");
+    const report = body(text, opts);
     const res = await file(taskId, {
-      pmResult: body(text, opts),
+      pmResult: report,
       status: opts.status || "done",
       error: opts.error || "",
       tokensIn: Number(opts.in || 0),
@@ -278,7 +288,7 @@ const commands = {
       // what was checked and run: kept with the result, off the user's screen
       runLog: opts.log ? [{ t: "", text: opts.log }] : undefined
     });
-    return out(t("cli.result", { id: res.id, status: res.status }));
+    return out(t("cli.result", { id: res.id, status: res.status }) + tableWarning(report));
   },
 
   async block(args) {

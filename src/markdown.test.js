@@ -189,3 +189,24 @@ test("a placeholder path is not a file", async () => {
   assert.doesNotMatch(renderMarkdown("write /tmp/pilo-brief-<n>.md first", esc), /md-path/);
   setDocs({ root: "", top: [], home: "" });
 });
+
+// #4897: hoban's #4893 report put two '| … |' rows under a line with no header or
+// divider, and the pipes showed as text.
+test("rows with no header or divider still make a table", async () => {
+  const { headlessTables } = await import("./markdown.js");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const text = "추천(2:8)\n| 7 | 실측 평균 9초 | 실측 평균 21.0초 |\n| 7 | 응답 상태 표시 | 현재 평균 15.8초 |\n대안(5:5): 끝";
+  const html = renderMarkdown(text, esc);
+  assert.match(html, /<p class="md-p">추천\(2:8\)<\/p><div class="md-block md-scroll"><table class="gn-table md-table"><tbody>/);
+  assert.equal((html.match(/<tr>/g) || []).length, 2);
+  assert.doesNotMatch(html, /<thead>/);
+  assert.match(html, /<td>현재 평균 15.8초<\/td>/);
+  assert.equal(headlessTables(text), 1);
+  assert.doesNotMatch(alignTables(text), /\|-/, "the terminal copy draws no header rule");
+  assert.match(alignTables(text), /^\| 7 \| 실측 평균 9초 /m);
+  // one bare row stays text, short rows are padded, a proper table is not warned about
+  assert.doesNotMatch(renderMarkdown("| a | b |", esc), /<table/);
+  assert.match(renderMarkdown("| a | b | c |\n| d | e |", esc), /<tr><td>d<\/td><td>e<\/td><td><\/td><\/tr>/);
+  assert.equal(headlessTables("| a | b |\n|---|---|\n| 1 | 2 |"), 0);
+  assert.equal(headlessTables("a | b\nc | d"), 0, "pipes inside prose are not rows");
+});

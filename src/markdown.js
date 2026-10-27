@@ -14,6 +14,42 @@ const cells = (line) =>
     .map((c) => c.trim());
 
 const isRow = (line) => line.includes("|") && line.trim().startsWith("|");
+// a row with no header above it still reads as a row when it is closed on both ends
+const isBareRow = (line) => /^\|.*\|$/.test(line.trim()) && cells(line).length >= 2;
+
+// The table starting at line i, or null. A header and divider make the usual table;
+// two or more bare '| … |' lines without them make one with no header (#4897: agents
+// drop the header and the divider, and the pipes showed as text). One bare line stays
+// text. Short rows are padded with empty cells to the widest row.
+function tableAt(lines, i) {
+  let head = null;
+  let j = i;
+  if (isRow(lines[i]) && i + 1 < lines.length && DIVIDER.test(lines[i + 1]) && isRow(lines[i + 1])) {
+    head = cells(lines[i]);
+    j = i + 2;
+    const body = [];
+    while (j < lines.length && isRow(lines[j])) body.push(cells(lines[j++]));
+    return { head, body, end: j };
+  }
+  const body = [];
+  while (j < lines.length && isBareRow(lines[j])) body.push(cells(lines[j++]));
+  if (body.length < 2) return null;
+  const count = Math.max(...body.map((r) => r.length));
+  return { head: null, body: body.map((r) => Array.from({ length: count }, (_, k) => r[k] ?? "")), end: j };
+}
+
+// Tables a reply saves with no header or divider, as a warning back to the agent
+// that wrote them; the text itself is stored as written.
+export function headlessTables(text) {
+  const lines = String(text || "").split("\n");
+  let n = 0;
+  for (let i = 0; i < lines.length; ) {
+    const t = tableAt(lines, i);
+    if (t && !t.head) n += 1;
+    i = t ? t.end : i + 1;
+  }
+  return n;
+}
 
 function pad(text, width) {
   return text + " ".repeat(Math.max(0, width - cols(text)));
@@ -47,7 +83,7 @@ function fit(widths, available) {
   return result;
 }
 
-function renderTable(rows, width) {
+function renderTable(rows, width, headed = true) {
   const count = Math.max(...rows.map((r) => r.length));
   const grid = rows.map((r) => Array.from({ length: count }, (_, i) => r[i] ?? ""));
   const widths = fit(
@@ -56,6 +92,7 @@ function renderTable(rows, width) {
   );
   const line = (cellsOfRow) => "| " + cellsOfRow.map((c, i) => pad(clip(c, widths[i]), widths[i])).join(" | ") + " |";
   const rule = "|" + widths.map((w) => "-".repeat(w + 2)).join("|") + "|";
+  if (!headed) return grid.map(line);
   const [head, ...body] = grid;
   return [line(head), rule, ...body.map(line)];
 }
@@ -67,20 +104,14 @@ export function alignTables(text, width = 80) {
   const out = [];
   let i = 0;
   while (i < lines.length) {
-    const isTable = isRow(lines[i]) && i + 1 < lines.length && DIVIDER.test(lines[i + 1]) && isRow(lines[i + 1]);
-    if (!isTable) {
+    const t = tableAt(lines, i);
+    if (!t) {
       out.push(lines[i]);
       i += 1;
       continue;
     }
-    const rows = [cells(lines[i])];
-    let j = i + 2;
-    while (j < lines.length && isRow(lines[j])) {
-      rows.push(cells(lines[j]));
-      j += 1;
-    }
-    out.push(...renderTable(rows, width));
-    i = j;
+    out.push(...renderTable(t.head ? [t.head, ...t.body] : t.body, width, Boolean(t.head)));
+    i = t.end;
   }
   return out.join("\n");
 }
@@ -93,22 +124,17 @@ export function tablesToHtml(text, escape) {
   const out = [];
   let i = 0;
   while (i < lines.length) {
-    const isTable = isRow(lines[i]) && i + 1 < lines.length && DIVIDER.test(lines[i + 1]) && isRow(lines[i + 1]);
-    if (!isTable) {
+    const t = tableAt(lines, i);
+    if (!t) {
       out.push(escape(lines[i]));
       i += 1;
       continue;
     }
     found = true;
-    const head = cells(lines[i]);
-    const body = [];
-    let j = i + 2;
-    while (j < lines.length && isRow(lines[j])) {
-      body.push(cells(lines[j]));
-      j += 1;
-    }
+    const { head, body } = t;
+    const j = t.end;
     out.push(
-      `<table class="md"><thead><tr>${head.map((c) => `<th>${escape(c)}</th>`).join("")}</tr></thead>` +
+      `<table class="md">${head ? `<thead><tr>${head.map((c) => `<th>${escape(c)}</th>`).join("")}</tr></thead>` : ""}` +
         `<tbody>${body
           .map((r) => `<tr>${r.map((c) => `<td>${escape(c)}</td>`).join("")}</tr>`)
           .join("")}</tbody></table>`
@@ -264,15 +290,14 @@ export function renderMarkdown(text, escape) {
       continue;
     }
 
-    if (isRow(line) && i + 1 < lines.length && DIVIDER.test(lines[i + 1]) && isRow(lines[i + 1])) {
-      const head = cells(line);
-      const body = [];
-      let j = i + 2;
-      while (j < lines.length && isRow(lines[j])) body.push(cells(lines[j++]));
+    const table = tableAt(lines, i);
+    if (table) {
+      const { head, body } = table;
+      const j = table.end;
       out.push(
-        `<div class="md-block md-scroll"><table class="gn-table md-table"><thead><tr>` +
-          head.map((cell) => `<th>${inlineHtml(escape(cell))}</th>`).join("") +
-          `</tr></thead><tbody>` +
+        `<div class="md-block md-scroll"><table class="gn-table md-table">` +
+          (head ? `<thead><tr>${head.map((cell) => `<th>${inlineHtml(escape(cell))}</th>`).join("")}</tr></thead>` : "") +
+          `<tbody>` +
           body.map((row) => `<tr>${row.map((cell) => `<td>${inlineHtml(escape(cell))}</td>`).join("")}</tr>`).join("") +
           `</tbody></table></div>`
       );
@@ -324,7 +349,7 @@ export function renderMarkdown(text, escape) {
       i < lines.length && lines[i].trim() &&
       !FENCE.test(lines[i]) && !HEADING.test(lines[i]) && !RULE.test(lines[i]) &&
       !QUOTE.test(lines[i]) && !BULLET.test(lines[i]) && !NUMBER.test(lines[i]) &&
-      !(isRow(lines[i]) && DIVIDER.test(lines[i + 1] || ""))
+      !tableAt(lines, i)
     ) {
       para.push(lines[i++]);
     }
