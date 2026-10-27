@@ -68,9 +68,71 @@ a:hover { color: var(--accent); }
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+          <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.4</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.27</span>
+          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
+<span class="l-en">A patched Node.js, wakes that wait out a dialog instead of giving up, and file paths as chips.</span>
+<span class="l-ko">패치된 Node, 대화상자에 막혀도 포기하지 않는 깨우기, 칩으로 보이는 파일 경로.</span>
+</p>
+        <div  style="border-top: 1px solid var(--line);">
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">node</span>
+<span class="l-ko">Node</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Needs a patched Node.js, 22.23.4 or newer on 22 and 24.22.1 or newer on 24. With an older one the installer fetches pilo's own private Node instead and leaves yours alone.</span>
+<span class="l-ko">패치된 Node 가 필요해요: 22 계열은 22.23.4 이상, 24 계열은 24.22.1 이상. 그보다 낮으면 설치 스크립트가 pilo 전용 Node 를 따로 받고, 원래 Node 는 그대로 둬요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">wakes</span>
+<span class="l-ko">깨우기</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">A wake that hits a dialog tries again once the pane is idle, never backs off or gives up, and shows as wake waiting. Wakes to the desk go out as one bundle per tick and wait for a busy desk to finish, and the request says why it waits.</span>
+<span class="l-ko">창에 대화상자가 떠서 못 깨운 경우 창이 한가해지면 다시 시도해요. 물러나거나 포기하지 않고, 상태는 깨우기 대기로 보여요. 데스크 깨우기는 한 번에 묶어 보내고, 데스크가 바쁘면 끝날 때까지 기다리며 왜 기다리는지 요청에 적혀요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">dashboard</span>
+<span class="l-ko">대시보드</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">File paths in answers show as name chips that copy the whole path. A follow-up is recognised with a plain dash too, so its chip sits beside 'you', and a '1.' you wrote starts its own line.</span>
+<span class="l-ko">답 속 파일 경로가 이름 칩으로 보이고, 누르면 전체 경로가 복사돼요. 일반 대시로 쓴 이어서 요청도 알아봐서 칩이 '나' 옆에 붙고, 직접 쓴 '1.' 은 새 줄에서 시작해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">usage</span>
+<span class="l-ko">사용량</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The desktop app counts as a third usage source. Usage notes say in plain words what stopped updating, that it is not the usage limit, and what to do, at most once per reason every 12 hours.</span>
+<span class="l-ko">데스크톱 앱이 세 번째 사용량 출처가 돼요. 사용량 알림은 무엇이 멈췄는지, 사용 한도 문제가 아니라는 것, 무엇을 하면 되는지 쉬운 말로 알려 주고, 같은 이유로는 12시간에 한 번만 떠요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">notes</span>
+<span class="l-ko">알림 글</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Notes the server writes for you are in Korean unless PILO_LANG says otherwise.</span>
+<span class="l-ko">서버가 사용자에게 쓰는 알림 글은 PILO_LANG 으로 바꾸지 않으면 한국어예요.</span>
+</span>
+        </div>
+        </div>
+      </div>
+      <div >
+        <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.3</span>
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.21</span>
-          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
 <span class="l-en">Schedules that run in a window, a schedule dialog that reads back as a sentence, and approval cards for subagents.</span>

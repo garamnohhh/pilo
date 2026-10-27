@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
 #
-# With Node.js 20 or newer it is the plain npm install. Without it, pilo gets a
+# With a patched Node.js (22.23.4+ or 24.22.1+) it is the plain npm install. Without it, pilo gets a
 # private Node of its own in ~/.pilo/runtime, from nodejs.org and checked
 # against its SHASUMS256.txt, and that Node runs pilo alone: the Node on PATH,
 # nvm and the rest are left as they are.
@@ -19,7 +19,7 @@ die() { echo "" >&2; echo "$1" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 node_ok() {
   have node && have npm \
-    && [ "$(node -e 'process.stdout.write(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)" -ge 20 ]
+    && node -e 'const [a, b, c] = process.versions.node.split(".").map(Number); process.exit(a === 22 ? (b > 23 || (b === 23 && c >= 4)) ? 0 : 1 : a === 24 ? (b > 22 || (b === 22 && c >= 1)) ? 0 : 1 : a > 24 ? 0 : 1)' 2>/dev/null
 }
 
 [ "$(uname -s)" = Darwin ] || die "pilo runs on macOS only."
@@ -39,7 +39,7 @@ case "$(uname -m)" in
   x86_64) arch=x64 ;;
   *) die "No Node.js build for $(uname -m)." ;;
 esac
-echo "No Node.js 20 or newer here, so pilo gets a private one in $RUNTIME."
+echo "No patched Node.js here (22.23.4+ or 24.22.1+), so pilo gets a private one in $RUNTIME."
 echo "Your own Node, if any, is left as it is."
 
 tmp="$(mktemp -d)"

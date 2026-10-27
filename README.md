@@ -55,7 +55,7 @@ on your own machine.
 curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
 ```
 
-No Node.js needed. With Node 20 or newer already there, this is the plain
+No Node.js needed. With Node 22.23.4+ or 24.22.1+ already there, this is the plain
 `npm install -g @garamnohhh/pilo` (which you can also run yourself). Without it,
 pilo gets a private Node in `~/.pilo/runtime` (about 27 MB to download, 230 MB
 on disk), fetched from nodejs.org and checked against its published checksums.
@@ -103,7 +103,7 @@ the terminal UI shows the same address). Four steps, each checking itself:
 
 | Step | What it asks of you |
 | --- | --- |
-| **Get ready** | Node 20+, herdr running, and a Claude Code or Codex session in a herdr pane. What is missing comes with the command to copy, and turns green on its own. |
+| **Get ready** | Node 22.23.4+ or 24.22.1+, herdr running, and a Claude Code or Codex session in a herdr pane. What is missing comes with the command to copy, and turns green on its own. |
 | **Pick your desk** | Which open session you talk to. One click. |
 | **Register the owners** | A project name for each other session. Preview the block pilo writes into that folder's `CLAUDE.md` or `AGENTS.md`, then write it. Optional. |
 | **Send a first request** | One request there and back, to see the desk answer. |

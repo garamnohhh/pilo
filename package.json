@@ -1,6 +1,6 @@
 {
   "name": "@garamnohhh/pilo",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "A local desk in front of the coding agents you already run - one conversation, every project, on your own Mac.",
   "type": "module",
   "license": "Apache-2.0",
@@ -35,7 +35,7 @@
     "migrations/"
   ],
   "engines": {
-    "node": ">=20"
+    "node": "^22.23.4 || >=24.22.1"
   },
   "publishConfig": {
     "access": "public"
