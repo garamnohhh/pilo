@@ -8,7 +8,7 @@ import { agentForPane, recordWakeFailure, dueSchedules, runSchedule, systemJob, 
 import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
-import { deskWait } from "./deskwait.js";
+import { deskWait, splitForCap } from "./deskwait.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -111,9 +111,11 @@ const WAKE_CAP_PER_HOUR = Number(process.env.PILO_WAKE_CAP || 30);
 
 async function overCap(agentId) {
   const row = await one(
-    // a bundle is one send however many items it carried
+    // a bundle is one send however many items it carried; the user's own requests
+    // do not count (capFree, see splitForCap)
     `SELECT count(DISTINCT COALESCE(payload->>'bundle', id::text))::int AS n FROM events
-     WHERE type = 'wake_sent' AND agent_id = $1 AND created_at > now() - interval '1 hour'`,
+     WHERE type = 'wake_sent' AND agent_id = $1 AND created_at > now() - interval '1 hour'
+       AND COALESCE(payload->>'capFree', 'false') <> 'true'`,
     [agentId]
   );
   return (row?.n || 0) >= WAKE_CAP_PER_HOUR;
@@ -166,8 +168,8 @@ async function wake(agent, message, { taskId = null, inboxId = null }) {
 let deskBox = new Map();
 const DESK_HOLD_MS = Number(process.env.PILO_DESK_HOLD_MS || 5 * 60 * 1000);
 
-function deskWake(message, { taskId = null, inboxId = null, after = null } = {}) {
-  if (!deskBox.has(message)) deskBox.set(message, { message, taskId, inboxId, after });
+function deskWake(message, { taskId = null, inboxId = null, after = null, user = false } = {}) {
+  if (!deskBox.has(message)) deskBox.set(message, { message, taskId, inboxId, after, user });
 }
 
 export function bundleMessage(items) {
@@ -182,7 +184,7 @@ function waitFor(reason, items) {
 }
 
 async function flushDesk() {
-  const items = [...deskBox.values()];
+  let items = [...deskBox.values()];
   deskBox = new Map();
   if (!items.length) { deskWait.reason = null; deskWait.since = null; deskWait.inboxIds = []; return; }
   const desk = await one(
@@ -195,12 +197,14 @@ async function flushDesk() {
     const since = deskWait.reason === "working" ? new Date(deskWait.since).getTime() : Date.now();
     if (Date.now() - since < DESK_HOLD_MS) return waitFor("working", items);
   }
-  if (await overCap(desk.id)) {
+  const { send, hold } = splitForCap(items, await overCap(desk.id));
+  if (hold.length) {
     if (deskWait.reason !== "cap") await logEvent({ type: "wake_suppressed",
       title: t("event.suppressed", { agent: desk.name, cap: WAKE_CAP_PER_HOUR }), agentId: desk.id,
-      payload: { cap: WAKE_CAP_PER_HOUR, items: items.length } });
-    return waitFor("cap", items);
+      payload: { cap: WAKE_CAP_PER_HOUR, items: hold.length } });
+    if (!send.length) return waitFor("cap", hold);
   }
+  items = send;
   const bundle = `b${Date.now()}`;
   try {
     await herdr.prompt(desk.herdr_target, bundleMessage(items));
@@ -210,16 +214,17 @@ async function flushDesk() {
   }
   for (const x of items) {
     await logEvent({ type: "wake_sent", title: t("event.woken", { agent: desk.name }), agentId: desk.id,
-      taskId: x.taskId, inboxId: x.inboxId, payload: { target: desk.herdr_target, message: x.message, bundle } });
+      taskId: x.taskId, inboxId: x.inboxId, payload: { target: desk.herdr_target, message: x.message, bundle, capFree: items.every((y) => y.user) } });
     if (x.after) await x.after();
   }
+  if (hold.length) return waitFor("cap", hold);   // the user's went; the rest still wait for the hour
   deskWait.reason = null; deskWait.since = null; deskWait.inboxIds = [];
 }
 
 async function pumpInbox() {
   const pilo = await one("SELECT id, name, herdr_target, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL");
   if (!pilo) return;
-  const pending = await query("SELECT id FROM inbox WHERE status = 'queued' ORDER BY created_at LIMIT 5");
+  const pending = await query("SELECT id, source FROM inbox WHERE status = 'queued' ORDER BY created_at LIMIT 5");
   for (const row of pending) {
     const check = await shouldWake("inbox_id", row.id);
     if (check.giveUp) {
@@ -231,7 +236,7 @@ async function pumpInbox() {
       await recordWakeFailure(pilo, "SESSION_NOT_BOUND", null, row.id);
       continue;
     }
-    deskWake(t("wake.inbox", { id: row.id, agent: pilo.name }), { inboxId: row.id });
+    deskWake(t("wake.inbox", { id: row.id, agent: pilo.name }), { inboxId: row.id, user: (row.source || "user") === "user" });
   }
 }
 
