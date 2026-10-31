@@ -1,7 +1,9 @@
 import { readFile, writeFile, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import { join, resolve, sep } from "node:path";
 import { query, one } from "./db.js";
-import { readPort } from "./paths.js";
+import { home, readPort } from "./paths.js";
 
 const BEGIN = "<!-- pilo:begin -->";
 const END = "<!-- pilo:end -->";
@@ -465,9 +467,22 @@ export async function previewRules({ name = "", role = "pm", runtime = "", cwd =
   return { file, exists: current !== null, hasBlock: Boolean(current?.includes(BEGIN)), preview: body };
 }
 
+// A second server started beside the real one (PILO_HOME elsewhere, a copy of the
+// data, for a test) carries the real agents' folders in its copy. Writing rules
+// there would put its port into the real desk's file. It may write only in a
+// temporary folder or its own home; PILO_RULES_ANYWHERE=1 is for someone who
+// really did move from ~/.pilo and left the old folder behind.
+export function sideServerRefuses(dir, { env = process.env, defaultHome = join(homedir(), ".pilo"), ownHome = home, temps = [tmpdir(), "/tmp", "/private/tmp"], installed = existsSync } = {}) {
+  if (!env.PILO_HOME || env.PILO_RULES_ANYWHERE === "1") return false;
+  if (resolve(ownHome) === resolve(defaultHome) || !installed(defaultHome)) return false;
+  const inside = (root) => { const r = resolve(root); return resolve(dir) === r || resolve(dir).startsWith(r + sep); };
+  return ![ownHome, ...temps].some(inside);
+}
+
 export async function writeRules(id) {
   const plan = await buildRules(id);
   const dir = plan.file.slice(0, plan.file.lastIndexOf("/"));
+  if (sideServerRefuses(dir)) throw Object.assign(new Error(`not written: this server runs from ${home}, and ${dir} belongs to the Pilo in ~/.pilo`), { status: 409 });
   const info = await stat(dir).catch(() => null);
   if (!info?.isDirectory()) throw Object.assign(new Error(`cwd not found: ${dir}`), { status: 400 });
 

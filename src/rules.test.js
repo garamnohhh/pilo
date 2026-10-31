@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { workerRules, previewRules } from "./rules.js";
+import { workerRules, previewRules, sideServerRefuses } from "./rules.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -127,4 +127,17 @@ test("a one-line short answer is quiet, anything with more to say is not", () =>
   assert.equal(quietReply(""), false, "no answer is not a quiet answer");
   assert.equal(quietReply("Added 2 events:\n- 10:00 standup\n- 14:00 review"), false);
   assert.equal(quietReply("x".repeat(61)), false);
+});
+
+test("a server beside the real one does not write the real agents' rules", () => {
+  const side = { env: { PILO_HOME: "/x/copy" }, defaultHome: "/u/.pilo", ownHome: "/x/copy/.pilo", temps: ["/tmp"], installed: () => true };
+  assert.equal(sideServerRefuses("/u/work/desk", side), true);
+  assert.equal(sideServerRefuses("/tmp/scratch", side), false);
+  assert.equal(sideServerRefuses("/x/copy/.pilo/a", side), false);
+  // not fooled by a folder that only starts the same
+  assert.equal(sideServerRefuses("/tmpfoo/a", side), true);
+  // the real server, a lone PILO_HOME install, and the stated override all write
+  assert.equal(sideServerRefuses("/u/work/desk", { ...side, env: {} }), false);
+  assert.equal(sideServerRefuses("/u/work/desk", { ...side, installed: () => false }), false);
+  assert.equal(sideServerRefuses("/u/work/desk", { ...side, env: { PILO_HOME: "/x/copy", PILO_RULES_ANYWHERE: "1" } }), false);
 });
