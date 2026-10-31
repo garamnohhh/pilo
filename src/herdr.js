@@ -1,15 +1,20 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as approvals from "./approvals.js";
+import { home } from "./paths.js";
 
 const run = promisify(execFile);
 // herdr's own installer puts it in ~/.local/bin; Homebrew in /opt/homebrew on
 // Apple silicon and /usr/local on Intel; anywhere else, whatever PATH finds.
 // Looked up on each call: herdr may be installed after the server started.
-const bin = () => process.env.PILO_HERDR
+// ~/.pilo/herdr-bin, when present, names the program to use instead and wins over
+// PILO_HERDR: pilo-desk writes its herdr stand-in there when it takes the agents
+// over, so a plain 'pilo restart' keeps using it; deleting the file goes back.
+const chosen = () => { try { return readFileSync(join(home, "herdr-bin"), "utf8").trim(); } catch { return ""; } };
+const bin = () => chosen() || process.env.PILO_HERDR
   || [join(homedir(), ".local/bin/herdr"), "/opt/homebrew/bin/herdr", "/usr/local/bin/herdr"].find((path) => existsSync(path))
   || "herdr";
 
