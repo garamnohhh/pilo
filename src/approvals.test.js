@@ -258,7 +258,11 @@ test("a prompt no hook told Pilo about: the screen's menu becomes the card, gone
   assert.equal(A.busy("w11:p1"), true);
   assert.deepEqual(A.list().notices.find((n) => n.pane === "w11:p1").menu.options.map((o) => o.label), ["Yes", "No"]);
   assert.equal(A.noticeFromScreen("w11:p1", agent, menu), false, "once");
-  A.settle("w11:p1", "working");
+  // #5299: the pane's status does not end it; the screen does
+  A.settle("w11:p1", "working"); A.settle("w11:p1", "idle");
+  assert.equal(A.busy("w11:p1"), true, "kept while the status moves");
+  assert.equal(A.screenSays("w11:p1", menu), false, "same menu: kept");
+  assert.equal(A.screenSays("w11:p1", null), true, "menu gone: gone");
   assert.equal(A.busy("w11:p1"), false);
 });
 
@@ -286,12 +290,12 @@ test("#5291: a prompt read off the screen carries the command the pane asked abo
   assert.equal(n.reason, "account write");
   assert.ok(!n.input.command.includes("ghp_") && n.input.command.includes("•••"), "the token is hidden");
   assert.equal(A.noticeFor("w13:p1").input.command, cmd, "kept whole inside, hidden only when shown");
-  A.settle("w13:p1", "working");
+  A.screenSays("w13:p1", null);
   // a screen asking about something else: no borrowed tool
   A.notify({ pane: "w14:p1", type: "tool", tool: "Bash", input: { command: "ls phone" } }, agent);
   A.noticeFromScreen("w14:p1", agent, menu, Date.now(), "rm -rf build\nDo you want to proceed?");
   assert.equal(A.noticeFor("w14:p1").tool, undefined);
-  A.settle("w14:p1", "working");
+  A.screenSays("w14:p1", null);
 });
 
 test("mask: tokens and the values after their names", () => {

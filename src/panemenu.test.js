@@ -70,3 +70,10 @@ test("no menu: plain output, a numbered list in prose, a lone option", () => {
   assert.equal(parseMenu("Pick:\n❯ 1. Only"), null);
   assert.equal(parseMenu(""), null);
 });
+
+test("#5300: Codex's hooks review is a card, its trust choice made in the pane", () => {
+  const m = parseMenu("  Hooks need review\n  3 hooks are new or changed.\n  Hooks can run outside the sandbox after you trust them.\n\n\n› 1. Review hooks\n  2. Trust all and continue\n  3. Continue without trusting (hooks won't run)\n\n  enter confirm · esc skip\n");
+  assert.equal(m.question, "Hooks can run outside the sandbox after you trust them.");
+  assert.deepEqual(m.context, ["Hooks need review", "3 hooks are new or changed."]);
+  assert.deepEqual(m.options.map((o) => o.standing), [false, true, true]);
+});

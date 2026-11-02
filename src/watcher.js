@@ -478,6 +478,7 @@ export async function pumpSessions() {
   const before = new Map((await query("SELECT agent_id, status FROM agent_sessions")).map((r) => [String(r.agent_id), r.status]));
   for (const agent of agents) {
     const session = live.find((s) => s.target === agent.herdr_target);
+    if (approvals.noticeFor(agent.herdr_target)?.screen) approvals.screenSays(agent.herdr_target, parseMenu(await herdr.readPane(agent.herdr_target)));
     if (session) approvals.settle(agent.herdr_target, session.status);
     if (session?.status === "blocked" && !approvals.busy(agent.herdr_target)) {
       const menu = parseMenu(await herdr.readPane(agent.herdr_target));

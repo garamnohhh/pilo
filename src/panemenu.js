@@ -9,7 +9,8 @@ const RULE = /^[\s─━╌┄═\-_│|]*$/;
 const HINT = /(Esc to cancel|Enter to select|Tab to amend|↑\/↓|to navigate|\(esc\)$)/i;
 // a choice that hands out more than this one request: a standing rule or a mode
 // switch is made in the pane, by the person who will live with it
-const STANDING = /\b(always|don'?t ask again|do not ask again|from now on|for this session|auto[- ]?mode|bypass)\b/i;
+// #5300: Codex's 'Trust all and continue' lets hooks run outside the sandbox - the user decides that in the pane
+const STANDING = /\b(always|don'?t ask again|do not ask again|from now on|for this session|auto[- ]?mode|bypass|trust\w*)\b/i;
 
 const TYPED = /^(type something|chat about this|other)\b/i;
 

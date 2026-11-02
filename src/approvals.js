@@ -182,9 +182,22 @@ export function noticeFromScreen(pane, agent, menu, now = Date.now(), screen = "
 
 // The pane's own prompt was answered: herdr says it is idle or done now.
 export function settle(pane, status) {
-  // one read off the screen is over as soon as the pane works again
-  const over = status === "idle" || status === "done" || (status === "working" && notices.get(pane)?.screen);
+  // one read off the screen is over when the screen says so (screenSays): the
+  // pane's status said 'working' or 'idle' under a menu, the card went, came back
+  // with the next read as new, and the notch asked the same again (#5299)
+  if (notices.get(pane)?.screen) return;
+  const over = status === "idle" || status === "done";
   if (over && notices.delete(pane)) onChange();
+}
+
+// The watcher's look at a pane with a card read off its screen: the card stays
+// while the same menu is there, and goes when it is not.
+export function screenSays(pane, menu) {
+  const n = notices.get(pane);
+  if (!n?.screen || (menu && menu.fingerprint === n.menu?.fingerprint)) return false;
+  notices.delete(pane);
+  onChange();
+  return true;
 }
 
 export function decide(id, body) {
