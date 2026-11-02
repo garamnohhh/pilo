@@ -21,8 +21,12 @@ export function stalled(agent, now = Date.now()) {
   return now - new Date(agent.lastSignal).getTime() > STALL_MS;
 }
 
+export const BLOCKS = ["login", "apierror", "noanswer"];
+
 export function agentState(agent, now = Date.now()) {
   if (agent.limitedUntil && new Date(agent.limitedUntil).getTime() > now) return "limited";
+  // it cannot work at all (src/blocks.js): above everything it holds
+  if (BLOCKS.includes(agent.status)) return agent.status;
   // A give-up now only counts while the work it gave up on is still waiting, so
   // it outranks the "running" the queued task itself puts on the row: nobody is
   // nudging that agent any more, whatever the task table says it holds.

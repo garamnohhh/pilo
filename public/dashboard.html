@@ -1739,6 +1739,7 @@ function agentState(a) {
   if (a.limitedUntil && new Date(a.limitedUntil).getTime() > Date.now()) return "limited";
   // a give-up counts only while that work is still waiting, so it outranks the
   // "running" the queued task puts on the row - see src/agentstate.js
+  if (["login", "apierror", "noanswer"].includes(a.status)) return a.status;   // cannot work: src/blocks.js
   if (a.gaveUp > 0) return "gaveUp";
   if (a.waitingApproval) return "blocked";
   if (a.wakeWaiting) return "wakeWaiting";
@@ -1751,7 +1752,7 @@ function agentState(a) {
   return "idle";
 }
 
-const TONE = { limited: () => WARN, wakeWaiting: () => WARN, gaveUp: () => ERR, stalled: () => WARN, blocked: () => INFO, holding: () => INFO, failed: () => ERR, unbound: () => ERR, running: () => WARN, idle: () => OK };
+const TONE = { limited: () => WARN, wakeWaiting: () => WARN, gaveUp: () => ERR, login: () => ERR, apierror: () => ERR, noanswer: () => ERR, stalled: () => WARN, blocked: () => INFO, holding: () => INFO, failed: () => ERR, unbound: () => ERR, running: () => WARN, idle: () => OK };
 const agentTone = (a) => TONE[agentState(a)]();
 const agentNote = (a) => T(`state.${agentState(a)}`);
 
@@ -1761,7 +1762,7 @@ const agentNote = (a) => T(`state.${agentState(a)}`);
 // shapes of their own - the TUI's where it has one - so no two read the same:
 // stalled ◌ against limited ‖ (both amber), failed ✕ · no answer ! · unbound ○
 // (all red), blocked ◆. Idle keeps the plain dot.
-const MARK = { wakeWaiting: "◷", holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", unbound: "○", blocked: "◆" };
+const MARK = { wakeWaiting: "◷", holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", login: "⊘", apierror: "✕", noanswer: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
   const key = agentState(a);
   // "running" is held work or a pane herdr says is working - the TUI spins for
@@ -1777,7 +1778,8 @@ function agentMark(a, colour) {
 function needsYou(st, lost) {
   const n = st.needsYou;
   if (!n) return ["needs you", String(lost || st.failed?.total || 0), lost ? "session lost" : st.failed?.total ? "failed" : "nothing", (lost || st.failed?.total) ? ERR : "var(--text)"];
-  const sub = n.decisions ? `${n.decisions} decision${n.decisions > 1 ? "s" : ""}` : n.lost ? "session lost" : n.failed ? "failed" : "nothing";
+  // a session that cannot work comes first: nothing moves until it is fixed
+  const sub = n.blocked ? (n.blockedWhy || [])[0] || "session stuck" : n.decisions ? `${n.decisions} decision${n.decisions > 1 ? "s" : ""}` : n.lost ? "session lost" : n.failed ? "failed" : "nothing";
   return ["needs you", String(n.total), sub, n.total ? ERR : "var(--text)", n.total ? "needs-you" : ""];
 }
 

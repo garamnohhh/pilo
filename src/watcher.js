@@ -1,6 +1,10 @@
 import { query, one, logEvent } from "./db.js";
 import * as herdr from "./herdr.js";
 import * as approvals from "./approvals.js";
+import * as blocks from "./blocks.js";
+import { readdirSync as listDir, statSync as statOf } from "node:fs";
+import { homedir as homeOf } from "node:os";
+import { join as joinPath } from "node:path";
 import { parseMenu } from "./panemenu.js";
 import { t, tUser } from "./text.js";
 import { claudeAgeMin, readQuota, quotaReport, limitReached, probeReason, readProbe, writeProbe } from "./quota.js";
@@ -494,6 +498,59 @@ export async function pumpSessions() {
       [agent.id, agent.herdr_target, session ? session.status || "" : SESSION_GONE, session?.title || ""]
     );
   }
+}
+
+// Sessions that cannot work, read from their own records every 15 s (src/blocks.js). Pilo says it itself: the desk may
+// be the stuck one. Told once when it starts and once when it ends; the agent's state carries it in between.
+let blocksAt = 0;
+const codexFiles = new Map();
+export async function pumpBlocks(now = Date.now()) {
+  if (now - blocksAt < 15000) return;
+  blocksAt = now;
+  const rows = await query(
+    `SELECT a.id, a.name, a.runtime, a.cwd, a.herdr_target AS target, s.session_id AS session,
+       (SELECT max(e.created_at) FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_sent' AND e.created_at > now() - interval '2 hours') AS woke,
+       (EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running'))
+         OR (a.role = 'pilo' AND EXISTS (SELECT 1 FROM inbox i WHERE i.status IN ('queued', 'dispatched')))) AS busy
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.herdr_target
+     WHERE a.archived_at IS NULL AND a.role <> 'system' AND a.herdr_target <> '' AND a.runtime IN ('claude', 'codex')`
+  );
+  const agents = [];
+  for (const r of rows) {
+    let file = null;
+    if (r.runtime === "codex") {
+      // the rollout of the thread in its pane, looked up again every 5 minutes
+      const kept = codexFiles.get(r.id);
+      if (kept && now - kept.at < 300000) file = kept.file;
+      else {
+        const thread = await models.codexSessionInPane(r.target, r.cwd).catch(() => null);
+        file = thread ? codexRollout(thread) : null;
+        codexFiles.set(r.id, { file, at: now });
+      }
+    }
+    agents.push({ id: r.id, name: r.name, runtime: r.runtime, cwd: r.cwd, session: r.session || null, file, busy: r.busy, wokeAt: r.woke ? new Date(r.woke).getTime() : 0 });
+  }
+  for (const c of blocks.scan(agents, now)) {
+    const word = blocks.WORDS[c.state](c.runtime, c.why);
+    await logEvent({
+      type: c.cleared ? "session_unblocked" : "session_blocked",
+      title: c.cleared ? `${c.name}: 다시 동작 (${word})` : `${c.name}: ${word}`,
+      agentId: c.id, payload: { state: c.state, why: c.why || "" }
+    });
+  }
+}
+// the newest rollout file named with this thread, in the last few days' folders
+function codexRollout(thread) {
+  const base = joinPath(homeOf(), ".codex", "sessions");
+  try {
+    const days = [];
+    for (const y of listDir(base)) for (const m of listDir(joinPath(base, y))) for (const d of listDir(joinPath(base, y, m))) days.push(joinPath(base, y, m, d));
+    for (const d of days.sort().reverse().slice(0, 14)) {
+      const f = listDir(d).find((n) => n.includes(thread) && n.endsWith(".jsonl"));
+      if (f) return joinPath(d, f);
+    }
+  } catch {}
+  return null;
 }
 
 // Some of what the screens show changes without anyone writing it: herdr says a
@@ -998,6 +1055,7 @@ export const tick = serialize(async () => {
     await pumpModels();
     await pumpQuota();
     await pumpSessions();
+    await pumpBlocks();
     await pumpNotice();
     await flushDesk();
   } catch (err) {

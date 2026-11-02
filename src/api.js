@@ -1,6 +1,7 @@
 import { deskWait } from "./deskwait.js";
 import { query, one, getSetting, setSetting, logEvent } from "./db.js";
 import * as approvals from "./approvals.js";
+import * as blocks from "./blocks.js";
 import { parseMenu } from "./panemenu.js";
 import { sessionReadings, modDir, modInstalled } from "./sessionusage.js";
 import * as herdr from "./herdr.js";
@@ -151,6 +152,11 @@ export async function listAgents() {
   const rows = await query(`SELECT ${AGENT_COLUMNS} ${AGENT_JOIN} ORDER BY a.role = 'pilo' DESC, a.name`);
   // live from the pane's hooks, not the database: a permission prompt shows at once
   for (const a of rows) a.waitingApproval = Boolean(a.herdrTarget) && approvals.busy(a.herdrTarget);
+  // a session that cannot work (logged out, refused, silent after a wake), read from its own record by the watcher
+  for (const a of rows) {
+    const b = blocks.of(a.id);
+    if (b) { a.status = b.state; a.blockedWhy = blocks.WORDS[b.state](b.runtime, b.why); a.blockedSince = new Date(b.since).toISOString(); }
+  }
   return rows;
 }
 
@@ -1592,6 +1598,8 @@ export async function overview() {
   // waits on the user, and it goes the moment they answer. What was asked and what
   // they said stays in that request's own conversation.
   const lost = agents.filter((a) => a.role !== "system" && a.status === "unbound").length;
+  // sessions that cannot work: one login lost is every Claude session, so they count as one each kind and runtime
+  const blockedNow = new Set(agents.filter((a) => a.role !== "system" && a.blockedWhy).map((a) => a.blockedWhy)).size;
   const failedTotal = openFailures.n + failedWakes.n;
   return {
     stats: {
@@ -1602,7 +1610,8 @@ export async function overview() {
       inboxToday,
       tokens,
       failed: { task: openFailures.n, wake: failedWakes.n, total: failedTotal },
-      needsYou: { total: decisions.length + failedTotal + lost, decisions: decisions.length, failed: failedTotal, lost },
+      needsYou: { total: decisions.length + failedTotal + lost + blockedNow, decisions: decisions.length, failed: failedTotal, lost, blocked: blockedNow,
+        blockedWhy: [...new Set(agents.filter((a) => a.role !== "system" && a.blockedWhy).map((a) => a.blockedWhy))] },
       history: { failedTasks: history.tasks, wakeFailures: history.wakes }
     },
     tasks,

@@ -14,6 +14,9 @@ const EN = {
   "state.failed": "failed",
   "state.unbound": "unbound",
   "state.gaveUp": "no answer",
+  "state.login": "login needed",
+  "state.apierror": "API error",
+  "state.noanswer": "not answering",
   "state.holding": "holding",
   "state.limited": "limited",
 
@@ -573,6 +576,9 @@ const KO = {
   "state.failed": "실패",
   "state.unbound": "세션 없음",
   "state.gaveUp": "응답 없음",
+  "state.login": "로그인 필요",
+  "state.apierror": "API 오류",
+  "state.noanswer": "응답 없음",
   "state.holding": "보류",
   "state.limited": "한도",
 
