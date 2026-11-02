@@ -534,8 +534,9 @@ export async function recordWakeFailure(agent, code, taskId = null, inboxId = nu
   // a numbered prompt is a question for the user, not a stuck pane: it goes on
   // the screens as a card (10/21: hoban's wake failed on one and nobody was asked)
   if (code === "PANE_IN_DIALOG" && agent.herdr_target) {
-    const menu = parseMenu(await herdr.readPane(agent.herdr_target));
-    if (menu) approvals.noticeFromScreen(agent.herdr_target, await agentForPane(agent.herdr_target), menu);
+    const screen = await herdr.readPane(agent.herdr_target);
+    const menu = parseMenu(screen);
+    if (menu) approvals.noticeFromScreen(agent.herdr_target, await agentForPane(agent.herdr_target), menu, Date.now(), screen);
   }
   const prior = await one(
     `SELECT count(*)::int AS n FROM events WHERE type = 'wake_failed' AND agent_id = $1 AND created_at > now() - interval '1 day'`,

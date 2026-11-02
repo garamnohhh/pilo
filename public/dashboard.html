@@ -1863,7 +1863,7 @@ function approvalsHtml() {
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
   const notice = (n) => `<div>${forHtml(n)}<span class="d-lbl d-appr-who">${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
-    ${n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : ""}
+    ${n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : `<div style="font-size:var(--fs-small);color:var(--warn, var(--text-2))">${esc(T("appr.unread"))}</div>`}
     ${n.reason || !n.menu ? `<div style="font-size:var(--fs-small);color:${n.reason ? "var(--err)" : "var(--text-3)"}">${esc(n.reason ? (PANE_ONLY.has(n.reason) ? T("appr.paneOnly", { why: n.reason }) : aboutWords(n.about).danger || T("appr.risky", { why: n.reason })) : T("appr.inPane"))}</div>` : ""}
     ${menuHtml(n)}</div></div>`;
   // The pane's own numbered choice as buttons, when it could be read and the

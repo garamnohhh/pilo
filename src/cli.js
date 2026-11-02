@@ -176,6 +176,13 @@ const USAGE = [
   ...CLI_COMMANDS.map((x) => `  ${signature(x)}${" ".repeat(column - cols(signature(x)))}${x.summary}`)
 ].join("\n");
 
+// one line for a session's waiting yes: its task, what it would run, the question
+function approvalLine(r) {
+  const what = r.tool ? `${r.tool}: ${r.about?.line || String(r.input?.command ?? r.input?.file_path ?? r.input?.url ?? "").split("\n")[0].slice(0, 120)}` : t("appr.unread");
+  const ask = r.menu?.question ? ` · ${r.menu.question}` : "";
+  return `◆ ${r.taskId ? `#${r.taskId} ` : ""}${r.agent} · ${t("cli.approvalWait")}${r.reason ? ` (${r.reason})` : ""}\n   ${what}${ask}`;
+}
+
 const commands = {
   async inbox([id]) {
     if (id) return out(await call("GET", `/api/inbox/${id}`));
@@ -329,10 +336,14 @@ const commands = {
     return out(res.limitedUntil ? t("cli.limited", { until: res.limitedUntil }) : t("cli.unlimited"));
   },
 
+  // decisions, and the yes a session waits on in its window (#5291: those were
+  // never a task's 'blocked', so this said nothing while one waited)
   async blocked() {
     const rows = await call("GET", "/api/blocked");
-    if (!rows.length) return out(t("cli.noBlocked"));
-    return out(rows.map((r) => `#${r.id} ${r.agent} · ${r.project || "—"}\n   ${r.question}`).join("\n"));
+    const a = await call("GET", "/api/approvals").catch(() => ({}));
+    const waits = [...(a.pending || []), ...(a.notices || []).filter((n) => ["permission_prompt", "elicitation_dialog", "returned"].includes(n.type))];
+    if (!rows.length && !waits.length) return out(t("cli.noBlocked"));
+    return out([...rows.map((r) => `#${r.id} ${r.agent} · ${r.project || "—"}\n   ${r.question}`), ...waits.map(approvalLine)].join("\n"));
   },
 
   // the desk, to the user, about a task that waits on them — not the answer

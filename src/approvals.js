@@ -35,8 +35,18 @@ export const setOnChange = (fn) => { onChange = fn; };
 export const fingerprint = (r) => createHash("sha256")
   .update([r.pane, r.session, r.tool, JSON.stringify(r.input ?? {})].join("\u001f")).digest("hex").slice(0, 32);
 
-// The request as the screens show it: no resolver, no timer.
-const view = ({ resolve, timer, ...r }) => ({ ...r, about: describe(r.tool, r.input) });
+// A secret in a command is never shown (#5291): tokens by their look, and the
+// value after token= · password: · Bearer and the like
+export const mask = (s) => String(s)
+  .replace(/\b(?:gh[pousr]_|github_pat_|sk-|xox[abprs]-|glpat-)[A-Za-z0-9_-]{8,}/g, "•••")
+  .replace(/\bAKIA[0-9A-Z]{16}\b/g, "•••")
+  .replace(/(Bearer\s+|Basic\s+)[A-Za-z0-9._~+/=-]{8,}/g, "$1•••")
+  .replace(/((?:token|secret|password|passwd|pwd|api[_-]?key|access[_-]?key|authorization|cookie)["']?\s*[:=]\s*["']?)(?!Bearer\b|Basic\b|•)[^\s"'&]{4,}/gi, "$1•••");
+const masked = (input) => (input && typeof input === "object" && !Array.isArray(input)
+  ? Object.fromEntries(Object.entries(input).map(([k, v]) => [k, typeof v === "string" ? mask(v) : v])) : input);
+
+// The request as the screens show it: no resolver, no timer, no secret.
+const view = ({ resolve, timer, ...r }) => { const input = masked(r.input); return { ...r, input, about: describe(r.tool, input) }; };
 
 // `agent` is the Pilo agent bound to the pane, or null: a session Pilo does not
 // run answers in its own pane, at once. `gone` resolves when the hook hangs up
@@ -118,7 +128,7 @@ export function notify(body, agent, now = Date.now()) {
 
 export function list(now = Date.now()) {
   for (const [pane, n] of notices) if (now - n.at > NOTICE_MS) notices.delete(pane);
-  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()].map((n) => (n.tool ? { ...n, about: describe(n.tool, n.input) } : n)) };
+  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()].map((n) => (n.tool ? { ...n, input: masked(n.input), about: describe(n.tool, masked(n.input)) } : n)) };
   // the panes that are asking, so a screen can mark their agents without a reload
   out.busy = [...new Set([...out.pending.map((r) => r.pane), ...out.notices.filter((n) => busy(n.pane)).map((n) => n.pane)])];
   return out;
@@ -132,12 +142,19 @@ export function attachMenu(pane, menu, screen = "") {
   n.menu = menu || null;
   // the tool borrowed for the notice must be the one on the screen; when it is
   // not, the screen's own lines say what is asked
-  const first = String(n.input?.command ?? n.input?.file_path ?? n.input?.url ?? "").split("\n")[0].trim().slice(0, 40);
-  if (n.tool && screen && first && !screen.includes(first)) { delete n.tool; delete n.input; delete n.reason; }
+  if (n.tool && screen && !onScreen(n.input, screen)) { delete n.tool; delete n.input; delete n.reason; }
   onChange();
   return true;
 }
 export const noticeFor = (pane) => notices.get(pane) || null;
+
+// the command's first words are on the pane's screen, whitespace aside: a long
+// line wraps there, and the box indents it
+const squash = (s) => String(s).replace(/\s+/g, "");
+export function onScreen(input, screen) {
+  const first = squash(String(input?.command ?? input?.file_path ?? input?.url ?? "").split("\n")[0]).slice(0, 24);
+  return !first || squash(screen).includes(first);
+}
 export const keyAllowed = (key) => keyOk(key);
 
 // A pane Pilo should not type into: a request held open, or the pane said it
@@ -149,10 +166,16 @@ export const busy = (pane) => [...pending.values()].some((r) => r.pane === pane)
 // no hook told it about (Claude's own "Dangerous rm" check, an old hook copy, a
 // session without hooks). The screen's menu becomes the notice, answered from
 // the screens with the same numbered buttons.
-export function noticeFromScreen(pane, agent, menu, now = Date.now()) {
+// #5291: the last tool the pane's main agent asked to run goes with it when the
+// screen shows that command (its card had said only 'Do you want to proceed?'),
+// or, with no screen to check, when it was asked in the last ten minutes.
+export function noticeFromScreen(pane, agent, menu, now = Date.now(), screen = "") {
   if (!agent || !menu || busy(pane)) return false;
+  const asked = lastTool.get(`${pane}\u001f`);
+  const fits = asked && (screen ? onScreen(asked.input, screen) : now - asked.at < ASKED_MS);
+  const about = fits ? { tool: asked.tool, input: asked.input, reason: asked.reason } : {};
   notices.set(pane, { pane, agent: agent.name, agentId: agent.id, taskId: agent.taskId || null, taskTitle: agent.taskTitle || "", type: "permission_prompt",
-    message: "", at: now, agentKey: "", screen: true, menu });
+    message: "", at: now, agentKey: "", screen: true, menu, ...about });
   onChange();
   return true;
 }

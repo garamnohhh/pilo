@@ -274,6 +274,33 @@ test("a notice borrows only its own asker's tool, and only what the screen shows
   assert.equal(A.noticeFor("w12:p1").tool, undefined, "ls phone is not on the screen");
 });
 
+test("#5291: a prompt read off the screen carries the command the pane asked about, its secrets hidden", () => {
+  const cmd = "cd /Users/me/x && mkdir -p shots && ego-browser nodejs <<'EOF' --token ghp_abcdefghijklmnopqrstuv\nawait click('#post')\nEOF";
+  A.notify({ pane: "w13:p1", type: "tool", tool: "Bash", input: { command: cmd, description: "Open comment composer and screenshot" }, reason: "account write" }, agent);
+  const menu = { question: "Do you want to proceed?", context: ["Hook PreToolUse:Bash requires confirmation for this command:"], options: [{ n: 1, label: "Yes" }, { n: 2, label: "No" }], fingerprint: "h" };
+  // the box wraps and indents the command on screen
+  assert.equal(A.noticeFromScreen("w13:p1", agent, menu, Date.now(), "  cd /Users/me/x && mkdir -p\n  shots && ego-browser nodejs\nDo you want to proceed?"), true);
+  const n = A.list().notices.find((x) => x.pane === "w13:p1");
+  assert.equal(n.tool, "Bash");
+  assert.equal(n.about.line, "Open comment composer and screenshot");
+  assert.equal(n.reason, "account write");
+  assert.ok(!n.input.command.includes("ghp_") && n.input.command.includes("•••"), "the token is hidden");
+  assert.equal(A.noticeFor("w13:p1").input.command, cmd, "kept whole inside, hidden only when shown");
+  A.settle("w13:p1", "working");
+  // a screen asking about something else: no borrowed tool
+  A.notify({ pane: "w14:p1", type: "tool", tool: "Bash", input: { command: "ls phone" } }, agent);
+  A.noticeFromScreen("w14:p1", agent, menu, Date.now(), "rm -rf build\nDo you want to proceed?");
+  assert.equal(A.noticeFor("w14:p1").tool, undefined);
+  A.settle("w14:p1", "working");
+});
+
+test("mask: tokens and the values after their names", () => {
+  assert.equal(A.mask("curl -H 'Authorization: Bearer abcdefgh12345' x"), "curl -H 'Authorization: Bearer •••' x");
+  assert.equal(A.mask("PASSWORD=hunter22 run"), "PASSWORD=••• run");
+  assert.equal(A.mask("gh auth ghp_1234567890abcdef ok"), "gh auth ••• ok");
+  assert.equal(A.mask("ls -la"), "ls -la");
+});
+
 test("pairing: a code once, then a key that answers", () => {
   const code = A.newPairCode();
   assert.match(code, /^\d{6}$/);
