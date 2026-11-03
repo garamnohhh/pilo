@@ -1209,12 +1209,12 @@ async function resultsFor(inboxId) {
 
 // What was asked, answered and reported before, found by words. Each word has to
 // turn up somewhere in the same request; newest first; pieces, not whole texts.
-export async function searchHistory({ q = "", since = null, agent = "", limit = DEFAULT_LIMIT } = {}) {
+export async function searchHistory({ q = "", since = null, agent = "", limit = DEFAULT_LIMIT, before = null } = {}) {
   const words = terms(q);
   if (!words.length) throw Object.assign(new Error("give at least one word to look for"), { status: 400 });
   const from = sinceDate(since);
   const most = Math.min(Math.max(Number(limit) || DEFAULT_LIMIT, 1), MAX_LIMIT);
-  const params = [from ? from.toISOString() : null, agent || ""];
+  const params = [from ? from.toISOString() : null, agent || "", before ? String(before) : null];
   const each = words.map((word) => {
     params.push(likePattern(word));
     const k = `$${params.length}`;
@@ -1228,6 +1228,7 @@ export async function searchHistory({ q = "", since = null, agent = "", limit = 
     `SELECT i.id, i.user_request AS request, i.created_at AS "createdAt"
      FROM inbox i
      WHERE ($1::timestamptz IS NULL OR i.created_at >= $1::timestamptz)
+       AND ($3::bigint IS NULL OR i.id < $3)
        AND ($2 = '' OR EXISTS (SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
                                 WHERE t.inbox_id = i.id AND a.name = $2))
        AND ${each.join("\n       AND ")}
