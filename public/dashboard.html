@@ -2270,7 +2270,7 @@ function feedMessages(item, detail) {
   for (const d of decisionsOf(item, detail)) {
     msgs.push(d.open
       ? { who: T("desk.decision.who", { agent: d.agent || "agent", id: d.taskId }), kind: "attention", text: T("desk.decision.below") }
-      : { who: T("desk.decision.done", { agent: d.agent || "agent", id: d.taskId }), kind: "decided", text: `${d.text || ""}\n\n**→ ${d.answer || ""}**` });
+      : { who: T("desk.decision.done", { agent: d.agent || "agent", id: d.taskId }), kind: "decided", base: cwdOf(d.agent), text: `${d.text || ""}\n\n**→ ${d.answer || ""}**` });
   }
   if (openDecisions(item, detail).length) return msgs;
 
@@ -2341,7 +2341,7 @@ function bubble(m) {
     <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${chip}${follow ? `<span style="margin-left:6px">${follow}</span>` : ""}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
-      <div class="md md-said" style="flex:1;min-width:0;padding:${m.quiet ? "2px 0 2px 14px" : "8px 0 8px 14px"};font-size:${m.quiet ? "var(--fs-small);color:var(--text-2)" : "var(--fs-body)"};line-height:1.62">${prose(m.text, cwdOf(m.who))}</div>
+      <div class="md md-said" style="flex:1;min-width:0;padding:${m.quiet ? "2px 0 2px 14px" : "8px 0 8px 14px"};font-size:${m.quiet ? "var(--fs-small);color:var(--text-2)" : "var(--fs-body)"};line-height:1.62">${prose(m.text, m.base ?? cwdOf(m.who))}</div>
     </div></div>`;
 }
 
@@ -2465,7 +2465,7 @@ function decisionBubbles() {
     who: d.asked === false
       ? `${d.agent || "agent"} → you · ${T("desk.decision.needs")} · in-${d.inboxId} · task #${d.taskId} · ${T("desk.decision.deskWriting")}`
       : `pilo → you · ${T("desk.decision.needs")} · in-${d.inboxId} · ${d.agent || "agent"} · task #${d.taskId}`,
-    kind: "decision", at: d.at,
+    kind: "decision", at: d.at, base: cwdOf(d.agent),   // #5629: its file names are chips, read against the asking agent's folder
     text: `in-${d.inboxId} · ${d.request || ""}\n\n${d.text || ""}`, task: d.taskId, inbox: d.inboxId
   }));
 }
@@ -2648,7 +2648,7 @@ function blockedCard(rows) {
     <p class="hint">답을 주면 그 작업이 다시 큐로 들어가고 agent가 이어서 진행합니다.</p>
     ${rows.map((r) => `<div style="padding:12px 0;border-top:1px solid #171b19">
       <div class="mono" style="font-size:11px;color:var(--blue)">#${r.id} ${esc(r.agent)}${r.project ? ` · ${esc(r.project)}` : ""}</div>
-      <div style="margin:6px 0 8px;font-size:12.5px;line-height:1.6;color:var(--text)">${esc(r.question || "확인 필요")}</div>
+      <div class="md" style="margin:6px 0 8px;font-size:12.5px;line-height:1.6;color:var(--text)">${r.question ? prose(r.question, cwdOf(r.agent)) : "확인 필요"}</div>
       <div style="display:flex;gap:6px">
         <input id="ans-${r.id}" placeholder="답변" style="flex:1;font:12px var(--mono);padding:7px 9px;border-radius:6px;border:1px solid #1e2422;background:var(--panel2);color:#e6ebe6;outline:none">
         <button class="btn small" data-act="answer" data-id="${r.id}">보내기</button>
