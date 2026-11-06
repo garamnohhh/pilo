@@ -179,51 +179,102 @@ export function bothArrow(value, caret) {
   return { value: value.slice(0, at) + "↔" + value.slice(caret), caret: at + 1 };
 }
 
-// File paths in an answer show as a chip with the file's name; a click copies the
-// whole path (pasted into a browser's address bar, or a viewer's open box). An
-// absolute path (/Users/…, ~/…) is copied as it is, ~ made the home folder; a
-// relative one only when it starts in the docs root (config docs_root), which
-// is put in front. Paths in fenced code blocks are left alone: those are
-// commands to copy as they stand. A path alone in inline code becomes a chip.
+// File paths in an answer show as a chip (#5574). A click opens the file with its
+// default app (a picture in Quick Look); the small ⋯ after it, or a right-click,
+// gives Show in Finder · Copy path · Open in pirep. The label is the last two parts
+// of the path; the whole path is the chip's title and accessible name, and Copy
+// path copies it whole. An absolute path (/Users/…, ~/…, or one in the docs root's
+// top folders) is a chip at once. A short one - a relative path, a bare file name,
+// a glob such as *.png - is asked of the server against the answer's project
+// folder and becomes a chip only if it is there; until then, and when it is not,
+// it reads as written. A glob is one chip for its folder: a click shows its files
+// in Quick Look (← → between them), Finder opens the folder. Paths in fenced code
+// blocks are left alone: those are commands to copy as they stand. A path alone
+// in inline code becomes a chip.
 let docs = { root: "", top: [], home: "" };
 export function setDocs(next) { docs = { root: next?.root || "", top: next?.top || [], home: next?.home || "" }; }
 
+// What the server said about a short name, by folder and name: a result, or null
+// for nothing there. Kept for the page's life, so a redraw has its chips at once.
+const known = new Map();
+const knownKey = (base, raw) => `${base || ""}\u0001${raw}`;
+export function knowPaths(base, results) { for (const r of results || []) known.set(knownKey(base, r.raw), r.path ? r : null); }
+
 const PATH_END = String.raw`\.[A-Za-z0-9]{1,8}`;
+const PATH_STOP = String.raw`(?=$|[\s),.;:!?」）\]*]|&lt;|&quot;)`;
+// the longest path that ends in an extension: "a/.env.local" and "foo.test.js." keep
+// their whole name (a shortest match stopped at the first dot, so ".env.local" was cut
+// to ".env" and the chip read ".env" with ".local" after it)
 function pathRe() {
   const rel = docs.root && docs.top.length
     ? `|(?:${docs.top.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})/`
     : "";
-  return new RegExp(String.raw`(?<![\w/.])((?:/(?:Users|home|Volumes|private|tmp|opt|var)/|~/${rel})[^\s<>"'\`|&]*?${PATH_END})(?=$|[\s),.;:!?」）\]]|&lt;|&quot;)`, "g");
+  return new RegExp(String.raw`(?<![\w/.])((?:/(?:Users|home|Volumes|private|tmp|opt|var)/|~/${rel})[^\s<>"'\`|&]*${PATH_END})${PATH_STOP}`, "g");
 }
+// a short name: "_src/check/a.png", "src/*.png", ".env.local", "*.png", "README.md";
+// the extension starts with a letter, so 0.3.4 is not one
+const SHORT = String.raw`(?<![\w/.~?@:-]|(?<!\*)\*)((?:[\w.-]+/)*(?:\*(?!\*)|[\w?-]|\.[\w-])(?:[\w.?-]|\*(?!\*))*\.[A-Za-z][A-Za-z0-9]{0,7})${PATH_STOP}`;
+const shortRe = () => new RegExp(SHORT, "g");
+
 function fullPath(p) {
   if (p.startsWith("~/")) return docs.home ? `${docs.home}/${p.slice(2)}` : p;
   if (p.startsWith("/")) return p;
   return `${docs.root}/${p}`;
 }
-function pathChip(p) {
-  const parts = p.split("/").filter(Boolean);
-  const file = parts.at(-1) || p;
-  // index.html and the like say nothing alone: the folder goes with them
-  const name = /^(index|readme)\./i.test(file) && parts.length > 1 ? `${parts.at(-2)}/${file}` : file;
-  const full = fullPath(p);
-  return `<button type="button" class="md-path" data-act="copy-path" data-path="${full}" title="${full}">${name}</button>`;
+const isGlob = (p) => /[*?]/.test(p.split("/").pop());
+export function chipLabel(full) {
+  const parts = String(full).split("/").filter(Boolean);
+  return parts.slice(-2).join("/") || full;
+}
+const attr = (v) => String(v).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+// one chip: the file (or a glob's folder) and the ⋯ menu after it
+export function chipHtml(r) {
+  const full = r.path;
+  const glob = r.kind === "glob" ? r.glob : "";
+  const n = (r.files || []).length;
+  const label = glob ? `${chipLabel(full)}/${glob}` : chipLabel(full);
+  const title = glob ? `${full}/${glob} · ${n} file${n === 1 ? "" : "s"}` : full;
+  const name = glob ? `Preview ${n} file${n === 1 ? "" : "s"} matching ${glob} in ${full}` : `Open ${full}`;
+  return `<span class="md-file"><button type="button" class="md-path" data-path="${attr(full)}"${glob ? ` data-glob="${attr(glob)}"` : ""}` +
+    ` title="${attr(title)}" aria-label="${attr(name)}">${attr(label)}</button>` +
+    `<button type="button" class="md-path-more" aria-haspopup="menu" title="More" aria-label="More actions for ${attr(glob ? `${full}/${glob}` : full)}">⋯</button></span>`;
+}
+// p is the escaped text as written; fallback is what shows if it is not a file
+function shortChip(p, base, fallback) {
+  const hit = known.get(knownKey(base, p));
+  if (hit) return chipHtml(hit);
+  if (hit === null) return fallback;
+  return `<span class="md-maybe" data-raw="${p}" data-base="${attr(base || "")}">${fallback}</span>`;
+}
+function pathChip(p, base, fallback) {
+  if (isGlob(p)) return shortChip(fullPath(p), base, fallback);
+  return chipHtml({ path: fullPath(p), kind: "file" });
 }
 
-function inlineHtml(escaped) {
+let curBase = "";
+function inlineHtml(escaped, base = curBase) {
   const parked = [];
   const park = (html) => `\u0000${parked.push(html) - 1}\u0000`;
   let s = escaped.replace(/\u0000/g, "");
   const re = pathRe();
+  const alone = new RegExp(`^${re.source}$`);
+  const aloneShort = new RegExp(`^${SHORT}$`);
 
   s = s.replace(/`([^`\n]+)`/g, (_, code) => {
-    const alone = new RegExp(`^${re.source}$`).exec(code.trim());
-    return park(alone ? pathChip(alone[1]) : `<code class="md-code">${code}</code>`);
+    const fallback = `<code class="md-code">${code}</code>`;
+    const abs = alone.exec(code.trim());
+    if (abs) return park(pathChip(abs[1], base, fallback));
+    const short = aloneShort.exec(code.trim());
+    return park(short ? shortChip(short[1], base, fallback) : fallback);
   });
   s = s.replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, (whole, label, href) =>
     (SAFE_HREF.test(href) ? park(`<a href="${href}" target="_blank" rel="noreferrer noopener">${label}</a>`) : whole));
   s = s.replace(/https?:\/\/[^\s<>"']+/g, (url) =>
     park(`<a href="${url}" target="_blank" rel="noreferrer noopener">${url}</a>`));
-  s = s.replace(re, (_, p) => park(pathChip(p)));
+  s = s.replace(re, (_, p) => park(pathChip(p, base, p)));
+  s = s.replace(shortRe(), (_, p) => park(shortChip(p, base, p)));
+  if (parked.some((h) => h.includes("md-maybe"))) askLater();
 
   // the sans font draws -> and <- as arrows but not <->, which came out "<→"
   s = s.replace(/&lt;-&gt;/g, "↔");
@@ -268,7 +319,9 @@ function listHtml(items, escape) {
   return out.join("");
 }
 
-export function renderMarkdown(text, escape) {
+// opts.base: the answer's project folder, which short file names are read against
+export function renderMarkdown(text, escape, opts = {}) {
+  curBase = opts.base || "";
   const lines = String(text ?? "").split("\n");
   const out = [];
   let i = 0;
@@ -357,4 +410,171 @@ export function renderMarkdown(text, escape) {
   }
 
   return out.join("");
+}
+
+// ---- the browser's half of file chips (#5574): the dashboard and pibot's window ----
+
+const inBrowser = typeof document !== "undefined" && typeof window !== "undefined";
+
+// Short names waiting for the server, asked in one go once the page has drawn.
+let asking = false;
+function askLater() {
+  if (!inBrowser || asking) return;
+  asking = true;
+  setTimeout(() => { asking = false; resolvePending().catch(() => {}); }, 0);
+}
+function settle(span) {
+  const hit = known.get(knownKey(span.dataset.base, span.dataset.raw));
+  if (hit === undefined) return;
+  if (hit) span.outerHTML = chipHtml(hit);
+  else span.replaceWith(...span.childNodes);
+}
+const asked = new Set();
+export async function resolvePending(root = inBrowser ? document : null) {
+  if (!root) return;
+  const spans = [...root.querySelectorAll(".md-maybe")];
+  spans.forEach(settle);
+  const byBase = new Map();
+  for (const s of root.querySelectorAll(".md-maybe")) {
+    const key = knownKey(s.dataset.base, s.dataset.raw);
+    if (asked.has(key)) continue;
+    asked.add(key);
+    if (!byBase.has(s.dataset.base)) byBase.set(s.dataset.base, new Set());
+    byBase.get(s.dataset.base).add(s.dataset.raw);
+  }
+  await Promise.all([...byBase].map(async ([base, raws]) => {
+    const q = new URLSearchParams();
+    if (base) q.set("base", base);
+    for (const r of raws) q.append("p", r);
+    try {
+      const res = await fetch(`/api/files/resolve?${q}`);
+      if (!res.ok) throw new Error(String(res.status));
+      knowPaths(base, (await res.json()).paths);
+    } catch {
+      // an older server, or none: they read as written, and are asked again next time
+      for (const r of raws) asked.delete(knownKey(base, r));
+    }
+  }));
+  root.querySelectorAll(".md-maybe").forEach(settle);
+}
+
+// What a chip asks for: { act: "open" | "reveal" | "copy" | "pirep", path, glob?, files?, kind }.
+// The dashboard runs it through the pilo server; a host such as pibot can take it
+// over with setFileHost(fn) and do it natively.
+let fileHost = null;
+export function setFileHost(fn) { fileHost = typeof fn === "function" ? fn : null; }
+
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const t = document.createElement("textarea");
+  t.value = text; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+  document.body.append(t); t.select();
+  let ok = false; try { ok = document.execCommand("copy"); } catch {}
+  t.remove();
+  return ok;
+}
+function flash(chip, words) {
+  if (!chip?.isConnected) return;
+  const was = chip.textContent;
+  chip.textContent = words;
+  setTimeout(() => { if (chip.isConnected) chip.textContent = was; }, 1200);
+}
+async function runFile(act, chip) {
+  const msg = { act, path: chip.dataset.path, kind: chip.dataset.glob ? "glob" : "file" };
+  if (chip.dataset.glob) msg.glob = chip.dataset.glob;
+  if (fileHost) { fileHost(msg); if (act === "copy") flash(chip, "Copied"); return; }
+  if (act === "copy") { flash(chip, (await copyText(msg.path)) ? "Copied" : "Copy failed"); return; }
+  try {
+    const res = await fetch("/api/files/act", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(msg) });
+    if (!res.ok) flash(chip, res.status === 404 ? "Not found" : "Failed");
+  } catch { flash(chip, "Failed"); }
+}
+
+const MENU = [["reveal", "Show in Finder"], ["copy", "Copy path"], ["pirep", "Open in pirep"]];
+let menu = null, menuChip = null, menuFrom = null;
+function closeMenu(refocus) {
+  if (!menu || menu.hidden) return;
+  menu.hidden = true;
+  if (refocus) menuFrom?.focus();
+  menuChip = menuFrom = null;
+}
+function openMenu(chip, from, x, y) {
+  if (!menu) {
+    menu = document.createElement("div");
+    menu.className = "md-file-menu";
+    menu.setAttribute("role", "menu");
+    menu.hidden = true;
+    menu.innerHTML = MENU.map(([act, words]) => `<button type="button" role="menuitem" tabindex="-1" data-file-act="${act}">${words}</button>`).join("");
+    document.body.append(menu);
+  }
+  menuChip = chip; menuFrom = from;
+  menu.setAttribute("aria-label", `Actions for ${chip.dataset.glob ? `${chip.dataset.path}/${chip.dataset.glob}` : chip.dataset.path}`);
+  menu.hidden = false;
+  const w = menu.offsetWidth, h = menu.offsetHeight;
+  menu.style.left = `${Math.max(4, Math.min(x, innerWidth - w - 4))}px`;
+  menu.style.top = `${Math.max(4, y + h > innerHeight - 4 ? y - h : y)}px`;
+  menu.querySelector("button").focus();
+}
+
+const STYLE = `
+.md-file { display: inline-flex; align-items: stretch; vertical-align: baseline; max-width: 100% }
+.md-file .md-path { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+.md-path-more { font: inherit; font-size: 0.85em; line-height: 1; padding: 0 4px; margin-left: -1px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text-3, var(--text-2)); cursor: pointer }
+.md-path-more:hover, .md-path-more:focus-visible { color: var(--accent); border-color: var(--accent) }
+.md-file-menu { position: fixed; z-index: 1000; min-width: 168px; padding: 4px; display: flex; flex-direction: column; background: var(--surface, var(--bg-2)); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgb(0 0 0 / 0.28) }
+.md-file-menu[hidden] { display: none }
+.md-file-menu button { all: unset; box-sizing: border-box; padding: 6px 10px; border-radius: 4px; font-family: var(--font-sans); font-size: 13px; color: var(--text); cursor: pointer; white-space: nowrap }
+.md-file-menu button:hover, .md-file-menu button:focus-visible, .md-file-menu button:focus { background: var(--bg-2); color: var(--accent) }
+`;
+
+function install() {
+  const style = document.createElement("style");
+  style.textContent = STYLE;
+  document.head.append(style);
+  const chipOf = (el) => el?.closest?.(".md-file")?.querySelector(".md-path");
+  // capture: the chip's click is its own, never the row's or the host page's around it
+  document.addEventListener("click", (e) => {
+    const item = e.target.closest?.(".md-file-menu [data-file-act]");
+    if (item) {
+      e.preventDefault(); e.stopPropagation();
+      const chip = menuChip; closeMenu(true);
+      if (chip) runFile(item.dataset.fileAct, chip);
+      return;
+    }
+    if (menu && !menu.hidden && !e.target.closest?.(".md-file-menu")) closeMenu(false);
+    const more = e.target.closest?.(".md-path-more");
+    if (more) {
+      e.preventDefault(); e.stopPropagation();
+      const r = more.getBoundingClientRect();
+      openMenu(chipOf(more), more, r.left, r.bottom + 2);
+      return;
+    }
+    const chip = e.target.closest?.(".md-file .md-path");
+    if (chip) { e.preventDefault(); e.stopPropagation(); runFile("open", chip); }
+  }, true);
+  document.addEventListener("contextmenu", (e) => {
+    const chip = chipOf(e.target);
+    if (!chip) return;
+    e.preventDefault(); e.stopPropagation();
+    const r = e.target.getBoundingClientRect();
+    const keyboard = !e.clientX && !e.clientY;
+    openMenu(chip, e.target.closest("button") || chip, keyboard ? r.left : e.clientX, keyboard ? r.bottom + 2 : e.clientY);
+  }, true);
+  document.addEventListener("keydown", (e) => {
+    if (!menu || menu.hidden) return;
+    const items = [...menu.querySelectorAll("button")];
+    const at = items.indexOf(document.activeElement);
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+    else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); e.stopPropagation();
+      items[(at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+    } else if (e.key === "Home" || e.key === "End") { e.preventDefault(); items[e.key === "Home" ? 0 : items.length - 1].focus(); }
+    else if (e.key === "Tab") closeMenu(false);
+  }, true);
+  addEventListener("scroll", () => closeMenu(false), true);
+  addEventListener("blur", () => closeMenu(false));
+}
+if (inBrowser) {
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true });
+  else install();
 }

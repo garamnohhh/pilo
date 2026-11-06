@@ -2040,3 +2040,16 @@ export async function pinModel(id, input) {
   await logEvent({ type: "models_changed", title: `${agent.name}: pinned to ${[model, effort].filter(Boolean).join(" · ")} — restarts when idle`, agentId: id, payload: pin });
   return { id: String(id), pin, applied: "restart when idle" };
 }
+
+// Where a short file name in an answer is looked for (#5574): the answer's own
+// folder first, then the docs root; with no folder given, every project's and
+// every agent's folder too, so pibot's window (which knows no project) still finds it.
+export async function fileBases(base = "") {
+  const docs = docsRoot().root;
+  if (base) return [base, docs].filter(Boolean);
+  const rows = await query(
+    `SELECT path AS dir FROM projects WHERE archived_at IS NULL AND path <> ''
+     UNION ALL SELECT cwd FROM agents WHERE archived_at IS NULL AND cwd <> ''`
+  ).catch(() => []);
+  return [docs, ...rows.map((r) => r.dir)].filter(Boolean);
+}

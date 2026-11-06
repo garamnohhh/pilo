@@ -174,12 +174,59 @@ test("file paths become chips that copy the whole path", async () => {
   setDocs({ root: "/K", top: ["SideProjects"], home: "/Users/g" });
   const rel = renderMarkdown("see `SideProjects/p/outputs/x/index.html` now", esc);
   assert.match(rel, /data-path="\/K\/SideProjects\/p\/outputs\/x\/index.html"[^>]*>x\/index.html</);
-  assert.match(renderMarkdown("at /Users/g/a/b.md, ok", esc), /data-path="\/Users\/g\/a\/b.md"[^>]*>b.md</);
+  assert.match(renderMarkdown("at /Users/g/a/b.md, ok", esc), /data-path="\/Users\/g\/a\/b.md"[^>]*>a\/b.md</);
   assert.match(renderMarkdown("~/x/y.png", esc), /data-path="\/Users\/g\/x\/y.png"/);
   assert.doesNotMatch(renderMarkdown("src/api.js stays", esc), /md-path/, "a repo path is not a docs path");
   assert.doesNotMatch(renderMarkdown("```\n/Users/g/a.md\n```", esc), /md-path/, "code blocks stay as written");
   setDocs({ root: "", top: [], home: "" });
   assert.doesNotMatch(renderMarkdown("SideProjects/p/a.md", esc), /md-path/, "no docs root: relative paths stay text");
+});
+
+// #5574: ".env.local" came out as a chip reading ".env" with ".local" after it -
+// the shortest match stopped at the first dot - and the label was the name alone
+test("a chip keeps the whole name and shows the last two parts, the full path on hover", async () => {
+  const { setDocs } = await import("./markdown.js");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  setDocs({ root: "", top: [], home: "/Users/g" });
+  const env = renderMarkdown("it is /Users/g/w/app/.env.local here", esc);
+  assert.match(env, /data-path="\/Users\/g\/w\/app\/.env.local"/);
+  assert.match(env, />app\/.env.local<\/button>/);
+  assert.match(env, /title="\/Users\/g\/w\/app\/.env.local"/);
+  assert.match(env, /aria-label="Open \/Users\/g\/w\/app\/.env.local"/);
+  assert.match(env, /class="md-path-more" aria-haspopup="menu"[^>]*aria-label="More actions for \/Users\/g\/w\/app\/.env.local"/);
+  assert.doesNotMatch(env, /<\/span>\.local/);
+  assert.match(renderMarkdown("/Users/g/a/foo.test.js.", esc), /data-path="\/Users\/g\/a\/foo.test.js"[^>]*>a\/foo.test.js</);
+  assert.match(renderMarkdown("**/Users/g/a/b.md**", esc), /<strong><span class="md-file">.*data-path="\/Users\/g\/a\/b.md"/);
+  assert.doesNotMatch(env, /data-act=/, "the host page's own click handlers never see a chip");
+  setDocs({ root: "", top: [], home: "" });
+});
+
+test("short names wait for the server, then become chips or stay as written", async () => {
+  const { setDocs, knowPaths } = await import("./markdown.js");
+  const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  setDocs({ root: "", top: [], home: "/Users/g" });
+  const base = "/P";
+  const first = renderMarkdown("see `.env.local`, _src/check/a.png and shots/*.png; v0.3.4 stays", esc, { base });
+  for (const raw of [".env.local", "_src/check/a.png", "shots/*.png"]) assert.match(first, new RegExp(`class="md-maybe" data-raw="${raw.replace(/[.*]/g, "\\$&")}" data-base="/P"`));
+  assert.doesNotMatch(first, /md-path/, "nothing is a chip before the server says so");
+  assert.doesNotMatch(first, /data-raw="v0/);
+  knowPaths(base, [
+    { raw: ".env.local", path: "/P/.env.local", kind: "file" },
+    { raw: "_src/check/a.png", path: null },
+    { raw: "shots/*.png", path: "/P/out/shots", kind: "glob", glob: "*.png", files: ["/P/out/shots/1.png", "/P/out/shots/2.png"] }
+  ]);
+  const then = renderMarkdown("see `.env.local`, _src/check/a.png and shots/*.png", esc, { base });
+  assert.match(then, /data-path="\/P\/.env.local"[^>]*>P\/.env.local</);
+  assert.match(then, /, _src\/check\/a.png and/, "not there: plain text, no chip");
+  assert.match(then, /data-path="\/P\/out\/shots" data-glob="\*.png" title="\/P\/out\/shots\/\*.png · 2 files" aria-label="Preview 2 files matching \*.png in \/P\/out\/shots">out\/shots\/\*.png</);
+  // another folder has not been asked
+  assert.match(renderMarkdown("`.env.local`", esc, { base: "/Q" }), /md-maybe/);
+  // inline code that is not a file stays code
+  knowPaths("/Q", [{ raw: ".env.local", path: null }]);
+  assert.equal(renderMarkdown("`.env.local`", esc, { base: "/Q" }), `<p class="md-p"><code class="md-code">.env.local</code></p>`);
+  // bold around a name is not a glob
+  assert.match(renderMarkdown("**README.md**", esc, { base }), /<strong><span class="md-maybe" data-raw="README.md"/);
+  setDocs({ root: "", top: [], home: "" });
 });
 
 test("a placeholder path is not a file", async () => {

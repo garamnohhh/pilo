@@ -153,7 +153,7 @@
   .md .md-rule { margin: 14px 0; border-top: var(--bw) solid var(--line) }
   .md .md-code { font-family: var(--font-mono); font-size: 0.92em; padding: 1px 5px; background: var(--bg-2); color: var(--text) }
   /* a file path in an answer: its name, a click copies the whole path (title shows it) */
-  .md .md-path { font: inherit; font-family: var(--font-mono); font-size: 0.92em; padding: 1px 6px; border: 1px solid var(--line); background: var(--bg-2); color: var(--accent); cursor: copy }
+  .md .md-path { font: inherit; font-family: var(--font-mono); font-size: 0.92em; padding: 1px 6px; border: 1px solid var(--line); background: var(--bg-2); color: var(--accent); cursor: pointer }
   .md .md-path:hover { border-color: var(--accent) }
   .md .md-pre { margin: 0; padding: 10px 14px; white-space: pre; overflow-x: auto; font-size: 12.5px; line-height: 1.75 }
   .md .gn-code { margin: 0 0 12px }
@@ -574,7 +574,10 @@ const T = (key, vars = {}) => {
 // Agent prose often carries markdown tables; show them as tables.
 // Agents write markdown. src/markdown.js escapes first and only then writes
 // tags, so nothing in an agent's words can become one.
-const prose = (text) => renderMarkdown(text, esc);
+// base: the folder short file names in the text are read against (#5574)
+const prose = (text, base = "") => renderMarkdown(text, esc, { base });
+// an agent's folder, for the file names in what it wrote
+const cwdOf = (name) => (state.data.agents || []).find((a) => a.name === name)?.cwd || "";
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Dates follow the dashboard language: an English screen should not say 오전.
 const loc = () => (state.lang === "ko" ? "ko-KR" : "en-US");
@@ -2033,7 +2036,7 @@ function offlineHtml() {
         <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(r.request)}</div>
         ${r.reply ? `<div style="margin-top:12px;padding-left:12px;box-shadow:inset 2px 0 0 0 var(--accent)">
           <div class="d-lbl" style="color:var(--accent-text)">FINAL REPLY</div>
-          <div class="md md-said" style="margin-top:6px;font-size:var(--fs-body);line-height:1.62">${prose(r.reply)}</div></div>` : ""}</div>`).join("")}</div>`;
+          <div class="md md-said" style="margin-top:6px;font-size:var(--fs-body);line-height:1.62">${prose(r.reply, cwdOf(r.agent))}</div></div>` : ""}</div>`).join("")}</div>`;
   }
   return `<div class="m-scroll" style="padding-top:max(16px, 14vh)">
     <div class="m-box" style="padding:24px;word-break:keep-all">
@@ -2182,10 +2185,10 @@ mviews.inbox = () => {
       <div class="d-m" style="margin-top:10px;font-size:11px;color:var(--text-3)">${esc([inboxAgents(d)[0] || "pilo", stamp(d.createdAt), d.status].filter(Boolean).join(" · "))}</div></div>
     <div class="m-box">${mHead(T("desk.lbl.handling"))}${trace.map((t) => `<div style="display:flex;gap:12px;padding:12px 16px;border-bottom:var(--hairline) solid var(--line-soft)">
         <span class="d-m" style="flex:none;width:84px;font-size:11px;color:${stageColour(t.stage)}">${esc(STAGE[t.stage] || t.stage)}${t.who ? `<br>${esc(t.who)}` : ""}</span>
-        <span class="md md-said" style="flex:1;min-width:0;font-size:var(--fs-small);line-height:1.6">${prose(t.text)}</span></div>`).join("")
+        <span class="md md-said" style="flex:1;min-width:0;font-size:var(--fs-small);line-height:1.6">${prose(t.text, cwdOf(t.who))}</span></div>`).join("")
       || `<div style="padding:12px 16px;font-size:var(--fs-small);color:var(--text-3)">not handed on yet</div>`}</div>
     ${reply ? `<div class="m-box m-boxpad" style="box-shadow:inset 3px 0 0 0 var(--accent)"><div class="d-lbl" style="color:var(--accent-text)">FINAL REPLY</div>
-      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(reply)}</div></div>` : ""}
+      <div class="md" style="margin-top:8px;font-size:var(--fs-body);line-height:1.62">${prose(reply, cwdOf(inboxAgents(d)[0]))}</div></div>` : ""}
     <button class="gn-btn gn-btn-block" style="height:44px;flex:none" data-act="follow-request" data-id="${esc(d.id)}">${esc(T("desk.follow.ask"))}</button></div>`;
 };
 
@@ -2338,7 +2341,7 @@ function bubble(m) {
     <span style="display:flex;align-items:center;gap:8px"><span class="d-lbl">${esc(m.who)}</span>${chip}${follow ? `<span style="margin-left:6px">${follow}</span>` : ""}</span>
     <div style="display:flex;width:100%">
       <span class="d-bar${live ? " d-bar-live" : ""}" style="background:${bar}"></span>
-      <div class="md md-said" style="flex:1;min-width:0;padding:${m.quiet ? "2px 0 2px 14px" : "8px 0 8px 14px"};font-size:${m.quiet ? "var(--fs-small);color:var(--text-2)" : "var(--fs-body)"};line-height:1.62">${prose(m.text)}</div>
+      <div class="md md-said" style="flex:1;min-width:0;padding:${m.quiet ? "2px 0 2px 14px" : "8px 0 8px 14px"};font-size:${m.quiet ? "var(--fs-small);color:var(--text-2)" : "var(--fs-body)"};line-height:1.62">${prose(m.text, cwdOf(m.who))}</div>
     </div></div>`;
 }
 
@@ -2936,12 +2939,12 @@ views.inbox = () => {
         <div class="d-list" style="margin-top:24px">${(detail.trace || []).filter((t) => t.stage !== "inbox").map((t) => `
           <div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${t.stage === "final_reply" ? ACCT : t.stage === "pm_result" ? INFO : "var(--text-3)"}">${esc(STAGE[t.stage] || t.stage)} · ${esc(t.who)}</span>
-            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.text)}</span>
+            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.text, cwdOf(t.who))}</span>
           </div>`).join("") || `<div class="d-tr"><span class="d-lbl">not handed on yet</span></div>`}</div>
         ${detail.tasks.some(inFlight) ? `<div style="margin-top:24px">${rule("in flight")}
           <div class="d-list">${detail.tasks.filter(inFlight).map((t) => `<div class="d-tr" style="grid-template-columns:132px minmax(0,1fr);align-items:start;min-height:auto;padding:12px 4px">
             <span class="d-m" style="font-size:12px;color:${WARN}">${esc(t.agent || "agent")} · ${ago(t.progressAt)}</span>
-            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.progress)}</span></div>`).join("")}</div></div>` : ""}
+            <span class="md md-said" style="font-size:var(--fs-body);line-height:1.62">${prose(t.progress, cwdOf(t.agent))}</span></div>`).join("")}</div></div>` : ""}
         ${detail.needsReply ? `<div class="d-hint" style="color:${ERR}">every task is finished and no answer has been written - <span class="d-m">pilo reply ${esc(detail.id)} "…"</span></div>` : ""}
         <div style="display:flex;gap:8px;margin-top:24px">
           ${btn("Ask a follow-up", "follow-request", `data-id="${detail.id}"`)}
@@ -3994,12 +3997,6 @@ function readProjectForm() {
 const actions = {
   async "w-open"() { state.tab = "welcome"; location.hash = "welcome"; render(); },
   async "w-copy"(el) { await navigator.clipboard.writeText(el.dataset.value); toast(T("welcome.copied")); },
-  async "copy-path"(el) {
-    await navigator.clipboard.writeText(el.dataset.path);
-    const name = el.textContent;
-    el.textContent = T("path.copied");
-    setTimeout(() => { el.textContent = name; }, 1200);
-  },
   async "w-desk-pick"(el) { state.welcome.desk = el.dataset.value; render(); },
   async "w-desk-make"(el) {
     const pane = (state.data.setup.free || []).find((x) => x.target === el.dataset.value);

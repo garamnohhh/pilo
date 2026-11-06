@@ -19,6 +19,7 @@ import { saveUpload } from "./attachments.js";
 import * as approvals from "./approvals.js";
 import { tick } from "./watcher.js";
 import { installHookFile } from "./hooks.js";
+import { resolvePaths, fileAct } from "./files.js";
 
 const publicDir = join(root, "public");
 const wanted = Number(process.env.PILO_PORT || 48888);
@@ -171,6 +172,10 @@ const routes = [
   ["POST", /^\/api\/approvals\/check$/, (_m, body) => approvals.checkKey(body)],
   ["POST", /^\/api\/approvals\/(\d+)$/, (m, body) => approvals.decide(m[1], body)],
 
+  // file chips in answers (#5574): what a short name is, and open · Finder · pirep · Quick Look
+  ["GET", /^\/api\/files\/resolve$/, async (_m, _b, q) => ({ paths: resolvePaths(q.getAll("p"), await api.fileBases(q.get("base") || "")) })],
+  ["POST", /^\/api\/files\/act$/, (_m, body) => fileAct(body)],
+
   ["GET", /^\/api\/settings$/, () => api.settingsAll()],
   ["PUT", /^\/api\/settings\/([a-z]+)$/, (m, body) => api.saveSetting(m[1], body.value)]
 ];
@@ -214,10 +219,20 @@ export async function dispatch(method, pathname, body = {}, query = new URLSearc
     if (!match) continue;
     const payload = (await run(match, body, params)) ?? { ok: true };
     // Every write, from the dashboard, the CLI's socket or the spool, passes here.
-    if (method !== "GET") changed();
+    // opening a file changes nothing the screens show
+    if (method !== "GET" && !path.startsWith("/api/files/")) changed();
     return { status: method === "POST" ? 201 : 200, payload };
   }
   return null;
+}
+
+function sameOrigin(req) {
+  const origin = req.headers.origin;
+  if (!origin || origin === "null") return !req.headers["sec-fetch-site"] || req.headers["sec-fetch-site"] === "same-origin" || req.headers["sec-fetch-site"] === "none";
+  try {
+    const o = new URL(origin);
+    return (o.hostname === "127.0.0.1" || o.hostname === "localhost") && o.host === req.headers.host;
+  } catch { return false; }
 }
 
 async function handle(req, res) {
@@ -239,6 +254,12 @@ async function handle(req, res) {
   // JSON body parser would try.
   if (method === "POST" && url.pathname === "/api/attachments") {
     json(res, 201, await saveUpload(req));
+    return;
+  }
+  // Opening a file is for Pilo's own pages (the dashboard, pibot's window), never
+  // for another site the browser has open that posts to this port.
+  if (url.pathname.startsWith("/api/files/") && !sameOrigin(req)) {
+    json(res, 403, { error: "local pages only" });
     return;
   }
   const known = routes.some(([m, pattern]) => m === method && pattern.test(url.pathname));
