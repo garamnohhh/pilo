@@ -12,6 +12,9 @@ const HINT = /(Esc to cancel|Enter to select|Tab to amend|↑\/↓|to navigate|\
 // #5300: Codex's 'Trust all and continue' lets hooks run outside the sandbox - the user decides that in the pane
 const STANDING = /\b(always|don'?t ask again|do not ask again|from now on|for this session|auto[- ]?mode|bypass|trust\w*)\b/i;
 
+// a dialog's own key line: 'Press enter to confirm or esc to cancel', 'enter confirm · esc skip'
+const KEYS = /\b(enter|esc)\b/i;
+
 const TYPED = /^(type something|chat about this|other)\b/i;
 
 export function parseMenu(screen) {
@@ -36,6 +39,9 @@ export function parseMenu(screen) {
     if (!/^\s{3,}\S/.test(lines[i])) return null;
   }
   if (options[0]?.n !== 1 || options.some((o, i) => o.n !== i + 1) || options.length < 2) return null;
+  // a dialog is the last thing on the screen: under its options only notes, rules and its key hints. A numbered
+  // list in an agent's own answer has its prompt box under it (#5605: the desk's WAF steps read as a question)
+  if (lines.slice(end + 1).some((l) => l.trim() && !RULE.test(l) && !HINT.test(l) && !KEYS.test(l) && !/^\s{3,}\S/.test(l))) return null;
   // the question: the nearest line above that says something
   let question = "";
   const context = [];

@@ -77,3 +77,9 @@ test("#5300: Codex's hooks review is a card, its trust choice made in the pane",
   assert.deepEqual(m.context, ["Hooks need review", "3 hooks are new or changed."]);
   assert.deepEqual(m.options.map((o) => o.standing), [false, true, true]);
 });
+
+test("#5605: a numbered list in an agent's answer, its prompt box under it, is no menu", () => {
+  const answer = "⏺ WAF 진행:\n  Next:\n  1. Create the rule group\n  2. Attach it to the ALB\n\n╭──────────────────────╮\n│ >                    │\n╰──────────────────────╯\n  ⏵⏵ bypass permissions on (shift+tab to cycle)";
+  assert.equal(parseMenu(answer), null);
+  assert.equal(parseMenu("• Steps\n  1. build\n  2. test\n\n› Ask Codex to do anything\n\n  ~/x · never · 5h 85% left"), null);
+});
