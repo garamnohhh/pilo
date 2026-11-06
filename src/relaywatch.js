@@ -12,11 +12,13 @@ import { query, one, logEvent } from "./db.js";
 import { createInbox, createTask } from "./api.js";
 
 export const TITLE = "RelayRoom 새 메시지";
-const EVENT = /^\[pager [^\]]*\] event: "(.*)" from (\S+)\s*$/;
+const EVENT = /^\[pager ([^\]]*)\] event: "(.*)" from (\S+)\s*$/;
 
-/** the messages in new log text: { subject, from } for each event line */
+/** the messages in new log text: { subject, from } for each event line. #5689: what this part sent itself and
+ *  RelayRoom's own notices (from "system": a thread opened, a status) are not news for it */
 export function relayEvents(text) {
-  return String(text).split("\n").map((l) => EVENT.exec(l)).filter(Boolean).map((m) => ({ subject: m[1], from: m[2] }));
+  return String(text).split("\n").map((l) => EVENT.exec(l)).filter(Boolean)
+    .filter((m) => m[3] !== m[1] && m[3] !== "system").map((m) => ({ subject: m[2], from: m[3] }));
 }
 
 export function relayRequest(subject, from) {
@@ -72,7 +74,8 @@ async function heard(file, a) {
   const e = events[events.length - 1];
   const request = relayRequest(e.subject, e.from);
   const inbox = await createInbox(request, a.cwd, "desk");
-  const task = await createTask(inbox.id, { toAgentId: a.id, title: `${TITLE} · ${e.from}`, request });
+  // standalone: a worker's task would otherwise be hung on its PM's open request, leaving this one queued for the desk (#5689)
+  const task = await createTask(inbox.id, { toAgentId: a.id, title: `${TITLE} · ${e.from}`, request, standalone: true });
   await logEvent({ type: "relay_message", title: `${e.from} → ${a.name}`, agentId: a.id, inboxId: inbox.id, taskId: task?.id || null,
     payload: { subject: e.subject.slice(0, 120), count: events.length } });
 }

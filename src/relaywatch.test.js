@@ -13,6 +13,8 @@ test("the pager's event lines are the messages; its other lines are not", () => 
     { subject: `다시 "따옴표" 제목`, from: "infra-gb10" }
   ]);
   assert.deepEqual(relayEvents("[pager x] skip nudge: no active wake\n"), []);
+  // #5689: RelayRoom's own notices and what the part sent itself are not news
+  assert.deepEqual(relayEvents(`[pager agent-noh] event: "스레드 열림" from system\n[pager agent-noh] event: "내가 보낸 것" from agent-noh\n`), []);
 });
 
 test("the task names the message and says what to do with it", () => {

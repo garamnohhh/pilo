@@ -963,7 +963,7 @@ export async function createNote(input) {
 //   none there, several elsewhere     → refused, with the list to pick from
 //   none open at all                  → as named (a PM acting on its own)
 async function settleWorkerTask(inboxId, to, input) {
-  if (to.role !== "worker" || !to.parentAgentId) return { inboxId, parent: input.parentTaskId || null, from: input.fromAgentId || null };
+  if (to.role !== "worker" || !to.parentAgentId || input.standalone) return { inboxId, parent: input.parentTaskId || null, from: input.fromAgentId || null };
   const open = await query(
     `SELECT id, inbox_id AS "inboxId" FROM tasks WHERE to_agent_id = $1 AND status IN ('queued', 'running', 'holding')
      ORDER BY created_at DESC`, [to.parentAgentId]);
