@@ -13,6 +13,7 @@ import { changed } from "./changes.js";
 import * as models from "./models.js";
 import { kst } from "./history.js";
 import { deskWait, splitForCap } from "./deskwait.js";
+import { pumpRelay } from "./relaywatch.js";
 
 const INTERVAL = Number(process.env.PILO_WATCH_MS || 3000);
 // ponytail: one poll loop over two queues. Switch to LISTEN/NOTIFY if the polling ever shows up in profiles.
@@ -1044,6 +1045,7 @@ export const tick = serialize(async () => {
   pending = new Set();
   try {
     await pumpSchedules();
+    await pumpRelay();
     await pumpInbox();
     await pumpTasks();
     await pumpResults();
