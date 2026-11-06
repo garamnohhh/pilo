@@ -76,6 +76,7 @@ test("the desk is told what a blocked wake means and how to speak to the user", 
 test("PMs and workers block only for what the user must decide", () => {
   const out = workerRules({ id: 7, name: "atlas", role: "pm" }, "", []);
   assert.match(out, /pilo block` only for what the user must decide/);
+  assert.match(out, /in the user's language, in three parts/, "a block question says what stopped, what to decide and each choice (#5567)");
 });
 
 // A PM that waits for its worker inside its own turn is refused by auto mode and

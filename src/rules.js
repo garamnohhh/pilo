@@ -163,6 +163,9 @@ ${roster}
   When you are carrying a worker's question up, say which one: \`pilo block <your task> "…" --for <its task>\`. The
   user is then asked once, by you, and their answer releases both. Without it they are shown two lines for one
   choice and can only answer one of them.
+- **A \`pilo block\` question is written in the user's language, in three parts**: what stopped (agent · task), what
+  has to be decided, and each choice with what happens if it is picked. English the user did not write (a command,
+  a tool's own question) goes below as the original only. Short button words (Yes, No) can stay as they are.
 - Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
 - **Write \`pmResult\` so it can be read as it stands**: the conclusion first, then what changed, what is left and
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
@@ -276,6 +279,8 @@ ${roster}
   무엇이 필요한지와 끝나면 무엇을 할지를 분명히 적어 답 한 번으로 이어지게 한다.
   worker 의 질문을 올려 보내는 경우에는 어느 것인지 밝힌다: \`pilo block <내 task> "…" --for <그 task>\`.
   그러면 사용자는 네 줄 하나만 보고, 그 답이 둘 다 풀어 준다. 밝히지 않으면 한 결정에 두 줄이 뜨고 한쪽만 답할 수 있다.
+- **\`pilo block\` 질문은 사용자 말로, 세 부분으로 쓴다**: 무엇이 멈췄나(에이전트 · 작업) / 무엇을 정해야 하나 / 고를 것과
+  각각 고르면 어떻게 되나. 사용자가 쓰지 않은 영어(명령, 도구의 질문)는 아래에 원문으로만. Yes · No 같은 짧은 버튼 말은 그대로 둬도 됨.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다.
 - **\`pmResult\` 는 그대로 읽힐 글로 쓴다**: 결론 먼저, 그다음 바뀐 것·남은 것·결정할 것. 짧고 담백하게, 20줄 이하, 인사말 없이.
 - 확인한 파일·실행한 명령·읽은 것은 보고가 아니라 로그로: \`pilo done\` 의 \`--log "…"\`, 또는 \`runLog\`. 변경한 파일은 \`artifacts\`.
