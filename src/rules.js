@@ -102,6 +102,8 @@ Run \`pilo agents\` if that list looks stale.
   \`pilo ask T "…"\`: two to four plain lines in the user's language — what is waiting, what they need to decide or do,
   the options if there are any, and what happens once they answer. It shows as a red line in that conversation,
   and whatever the user types under it goes to the task as its answer; the PM carries on by itself.
+- Choices the user can tap: one \`--option "…"\` each (\`--option "고쳐" --option "그대로"\`). Only these become buttons; a
+  numbered list in the text stays text, so findings or reasons are never mistaken for choices. No choices, no options.
 - \`pilo ask\` is not the answer: it does not close the request, and \`pilo reply\` still comes at the end as usual.
 - Do not answer for the user, and do not guess the decision. After \`pilo ask\`, stop.
 - The morning briefing starts with every decision still waiting (\`pilo blocked\`): each question in full, and how to
@@ -166,6 +168,8 @@ ${roster}
 - **A \`pilo block\` question is written in the user's language, in three parts**: what stopped (agent · task), what
   has to be decided, and each choice with what happens if it is picked. English the user did not write (a command,
   a tool's own question) goes below as the original only. Short button words (Yes, No) can stay as they are.
+  End it with the choices as one line, \`답: '고쳐' / '그대로'\`: the screens make buttons of that line only, and a
+  numbered list above it (findings, reasons) stays text.
 - Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
 - **Write \`pmResult\` so it can be read as it stands**: the conclusion first, then what changed, what is left and
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
@@ -238,6 +242,8 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
 - \`pilo inbox N\` 으로 질문(멈춘 task 의 \`blockedQuestion\`, 없으면 \`pmResult\`)을 읽고 \`pilo ask T "…"\`:
   사용자 언어로 2~4줄 — 무엇이 멈춰 있는지, 무엇을 정하거나 하면 되는지, 선택지가 있으면 선택지, 답하면 어떻게 이어지는지.
   그 대화 안에 빨간 줄로 뜨고, 사용자가 그 아래에 쓴 답이 그 task 의 answer 로 들어가 PM 이 알아서 이어간다.
+- 눌러서 고를 선택지는 하나에 \`--option "…"\` 하나씩(\`--option "고쳐" --option "그대로"\`). 버튼은 이것만, 본문의 번호 목록은
+  글로 남아 설명 · 근거가 선택지로 오해되지 않는다. 선택지가 없으면 --option 없이.
 - \`pilo ask\` 는 답이 아니다. 요청을 닫지 않고, \`pilo reply\` 는 평소처럼 마지막에 한다.
 - 사용자 대신 답하거나 결정을 짐작하지 않는다. \`pilo ask\` 뒤에는 멈춘다.
 - 아침 브리핑은 아직 기다리는 결정(\`pilo blocked\`)부터 시작한다: 질문 전문과 답하는 방법(Pilo 의 그 대화에서 답하기).

@@ -348,10 +348,14 @@ const commands = {
 
   // the desk, to the user, about a task that waits on them — not the answer
   async ask(args) {
-    const { rest, opts } = flags(args);
+    // #5766: the choices are named, each --option one, and written as the last line "답: '고쳐' / '그대로'" - the
+    // screens make buttons of that line alone, never of a numbered list in the text
+    const options = [];
+    const { rest, opts } = flags(args.filter((a, i) => a === "--option" ? (options.push(args[i + 1]), false) : args[i - 1] !== "--option"));
     const [taskId, ...text] = rest;
-    if (!taskId || (!text.length && !opts.file)) throw new Error('usage: pilo ask <taskId> "what the user needs to decide or do" | --file <path>');
-    const res = await call("POST", `/api/tasks/${taskId}/ask`, { body: body(text, opts) });
+    if (!taskId || (!text.length && !opts.file)) throw new Error('usage: pilo ask <taskId> "what the user needs to decide or do" | --file <path> [--option "…" --option "…"]');
+    const said = body(text, opts) + (options.length ? `\n답: ${options.map((o) => `'${o}'`).join(" / ")}` : "");
+    const res = await call("POST", `/api/tasks/${taskId}/ask`, { body: said });
     return out(t("cli.asked", { id: res.taskId, inbox: res.inboxId }));
   },
 
