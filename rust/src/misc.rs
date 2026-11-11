@@ -8,7 +8,6 @@ use serde_json::{json, Value};
 pub fn routes(r: Router<Shared>) -> Router<Shared> {
     r.route("/api/files/resolve", get(resolve))
         .route("/api/update", get(update))
-        .route("/api/approvals", get(approvals))
         .route("/api/agents/{id}/session", get(session))
 }
 
@@ -80,8 +79,6 @@ async fn update(State(app): State<Shared>) -> Res {
     })))
 }
 
-/// approvals.list. What the pane hooks report lives in memory; it moves over with the hooks (B3).
-async fn approvals() -> Json<Value> { Json(json!({ "pending": [], "notices": [], "busy": [] })) }
 
 fn toml_key(text: &str, key: &str) -> Option<String> {
     let re = regex::Regex::new(&format!(r#"^\s*{key}\s*=\s*"([^"]*)""#)).unwrap();

@@ -86,22 +86,25 @@ const AGENT_KINDS: [(&str, K); 3] = [("wakeWaiting", K::Bool), ("reviewer", K::B
 /// listAgents. A pending permission prompt (approvals) and a session that
 /// cannot work (blocks) come from the hooks and the watcher; until those move
 /// over (B3, B4) every agent reads as having neither.
-pub fn list_agents(db: &Connection) -> rusqlite::Result<Vec<Value>> {
+pub fn list_agents(db: &Connection) -> rusqlite::Result<Vec<Value>> { list_agents_with(db, |_| false) }
+
+/// with the panes that are asking (approvals.busy), live from the hooks
+pub fn list_agents_with(db: &Connection, busy: impl Fn(&str) -> bool) -> rusqlite::Result<Vec<Value>> {
     let mut out = rows(db, &format!(r#"SELECT {} FROM agents a LEFT JOIN projects p ON p.id = a.project_id
   LEFT JOIN agent_sessions s ON s.agent_id = a.id
   WHERE a.archived_at IS NULL ORDER BY a.role = 'pilo' DESC, a.name"#, agent_columns()), &[], &AGENT_KINDS)?;
-    for a in out.iter_mut() { a["waitingApproval"] = json!(false); }
+    for a in out.iter_mut() { let t = a["herdrTarget"].as_str().unwrap_or("").to_string(); a["waitingApproval"] = json!(!t.is_empty() && busy(&t)); }
     Ok(out)
 }
 
 async fn agents(State(app): State<Shared>) -> Res {
     let db = app.db.lock().unwrap();
-    list_agents(&db).map(|r| Json(json!(r))).map_err(db_err)
+    list_agents_with(&db, |p| app.approvals.busy(p)).map(|r| Json(json!(r))).map_err(db_err)
 }
 
 async fn tree(State(app): State<Shared>) -> Res {
     let db = app.db.lock().unwrap();
-    let agents = list_agents(&db).map_err(db_err)?;
+    let agents = list_agents_with(&db, |p| app.approvals.busy(p)).map_err(db_err)?;
     let role = |r: &str| agents.iter().filter(|a| a["role"] == r).cloned().collect::<Vec<_>>();
     let (pms, workers) = (role("pm"), role("worker"));
     let pilo = agents.iter().find(|a| a["role"] == "pilo").cloned().unwrap_or(Value::Null);
@@ -225,7 +228,7 @@ const TODAY: &str = "(now() / 86400000000) * 86400000000";
 
 async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extract::Query<std::collections::HashMap<String, String>>) -> Res {
     let db = app.db.lock().unwrap();
-    let agents = list_agents(&db).map_err(db_err)?;
+    let agents = list_agents_with(&db, |p| app.approvals.busy(p)).map_err(db_err)?;
     let tasks = rows(&db, r#"SELECT t.id, t.title, t.request, t.status, t.tokens_in AS "tokensIn", t.tokens_out AS "tokensOut",
        t.created_at AS "createdAt", t.inbox_id AS "inboxId", t.progress, t.progress_at AS "progressAt",
        a.name AS agent, pa.name AS "parentAgent"

@@ -1,4 +1,5 @@
 mod admin;
+mod approvals;
 mod cadence;
 mod agents;
 mod describe;

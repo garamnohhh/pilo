@@ -138,7 +138,7 @@ fn wake(app: &Shared, agent: &Value, message: &str, task: Option<i64>, inbox: Op
     }
     app.engine.state.lock().unwrap().pending.insert(id);
     let target = s(&agent["herdr_target"]);
-    match app.herdr.prompt(&target, message, false) {
+    match app.herdr.prompt(&target, message, app.approvals.busy(&target)) {
         Ok(()) => { ev(app, "wake_sent", &t("event.woken", &[("agent", name)]), Some(id), task, inbox, json!({ "target": target, "message": message })); true }
         Err(e) => { failed(app, agent, &e, task, inbox); false }
     }
@@ -193,7 +193,7 @@ fn flush_desk(app: &Shared) {
     }
     let bundle = format!("b{}", crate::sql::now_us() / 1000);
     let messages: Vec<&str> = send.iter().map(|x| x.message.as_str()).collect();
-    if let Err(e) = app.herdr.prompt(&target, &bundle_message(&messages), false) {
+    if let Err(e) = app.herdr.prompt(&target, &bundle_message(&messages), app.approvals.busy(&target)) {
         for x in &send { failed(app, &desk, &e, x.task, x.inbox); }
         return;
     }
@@ -428,6 +428,19 @@ fn pump_sessions(app: &Shared) {
         let id = a["id"].as_i64().unwrap();
         let target = s(&a["herdr_target"]);
         let session = live.iter().find(|x| x["target"] == target.as_str());
+        // a card read off the screen goes when the screen no longer shows its menu; herdr's status settles the rest
+        if app.approvals.notice_for(&target).map(|n| n["screen"] == true).unwrap_or(false) {
+            let m = crate::panemenu::parse_menu(&app.herdr.read_pane(&target));
+            if app.approvals.screen_says(&target, m.as_ref()) { app.bell.changed(); }
+        }
+        if let Some(sx) = session { if app.approvals.settle(&target, sx["status"].as_str().unwrap_or("")) { app.bell.changed(); } }
+        if session.map(|x| x["status"] == "blocked").unwrap_or(false) && !app.approvals.busy(&target) {
+            let screen = app.herdr.read_pane(&target);
+            if let Some(menu) = crate::panemenu::parse_menu(&screen) {
+                let agent = crate::approvals::agent_for_pane(app, &target);
+                if app.approvals.notice_from_screen(&target, agent.as_ref(), menu, "") { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
+            }
+        }
         if session.is_some() && before.iter().any(|(i, st)| *i == id && st == "gone") {
             ev(app, "session_started", &format!("{}: session back in {target}", if s(&a["name"]).is_empty() { "agent".into() } else { s(&a["name"]) }), Some(id), None, None, json!({ "target": target }));
         }

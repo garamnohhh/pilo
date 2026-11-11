@@ -87,6 +87,14 @@ impl Herdr {
             else if e.trim().is_empty() { "WAKE_FAILED".into() } else { e.trim().lines().next().unwrap_or("WAKE_FAILED").to_string() }
         })
     }
+
+    /// sendKeys: keys, not text (Escape, a menu's number, Enter)
+    pub fn send_keys(&self, target: &str, keys: &[&str]) -> Result<(), String> {
+        if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
+        let mut args = vec!["agent", "send-keys", target];
+        args.extend_from_slice(keys);
+        self.call(&args).map(|_| ())
+    }
 }
 
 fn expand(path: &str) -> String {
