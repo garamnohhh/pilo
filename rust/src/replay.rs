@@ -20,6 +20,7 @@ static SESSIONS: Mutex<Option<Vec<Value>>> = Mutex::new(None);
 pub fn sessions() -> Option<Vec<Value>> { SESSIONS.lock().unwrap().clone() }
 // a pane the Node server found in a dialog shows one (with no numbered menu, so no card is made of it)
 static DIALOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static STALLED: Mutex<Vec<i64>> = Mutex::new(Vec::new());
 pub fn screen(target: &str) -> String { if DIALOG.lock().unwrap().iter().any(|p| p == target) { "Hooks need review\nEsc to close".into() } else { String::new() } }
 
 fn us(v: &Value) -> i64 { v.as_str().and_then(|x| crate::store::micros(x).ok()).unwrap_or(0) }
@@ -40,7 +41,7 @@ fn items(message: &str) -> Vec<String> {
     st.iter().enumerate().map(|(i, (_, e))| rest[*e..st.get(i + 1).map(|n| n.0).unwrap_or(rest.len())].to_string()).collect()
 }
 
-struct Window { at: i64, rust: Vec<(String, String)>, node: Vec<(String, String)>, held: bool }
+struct Window { at: i64, last: i64, swept: Vec<i64>, rust: Vec<(String, String)>, node: Vec<(String, String)>, held: bool }
 
 pub fn run(argv: &[String]) -> i32 {
     let Some(dump) = argv.first() else { eprintln!("usage: pilo replay <dump.jsonl> [--days 14] [--out file]"); return 2 };
@@ -83,6 +84,8 @@ pub fn run(argv: &[String]) -> i32 {
     line.sort_by(|a, b| (a.0, a.1, a.3["id"].as_i64().unwrap_or(0)).cmp(&(b.0, b.1, b.3["id"].as_i64().unwrap_or(0))));
     let final_tasks: HashMap<i64, Value> = tables.get("tasks").cloned().unwrap_or_default().into_iter().map(|t| (t["id"].as_i64().unwrap(), t)).collect();
     let since = crate::sql::now_us() - days * 86_400_000_000;
+    // --stop <iso>: end the walk just before that moment and keep the database there, to look at
+    let stop = opt("--stop").and_then(|x| crate::store::micros(&x).ok());
 
     crate::shadow::set_on();
     let rt = tokio::runtime::Runtime::new().unwrap();
@@ -110,6 +113,10 @@ pub fn run(argv: &[String]) -> i32 {
         crate::shadow::take_recorded();
         crate::engine::tick(app);
         let rec = crate::shadow::take_recorded();
+        // which of them were the stall sweep's (diagnostics: a sweep follows the session's 'working', which history lacks)
+        let swept: Vec<i64> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT task_id FROM events WHERE type = 'task_stalled' AND created_at >= $1", &[&at], &[]).unwrap_or_default() }
+            .into_iter().filter_map(|r| r["task_id"].as_i64()).collect();
+        STALLED.lock().unwrap().extend(swept);
         { let db = app.db.lock().unwrap(); let _ = db.execute_batch("ROLLBACK"); }
         let mut out = Vec::new();
         // panes moved over the weeks (desk:4 was w7:p5): who was woken is the agent, not its pane
@@ -122,21 +129,37 @@ pub fn run(argv: &[String]) -> i32 {
     // a pane the Node server found showing a dialog stays so until its agent is heard from again
     let mut dialog: std::collections::HashSet<i64> = Default::default();
     for (i, (t, _, table, r)) in line.iter().enumerate() {
+        if stop.is_some_and(|x| *t >= x) { app.db.lock().unwrap().execute_batch("PRAGMA wal_checkpoint").ok(); println!("stopped: {}", tmp.display()); return 0; }
         // a moment the Node server acted: the engine ticks just before the row lands
-        let action = table == "events" && (r["type"] == "wake_sent" || r["type"] == "wake_failed") && *t >= since;
-        if let Some(w) = &open { if *t > w.at + 3_000_000 { windows.push(open.take().unwrap()); } }
+        // a moment the Node server acted, from the first row its tick wrote (task_stalled comes before its wake)
+        let action = table == "events" && *t >= since && matches!(r["type"].as_str(), Some("wake_sent" | "wake_failed" | "task_stalled" | "wake_coalesced" | "wake_suppressed" | "wake_parked" | "wake_gave_up" | "decision_woken" | "decision_reminded" | "followup_woken" | "worker_result_woken"));
+        let woke = table == "events" && (r["type"] == "wake_sent" || r["type"] == "wake_failed");
+        if let Some(w) = &open { if *t > w.at + 10_000_000 { windows.push(open.take().unwrap()); } }
         // a wake Node got through says that pane had no dialog then
-        if action && open.is_none() { for (_, _, tb, x) in line[i..].iter().take_while(|x| x.0 <= *t + 3_000_000) { if tb == "events" && x["type"] == "wake_sent" { if let Some(a) = x["agent_id"].as_i64() { dialog.remove(&a); } } } }
-        if action && open.is_none() { open = Some(Window { at: *t, rust: tick(&app, *t, &dialog), node: vec![], held: false }); decisions += 1; }
+        if action && open.is_none() { for (_, _, tb, x) in line[i..].iter().take_while(|x| x.0 <= *t + 10_000_000) { if tb == "events" && x["type"] == "wake_sent" { if let Some(a) = x["agent_id"].as_i64() { if dialog.remove(&a) {
+            let db = app.db.lock().unwrap(); let _ = exec(&db, "INSERT INTO agent_sessions (agent_id, target, status, title, since, updated_at) VALUES ($1, '', 'idle', '', $2, $2)
+                ON CONFLICT (agent_id) DO UPDATE SET status = 'idle', since = excluded.since, updated_at = excluded.updated_at", &[&a, &(*t - 1)]); } } } } }
+        if action && open.is_none() { let rust = tick(&app, *t, &dialog); open = Some(Window { at: *t, last: *t, swept: std::mem::take(&mut *STALLED.lock().unwrap()), rust, node: vec![], held: false }); decisions += 1; }
+        // the Node server ticks every 3 seconds, and at once on a Stop hook, and wakes one item per agent per tick: so does the walk, inside a window
+        else if action && open.as_ref().is_some_and(|w| *t >= w.last + 500_000) {
+            let more = tick(&app, *t, &dialog);
+            let w = open.as_mut().unwrap();
+            for k in more { if !w.rust.contains(&k) { w.rust.push(k); } }
+            w.last = *t;
+            w.swept.extend(std::mem::take(&mut *STALLED.lock().unwrap()));
+        }
         else if !action && open.is_none() && *t >= next_tick && *t >= since {
             // a quiet moment: whatever the engine would send here, the Node server did not
             let rust = tick(&app, *t, &dialog);
-            if !rust.is_empty() { windows.push(Window { at: *t, rust, node: vec![], held: false }); }
+            if !rust.is_empty() { windows.push(Window { at: *t, last: *t, swept: std::mem::take(&mut *STALLED.lock().unwrap()), rust, node: vec![], held: false }); }
         }
         if *t >= next_tick { next_tick = *t + 300_000_000; }
         if table == "events" { if let Some(a) = r["agent_id"].as_i64() {
+            // the pane went idle when its dialog went: an answer to it, or the agent heard from again
+            let session = |st: &str| { let db = app.db.lock().unwrap(); let _ = exec(&db, "INSERT INTO agent_sessions (agent_id, target, status, title, since, updated_at) VALUES ($1, '', $2, '', $3, $3)
+                ON CONFLICT (agent_id) DO UPDATE SET status = excluded.status, since = excluded.since, updated_at = excluded.updated_at", &[&a, &st, t]); };
             if r["type"] == "wake_failed" && r["payload"]["code"] == "PANE_IN_DIALOG" { dialog.insert(a); }
-            else if !matches!(r["type"].as_str(), Some("wake_failed" | "task_stalled" | "wake_coalesced" | "wake_suppressed" | "wake_parked")) { dialog.remove(&a); }
+            else if !matches!(r["type"].as_str(), Some("wake_failed" | "task_stalled" | "wake_coalesced" | "wake_suppressed" | "wake_parked")) { if dialog.remove(&a) { session("idle"); } }
         } }
         // the row lands
         let db = app.db.lock().unwrap();
@@ -173,7 +196,7 @@ pub fn run(argv: &[String]) -> i32 {
                     "worker_result_woken" => { let _ = exec(&db, "UPDATE tasks SET status = 'running', hold_note = '' WHERE id = $1 AND status = 'holding'", &[&p["parent"].as_i64()]); }
                     _ => {}
                 }
-                if action {
+                if woke && *t >= since {
                     if let Some(w) = open.as_mut() {
                         let target = r["agent_id"].as_i64().map(|x| x.to_string()).unwrap_or_else(|| s(&p["target"]));
                         if kind == "wake_sent" { w.node.push(key(&target, &s(&p["message"]))); }
@@ -204,7 +227,7 @@ pub fn run(argv: &[String]) -> i32 {
         let nd: Vec<_> = w.node.iter().filter(|x| !w.rust.contains(x)).collect();
         if !rd.is_empty() || !nd.is_empty() {
             use std::io::Write;
-            let _ = writeln!(f, "{}", json!({ "at": crate::sql::iso_ms(w.at), "onlyRust": rd, "onlyNode": nd, "failedTry": w.held }));
+            let _ = writeln!(f, "{}", json!({ "at": crate::sql::iso_ms(w.at), "onlyRust": rd, "onlyNode": nd, "failedTry": w.held, "swept": w.swept }));
         }
     }
     let _ = std::fs::remove_file(&tmp);
