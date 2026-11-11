@@ -408,3 +408,9 @@ test("#5989: a long command whose first line scrolled off the screen is still th
   assert.ok(card.plain.line.endsWith("될까요?") && card.plain.options[0].label === "진행");
   A.screenSays("w15:p1", null);
 });
+
+test("#6037: a heredoc whose first line is off the screen and whose last is EOF is matched by a line between", () => {
+  const cmd = "pilo progress 6035 \"인사이트 API 로 오늘\"\nTOK=$(security find-generic-password -s x -w)\npython3 - \"$TOK\" <<'EOF'\nm=g(\"17841473437577789/media?fields=id\")\nprint(a)\nEOF";
+  assert.ok(A.onScreen({ command: cmd }, "│ m=g(\"17841473437577789/media?fields=id\") │\n│ print(a) │\n│ EOF │\nDo you want to proceed?"));
+  assert.ok(!A.onScreen({ command: cmd }, "│ print(a) │\n│ EOF │\nDo you want to proceed?"), "short lines alone are not this command");
+});
