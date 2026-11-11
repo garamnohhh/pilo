@@ -43,7 +43,8 @@
   "scripts": {
     "start": "node src/server.js",
     "check": "node --check src/server.js",
-    "test": "node --test src/*.test.js"
+    "test": "node --test src/*.test.js",
+    "conformance": "node --test --test-timeout=60000 'conformance/*.test.js'"
   },
   "dependencies": {
     "@electric-sql/pglite": "0.5.8",
