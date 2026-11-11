@@ -73,7 +73,15 @@ pub fn exec(db: &Connection, pg: &str, params: &[&dyn ToSql]) -> rusqlite::Resul
 }
 
 pub type Res = Result<Json<Value>, Response>;
-pub fn fail(status: StatusCode, msg: &str) -> Response { (status, Json(json!({ "error": msg }))).into_response() }
+/// The error message rides along on the response, for a caller that collects
+/// errors instead of answering with them (propagateRules' results).
+#[derive(Clone)]
+pub struct ErrText(pub String);
+pub fn fail(status: StatusCode, msg: &str) -> Response {
+    let mut r = (status, Json(json!({ "error": msg }))).into_response();
+    r.extensions_mut().insert(ErrText(msg.to_string()));
+    r
+}
 pub fn db_err(e: rusqlite::Error) -> Response { fail(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()) }
 
 /// The dashboard and the four modules it imports straight from src.
@@ -101,7 +109,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
     let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src"),
         herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new() });
-    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::writes::routes(crate::reads::routes(Router::new()))))));
+    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();
     let router = router.fallback(get(page))

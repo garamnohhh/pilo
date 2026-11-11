@@ -31,6 +31,15 @@ pub fn create(path: &Path) -> Result<Connection, String> {
     Ok(db)
 }
 
+/// A new, empty Pilo: the schema and what the migrations seed (settings, the
+/// watcher's own jobs). The app functions are there for the seed's now_us().
+pub fn fresh(path: &Path) -> Result<Connection, String> {
+    let db = create(path)?;
+    crate::sql::register(&db).map_err(|e| e.to_string())?;
+    db.execute_batch(include_str!("seed.sql")).map_err(|e| e.to_string())?;
+    Ok(db)
+}
+
 pub fn micros(iso: &str) -> Result<i64, String> {
     DateTime::parse_from_rfc3339(iso).map(|t| t.timestamp_micros()).map_err(|e| format!("{iso}: {e}"))
 }

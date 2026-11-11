@@ -62,4 +62,47 @@ impl Herdr {
     pub fn notify(&self, title: &str, body: &str) -> bool {
         self.call(&["notification", "show", title, "--body", body, "--position", "top-right", "--sound", "none"]).is_ok()
     }
+
+    /// past the cache: the check made right before typing
+    pub fn fresh_sessions(&self) -> Vec<Value> { *self.cache.lock().unwrap() = (None, vec![]); self.sessions() }
+
+    pub fn read_pane(&self, target: &str) -> String {
+        if target.is_empty() { return String::new(); }
+        self.call(&["pane", "read", target]).unwrap_or_default()
+    }
+
+    /// candidates: sessions in the same folder (and of the same runtime, when known)
+    pub fn candidates(&self, cwd: &str, runtime: &str) -> Vec<Value> {
+        let want = expand(cwd);
+        if want.is_empty() { return vec![]; }
+        self.sessions().into_iter().filter(|s| expand(s["cwd"].as_str().unwrap_or("")) == want && (runtime.is_empty() || s["runtime"] == runtime)).collect()
+    }
+
+    /// prompt: refused into a dialog (PANE_IN_DIALOG), else typed by herdr
+    pub fn prompt(&self, target: &str, message: &str, busy: bool) -> Result<(), String> {
+        if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
+        if busy || in_dialog(&self.read_pane(target)) { return Err("PANE_IN_DIALOG".into()); }
+        self.call(&["agent", "prompt", target, message]).map(|_| ()).map_err(|e| {
+            if regex::Regex::new(r"(?i)not found|unknown pane|no such").unwrap().is_match(&e) { "SESSION_NOT_FOUND".into() }
+            else if e.trim().is_empty() { "WAKE_FAILED".into() } else { e.trim().lines().next().unwrap_or("WAKE_FAILED").to_string() }
+        })
+    }
+}
+
+fn expand(path: &str) -> String {
+    if path.is_empty() { return String::new(); }
+    let home = std::env::var("HOME").unwrap_or_default();
+    let full = if let Some(rest) = path.strip_prefix('~') { format!("{home}{rest}") } else { path.to_string() };
+    full.trim_end_matches('/').to_string()
+}
+
+/// herdr.js inDialog: only the bottom of the screen counts, and Claude's own input
+/// box (a ❯ line right under a rule) means no screen is open
+pub fn in_dialog(screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();
+    let bottom = &lines[lines.len().saturating_sub(6)..];
+    let rule = regex::Regex::new(r"^\s*─{8,}").unwrap();
+    let input_box = bottom.iter().enumerate().any(|(i, l)| i > 0 && l.trim_start().starts_with('❯') && rule.is_match(bottom[i - 1]));
+    let dialogs = regex::Regex::new(r"trust all · enter review · esc close|Hooks need review|Trust all and continue|Space to select · Esc to reject all|Type to search|\bEsc to (cancel|close|go back|exit)\b").unwrap();
+    !input_box && dialogs.is_match(&bottom.join("\n"))
 }

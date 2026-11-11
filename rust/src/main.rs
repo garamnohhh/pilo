@@ -1,3 +1,4 @@
+mod admin;
 mod agents;
 mod files;
 mod herdr;
@@ -14,7 +15,7 @@ mod writes;
 use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage:
-  pilo serve --port <n> --db <file.sqlite>   the HTTP side (read paths so far)
+  pilo serve [--port <n>] [--db <file>]    the HTTP side; without --db, $PILO_HOME/.pilo/pilo.sqlite
   pilo db import <dump.jsonl> <new.sqlite>   rows from tools/db/pg-dump.mjs into a new SQLite file
   pilo db export <file.sqlite> <dump.jsonl>  the same rows back out, for tools/db/pg-restore.mjs";
 
@@ -24,11 +25,22 @@ fn main() {
     if a.first() == Some(&"serve") {
         let opt = |name: &str| a.iter().position(|x| *x == name).and_then(|i| a.get(i + 1)).map(|s| s.to_string());
         let port = opt("--port").or_else(|| std::env::var("PILO_PORT").ok()).and_then(|p| p.parse().ok()).unwrap_or(48888);
-        let Some(db) = opt("--db") else { eprintln!("{USAGE}"); std::process::exit(2) };
+        // --db: a file someone else's home goes with (a copy beside the Node server);
+        // without it the server owns its home: the database there, made on first
+        // start, and the port written where the CLI and the rules read it
+        let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
+        let own = opt("--db").is_none();
+        let db = opt("--db").map(PathBuf::from).unwrap_or_else(|| home.join("pilo.sqlite"));
+        if own {
+            let _ = std::fs::create_dir_all(home.join("logs"));
+            if !db.exists() { if let Err(e) = store::fresh(&db) { eprintln!("pilo: {e}"); std::process::exit(1) } }
+            let _ = std::fs::write(home.join("port"), port.to_string());
+            let _ = std::fs::write(home.join("server.pid"), std::process::id().to_string());
+        }
         // the dashboard and src/ come from the checkout this binary was built in
         let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
         let rt = tokio::runtime::Runtime::new().expect("runtime");
-        if let Err(e) = rt.block_on(serve::run(port, PathBuf::from(db), repo)) { eprintln!("pilo: {e}"); std::process::exit(1) }
+        if let Err(e) = rt.block_on(serve::run(port, db, repo)) { eprintln!("pilo: {e}"); std::process::exit(1) }
         return;
     }
     let done = match a.as_slice() {

@@ -402,3 +402,6 @@ async fn limited(State(app): State<Shared>, Path(agent_id): Path<i64>, raw: Stri
 
 #[allow(dead_code)]
 pub fn into(r: W) -> Response { match r { Ok(x) => x.into_response(), Err(e) => e } }
+
+/// what an error response says
+pub fn error_text(r: Response) -> String { r.extensions().get::<crate::serve::ErrText>().map(|e| e.0.clone()).unwrap_or_default() }
