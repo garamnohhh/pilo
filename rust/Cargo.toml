@@ -10,6 +10,7 @@ rusqlite = { version = "0.37", features = ["bundled", "functions"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 regex = "1"
 sha2 = "0.10"
+serde = "1"
 notify = { version = "8", default-features = false, features = ["macos_kqueue"] }
 tower = { version = "0.5", features = ["util"] }
 sha1_smol = { version = "1", features = ["std"] }

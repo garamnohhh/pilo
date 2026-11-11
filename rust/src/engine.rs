@@ -6,7 +6,7 @@
 //! In now: sessions, requests, tasks, results, follow-ups, worker results,
 //! stalls, decisions, held requests, the desk's bundle, the backoff, the cap.
 //! Schedules run from here too (schedules.rs), and engine2.rs has RelayRoom, limits,
-//! the usage probe, blocked sessions and the notice line. Still to come: model changes.
+//! the usage probe, blocked sessions and the notice line; modelrun.rs the model changes.
 
 use crate::reads::log_event;
 use crate::serve::{one, rows, Shared, K};
@@ -468,8 +468,9 @@ pub fn tick(app: &Shared) {
     pump_worker_results(app);
     pump_stalled(app);
     pump_decisions(app);
-    pump_held(app);
     crate::engine2::pump_limits(app);
+    pump_held(app);
+    crate::modelrun::pump(app);
     crate::engine2::pump_quota(app);
     pump_sessions(app);
     crate::engine2::pump_blocks(app);

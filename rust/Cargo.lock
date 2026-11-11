@@ -569,6 +569,7 @@ dependencies = [
  "notify",
  "regex",
  "rusqlite",
+ "serde",
  "serde_json",
  "sha1_smol",
  "sha2",

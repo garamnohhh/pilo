@@ -88,6 +88,13 @@ impl Herdr {
         })
     }
 
+    /// startAgent: a Claude or Codex session in a pane back at its shell, the runtime's arguments after --
+    pub fn start_agent(&self, name: &str, kind: &str, pane: &str, args: &[String]) -> Result<(), String> {
+        let mut a: Vec<&str> = vec!["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", "60000", "--"];
+        a.extend(args.iter().map(String::as_str));
+        self.call(&a).map(|_| ())
+    }
+
     /// sendKeys: keys, not text (Escape, a menu's number, Enter)
     pub fn send_keys(&self, target: &str, keys: &[&str]) -> Result<(), String> {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
