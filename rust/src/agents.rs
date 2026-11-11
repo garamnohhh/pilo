@@ -93,7 +93,16 @@ pub fn list_agents_with(db: &Connection, busy: impl Fn(&str) -> bool) -> rusqlit
     let mut out = rows(db, &format!(r#"SELECT {} FROM agents a LEFT JOIN projects p ON p.id = a.project_id
   LEFT JOIN agent_sessions s ON s.agent_id = a.id
   WHERE a.archived_at IS NULL ORDER BY a.role = 'pilo' DESC, a.name"#, agent_columns()), &[], &AGENT_KINDS)?;
-    for a in out.iter_mut() { let t = a["herdrTarget"].as_str().unwrap_or("").to_string(); a["waitingApproval"] = json!(!t.is_empty() && busy(&t)); }
+    for a in out.iter_mut() {
+        let t = a["herdrTarget"].as_str().unwrap_or("").to_string();
+        a["waitingApproval"] = json!(!t.is_empty() && busy(&t));
+        // a session that cannot work, read from its own record by the engine
+        if let Some(b) = crate::engine2::block_of(a["id"].as_i64().unwrap_or(0)) {
+            a["status"] = json!(b.state);
+            a["blockedWhy"] = json!(crate::engine2::words(&b.state, &b.runtime, &b.why));
+            a["blockedSince"] = json!(crate::sql::iso_ms(b.since * 1000));
+        }
+    }
     Ok(out)
 }
 

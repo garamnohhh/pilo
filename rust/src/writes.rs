@@ -102,13 +102,19 @@ async fn create_note(State(app): State<Shared>, raw: String) -> W {
     if text.is_empty() { return Err(bad(400, "empty note")); }
     let title = { let x = text_of(&b["title"]).trim().to_string(); if x.is_empty() { js_slice(text.split('\n').next().unwrap_or(""), 60) } else { x } };
     let db = app.db.lock().unwrap();
-    let inbox = insert_inbox(&db, &title, "", "desk", None)?["id"].as_i64().unwrap();
-    exec(&db, "UPDATE inbox SET status = 'replied', updated_at = now() WHERE id = $1", &[&inbox]).map_err(db_err)?;
-    let desk = desk_id(&db)?;
-    exec(&db, "INSERT INTO final_replies (inbox_id, agent_id, body, elapsed_ms, created_at) VALUES ($1, $2, $3, 0, now())", &[&inbox, &desk, &text]).map_err(db_err)?;
-    log_event(&db, "desk_note", &title, desk, None, Some(inbox), &json!({})).map_err(db_err)?;
-    notify_rule(&app, &db, "desk note", &format!("Pilo · {title}"), &format!("in-{inbox}"));
-    created(json!({ "id": inbox }))
+    created(json!({ "id": insert_note(&app, &db, &text, &title)? }))
+}
+
+/// createNote: pilo speaking first, a request already answered
+pub fn insert_note(app: &Shared, db: &Connection, text: &str, title: &str) -> Result<i64, Response> {
+    let db = db;
+    let inbox = insert_inbox(db, title, "", "desk", None)?["id"].as_i64().unwrap();
+    exec(db, "UPDATE inbox SET status = 'replied', updated_at = now() WHERE id = $1", &[&inbox]).map_err(db_err)?;
+    let desk = desk_id(db)?;
+    exec(db, "INSERT INTO final_replies (inbox_id, agent_id, body, elapsed_ms, created_at) VALUES ($1, $2, $3, 0, now())", &[&inbox, &desk, &text]).map_err(db_err)?;
+    log_event(db, "desk_note", title, desk, None, Some(inbox), &json!({})).map_err(db_err)?;
+    notify_rule(app, db, "desk note", &format!("Pilo · {title}"), &format!("in-{inbox}"));
+    Ok(inbox)
 }
 
 /// pickParent: the PM's open task on this request; failing that its only open task
@@ -374,6 +380,12 @@ async fn limited(State(app): State<Shared>, Path(agent_id): Path<i64>, raw: Stri
         Some(chrono::DateTime::parse_from_rfc3339(&until).map(|t| t.timestamp_micros()).or_else(|_| crate::store::micros(&until))
             .map_err(|_| bad(400, "until must be a time"))?)
     };
+    created(set_limited(&app, &db, &agent, agent_id, when)?)
+}
+
+/// setLimited: parked until a time (a worker's untouched work going to its PM), or the park lifted
+pub fn set_limited(_app: &Shared, db: &Connection, agent: &Value, agent_id: i64, when: Option<i64>) -> Result<Value, Response> {
+    let db = db;
     let parked = when.filter(|w| *w > crate::sql::now_us());
     exec(&db, "UPDATE agents SET limited_until = $2, updated_at = now() WHERE id = $1", &[&agent_id, &parked]).map_err(db_err)?;
     let name = s(&agent["name"]);
@@ -402,7 +414,7 @@ async fn limited(State(app): State<Shared>, Path(agent_id): Path<i64>, raw: Stri
             }
         }
     }
-    created(json!({ "id": agent_id, "limitedUntil": iso, "handedOver": moved }))
+    Ok(json!({ "id": agent_id, "limitedUntil": iso, "handedOver": moved }))
 }
 
 #[allow(dead_code)]

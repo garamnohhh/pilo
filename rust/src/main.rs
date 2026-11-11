@@ -5,6 +5,7 @@ mod agents;
 mod cli;
 mod describe;
 mod engine;
+mod engine2;
 mod files;
 mod herdr;
 mod panemenu;
