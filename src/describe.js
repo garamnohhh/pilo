@@ -136,13 +136,13 @@ export function plainAsk(item, menu = null) {
   const input = item?.input || {};
   let line;
   if (item?.kind === "question") line = tUser("plain.question", { who });
-  else if (!tool) line = tUser("plain.unread");
+  else if (!tool) line = tUser("plain.unread", { who });
   else if (tool === "Bash" || tool === "exec_command" || input.command) {
     // looking at output (tail, grep) says nothing next to what the command does
     const all = describe(tool, input).steps;
     const doing = all.filter((x) => x.key !== "read");
     const steps = (doing.length ? doing : all).slice(0, 3).map(stepPhrase);
-    if (!steps.length) line = tUser("plain.unread");
+    if (!steps.length) line = tUser("plain.unread", { who });
     else {
       // 하 + 고 for all but the last; the last 하 becomes 해도
       const chain = steps.map((p, i) => (i < steps.length - 1 ? `${p}고` : `${p.slice(0, -1)}해도`)).join(", ");

@@ -44,6 +44,6 @@ test("#5989: a card says in one plain sentence what the agent wants to do, and Y
   assert.equal(say({ agent: "h", tool: "Bash", input: { command: "git commit -m x && git push origin main" } }).line,
     "h에서 변경 내용을 커밋으로 저장하고, 변경 내용을 원격 저장소(origin main)에 업로드해도 될까요?");
   assert.equal(say({ agent: "p", tool: "Edit", input: { file_path: "/x/src/a.js" } }).line, "p에서 파일을 고쳐도 될까요? (a.js)");
-  assert.equal(say({ agent: "p" }).line, "어떤 명령인지 못 읽음");
+  assert.equal(say({ agent: "p" }).line, "p에서 명령을 실행해도 될지 기다리고 있어요.");
   assert.deepEqual(say({ agent: "p" }).options.map((o) => o.label), ["진행", "Yes, and always allow x", "멈춤"]);
 });

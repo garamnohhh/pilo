@@ -14,7 +14,7 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { home } from "./paths.js";
+import { home, logDir } from "./paths.js";
 import { HOOK_TIMEOUT_S, windowOnly, paneOnly } from "../hooks/pilo-hook.mjs";
 import { describe, plainAsk } from "./describe.js";
 
@@ -154,13 +154,27 @@ export const noticeFor = (pane) => notices.get(pane) || null;
 // line or the line the tool wrote about it. A long command's box is taller than
 // the screen and its top scrolls off (#5989: pilo-dev's card said "could not
 // read" for a heredoc whose first line was above the screen).
-const squash = (s) => String(s).replace(/\s+/g, "");
+// #6037: a heredoc's first line was off the top and its last was "EOF" (too
+// short to count), so garamnoh's card said "could not read": any line of the
+// command long enough to mean something counts. Box borders go with whitespace.
+const squash = (s) => String(s).replace(/[\s─-╿]+/g, "");
 export function onScreen(input, screen) {
   const lines = String(input?.command ?? input?.file_path ?? input?.url ?? "").split("\n").map(squash).filter(Boolean);
   if (!lines.length) return true;
   const shown = squash(screen);
-  const marks = [lines[0], lines.at(-1), squash(input?.description ?? "")].filter((x) => x.length >= 6).map((x) => x.slice(0, 24));
-  return marks.some((m) => shown.includes(m)) || (!marks.length && shown.includes(lines[0]));
+  const marks = [...lines.filter((x, i) => x.length >= (i === 0 ? 6 : 10)), squash(input?.description ?? "")].filter((x) => x.length >= 6).map((x) => x.slice(0, 24));
+  const seen = marks.some((m) => shown.includes(m)) || (!marks.length && shown.includes(lines[0]));
+  if (!seen && screen && !process.env.NODE_TEST_CONTEXT) unreadLog(input, screen);
+  return seen;
+}
+// what was asked and what the screen showed, when the two did not meet: the next
+// "could not read" card says why from here (~/.pilo/logs/unread.log, last 50kB kept)
+function unreadLog(input, screen) {
+  try {
+    const file = join(logDir, "unread.log");
+    const old = existsSync(file) ? readFileSync(file, "utf8").slice(-50_000) : "";
+    writeFileSync(file, `${old}\n=== ${new Date().toISOString()}\n--- asked\n${String(input?.command ?? input?.file_path ?? input?.url ?? "").slice(0, 2000)}\n--- screen\n${String(screen).slice(-4000)}\n`);
+  } catch {}
 }
 export const keyAllowed = (key) => keyOk(key);
 
