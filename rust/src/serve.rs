@@ -122,6 +122,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let router: Router<Shared> = crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();
+    let app_home = app.home.clone();
     let router = router.fallback(get(page))
         .layer(axum::middleware::from_fn(move |req: axum::extract::Request, next: axum::middleware::Next| {
             let app = bell.clone();
@@ -134,8 +135,81 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
         }))
         .with_state(app);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| e.to_string())?;
-    println!("pilo serve on http://127.0.0.1:{port} ({})", db.display());
+    // the same API over a unix socket: agents run in sandboxes that block TCP
+    let sock = std::env::var("PILO_SOCKET").ok().filter(|s| !s.is_empty())
+        .unwrap_or_else(|| format!("{}/pilo.sock", std::env::temp_dir().display().to_string().trim_end_matches('/')));
+    match unix_listener(&sock) {
+        Ok(u) => {
+            let _ = std::fs::write(app_home.join("socket"), &sock);
+            let r = router.clone();
+            tokio::spawn(async move { let _ = axum::serve(u, r).await; });
+        }
+        Err(e) => eprintln!("socket unavailable ({e}); TCP only"),
+    }
+    spool(router.clone());
+    println!("pilo serve on http://127.0.0.1:{port} and {sock} ({})", db.display());
     axum::serve(listener, router).await.map_err(|e| e.to_string())
+}
+
+/// A socket another live server answers on is not taken: it belongs to that one
+fn unix_listener(path: &str) -> Result<tokio::net::UnixListener, String> {
+    if std::path::Path::new(path).exists() {
+        if std::os::unix::net::UnixStream::connect(path).is_ok() { return Err(format!("{path} is in use by another server")); }
+        let _ = std::fs::remove_file(path);
+    }
+    let l = tokio::net::UnixListener::bind(path).map_err(|e| e.to_string())?;
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
+    Ok(l)
+}
+
+/// The file spool (src/spool.js): when a sandbox refuses even the socket, the CLI
+/// drops req-<id>.json and waits for res-<id>.json. One server per spool folder.
+fn spool(router: Router) {
+    if std::env::var("PILO_SPOOL").as_deref() == Ok("off") { return; }
+    let dir = crate::cli::spool_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let owner = format!("{dir}/owner.json");
+    let mine = std::env::var("PILO_HOME").unwrap_or_default();
+    if let Ok(prev) = std::fs::read_to_string(&owner).map(|t| serde_json::from_str::<Value>(&t).unwrap_or(json!({}))) {
+        let pid = prev["pid"].as_i64().unwrap_or(0) as i32;
+        let alive = pid > 0 && pid as u32 != std::process::id() && unsafe_kill0(pid);
+        if alive && prev["data"].as_str() != Some(&mine) { eprintln!("spool: {dir} belongs to pid {pid} — not serving it"); return; }
+    }
+    let _ = std::fs::write(&owner, json!({ "pid": std::process::id(), "data": mine }).to_string());
+    let every = std::time::Duration::from_millis(std::env::var("PILO_SPOOL_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(250));
+    tokio::spawn(async move {
+        use tower::ServiceExt;
+        loop {
+            tokio::time::sleep(every).await;
+            let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+            let names: Vec<String> = rd.filter_map(Result::ok).map(|e| e.file_name().to_string_lossy().into_owned()).filter(|n| n.starts_with("req-") && n.ends_with(".json")).collect();
+            for name in names {
+                let path = format!("{dir}/{name}");
+                let id = &name[4..name.len() - 5];
+                let req: Value = std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
+                let _ = std::fs::remove_file(&path);
+                let method = req["method"].as_str().unwrap_or("GET").to_uppercase();
+                let uri = req["path"].as_str().unwrap_or("/").to_string();
+                let body = if req["body"].is_null() { String::new() } else { req["body"].to_string() };
+                let r = axum::http::Request::builder().method(method.as_str()).uri(uri).header("content-type", "application/json").body(axum::body::Body::from(body));
+                let response = match r { Ok(r) => router.clone().oneshot(r).await.ok(), Err(_) => None };
+                let out = match response {
+                    Some(res) => {
+                        let status = res.status().as_u16();
+                        let bytes = axum::body::to_bytes(res.into_body(), 16 << 20).await.unwrap_or_default();
+                        json!({ "status": status, "payload": serde_json::from_slice::<Value>(&bytes).unwrap_or(json!({})) })
+                    }
+                    None => json!({ "status": 500, "payload": { "error": "bad spool request" } }),
+                };
+                let _ = std::fs::write(format!("{dir}/res-{id}.json"), out.to_string());
+            }
+        }
+    });
+}
+
+fn unsafe_kill0(pid: i32) -> bool {
+    std::process::Command::new("/bin/kill").args(["-0", &pid.to_string()]).stderr(std::process::Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
 }
 
 #[cfg(test)]

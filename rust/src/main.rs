@@ -2,6 +2,7 @@ mod admin;
 mod approvals;
 mod cadence;
 mod agents;
+mod cli;
 mod describe;
 mod engine;
 mod files;
@@ -34,6 +35,10 @@ fn main() {
     if a.first() == Some(&"hook") {
         match a.get(1) { Some(&"classify") => hook::classify(), Some(&"describe") => describe::print_lines(), Some(ev) => hook::run(ev, a.contains(&"--codex")), None => {} }
         return;
+    }
+    // the agent CLI: pilo task, done, progress, …
+    if a.first().map(|c| cli::COMMANDS.contains(c)).unwrap_or(false) || a.is_empty() {
+        std::process::exit(cli::run(&args));
     }
     if a.first() == Some(&"serve") {
         let opt = |name: &str| a.iter().position(|x| *x == name).and_then(|i| a.get(i + 1)).map(|s| s.to_string());

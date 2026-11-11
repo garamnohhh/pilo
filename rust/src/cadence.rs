@@ -191,3 +191,24 @@ mod tests {
         assert!(in_window("days:weekday@09:00-18:00/60", at("2026-11-13 18:10"), 15) && !in_window("days:weekday@09:00-18:00/60", at("2026-11-14 10:00"), 15));
     }
 }
+
+/// describeCadence: one phrase all the screens draw ("평일 09:00", "45분마다")
+pub fn describe(cadence: &str, weekdays_only: bool) -> String {
+    use crate::text::t;
+    let Some(plan) = parse(cadence) else { return cadence.to_string() };
+    let time = |h: u32, m: u32| format!("{h:02}:{m:02}");
+    let day = |d: &u32| t(&format!("cadence.day.{}", DAYS[*d as usize]), &[]);
+    match plan {
+        Plan::Every(n) => if n % 1440 == 0 { t("cadence.everyDays", &[("n", (n / 1440).to_string())]) } else if n % 60 == 0 { t("cadence.hours", &[("n", (n / 60).to_string())]) } else { t("cadence.minutes", &[("n", n.to_string())]) },
+        Plan::Window { spec, days, hour, minute, end_hour, end_minute, minutes } => {
+            let ds = if spec == "daily" { t("cadence.allDays", &[]) } else if spec == "weekday" { t("cadence.weekdays", &[]) } else { days.iter().map(day).collect::<Vec<_>>().join("·") };
+            let every = if minutes % 60 == 0 { t("cadence.hours", &[("n", (minutes / 60).to_string())]) } else { t("cadence.minutes", &[("n", minutes.to_string())]) };
+            t("cadence.window", &[("days", ds), ("from", time(hour, minute)), ("to", time(end_hour, end_minute)), ("every", every)])
+        }
+        Plan::At(h, m) => t(if weekdays_only { "cadence.weekday" } else { "cadence.daily" }, &[("time", time(h, m))]),
+        Plan::Weekday(h, m) => t("cadence.weekday", &[("time", time(h, m))]),
+        Plan::Daily(h, m) => t("cadence.daily", &[("time", time(h, m))]),
+        Plan::Pick(days, h, m) => t("cadence.pick", &[("days", days.iter().map(day).collect::<Vec<_>>().join("·")), ("time", time(h, m))]),
+        Plan::Step(n, h, m) => match n { 1 => t("cadence.daily", &[("time", time(h, m))]), 2 => t("cadence.twoDays", &[("time", time(h, m))]), _ => t("cadence.days", &[("n", n.to_string()), ("time", time(h, m))]) },
+    }
+}
