@@ -1,0 +1,91 @@
+{"tool":"Bash","input":{"command":"rm -rf /"}}
+{"tool":"Bash","input":{"command":"rm -rf ~/"}}
+{"tool":"Bash","input":{"command":"rm -rf ./node_modules"}}
+{"tool":"Bash","input":{"command":"rm -rf ../x/node_modules"}}
+{"tool":"Bash","input":{"command":"rm -rf /tmp/a /etc"}}
+{"tool":"Bash","input":{"command":"rm -rf \"$TMPDIR/x\""}}
+{"tool":"Bash","input":{"command":"D=$(mktemp -d); rm -rf \"$D\""}}
+{"tool":"Bash","input":{"command":"D=$(mktemp -d) && rm -rf $D/.."}}
+{"tool":"Bash","input":{"command":"rm -fr build dist"}}
+{"tool":"Bash","input":{"command":"rm -r -f target"}}
+{"tool":"Bash","input":{"command":"sudo rm -rf /var/x"}}
+{"tool":"Bash","input":{"command":"sudo -u root rm -rf /x"}}
+{"tool":"Bash","input":{"command":"env A=1 rm -rf /x"}}
+{"tool":"Bash","input":{"command":"xargs rm -rf < list"}}
+{"tool":"Bash","input":{"command":"find . -name x -exec rm -rf {} +"}}
+{"tool":"Bash","input":{"command":"bash -c \"rm -rf /x\""}}
+{"tool":"Bash","input":{"command":"zsh -c 'git push --force origin main'"}}
+{"tool":"Bash","input":{"command":"ssh host rm -rf /srv"}}
+{"tool":"Bash","input":{"command":"ssh -i key.pem host ls"}}
+{"tool":"Bash","input":{"command":"git push --force"}}
+{"tool":"Bash","input":{"command":"git push -f origin feature"}}
+{"tool":"Bash","input":{"command":"git push origin +main"}}
+{"tool":"Bash","input":{"command":"git push origin :old"}}
+{"tool":"Bash","input":{"command":"git push --delete origin x"}}
+{"tool":"Bash","input":{"command":"git push --force-with-lease origin main"}}
+{"tool":"Bash","input":{"command":"git push --all --force"}}
+{"tool":"Bash","input":{"command":"git push origin main"}}
+{"tool":"Bash","input":{"command":"gh repo delete x/y"}}
+{"tool":"Bash","input":{"command":"gh api -X DELETE /repos/x"}}
+{"tool":"Bash","input":{"command":"gh api repos/x"}}
+{"tool":"Bash","input":{"command":"gh secret list"}}
+{"tool":"Bash","input":{"command":"gh secret set X < .env"}}
+{"tool":"Bash","input":{"command":"psql -c \"select 1\""}}
+{"tool":"Bash","input":{"command":"psql -c \"DELETE FROM t\""}}
+{"tool":"Bash","input":{"command":"psql -f migrate.sql"}}
+{"tool":"Bash","input":{"command":"mysql -e \"update t set a=1\""}}
+{"tool":"Bash","input":{"command":"mongosh --eval \"db.x.deleteMany({})\""}}
+{"tool":"Bash","input":{"command":"dropdb prod"}}
+{"tool":"Bash","input":{"command":"aws s3 ls"}}
+{"tool":"Bash","input":{"command":"aws s3 rm s3://b/x"}}
+{"tool":"Bash","input":{"command":"aws s3 sync . s3://b --delete"}}
+{"tool":"Bash","input":{"command":"aws ec2 describe-instances"}}
+{"tool":"Bash","input":{"command":"aws ec2 terminate-instances --ids i-1"}}
+{"tool":"Bash","input":{"command":"aws logs start-query x"}}
+{"tool":"Bash","input":{"command":"aws secretsmanager get-secret-value --secret-id x"}}
+{"tool":"Bash","input":{"command":"gcloud compute instances create x"}}
+{"tool":"Bash","input":{"command":"gcloud secrets versions access latest"}}
+{"tool":"Bash","input":{"command":"az vm delete -n x"}}
+{"tool":"Bash","input":{"command":"terraform plan"}}
+{"tool":"Bash","input":{"command":"terraform apply"}}
+{"tool":"Bash","input":{"command":"kubectl get pods"}}
+{"tool":"Bash","input":{"command":"kubectl delete pod x"}}
+{"tool":"Bash","input":{"command":"kubectl get secret x -o yaml"}}
+{"tool":"Bash","input":{"command":"helm upgrade x"}}
+{"tool":"Bash","input":{"command":"pulumi up"}}
+{"tool":"Bash","input":{"command":"cat .env"}}
+{"tool":"Bash","input":{"command":"cat .env.example"}}
+{"tool":"Bash","input":{"command":"source .env"}}
+{"tool":"Bash","input":{"command":"docker run --env-file .env x"}}
+{"tool":"Bash","input":{"command":"cat ~/.ssh/id_ed25519"}}
+{"tool":"Bash","input":{"command":"cat config/secrets/prod.yml"}}
+{"tool":"Bash","input":{"command":"cat cert.pem"}}
+{"tool":"Bash","input":{"command":"vault read secret/x"}}
+{"tool":"Bash","input":{"command":"op read op://x"}}
+{"tool":"Bash","input":{"command":"security find-generic-password -w"}}
+{"tool":"Bash","input":{"command":"pilo approvals pair"}}
+{"tool":"Bash","input":{"command":"pilo hooks install"}}
+{"tool":"Bash","input":{"command":"curl -X POST http://127.0.0.1:48888/api/approvals/1"}}
+{"tool":"Bash","input":{"command":"curl http://127.0.0.1:48888/api/approvals"}}
+{"tool":"Bash","input":{"command":"cat ~/.pilo/approvals.json"}}
+{"tool":"Bash","input":{"command":"echo \"rm -rf /\""}}
+{"tool":"Bash","input":{"command":"pilo done 5 \"ran rm -rf /tmp/x and git push --force\""}}
+{"tool":"Bash","input":{"command":"cat <<EOF > note.md\nrm -rf /\nEOF"}}
+{"tool":"Bash","input":{"command":"bash <<EOF\nrm -rf /srv\nEOF"}}
+{"tool":"Bash","input":{"command":"echo $(rm -rf /x)"}}
+{"tool":"Bash","input":{"command":"echo `git push -f`"}}
+{"tool":"Bash","input":{"command":"ego-browser nodejs <<'EOF'\nawait click(\"@1\")\nEOF"}}
+{"tool":"Bash","input":{"command":"ego-browser nodejs <<'EOF'\ncliLog(await snapshotText())\nEOF"}}
+{"tool":"Bash","input":{"command":"ls 2>&1 | head"}}
+{"tool":"Bash","input":{"command":"a && b || rm -rf /x"}}
+{"tool":"Bash","input":{"command":"(cd x; rm -rf /y)"}}
+{"tool":"Bash","input":{"command":["rm","-rf","/x"]}}
+{"tool":"Read","input":{"file_path":"/w/.env.production"}}
+{"tool":"Edit","input":{"file_path":"/w/.env.sample"}}
+{"tool":"mcp__postgresql__query","input":{"sql":"insert into t values (1)"}}
+{"tool":"mcp__postgresql__query","input":{"sql":"select 1"}}
+{"tool":"mcp__slack__send_message","input":{}}
+{"tool":"mcp__relayroom__reply","input":{}}
+{"tool":"mcp__relayroom__inbox","input":{}}
+{"tool":"WebFetch","input":{"url":"http://127.0.0.1:48888/api/agents/3/choose"}}
+{"tool":"exec_command","input":{"cmd":"rm -rf /x"}}

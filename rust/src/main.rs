@@ -4,6 +4,7 @@ mod agents;
 mod engine;
 mod files;
 mod herdr;
+mod hook;
 mod misc;
 mod reads;
 mod rules;
@@ -19,12 +20,18 @@ use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage:
   pilo serve [--port <n>] [--db <file>]    the HTTP side; without --db, $PILO_HOME/.pilo/pilo.sqlite
+  pilo hook <event> [--codex]               a Claude Code / Codex hook (stdin: the hook's JSON)
   pilo db import <dump.jsonl> <new.sqlite>   rows from tools/db/pg-dump.mjs into a new SQLite file
   pilo db export <file.sqlite> <dump.jsonl>  the same rows back out, for tools/db/pg-restore.mjs";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let a: Vec<&str> = args.iter().map(String::as_str).collect();
+    // a hook event: whatever happens, exit 0 and print only what the hook answers
+    if a.first() == Some(&"hook") {
+        match a.get(1) { Some(&"classify") => hook::classify(), Some(ev) => hook::run(ev, a.contains(&"--codex")), None => {} }
+        return;
+    }
     if a.first() == Some(&"serve") {
         let opt = |name: &str| a.iter().position(|x| *x == name).and_then(|i| a.get(i + 1)).map(|s| s.to_string());
         let port = opt("--port").or_else(|| std::env::var("PILO_PORT").ok()).and_then(|p| p.parse().ok()).unwrap_or(48888);
