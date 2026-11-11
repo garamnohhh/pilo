@@ -34,3 +34,16 @@ test("words in a quoted report are not steps", () => {
   assert.deepEqual(a.steps, [{ key: "pilo", arg: "done 3" }]);
   assert.equal(a.danger, null);
 });
+
+test("#5989: a card says in one plain sentence what the agent wants to do, and Yes / No read as 진행 / 멈춤", async () => {
+  const { plainAsk } = await import("./describe.js");
+  const m = { options: [{ n: 1, label: "Yes" }, { n: 2, label: "Yes, and always allow x", standing: true }, { n: 3, label: "No, and tell Claude what to do differently" }] };
+  const say = (item) => plainAsk(item, m);
+  assert.equal(say({ agent: "pilo-dev", tool: "Bash", input: { command: "cd rust && cargo build 2>&1 | tail -3" } }).line, "pilo-dev에서 Rust 프로그램을 빌드해도 될까요?");
+  assert.equal(say({ agent: "g", tool: "Bash", input: { command: "rm -rf ~/old-site" }, reason: "rm -rf" }).line, "g에서 ~/old-site 삭제를 해도 될까요? 되돌릴 수 없는 삭제예요.");
+  assert.equal(say({ agent: "h", tool: "Bash", input: { command: "git commit -m x && git push origin main" } }).line,
+    "h에서 변경 내용을 커밋으로 저장하고, 변경 내용을 원격 저장소(origin main)에 업로드해도 될까요?");
+  assert.equal(say({ agent: "p", tool: "Edit", input: { file_path: "/x/src/a.js" } }).line, "p에서 파일을 고쳐도 될까요? (a.js)");
+  assert.equal(say({ agent: "p" }).line, "어떤 명령인지 못 읽음");
+  assert.deepEqual(say({ agent: "p" }).options.map((o) => o.label), ["진행", "Yes, and always allow x", "멈춤"]);
+});

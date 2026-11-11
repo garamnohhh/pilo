@@ -16,7 +16,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { home } from "./paths.js";
 import { HOOK_TIMEOUT_S, windowOnly, paneOnly } from "../hooks/pilo-hook.mjs";
-import { describe } from "./describe.js";
+import { describe, plainAsk } from "./describe.js";
 
 export { windowOnly, paneOnly };
 // a little short of the hook's timeout, so the pane hears "no answer" from us
@@ -46,7 +46,7 @@ const masked = (input) => (input && typeof input === "object" && !Array.isArray(
   ? Object.fromEntries(Object.entries(input).map(([k, v]) => [k, typeof v === "string" ? mask(v) : v])) : input);
 
 // The request as the screens show it: no resolver, no timer, no secret.
-const view = ({ resolve, timer, ...r }) => { const input = masked(r.input); return { ...r, input, about: describe(r.tool, input) }; };
+const view = ({ resolve, timer, ...r }) => { const input = masked(r.input); return { ...r, input, about: describe(r.tool, input), plain: plainAsk({ ...r, input }, null) }; };
 
 // `agent` is the Pilo agent bound to the pane, or null: a session Pilo does not
 // run answers in its own pane, at once. `gone` resolves when the hook hangs up
@@ -128,7 +128,8 @@ export function notify(body, agent, now = Date.now()) {
 
 export function list(now = Date.now()) {
   for (const [pane, n] of notices) if (now - n.at > NOTICE_MS) notices.delete(pane);
-  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()].map((n) => (n.tool ? { ...n, input: masked(n.input), about: describe(n.tool, masked(n.input)) } : n)) };
+  const out = { pending: [...pending.values()].map(view), notices: [...notices.values()].map((n) => ({
+    ...(n.tool ? { ...n, input: masked(n.input), about: describe(n.tool, masked(n.input)) } : n), plain: plainAsk({ ...n, input: masked(n.input) }, n.menu) })) };
   // the panes that are asking, so a screen can mark their agents without a reload
   out.busy = [...new Set([...out.pending.map((r) => r.pane), ...out.notices.filter((n) => busy(n.pane)).map((n) => n.pane)])];
   return out;
@@ -148,12 +149,18 @@ export function attachMenu(pane, menu, screen = "") {
 }
 export const noticeFor = (pane) => notices.get(pane) || null;
 
-// the command's first words are on the pane's screen, whitespace aside: a long
-// line wraps there, and the box indents it
+// what the pane asked about is on its screen, whitespace aside (a long line
+// wraps there, and the box indents it): the command's first line, its last
+// line or the line the tool wrote about it. A long command's box is taller than
+// the screen and its top scrolls off (#5989: pilo-dev's card said "could not
+// read" for a heredoc whose first line was above the screen).
 const squash = (s) => String(s).replace(/\s+/g, "");
 export function onScreen(input, screen) {
-  const first = squash(String(input?.command ?? input?.file_path ?? input?.url ?? "").split("\n")[0]).slice(0, 24);
-  return !first || squash(screen).includes(first);
+  const lines = String(input?.command ?? input?.file_path ?? input?.url ?? "").split("\n").map(squash).filter(Boolean);
+  if (!lines.length) return true;
+  const shown = squash(screen);
+  const marks = [lines[0], lines.at(-1), squash(input?.description ?? "")].filter((x) => x.length >= 6).map((x) => x.slice(0, 24));
+  return marks.some((m) => shown.includes(m)) || (!marks.length && shown.includes(lines[0]));
 }
 export const keyAllowed = (key) => keyOk(key);
 

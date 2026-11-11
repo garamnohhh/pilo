@@ -396,3 +396,15 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
   const bad = await runHook(["PermissionRequest"], "not json", env);
   assert.deepEqual(bad, { code: 0, out: "" });
 });
+
+test("#5989: a long command whose first line scrolled off the screen is still the one asked about", () => {
+  const cmd = "cd ~/x && node -e '\nconst a = 1;\nconsole.log(a)'\nfinal-line-of-it";
+  A.notify({ pane: "w15:p1", type: "tool", tool: "Bash", input: { command: cmd } }, agent);
+  A.notify({ pane: "w15:p1", type: "permission_prompt" }, agent);
+  const menu = { question: "Do you want to proceed?", context: [], options: [{ n: 1, label: "Yes" }, { n: 2, label: "No" }], fingerprint: "k" };
+  A.attachMenu("w15:p1", menu, "console.log(a)'\n final-line-of-it\nDo you want to proceed?");
+  assert.equal(A.noticeFor("w15:p1").tool, "Bash", "its last line is on the screen");
+  const card = A.list().notices.find((n) => n.pane === "w15:p1");
+  assert.ok(card.plain.line.endsWith("될까요?") && card.plain.options[0].label === "진행");
+  A.screenSays("w15:p1", null);
+});
