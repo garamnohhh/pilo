@@ -57,6 +57,7 @@ pub fn set_toml_keys(text: &str, changes: &[(&str, Option<String>)]) -> String {
 
 /// replace: a copy kept aside, the new file written beside it, one rename
 fn replace(app: &Shared, file: &str, next: &str, tag: &str) -> bool {
+    if crate::shadow::on() { return false; }   // the shadow run changes no file of the user's
     let current = std::fs::read_to_string(file).unwrap_or_default();
     if current == next { return false; }
     let kept = app.home.join("backups").join("model-settings");

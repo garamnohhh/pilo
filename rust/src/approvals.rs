@@ -69,6 +69,7 @@ fn view(r: &Value) -> Value {
 impl Approvals {
     /// busy: a request held open, or the pane said it shows a prompt
     pub fn busy(&self, pane: &str) -> bool {
+        if crate::shadow::live_busy(pane) { return true; }
         self.pending.lock().unwrap().values().any(|h| h.item["pane"] == pane)
             || self.notices.lock().unwrap().get(pane).map(|n| ["permission_prompt", "elicitation_dialog", "returned"].contains(&n["type"].as_str().unwrap_or(""))).unwrap_or(false)
     }

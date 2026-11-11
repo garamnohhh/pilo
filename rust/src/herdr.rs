@@ -24,6 +24,11 @@ impl Herdr {
     }
 
     fn call(&self, args: &[&str]) -> Result<String, String> {
+        // the shadow run (`pilo shadow`) reads sessions and screens but types nothing: what it would send is written down
+        if crate::shadow::on() && matches!((args.first().copied(), args.get(1).copied()), (Some("agent"), Some("prompt" | "send-keys" | "start" | "focus")) | (Some("notification"), _)) {
+            crate::shadow::record(args);
+            return Ok(String::new());
+        }
         let out = Command::new(program(&self.home)).args(args).output().map_err(|e| e.to_string())?;
         if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("failed").to_string()); }
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())

@@ -19,6 +19,7 @@ mod quota;
 mod rules;
 mod schedules;
 mod serve;
+mod shadow;
 mod sql;
 mod store;
 mod stream;
@@ -30,6 +31,8 @@ use std::path::{Path, PathBuf};
 
 const USAGE: &str = "usage:
   pilo serve [--port <n>] [--db <file>]    the HTTP side; without --db, $PILO_HOME/.pilo/pilo.sqlite
+  pilo shadow [--live url] [--data dir] [--out dir] [--every s] [--once]   decide beside the live server, act on nothing
+  pilo shadow report                        what the rounds found
   pilo hook <event> [--codex]               a Claude Code / Codex hook (stdin: the hook's JSON)
   pilo db import <dump.jsonl> <new.sqlite>   rows from tools/db/pg-dump.mjs into a new SQLite file
   pilo db export <file.sqlite> <dump.jsonl>  the same rows back out, for tools/db/pg-restore.mjs";
@@ -46,6 +49,8 @@ fn main() {
     if a.first().map(|c| cli::COMMANDS.contains(c)).unwrap_or(false) || a.is_empty() {
         std::process::exit(cli::run(&args));
     }
+    // the engine beside the live server, deciding and never acting
+    if a.first() == Some(&"shadow") { std::process::exit(shadow::run(&args[1..])); }
     if a.first() == Some(&"serve") {
         let opt = |name: &str| a.iter().position(|x| *x == name).and_then(|i| a.get(i + 1)).map(|s| s.to_string());
         let port = opt("--port").or_else(|| std::env::var("PILO_PORT").ok()).and_then(|p| p.parse().ok()).unwrap_or(48888);

@@ -127,6 +127,7 @@ pub fn probe_reason(screen: &str) -> Option<&'static str> {
 }
 
 fn write_probe(state: &Value) {
+    if crate::shadow::on() { return; }
     let f = crate::quota::probe_file();
     if state["reason"].is_null() && state["notedAt"].is_null() { let _ = std::fs::remove_file(f); } else { let _ = std::fs::write(f, state.to_string()); }
 }
