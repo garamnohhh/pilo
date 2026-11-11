@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { serialize, probeWorthTrying, probeBackoffMs, jobSetting, reminderDue, bundleMessage } from "./watcher.js";
+import { serialize, probeWorthTrying, probeBackoffMs, jobSetting, reminderDue, bundleMessage, dialogHeld } from "./watcher.js";
 
 // The bug this exists for: a herdr call hung for 78 minutes, setInterval kept
 // firing on the clock, and every waiting tick read the same "not woken yet"
@@ -112,4 +112,15 @@ test("the desk gets one message per tick, every item in it", async () => {
   const src = readFileSync(new URL("./watcher.js", import.meta.url), "utf8");
   assert.doesNotMatch(src, /await wake\((pilo|desk),/);
   assert.match(src, /count\(DISTINCT COALESCE\(payload->>'bundle', id::text\)\)/);
+});
+
+test("dialogHeld: a pane that showed a dialog is tried again once a minute, at once when idle since, never while it is blocked", () => {
+  const now = Date.parse("2026-11-11T01:12:00Z");
+  const tried = "2026-11-11T01:11:40Z";
+  assert.equal(dialogHeld(null, now), false);
+  assert.equal(dialogHeld({ dialog: false, tried }, now), false);
+  assert.equal(dialogHeld({ dialog: true, tried }, now), true, "20 s after a dialog");
+  assert.equal(dialogHeld({ dialog: true, tried }, now + 41e3), false, "a minute on");
+  assert.equal(dialogHeld({ dialog: true, tried, idleSince: true }, now), false, "idle since the try");
+  assert.equal(dialogHeld({ dialog: true, tried, blocked: true }, now + 600e3), true, "still on its prompt");
 });

@@ -80,6 +80,30 @@ async function shouldWake(column, id, agentId = null) {
   return { wake: Date.now() - new Date(row.last).getTime() >= wait, attempts };
 }
 
+// A pane that showed a dialog on the last wake is not typed into again every
+// tick. shouldWake holds a task's own wake this way; the worker-result wake and
+// the desk's bundle had no such gate, and a permission prompt left open on
+// garamnoh's pane (11/11) turned one worker result into 99 failed wakes, one
+// every three seconds for five minutes. The same rule: wait while the pane is
+// blocked on its prompt, go once it has gone idle since, else try once a minute.
+export function dialogHeld(last, now = Date.now()) {
+  if (!last?.dialog) return false;
+  if (last.blocked) return true;
+  if (last.idleSince) return false;
+  return now - new Date(last.tried).getTime() < DIALOG_RETRY_SECONDS * 1000;
+}
+
+async function lastDialog(agentId) {
+  return one(
+    `SELECT e.type = 'wake_failed' AND e.payload->>'code' = 'PANE_IN_DIALOG' AS dialog, e.created_at AS tried,
+       (SELECT status = 'idle' AND since > e.created_at FROM agent_sessions WHERE agent_id = $1) AS "idleSince",
+       (SELECT status = 'blocked' FROM agent_sessions WHERE agent_id = $1) AS blocked
+     FROM events e WHERE e.agent_id = $1 AND e.type IN ('wake_sent', 'wake_failed')
+     ORDER BY e.created_at DESC LIMIT 1`,
+    [agentId]
+  );
+}
+
 async function gaveUp(column, id, agent, extra) {
   const already = await one(
     `SELECT 1 AS hit FROM events WHERE type = 'wake_gave_up' AND ${column} = $1 LIMIT 1`,
@@ -202,6 +226,7 @@ async function flushDesk() {
     const since = deskWait.reason === "working" ? new Date(deskWait.since).getTime() : Date.now();
     if (Date.now() - since < DESK_HOLD_MS) return waitFor("working", items);
   }
+  if (dialogHeld(await lastDialog(desk.id))) return waitFor("dialog", items);
   const { send, hold } = splitForCap(items, await overCap(desk.id));
   if (hold.length) {
     if (deskWait.reason !== "cap") await logEvent({ type: "wake_suppressed",
@@ -681,6 +706,7 @@ async function pumpWorkerResults() {
   for (const row of done) {
     const pm = { id: row.pmId, name: row.pm, herdr_target: row.herdr_target, runtime: row.runtime };
     const vars = { task: row.task, worker: row.worker, status: t(row.status === "failed" ? "worker.failed" : "worker.done"), parent: row.parent, pm: row.pm };
+    if (dialogHeld(await lastDialog(pm.id))) continue;
     const sent = await wake(pm, t("wake.workerResult", vars), { taskId: row.parent, inboxId: row.inboxId });
     if (!sent) continue;
     // what it was holding for has arrived: back to work, off the "holding" line
