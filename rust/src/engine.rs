@@ -5,7 +5,7 @@
 //!
 //! In now: sessions, requests, tasks, results, follow-ups, worker results,
 //! stalls, decisions, held requests, the desk's bundle, the backoff, the cap.
-//! Still to come: schedules, RelayRoom, provider limits, model changes, the
+//! Schedules run from here too (schedules.rs). Still to come: RelayRoom, provider limits, model changes, the
 //! usage probe, blocked sessions, the notice line.
 
 use crate::reads::log_event;
@@ -427,6 +427,7 @@ fn pump_sessions(app: &Shared) {
 /// tick: the pumps in watcher.js's order, one tick at a time
 pub fn tick(app: &Shared) {
     app.engine.state.lock().unwrap().pending.clear();
+    crate::schedules::pump(app);
     pump_inbox(app);
     pump_tasks(app);
     pump_results(app);

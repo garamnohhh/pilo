@@ -13,9 +13,11 @@ const call = async (base, method, path, body) => {
   return { status: r.status, body: json };
 };
 const ISO = /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z$/;
+let reordered = 0;
 function diffs(x, y, at = "", out = []) {
   if (out.length >= 8) return out;
   if (typeof x === "string" && typeof y === "string" && ISO.test(x) && ISO.test(y)) return out;
+  if (Array.isArray(x) && Array.isArray(y) && tiesOnly(x, y) && JSON.stringify(x) !== JSON.stringify(y)) { reordered++; return out; }
   if (Array.isArray(x) && Array.isArray(y)) {
     if (x.length !== y.length) out.push(`${at || "."} length ${x.length} != ${y.length}`);
     for (let i = 0; i < Math.min(x.length, y.length); i++) diffs(x[i], y[i], `${at}[${i}]`, out);
@@ -36,16 +38,20 @@ const loose = (d) => d.filter((line) => !/\.error "task #\d+ is not in this Pilo
 // rows in another order is said as such, not passed silently.
 const byId = (rows) => [...rows].sort((p, q) => Number(p.id) - Number(q.id));
 const near = (x, y) => x.every((r, i) => r.id === y[i].id || Math.abs(Date.parse(r.createdAt) - Date.parse(x.find((o) => o.id === y[i].id)?.createdAt)) <= 2);
-const tiesOnly = (x, y) => Array.isArray(x) && Array.isArray(y) && x.length === y.length && x.every((r) => r && r.createdAt && r.id !== undefined)
-  && !diffs(byId(x), byId(y)).length && near(x, y);
+function tiesOnly(x, y) {
+  if (!(x.length === y.length && x.length && x.every((r) => r && r.createdAt && r.id !== undefined) && near(x, y))) return false;
+  const [p, q] = [byId(x), byId(y)];
+  return p.every((r, i) => !diffs(r, q[i]).length);
+}
 
 let bad = 0, n = 0;
 const both = async (method, path, body, note = "") => {
   const [x, y] = await Promise.all([call(a, method, path, body), call(b, method, path, body)]);
+  const before = reordered;
   const d = x.status !== y.status ? [`status ${x.status} != ${y.status} ${JSON.stringify(x.body).slice(0, 120)} | ${JSON.stringify(y.body).slice(0, 120)}`] : loose(diffs(x.body, y.body));
   n++;
-  if (d.length && tiesOnly(x.body, y.body)) { console.log(`ok~ ${method} ${path}  (same rows; order differs only among rows 2 ms or less apart)`); return x.body; }
   if (d.length) bad++;
+  else if (reordered > before) { console.log(`ok~ ${method} ${path}  (same rows; order differs only among rows 2 ms or less apart)`); return x.body; }
   console.log(`${d.length ? "DIFF" : "ok  "} ${method} ${path}${note ? `  (${note})` : ""}${d.length ? "\n       " + d.join("\n       ") : ""}`);
   return x.body;
 };
@@ -109,6 +115,36 @@ await both("POST", `/api/agents/${worker.id}/limited`, { until: new Date(Date.no
 await both("POST", `/api/agents/${worker.id}/limited`, { until: null });
 await both("POST", `/api/agents/${worker.id}/limited`, { until: "not a time" });
 await both("POST", `/api/agents/999999/limited`, {});
+// standing jobs: each form of cadence, changes, a system job's limits
+const sA = await both("POST", "/api/schedules", { toAgentId: pm.id, request: "weekly check", when: { repeat: "pick", at: "9:30", days: ["thu", "mon"] } });
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "window", when: { repeat: "window", at: "09:00", until: "18:00", interval: 60, days: ["mon", "tue", "wed", "thu", "fri"] } });
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "every other day", when: { repeat: "step", at: "14:00", interval: 2 } });
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "plain", cadence: "08:15", weekdaysOnly: false, onMiss: "skip", name: "plain one" });
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "every 45", cadence: "every:45" });
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "x", cadence: "days:xyz@10:00" }, "bad cadence");
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: "x", when: { repeat: "window", at: "18:00", until: "09:00", interval: 30, days: ["mon"] } }, "window backwards");
+await both("POST", "/api/schedules", { toAgentId: 999999, request: "x", cadence: "09:00" }, "no agent");
+await both("POST", "/api/schedules", { toAgentId: pm.id, request: " ", cadence: "09:00" }, "empty");
+await both("POST", `/api/schedules/${sA.id}`, { name: "renamed" }, "rename keeps the next run");
+await both("POST", `/api/schedules/${sA.id}`, { enabled: false });
+await both("POST", `/api/schedules/${sA.id}`, { enabled: true, when: { repeat: "daily", at: "07:00" } });
+await both("POST", `/api/schedules/${sA.id}`, { toAgentId: worker.id, request: "moved" });
+const system = (await call(a, "GET", "/api/schedules")).body.find((x) => x.kind === "system");
+await both("POST", `/api/schedules/${system.id}`, { cadence: "every:15" });
+await both("POST", `/api/schedules/${system.id}`, { cadence: "09:00" }, "system job wants every:N");
+await both("DELETE", `/api/schedules/${system.id}`, undefined, "system job");
+await both("DELETE", `/api/schedules/${sA.id}`);
+await both("DELETE", `/api/schedules/${sA.id}`, undefined, "gone");
+await both("GET", "/api/schedules");
+// settings and projects
+await both("PUT", "/api/settings/icons", { value: { on: true } });
+await both("PUT", "/api/settings/nope", { value: 1 }, "unknown");
+const pr = await both("POST", "/api/projects", { name: "conformance-project", repo: "x/y" });
+await both("POST", "/api/projects", {}, "no name");
+await both("PATCH", `/api/projects/${pr.id}`, { note: "a note" });
+await both("DELETE", `/api/projects/${pr.id}`);
+await both("GET", "/api/settings");
+await both("GET", "/api/projects");
 // what all of that reads as now
 for (const p of ["/api/inbox?limit=10", `/api/inbox/${i1.id}`, `/api/inbox/${i2.id}`, `/api/tasks/${t1.id}`, `/api/tasks/${w1.id}`,
   "/api/overview?part=stats", "/api/agents", "/api/blocked", "/api/events", "/api/artifacts", `/api/replies?ids=${i1.id},${i2.id}`]) await both("GET", p);

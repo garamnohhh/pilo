@@ -186,7 +186,7 @@ async fn schedule_runs(State(app): State<Shared>, Path(id): Path<i64>) -> Res {
        LEFT JOIN final_replies f ON f.inbox_id = e.inbox_id
        LEFT JOIN agents a ON a.id = e.agent_id
      WHERE e.type = 'schedule_fired' AND CAST(e.payload->>'scheduleId' AS TEXT) = $1
-     ORDER BY e.created_at DESC LIMIT 5"#, &[&id.to_string()], &[])
+     ORDER BY e.created_at DESC, f.id LIMIT 5"#, &[&id.to_string()], &[])
 }
 
 // settingsAll

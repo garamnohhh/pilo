@@ -123,6 +123,11 @@ pub fn pick_parent(open: &[Value], inbox: i64) -> Value {
 async fn create_task(State(app): State<Shared>, Path(inbox): Path<i64>, raw: String) -> W {
     let b = body(&raw)?;
     let db = app.db.lock().unwrap();
+    created(insert_task(&db, inbox, &b)?)
+}
+
+pub fn insert_task(db: &Connection, inbox: i64, b: &Value) -> Result<Value, Response> {
+    let db = db;
     let to_id = num(&b["toAgentId"]);
     let to = one(&db, r#"SELECT a.id, a.name, a.role, a.parent_agent_id AS "parentAgentId", p.name AS "parentName"
      FROM agents a LEFT JOIN agents p ON p.id = a.parent_agent_id WHERE a.id = $1 AND a.archived_at IS NULL"#, &[&to_id], &[]).map_err(db_err)?
@@ -158,7 +163,7 @@ async fn create_task(State(app): State<Shared>, Path(inbox): Path<i64>, raw: Str
     log_event(&db, "task_created", &event_title, Some(to_id), Some(id), Some(inbox_id), &payload).map_err(db_err)?;
     let mut out = json!({ "id": id, "inboxId": inbox_id.to_string(), "parentTaskId": parent.map(|p| p.to_string()) });
     if !corrected.is_null() { out["corrected"] = corrected; }
-    created(out)
+    Ok(out)
 }
 
 // saveTaskResult

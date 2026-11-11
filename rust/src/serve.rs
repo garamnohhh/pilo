@@ -116,7 +116,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
         herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
         engine: crate::engine::Engine::new(), wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
     crate::engine::start(app.clone());
-    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))));
+    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new()))))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();
     let router = router.fallback(get(page))

@@ -1,4 +1,5 @@
 mod admin;
+mod cadence;
 mod agents;
 mod engine;
 mod files;
@@ -6,6 +7,7 @@ mod herdr;
 mod misc;
 mod reads;
 mod rules;
+mod schedules;
 mod serve;
 mod sql;
 mod store;
