@@ -18,6 +18,9 @@ use std::{collections::HashMap, io::BufRead, path::PathBuf, sync::{Arc, Mutex}};
 
 static SESSIONS: Mutex<Option<Vec<Value>>> = Mutex::new(None);
 pub fn sessions() -> Option<Vec<Value>> { SESSIONS.lock().unwrap().clone() }
+// a pane the Node server found in a dialog shows one (with no numbered menu, so no card is made of it)
+static DIALOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
+pub fn screen(target: &str) -> String { if DIALOG.lock().unwrap().iter().any(|p| p == target) { "Hooks need review\nEsc to close".into() } else { String::new() } }
 
 fn us(v: &Value) -> i64 { v.as_str().and_then(|x| crate::store::micros(x).ok()).unwrap_or(0) }
 
@@ -96,10 +99,11 @@ pub fn run(argv: &[String]) -> i32 {
     let mut windows: Vec<Window> = Vec::new();
     let mut open: Option<Window> = None;
     let mut next_tick = since;
-    let tick = |app: &Shared, at: i64| -> Vec<(String, String)> {
+    let tick = |app: &Shared, at: i64, dialog: &std::collections::HashSet<i64>| -> Vec<(String, String)> {
         // every bound agent's session idle
-        let list: Vec<Value> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT herdr_target AS t, runtime, cwd FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[], &[]).unwrap_or_default() }
-            .into_iter().map(|a| json!({ "target": a["t"], "runtime": a["runtime"], "status": "idle", "cwd": a["cwd"], "title": "", "name": "", "session": "", "seq": 0, "terminalId": "" })).collect();
+        let list: Vec<Value> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT id, herdr_target AS t, runtime, cwd FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[], &[]).unwrap_or_default() }
+            .into_iter().map(|a| json!({ "target": a["t"], "runtime": a["runtime"], "status": if dialog.contains(&a["id"].as_i64().unwrap_or(0)) { "blocked" } else { "idle" }, "cwd": a["cwd"], "title": "", "name": "", "session": "", "seq": 0, "terminalId": "" })).collect();
+        *DIALOG.lock().unwrap() = list.iter().filter(|x| x["status"] == "blocked").map(|x| s(&x["target"])).collect();
         *SESSIONS.lock().unwrap() = Some(list);
         crate::sql::set_now(at);
         { let db = app.db.lock().unwrap(); let _ = db.execute_batch("BEGIN"); }
@@ -108,25 +112,37 @@ pub fn run(argv: &[String]) -> i32 {
         let rec = crate::shadow::take_recorded();
         { let db = app.db.lock().unwrap(); let _ = db.execute_batch("ROLLBACK"); }
         let mut out = Vec::new();
-        for r in rec { if r.get(1).map(String::as_str) == Some("prompt") { for m in items(r.get(3).map(String::as_str).unwrap_or("")) { out.push(key(&r[2], &m)); } } }
+        // panes moved over the weeks (desk:4 was w7:p5): who was woken is the agent, not its pane
+        let ids: HashMap<String, String> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT herdr_target AS t, id FROM agents", &[], &[]).unwrap_or_default() }
+            .into_iter().map(|a| (s(&a["t"]), a["id"].to_string())).collect();
+        for r in rec { if r.get(1).map(String::as_str) == Some("prompt") { let who = ids.get(&r[2]).cloned().unwrap_or_else(|| r[2].clone()); for m in items(r.get(3).map(String::as_str).unwrap_or("")) { out.push(key(&who, &m)); } } }
         out
     };
     let mut decisions = 0;
-    for (t, _, table, r) in &line {
+    // a pane the Node server found showing a dialog stays so until its agent is heard from again
+    let mut dialog: std::collections::HashSet<i64> = Default::default();
+    for (i, (t, _, table, r)) in line.iter().enumerate() {
         // a moment the Node server acted: the engine ticks just before the row lands
         let action = table == "events" && (r["type"] == "wake_sent" || r["type"] == "wake_failed") && *t >= since;
         if let Some(w) = &open { if *t > w.at + 3_000_000 { windows.push(open.take().unwrap()); } }
-        if action && open.is_none() { open = Some(Window { at: *t, rust: tick(&app, *t), node: vec![], held: false }); decisions += 1; }
+        // a wake Node got through says that pane had no dialog then
+        if action && open.is_none() { for (_, _, tb, x) in line[i..].iter().take_while(|x| x.0 <= *t + 3_000_000) { if tb == "events" && x["type"] == "wake_sent" { if let Some(a) = x["agent_id"].as_i64() { dialog.remove(&a); } } } }
+        if action && open.is_none() { open = Some(Window { at: *t, rust: tick(&app, *t, &dialog), node: vec![], held: false }); decisions += 1; }
         else if !action && open.is_none() && *t >= next_tick && *t >= since {
             // a quiet moment: whatever the engine would send here, the Node server did not
-            let rust = tick(&app, *t);
+            let rust = tick(&app, *t, &dialog);
             if !rust.is_empty() { windows.push(Window { at: *t, rust, node: vec![], held: false }); }
         }
         if *t >= next_tick { next_tick = *t + 300_000_000; }
+        if table == "events" { if let Some(a) = r["agent_id"].as_i64() {
+            if r["type"] == "wake_failed" && r["payload"]["code"] == "PANE_IN_DIALOG" { dialog.insert(a); }
+            else if !matches!(r["type"].as_str(), Some("wake_failed" | "task_stalled" | "wake_coalesced" | "wake_suppressed" | "wake_parked")) { dialog.remove(&a); }
+        } }
         // the row lands
         let db = app.db.lock().unwrap();
         match table.as_str() {
             "agents" => { let mut a = r.clone(); a["archived_at"] = Value::Null; a["limited_until"] = Value::Null; a["model_pending"] = Value::Null; ins(&db, "agents", &a); }
+            "inbox" | "tasks" | "asks" if *t < since - 86_400_000_000 => { ins(&db, table, r); }
             "inbox" => { let mut a = r.clone(); a["status"] = json!("queued"); a["updated_at"] = a["created_at"].clone(); ins(&db, "inbox", &a); }
             "tasks" => { let mut a = r.clone(); for k in ["pm_result", "error", "blocked_question", "answer", "progress", "hold_note"] { a[k] = json!(""); }
                 a["status"] = json!("queued"); a["done_at"] = Value::Null; a["progress_at"] = Value::Null; a["claimed_at"] = Value::Null; a["updated_at"] = a["created_at"].clone(); a["relay_of"] = Value::Null; ins(&db, "tasks", &a);
@@ -137,7 +153,7 @@ pub fn run(argv: &[String]) -> i32 {
                 ins(&db, "events", r);
                 let (task, kind) = (r["task_id"].as_i64(), s(&r["type"]));
                 let p = &r["payload"];
-                match kind.as_str() {
+                match if *t >= since - 86_400_000_000 { kind.as_str() } else { "" } {
                     "task_progress" => { let _ = exec(&db, "UPDATE tasks SET progress = $2, progress_at = $3, updated_at = $3, status = CASE WHEN status = 'queued' THEN 'running' ELSE status END, claimed_at = COALESCE(claimed_at, $3) WHERE id = $1", &[&task, &s(&p["text"]), t]); }
                     "pm_result" => {
                         let st = s(&p["status"]);
@@ -159,12 +175,15 @@ pub fn run(argv: &[String]) -> i32 {
                 }
                 if action {
                     if let Some(w) = open.as_mut() {
-                        let target = s(&p["target"]);
+                        let target = r["agent_id"].as_i64().map(|x| x.to_string()).unwrap_or_else(|| s(&p["target"]));
                         if kind == "wake_sent" { w.node.push(key(&target, &s(&p["message"]))); }
                         else {
                             // a failed try names its task or request, not its words
                             let id = task.or(r["inbox_id"].as_i64()).map(|x| x.to_string()).unwrap_or_default();
-                            if let Some(k) = w.rust.iter().find(|k| k.0 == target && k.1.ends_with(&format!("#{id}"))).cloned() { w.node.push(k); } else { w.node.push((target, format!("failed #{id}"))); }
+                            // a dialog in the way: neither side delivers, and Rust not trying is the same as Node failing
+                            let dialog = p["code"] == "PANE_IN_DIALOG";
+                            if let Some(k) = w.rust.iter().find(|k| k.0 == target && k.1.ends_with(&format!("#{id}"))).cloned() { w.node.push(k); }
+                            else if !dialog { w.node.push((target, format!("failed #{id}"))); }
                             w.held = true;
                         }
                     }

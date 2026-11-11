@@ -73,7 +73,8 @@ impl Herdr {
     pub fn fresh_sessions(&self) -> Vec<Value> { *self.cache.lock().unwrap() = (None, vec![]); self.sessions() }
 
     pub fn read_pane(&self, target: &str) -> String {
-        if target.is_empty() || crate::replay::sessions().is_some() { return String::new(); }
+        if target.is_empty() { return String::new(); }
+        if crate::replay::sessions().is_some() { return crate::replay::screen(target); }
         self.call(&["pane", "read", target]).unwrap_or_default()
     }
 
