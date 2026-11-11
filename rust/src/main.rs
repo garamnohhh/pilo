@@ -1,5 +1,8 @@
+mod reads;
 mod serve;
+mod sql;
 mod store;
+mod text;
 
 use std::path::{Path, PathBuf};
 
