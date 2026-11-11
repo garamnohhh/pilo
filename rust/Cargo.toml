@@ -1,0 +1,14 @@
+[package]
+name = "pilo"
+version = "0.0.1"
+edition = "2021"
+description = "Pilo in one binary: the server, the CLI and the hooks (work in progress)"
+license = "Apache-2.0"
+
+[dependencies]
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde_json = "1"
+chrono = { version = "0.4", default-features = false, features = ["std"] }
+
+[profile.dev]
+opt-level = 1
