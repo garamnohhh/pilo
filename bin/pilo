@@ -63,7 +63,14 @@ ensure_server() {
   # The database is a file directory the server opens itself; there is nothing to
   # start first. The server applies migrations, picks a free port and records it
   # in ~/.pilo/port.
-  PILO_PORT="$WANTED_PORT" nohup node "$ROOT/src/server.js" >> "$LOG" 2>&1 &
+  # ~/.pilo/engine names another server binary to run instead (the Rust one,
+  # tools/db/cutover.sh); without it, or when it is gone, the Node server runs
+  ENGINE="$(cat "$PILO_HOME_DIR/engine" 2>/dev/null || true)"
+  if [[ -n "$ENGINE" && -x "$ENGINE" ]]; then
+    PILO_PORT="$WANTED_PORT" nohup "$ENGINE" serve >> "$LOG" 2>&1 &
+  else
+    PILO_PORT="$WANTED_PORT" nohup node "$ROOT/src/server.js" >> "$LOG" 2>&1 &
+  fi
   echo $! > "$PIDFILE"
   wait_http || { echo "Pilo server failed. See $LOG"; exit 1; }
 }
