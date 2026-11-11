@@ -95,6 +95,12 @@ impl Herdr {
         self.call(&a).map(|_| ())
     }
 
+    /// focus: herdr switches to the pane inside itself
+    pub fn focus(&self, target: &str) -> Result<(), String> {
+        if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
+        self.call(&["agent", "focus", target]).map(|_| ())
+    }
+
     /// sendKeys: keys, not text (Escape, a menu's number, Enter)
     pub fn send_keys(&self, target: &str, keys: &[&str]) -> Result<(), String> {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }

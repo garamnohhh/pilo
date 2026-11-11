@@ -193,3 +193,21 @@ mod tests {
         assert!(super::quoted(r#"roster || "| — | no PMs yet | | | | |""#).starts_with("| — | no PMs"));
     }
 }
+
+/// previewRules: the block a pane would get if it were registered as asked, before the agent exists
+pub fn preview(app: &Shared, b: &Value) -> Result<Value, axum::response::Response> {
+    let cwd = b["cwd"].as_str().unwrap_or("").to_string();
+    if cwd.is_empty() { return Err(fail(StatusCode::BAD_REQUEST, "cwd is required")); }
+    let (name, role, runtime) = (b["name"].as_str().unwrap_or(""), b["role"].as_str().filter(|r| !r.is_empty()).unwrap_or("pm"), b["runtime"].as_str().unwrap_or(""));
+    let agent = json!({ "id": "(given on registration)", "name": name, "role": role, "runtime": runtime, "cwd": cwd, "aliases": "", "specialty": "", "reviewer": false, "projectName": name });
+    let port = std::fs::read_to_string(app.home.join("port")).ok().and_then(|s| s.trim().parse::<u16>().ok()).unwrap_or(app.port);
+    let body = if role == "pilo" {
+        let db = app.db.lock().unwrap();
+        let agents = rows(&db, r#"SELECT a.id, a.name, a.role, a.aliases, a.specialty, a.reviewer, a.parent_agent_id AS "parentAgentId", p.name AS "projectName"
+       FROM agents a LEFT JOIN projects p ON p.id = a.project_id WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role, a.name"#, &[], &[("reviewer", K::Bool)]).map_err(db_err)?;
+        pilo_rules(&format!("http://127.0.0.1:{port}"), &agents)
+    } else { worker_rules(&agent, &[], None) };
+    let file = format!("{cwd}/{}", if runtime == "claude" { "CLAUDE.md" } else { "AGENTS.md" });
+    let current = std::fs::read_to_string(&file).ok();
+    Ok(json!({ "file": file, "exists": current.is_some(), "hasBlock": current.map(|c| c.contains(BEGIN)).unwrap_or(false), "preview": body }))
+}

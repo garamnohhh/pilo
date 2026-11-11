@@ -12,6 +12,7 @@ mod panemenu;
 mod hook;
 mod misc;
 mod reads;
+mod rest;
 mod modelrun;
 mod models;
 mod quota;

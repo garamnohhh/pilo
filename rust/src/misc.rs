@@ -53,8 +53,10 @@ fn version_of(v: &str) -> Option<[u64; 3]> {
     re.captures(v.trim()).map(|c| [c[1].parse().unwrap_or(0), c[2].parse().unwrap_or(0), c[3].parse().unwrap_or(0)])
 }
 
+async fn update(State(app): State<Shared>) -> Res { Ok(update_status(&app).await) }
+
 /// update.status: this checkout's version, the newest one seen, how it was installed
-async fn update(State(app): State<Shared>) -> Res {
+pub async fn update_status(app: &Shared) -> Json<Value> {
     let root = app.src.join("..");
     let pkg: Value = std::fs::read_to_string(root.join("package.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(json!({}));
     let current = pkg["version"].as_str().unwrap_or("").to_string();
@@ -71,12 +73,12 @@ async fn update(State(app): State<Shared>) -> Res {
         } };
     let page = std::fs::metadata(app.public.join("dashboard.html")).and_then(|m| m.modified()).ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| { let ms = d.as_secs_f64() * 1000.0; if ms.fract() == 0.0 { format!("{}", ms as u64) } else { format!("{ms}") } }).unwrap_or_default();
-    Ok(Json(json!({
+    Json(json!({
         "current": current, "latest": latest, "available": available,
         "checkedAt": state["checkedAt"].as_str(), "checkOff": std::env::var("PILO_UPDATE_CHECK").as_deref() == Ok("off"),
         "kind": kind, "step": state["step"].as_str().unwrap_or(""), "error": state["error"].as_str().unwrap_or(""),
         "installing": false, "build": page
-    })))
+    }))
 }
 
 

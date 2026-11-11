@@ -122,7 +122,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     // the pilo-usage mod lives in Pilo's home; Claude Code loads it from there
     crate::quota::install_mod(&repo_root.join("mods/pilo-usage"));
     crate::engine::start(app.clone());
-    let router: Router<Shared> = crate::modelrun::routes(crate::models::routes(crate::usage::routes(crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new()))))))))))));
+    let router: Router<Shared> = crate::rest::routes(crate::modelrun::routes(crate::models::routes(crate::usage::routes(crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))))))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();
     let app_home = app.home.clone();
