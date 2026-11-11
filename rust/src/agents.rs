@@ -13,6 +13,7 @@ pub fn routes(r: Router<Shared>) -> Router<Shared> {
         .route("/api/sessions", get(sessions))
         .route("/api/system", get(system))
         .route("/api/overview", get(overview))
+        .route("/api/setup", get(setup))
 }
 
 pub fn waits_on_worker(task: &str, agent: &str) -> String {
@@ -278,5 +279,32 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
     Ok(Json(json!({
         "stats": stats, "tasks": tasks, "blocked": blocked, "decisions": decisions,
         "services": system["services"], "paths": system["paths"], "wakeFailures": system["wakeFailures"]
+    })))
+}
+
+/// setupState: what the welcome screen needs to know
+async fn setup(State(app): State<Shared>) -> Res {
+    let live = app.herdr.sessions();
+    let up = app.herdr.health.lock().unwrap().ok;
+    let db = app.db.lock().unwrap();
+    let pilos = rows(&db, r#"SELECT id, name, cwd, runtime, herdr_target AS "herdrTarget", created_at AS "createdAt" FROM agents WHERE role = 'pilo' AND archived_at IS NULL"#, &[], &[]).map_err(db_err)?;
+    let pms = one(&db, "SELECT count(*) AS n FROM agents WHERE role = 'pm' AND archived_at IS NULL", &[], &[]).map_err(db_err)?.unwrap()["n"].clone();
+    let held: Vec<String> = rows(&db, "SELECT herdr_target AS target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[], &[]).map_err(db_err)?
+        .into_iter().filter_map(|r| r["target"].as_str().map(String::from)).collect();
+    let first = one(&db, r#"SELECT i.id, i.status, i.created_at AS "createdAt",
+       EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id) AS answered
+     FROM inbox i ORDER BY i.id DESC LIMIT 1"#, &[], &[("answered", K::Bool)]).map_err(db_err)?;
+    let answered = one(&db, "SELECT count(*) AS n FROM final_replies", &[], &[]).map_err(db_err)?.unwrap()["n"].clone();
+    let welcome = one(&db, "SELECT value FROM settings WHERE key = 'welcome'", &[], &[("value", K::Json)]).map_err(db_err)?.map(|r| r["value"].clone()).unwrap_or(json!(""));
+    let port = std::fs::read_to_string(app.home.join("port")).ok().and_then(|s| s.trim().parse::<u16>().ok()).unwrap_or(app.port);
+    let free: Vec<Value> = live.iter().filter(|x| !held.iter().any(|h| x["target"] == h.as_str()))
+        .map(|x| json!({ "target": x["target"], "cwd": x["cwd"], "runtime": x["runtime"], "status": x["status"] })).collect();
+    let n = pilos.len();
+    Ok(Json(json!({
+        "herdrUp": up, "herdr": !live.is_empty(), "sessions": live.len(),
+        // the Node server says which Node runs it; there is none here
+        "node": "", "url": format!("http://127.0.0.1:{port}/welcome"),
+        "lastRequest": first, "answered": answered, "welcome": welcome, "postgres": true,
+        "piloAgents": pilos, "duplicatePilo": n > 1, "needsSetup": n != 1, "pmCount": pms, "free": free
     })))
 }

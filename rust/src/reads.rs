@@ -39,7 +39,7 @@ fn list(app: &Shared, sql: &str, params: &[&dyn rusqlite::ToSql], kinds: &[(&str
 }
 
 async fn health(State(app): State<Shared>) -> Json<Value> {
-    Json(json!({ "ok": true, "name": "Pilo", "port": app.port, "streams": 0 }))
+    Json(json!({ "ok": true, "name": "Pilo", "port": app.port, "streams": app.bell.listening() }))
 }
 
 // listEvents
@@ -124,6 +124,7 @@ async fn task(State(app): State<Shared>, Path(id): Path<i64>, Query(q): Q) -> Re
             let agent = row["agent"].as_str().unwrap_or("agent").to_string();
             let title = t("event.opened", &[("agent", agent.clone()), ("id", id.to_string())]);
             log_event(&db, "task_opened", &title, None, Some(id), row["inboxId"].as_i64(), &json!({ "agent": row["agent"] })).map_err(db_err)?;
+            app.bell.changed();
         }
     }
     row["progress"] = Value::Array(progress);

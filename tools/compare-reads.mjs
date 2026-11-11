@@ -13,7 +13,7 @@ const get = async (base, path) => {
 };
 // what differs on purpose: the port each listens on, and live SSE clients
 // and what each says about itself (pid, uptime, database engine, its files)
-const IGNORE = { "/health": ["port", "streams"], "/api/tasks/999999999": ["error"], "/api/system": ["services", "paths"], "/api/overview": ["services", "paths"] };
+const IGNORE = { "/health": ["port", "streams"], "/api/tasks/999999999": ["error"], "/api/system": ["services", "paths"], "/api/overview": ["services", "paths"], "/api/setup": ["node"] };
 // where rows tie on every sort key, Postgres hands them back in storage order,
 // which nothing promises; the same rows in another order is an explained difference
 const TIES = { "/api/schedules": "system jobs share next_run_at" };
@@ -60,7 +60,7 @@ async function paths() {
     "/api/update", "/api/approvals", "/api/agents/1/session", "/api/agents/6/session", "/api/agents/999999/session",
     "/api/files/resolve?p=src/server.js&p=package.json&p=nope.md&p=public/*.png&p=~/workspace", "/api/files/resolve?p=README.md&base=" + encodeURIComponent(process.cwd()),
     ...everyAgent.map((i) => `/api/agents/${i}/rules`), "/api/agents/999999/rules",
-    "/api/agents", "/api/agents/tree", "/api/sessions", "/api/system", "/api/overview", "/api/overview?part=stats",
+    "/api/setup", "/api/agents", "/api/agents/tree", "/api/sessions", "/api/system", "/api/overview", "/api/overview?part=stats",
     "/", "/dashboard.html", "/markdown.js", "/nope.txt"];
 }
 

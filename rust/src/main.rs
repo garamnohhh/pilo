@@ -7,6 +7,7 @@ mod rules;
 mod serve;
 mod sql;
 mod store;
+mod stream;
 mod text;
 
 use std::path::{Path, PathBuf};
