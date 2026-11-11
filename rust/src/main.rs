@@ -11,6 +11,8 @@ mod panemenu;
 mod hook;
 mod misc;
 mod reads;
+mod models;
+mod quota;
 mod rules;
 mod schedules;
 mod serve;
@@ -18,6 +20,7 @@ mod sql;
 mod store;
 mod stream;
 mod text;
+mod usage;
 mod writes;
 
 use std::path::{Path, PathBuf};

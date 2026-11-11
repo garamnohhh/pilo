@@ -23,7 +23,7 @@ const freePort = () => new Promise((resolve) => {
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export async function startServer({ env = {}, world = {} } = {}) {
+export async function startServer({ env = {}, world = {}, cmd: given = "" } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "pilo-conf-"));
   const home = join(dir, "home");
   mkdirSync(join(home, ".pilo", "logs"), { recursive: true });
@@ -31,7 +31,7 @@ export async function startServer({ env = {}, world = {} } = {}) {
   const state = join(dir, "herdr-state.json"), log = join(dir, "herdr-log.jsonl");
   writeFileSync(state, JSON.stringify(world));
   const port = await freePort();
-  const cmd = (process.env.PILO_SERVER_CMD || `${process.execPath} src/server.js`).split(" ");
+  const cmd = (given || process.env.PILO_SERVER_CMD || `${process.execPath} src/server.js`).split(" ");
   const child = spawn(cmd[0], cmd.slice(1), {
     cwd: repo,
     stdio: ["ignore", "pipe", "pipe"],

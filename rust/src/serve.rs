@@ -109,6 +109,7 @@ async fn page(State(app): State<Shared>, uri: Uri) -> Response {
 }
 
 pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
+    let repo_root = repo.clone();
     let conn = crate::store::open(&db).map_err(|e| e.to_string())?;
     crate::sql::register(&conn).map_err(|e| e.to_string())?;
     let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
@@ -118,8 +119,10 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
         engine: crate::engine::Engine::new(), approvals: crate::approvals::Approvals::new(), wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
     // the key the TUI and pibot answer approvals with, as the Node server makes it at start
     let _ = crate::approvals::tui_key(&app);
+    // the pilo-usage mod lives in Pilo's home; Claude Code loads it from there
+    crate::quota::install_mod(&repo_root.join("mods/pilo-usage"));
     crate::engine::start(app.clone());
-    let router: Router<Shared> = crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))))));
+    let router: Router<Shared> = crate::models::routes(crate::usage::routes(crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();
     let app_home = app.home.clone();
