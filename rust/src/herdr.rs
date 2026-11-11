@@ -7,6 +7,35 @@ use std::{path::PathBuf, process::Command, sync::Mutex, time::{Duration, Instant
 
 pub struct Health { pub ok: bool, pub error: String }
 
+/// Panes whose hooks said a tool ran and no Stop since (#6111): claude's busy line stopped saying 'esc to
+/// interrupt', so the desk daemon reads a working claude as idle and a wake would land mid-turn.
+static TURNS: Mutex<Option<std::collections::HashMap<String, Instant>>> = Mutex::new(None);
+// ponytail: an Esc-interrupted turn has no Stop; it reads working until 5 min after its last tool call
+const TURN_HOLD: Duration = Duration::from_secs(300);
+
+/// a hook's word on a pane: a tool call (or its end) is a turn going on, a Stop or a new session ends it
+pub fn hook_said(pane: &str, kind: &str) {
+    if pane.is_empty() { return; }
+    let mut t = TURNS.lock().unwrap();
+    let m = t.get_or_insert_with(Default::default);
+    match kind {
+        "tool" | "done" => { m.insert(pane.to_string(), Instant::now()); }
+        "stop" | "session" => { m.remove(pane); }
+        _ => {}
+    }
+}
+
+/// an idle row turned working while its pane's hooks say a turn is going on
+fn with_turns(mut rows: Vec<Value>) -> Vec<Value> {
+    let t = TURNS.lock().unwrap();
+    let Some(m) = t.as_ref() else { return rows };
+    for r in rows.iter_mut() {
+        let on = r["target"].as_str().and_then(|p| m.get(p)).is_some_and(|at| at.elapsed() < TURN_HOLD);
+        if on && r["status"] == "idle" { r["status"] = json!("working"); }
+    }
+    rows
+}
+
 /// ~/.pilo/herdr-bin wins (pilo-desk writes it), then PILO_HERDR, then the usual places.
 fn program(home: &PathBuf) -> String {
     if let Ok(s) = std::fs::read_to_string(home.join("herdr-bin")) { if !s.trim().is_empty() { return s.trim().to_string(); } }
@@ -39,7 +68,7 @@ impl Herdr {
         if let Some(list) = crate::replay::sessions() { *self.health.lock().unwrap() = Health { ok: true, error: String::new() }; return list; }
         let ttl = Duration::from_millis(std::env::var("PILO_HERDR_CACHE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500));
         let mut c = self.cache.lock().unwrap();
-        if let Some(at) = c.0 { if at.elapsed() < ttl { return c.1.clone(); } }
+        if let Some(at) = c.0 { if at.elapsed() < ttl { return with_turns(c.1.clone()); } }
         let rows = match self.call(&["agent", "list"]).and_then(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string())) {
             Ok(v) => {
                 *self.health.lock().unwrap() = Health { ok: true, error: String::new() };
@@ -61,7 +90,7 @@ impl Herdr {
             }
         };
         *c = (Some(Instant::now()), rows.clone());
-        rows
+        with_turns(rows)
     }
 
     /// a desktop notice through herdr; false when it did not go

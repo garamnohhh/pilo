@@ -310,6 +310,7 @@ async fn hook_wait(State(app): State<Shared>, raw: String) -> Response {
 async fn hook_notify(State(app): State<Shared>, raw: String) -> Response {
     let b = match body(&raw) { Ok(b) => b, Err(e) => return e };
     let pane = s(&b["pane"]);
+    crate::herdr::hook_said(&pane, b["type"].as_str().unwrap_or(""));
     let agent = agent_for_pane(&app, &pane);
     if app.approvals.notify(&b, agent.as_ref()) { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
     let Some(agent) = agent else { return (StatusCode::CREATED, Json(json!({ "ok": true }))).into_response() };

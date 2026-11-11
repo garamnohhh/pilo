@@ -86,6 +86,22 @@ scenario("the desk is held while it works, then told everything in one bundle", 
   assert.ok(sent[0].includes(`request #${a.json.id}`) && sent[0].includes(`request #${b.json.id}`));
 });
 
+// Rust only (Node is frozen): the desk daemon reads a working claude as idle since its busy line lost
+// 'esc to interrupt', so the hooks' word holds the wake (#6111)
+test("a pane its hooks call mid-turn is held though the screen reads idle, and woken after Stop", { skip: !process.env.PILO_SERVER_CMD }, async () => {
+  const srv = await startServer();
+  try {
+    const t = await team(srv);
+    await ticks(2);
+    await srv.api("POST", "/api/hooks/notify", { pane: t.pane.desk, type: "tool", tool: "Bash", input: { command: "cargo build" } });
+    await srv.api("POST", "/api/inbox", { userRequest: "first" });
+    await ticks(4);
+    assert.equal(srv.prompts(t.pane.desk).length, 0, "held mid-turn");
+    await srv.api("POST", "/api/hooks/notify", { pane: t.pane.desk, type: "stop" });
+    await srv.waitFor(() => srv.prompts(t.pane.desk).length, { what: "wake after Stop" });
+  } finally { await srv.stop(); }
+});
+
 scenario("the user's own requests reach the desk past the cap", { env: { PILO_WAKE_CAP: "1" } }, async (srv) => {
   const t = await team(srv);
   await srv.api("POST", "/api/inbox", { userRequest: "one" });

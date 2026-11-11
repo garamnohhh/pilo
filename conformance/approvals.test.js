@@ -69,7 +69,7 @@ scenario("a prompt no hook told of, read off a blocked pane: unread says so in o
   const t = await team(srv, { status: { pm: "blocked" }, screens: { "w1:p2": " Do you want to proceed?\n ❯ 1. Yes\n   2. No\n\n Esc to cancel" } });
   const n = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.notices[0], { what: "card from the screen" });
   assert.equal(n.screen, true);
-  assert.equal(n.plain.line, "어떤 명령인지 못 읽음");
+  assert.equal(n.plain.line, "pm1에서 명령을 실행해도 될지 기다리고 있어요.");
   t.set({ screens: {}, status: { pm: "idle" } });
   await srv.waitFor(async () => !(await srv.api("GET", "/api/approvals")).json.notices.length, { what: "gone with the menu" });
   await sleep(10);
