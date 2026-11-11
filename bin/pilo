@@ -88,6 +88,19 @@ stop_server() {
   rm -f "$PIDFILE"
 }
 
+# Which server the launcher runs and the database it serves (#6098: after the
+# move to Rust, status still said PGlite)
+engine_lines() {
+  local engine; engine="$(cat "$PILO_HOME_DIR/engine" 2>/dev/null || true)"
+  if [[ -n "$engine" && -x "$engine" ]]; then
+    echo "engine:    rust, build ${engine##*/pilo-} ($engine)"
+    echo "database:  $PILO_HOME_DIR/pilo.sqlite (SQLite)"
+  else
+    echo "engine:    node $(node -p 'require("./package.json").version' 2>/dev/null)"
+    echo "database:  $PILO_HOME_DIR/data (PGlite) $([[ -d "$PILO_HOME_DIR/data" ]] && echo present || echo "not created yet")"
+  fi
+}
+
 # A first run (no desk registered yet) is finished in the browser: say where,
 # and open it unless --no-open or PILO_NO_OPEN says not to.
 welcome() {
@@ -141,13 +154,13 @@ case "${1:-tui}" in
     ;;
   status)
     if health; then echo "server:    running (port $(live_port))"; else echo "server:    stopped"; fi
-    echo "database:  $PILO_HOME_DIR/data (PGlite)"
+    engine_lines
     ;;
   doctor)
     echo "root:      $ROOT"
     echo "home:      $PILO_HOME_DIR"
     echo "port file: $(live_port)"
-    echo "database:  $PILO_HOME_DIR/data $([[ -d "$PILO_HOME_DIR/data" ]] && echo present || echo "not created yet")"
+    engine_lines
     HERDR_BIN="$(cat "$PILO_HOME_DIR/herdr-bin" 2>/dev/null)"
     [[ -n "$HERDR_BIN" ]] || HERDR_BIN="${PILO_HERDR:-$(command -v "$HOME/.local/bin/herdr" || command -v /opt/homebrew/bin/herdr || command -v /usr/local/bin/herdr || command -v herdr || true)}"
     [[ -n "$HERDR_BIN" && -x "$HERDR_BIN" ]] \
