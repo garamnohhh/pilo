@@ -8,7 +8,7 @@ use std::{collections::HashMap, sync::OnceLock};
 pub struct Words { en: HashMap<String, String>, ko: HashMap<String, String> }
 
 pub fn parse(js: &str) -> Words {
-    let line = Regex::new(r#"^\s*"([\w.\-]+)":\s*("(?:[^"\\]|\\.)*"),?\s*$"#).unwrap();
+    let line = Regex::new(r#"^\s*"([\w.\-]+)":\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'),?\s*$"#).unwrap();
     let mut en = HashMap::new();
     let mut ko = HashMap::new();
     let mut into: Option<&mut HashMap<String, String>> = None;
@@ -17,7 +17,10 @@ pub fn parse(js: &str) -> Words {
         if l.starts_with("const KO = {") { into = Some(&mut ko); continue; }
         if l.starts_with("};") { into = None; continue; }
         if let (Some(map), Some(c)) = (into.as_deref_mut(), line.captures(l)) {
-            if let Ok(s) = serde_json::from_str::<String>(&c[2]) { map.insert(c[1].to_string(), s); }
+            // a JavaScript string in either quote; a single-quoted one is re-quoted for the JSON reader
+            let v = &c[2];
+            let json = if v.starts_with('\'') { format!("\"{}\"", v[1..v.len() - 1].replace("\\'", "'").replace('"', "\\\"")) } else { v.to_string() };
+            if let Ok(s) = serde_json::from_str::<String>(&json) { map.insert(c[1].to_string(), s); }
         }
     }
     Words { en, ko }
