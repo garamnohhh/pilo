@@ -48,7 +48,6 @@ pub fn t(key: &str, vars: &[(&str, String)]) -> String {
     fill(&pick(if lang == "ko" { "ko" } else { "en" }, key), vars)
 }
 
-#[allow(dead_code)]
 pub fn t_user(key: &str, vars: &[(&str, String)]) -> String {
     let lang = std::env::var("PILO_LANG").unwrap_or_default();
     fill(&pick(if lang == "en" { "en" } else { "ko" }, key), vars)

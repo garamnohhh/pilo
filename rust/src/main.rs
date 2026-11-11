@@ -1,9 +1,11 @@
 mod admin;
 mod cadence;
 mod agents;
+mod describe;
 mod engine;
 mod files;
 mod herdr;
+mod panemenu;
 mod hook;
 mod misc;
 mod reads;
@@ -29,7 +31,7 @@ fn main() {
     let a: Vec<&str> = args.iter().map(String::as_str).collect();
     // a hook event: whatever happens, exit 0 and print only what the hook answers
     if a.first() == Some(&"hook") {
-        match a.get(1) { Some(&"classify") => hook::classify(), Some(ev) => hook::run(ev, a.contains(&"--codex")), None => {} }
+        match a.get(1) { Some(&"classify") => hook::classify(), Some(&"describe") => describe::print_lines(), Some(ev) => hook::run(ev, a.contains(&"--codex")), None => {} }
         return;
     }
     if a.first() == Some(&"serve") {
