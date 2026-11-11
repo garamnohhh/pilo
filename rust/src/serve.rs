@@ -25,7 +25,13 @@ fn time_name(n: &str) -> bool {
     matches!(n, "at" | "since" | "until" | "until_at") || n.ends_with("At") || n.ends_with("_at") || n.ends_with("Since") || n.ends_with("Until")
 }
 
-pub struct App { pub db: Mutex<Connection>, pub port: u16, pub public: PathBuf, pub src: PathBuf }
+pub struct App {
+    pub db: Mutex<Connection>, pub port: u16, pub public: PathBuf, pub src: PathBuf,
+    /// Pilo's home (~/.pilo, or $PILO_HOME/.pilo)
+    pub home: PathBuf,
+    pub herdr: crate::herdr::Herdr,
+    pub started: std::time::Instant,
+}
 pub type Shared = Arc<App>;
 
 fn cell(v: Sql, name: &str, kind: Option<K>) -> Value {
@@ -91,8 +97,10 @@ async fn page(State(app): State<Shared>, uri: Uri) -> Response {
 pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let conn = crate::store::open(&db).map_err(|e| e.to_string())?;
     crate::sql::register(&conn).map_err(|e| e.to_string())?;
-    let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src") });
-    let router: Router<Shared> = crate::reads::routes(Router::new());
+    let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
+    let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src"),
+        herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now() });
+    let router: Router<Shared> = crate::agents::routes(crate::reads::routes(Router::new()));
     let router = router.fallback(get(page)).with_state(app);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| e.to_string())?;
     println!("pilo serve on http://127.0.0.1:{port} ({})", db.display());

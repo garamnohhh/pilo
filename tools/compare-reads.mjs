@@ -12,7 +12,8 @@ const get = async (base, path) => {
   return { status: r.status, body };
 };
 // what differs on purpose: the port each listens on, and live SSE clients
-const IGNORE = { "/health": ["port", "streams"], "/api/tasks/999999999": ["error"] };
+// and what each says about itself (pid, uptime, database engine, its files)
+const IGNORE = { "/health": ["port", "streams"], "/api/tasks/999999999": ["error"], "/api/system": ["services", "paths"], "/api/overview": ["services", "paths"] };
 // where rows tie on every sort key, Postgres hands them back in storage order,
 // which nothing promises; the same rows in another order is an explained difference
 const TIES = { "/api/schedules": "system jobs share next_run_at" };
@@ -55,6 +56,7 @@ async function paths() {
     `/api/replies?ids=${pick.join(",")}`, "/api/replies?ids=x", `/api/tasks/${doneTask}`, "/api/tasks/999999999",
     `/api/schedules/${sched}/runs`, "/api/history?q=pilo", "/api/history?q=%EA%B3%84%ED%9A%8D%20rust&limit=30",
     `/api/history?q=pilo&agent=${encodeURIComponent(agentName)}&since=2026-11-01`, "/api/history?q=", "/api/history?q=x&since=11-01",
+    "/api/agents", "/api/agents/tree", "/api/sessions", "/api/system", "/api/overview", "/api/overview?part=stats",
     "/", "/dashboard.html", "/markdown.js", "/nope.txt"];
 }
 

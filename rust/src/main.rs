@@ -1,3 +1,5 @@
+mod agents;
+mod herdr;
 mod reads;
 mod serve;
 mod sql;

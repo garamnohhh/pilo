@@ -194,7 +194,7 @@ async fn settings(State(app): State<Shared>) -> Res {
     Ok(Json(Value::Object(r.into_iter().map(|x| (x["key"].as_str().unwrap_or_default().to_string(), x["value"].clone())).collect())))
 }
 
-const OPEN_ASK_TEXT: &str = "COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL
+pub const OPEN_ASK_TEXT: &str = "COALESCE((SELECT k.body FROM asks k WHERE k.task_id = t.id AND k.answered_at IS NULL
     ORDER BY k.created_at DESC LIMIT 1), NULLIF(t.blocked_question, ''), t.pm_result)";
 const CARRIED_UP: &str = "EXISTS (SELECT 1 FROM tasks ct
     WHERE ct.inbox_id = t.inbox_id AND ct.status = 'blocked' AND ct.relay_of = t.id)";
