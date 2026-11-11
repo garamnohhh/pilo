@@ -14,8 +14,16 @@ for (const t of TABLES) {
   const cols = await db.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND table_name = $1 ORDER BY ordinal_position", [t]);
   columns[t] = Object.fromEntries(cols.rows.map((c) => [c.column_name, kind(c.data_type)]));
 }
+// where each id sequence stands: past the largest id when rows were deleted or
+// an insert failed, and the next id must not land on one handed out before
+const sequences = {};
+for (const t of TABLES) {
+  if (KEY[t]) continue;
+  const r = await db.query(`SELECT last_value::text AS v, is_called FROM ${(await db.query("SELECT pg_get_serial_sequence($1, 'id') AS s", [t])).rows[0].s}`);
+  sequences[t] = r.rows[0].is_called ? Number(r.rows[0].v) : Number(r.rows[0].v) - 1;
+}
 const out = createWriteStream(outFile);
-out.write(JSON.stringify({ pilo_dump: 1, columns }) + "\n");
+out.write(JSON.stringify({ pilo_dump: 1, columns, sequences }) + "\n");
 const counts = {};
 for (const t of TABLES) {
   const rows = await db.query(`SELECT row_to_json(x)::text AS j FROM "${t}" x ORDER BY "${KEY[t] || "id"}"`);

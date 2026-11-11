@@ -16,6 +16,7 @@ await migrate();
 const db = await open();
 await db.exec("SET TIME ZONE 'UTC'");
 let columns = null;
+let sequences = {};
 const counts = Object.fromEntries(TABLES.map((t) => [t, 0]));
 await db.exec("BEGIN; SET CONSTRAINTS ALL DEFERRED;");
 // the triggers that guard foreign keys are off while rows go in out of order
@@ -24,7 +25,7 @@ for (const t of TABLES) await db.exec(`DELETE FROM "${t}"`);   // what the migra
 for await (const line of createInterface({ input: createReadStream(dumpFile) })) {
   if (!line) continue;
   const x = JSON.parse(line);
-  if (x.pilo_dump) { columns = x.columns; continue; }
+  if (x.pilo_dump) { columns = x.columns; sequences = x.sequences || {}; continue; }
   const names = Object.keys(x.r);
   const vals = names.map((n) => (columns[x.t][n] === "json" ? JSON.stringify(x.r[n]) : x.r[n]));
   await db.query(`INSERT INTO "${x.t}" (${names.map((n) => `"${n}"`).join(", ")}) VALUES (${names.map((_, i) => `$${i + 1}`).join(", ")})`, vals);
@@ -33,7 +34,8 @@ for await (const line of createInterface({ input: createReadStream(dumpFile) }))
 await db.exec("SET session_replication_role = origin");
 for (const t of TABLES) {
   if (KEY[t]) continue;
-  await db.query(`SELECT setval(pg_get_serial_sequence('"${t}"', 'id'), GREATEST((SELECT max(id) FROM "${t}"), 1), (SELECT max(id) FROM "${t}") IS NOT NULL)`);
+  const at = Math.max(Number(sequences[t] || 0), 0);
+  await db.query(`SELECT setval(pg_get_serial_sequence('"${t}"', 'id'), GREATEST((SELECT max(id) FROM "${t}"), $1, 1), (SELECT max(id) FROM "${t}") IS NOT NULL OR $1 > 0)`, [at]);
 }
 await db.exec("COMMIT");
 void query;

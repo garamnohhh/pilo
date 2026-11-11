@@ -102,6 +102,13 @@ pub fn import(dump: &Path, file: &Path) -> Result<HashMap<String, usize>, String
         tx.prepare_cached(&sql).and_then(|mut s| s.execute(params_from_iter(vals))).map_err(|e| format!("{t}: {e}"))?;
         *counts.get_mut(t).unwrap() += 1;
     }
+    // the id each table goes on from (Postgres's sequences, which can stand past the largest id)
+    for (t, n) in head.get("sequences").and_then(Value::as_object).cloned().unwrap_or_default() {
+        if !TABLES.contains(&t.as_str()) || key(&t) != "id" { continue; }
+        let max: i64 = tx.query_row(&format!("SELECT COALESCE(max(id), 0) FROM {t}"), [], |r| r.get(0)).map_err(|e| e.to_string())?;
+        tx.execute("DELETE FROM sqlite_sequence WHERE name = ?1", [&t]).map_err(|e| e.to_string())?;
+        tx.execute("INSERT INTO sqlite_sequence (name, seq) VALUES (?1, ?2)", rusqlite::params![t, max.max(n.as_i64().unwrap_or(0))]).map_err(|e| e.to_string())?;
+    }
     tx.commit().map_err(|e| e.to_string())?;
     let broken: i64 = db.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r.get(0)).map_err(|e| e.to_string())?;
     if broken > 0 { return Err(format!("{broken} rows point at rows that are not there")); }
@@ -130,7 +137,12 @@ pub fn export(file: &Path, dump: &Path) -> Result<HashMap<String, usize>, String
         shape.insert(t, cols);
     }
     let mut out = BufWriter::new(File::create(dump).map_err(|e| e.to_string())?);
-    writeln!(out, "{}", json!({ "pilo_dump": 1, "columns": columns })).map_err(|e| e.to_string())?;
+    let mut sequences = Map::new();
+    let mut st = db.prepare("SELECT name, seq FROM sqlite_sequence").map_err(|e| e.to_string())?;
+    for r in st.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?))).map_err(|e| e.to_string())?.flatten() {
+        if TABLES.contains(&r.0.as_str()) { sequences.insert(r.0, json!(r.1)); }
+    }
+    writeln!(out, "{}", json!({ "pilo_dump": 1, "columns": columns, "sequences": sequences })).map_err(|e| e.to_string())?;
     let mut counts = HashMap::new();
     for t in TABLES {
         let cols = &shape[t];
