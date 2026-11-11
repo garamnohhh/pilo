@@ -32,6 +32,10 @@ pub struct App {
     pub herdr: crate::herdr::Herdr,
     pub started: std::time::Instant,
     pub bell: crate::stream::Bell,
+    pub engine: crate::engine::Engine,
+    /// a tick asked for now (a Stop hook), instead of on the clock
+    pub wake_tx: Mutex<std::sync::mpsc::Sender<()>>,
+    pub wake_rx: Mutex<std::sync::mpsc::Receiver<()>>,
 }
 pub type Shared = Arc<App>;
 
@@ -107,8 +111,11 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let conn = crate::store::open(&db).map_err(|e| e.to_string())?;
     crate::sql::register(&conn).map_err(|e| e.to_string())?;
     let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
+    let (tx, rx) = std::sync::mpsc::channel();
     let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src"),
-        herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new() });
+        herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
+        engine: crate::engine::Engine::new(), wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
+    crate::engine::start(app.clone());
     let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();

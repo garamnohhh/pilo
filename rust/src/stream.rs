@@ -9,20 +9,21 @@ use std::{sync::{atomic::{AtomicBool, Ordering}, Arc}, time::Duration};
 use tokio::sync::broadcast;
 use tokio_stream::{wrappers::{BroadcastStream, IntervalStream}, StreamExt};
 
-pub struct Bell { tx: broadcast::Sender<String>, pending: Arc<AtomicBool> }
+pub struct Bell { tx: broadcast::Sender<String>, pending: Arc<AtomicBool>, rt: tokio::runtime::Handle }
 
 fn ms(var: &str, default: u64) -> Duration {
     Duration::from_millis(std::env::var(var).ok().and_then(|v| v.parse().ok()).unwrap_or(default))
 }
 
 impl Bell {
-    pub fn new() -> Self { Bell { tx: broadcast::channel(256).0, pending: Arc::new(AtomicBool::new(false)) } }
+    /// made inside the server's runtime; rings from the watcher's thread go through it
+    pub fn new() -> Self { Bell { tx: broadcast::channel(256).0, pending: Arc::new(AtomicBool::new(false)), rt: tokio::runtime::Handle::current() } }
 
     /// changed(): one notice per PILO_CHANGE_WINDOW_MS, however many writes
     pub fn changed(&self) {
         if self.pending.swap(true, Ordering::SeqCst) { return; }
         let (tx, pending) = (self.tx.clone(), self.pending.clone());
-        tokio::spawn(async move {
+        self.rt.spawn(async move {
             tokio::time::sleep(ms("PILO_CHANGE_WINDOW_MS", 150)).await;
             pending.store(false, Ordering::SeqCst);
             let _ = tx.send("data: changed\n\n".into());
