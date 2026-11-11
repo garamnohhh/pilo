@@ -3,6 +3,7 @@ mod files;
 mod herdr;
 mod misc;
 mod reads;
+mod rules;
 mod serve;
 mod sql;
 mod store;

@@ -47,6 +47,7 @@ async function paths() {
   // a done task only: reading a queued one marks it opened, on each side
   const doneTask = tasks.find((t) => t.status === "done")?.id;
   const sched = (await get(a, "/api/schedules")).body?.find((s) => s.kind !== "system")?.id;
+  const everyAgent = ((await get(a, "/api/agents")).body || []).map((x) => x.id);
   const agentName = inbox.find((r) => r.routed)?.routed?.split(", ")[0] || "";
   return ["/health", "/api/events", `/api/events/${await id("/api/events")}`, "/api/events/999999999", "/api/artifacts",
     `/api/artifacts/${await id("/api/artifacts")}`, "/api/tasks", "/api/blocked", "/api/projects", "/api/schedules", "/api/settings",
@@ -58,6 +59,7 @@ async function paths() {
     `/api/history?q=pilo&agent=${encodeURIComponent(agentName)}&since=2026-11-01`, "/api/history?q=", "/api/history?q=x&since=11-01",
     "/api/update", "/api/approvals", "/api/agents/1/session", "/api/agents/6/session", "/api/agents/999999/session",
     "/api/files/resolve?p=src/server.js&p=package.json&p=nope.md&p=public/*.png&p=~/workspace", "/api/files/resolve?p=README.md&base=" + encodeURIComponent(process.cwd()),
+    ...everyAgent.map((i) => `/api/agents/${i}/rules`), "/api/agents/999999/rules",
     "/api/agents", "/api/agents/tree", "/api/sessions", "/api/system", "/api/overview", "/api/overview?part=stats",
     "/", "/dashboard.html", "/markdown.js", "/nope.txt"];
 }
