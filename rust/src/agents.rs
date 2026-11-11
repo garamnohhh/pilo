@@ -231,7 +231,7 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
        a.name AS agent, pa.name AS "parentAgent"
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
        LEFT JOIN agents pa ON pa.id = (SELECT to_agent_id FROM tasks p WHERE p.id = t.parent_task_id)
-     ORDER BY (t.status IN ('blocked', 'queued', 'running')) DESC, t.created_at DESC LIMIT 12"#, &[], &[]).map_err(db_err)?;
+     ORDER BY (t.status IN ('blocked', 'queued', 'running')) DESC, t.created_at DESC, t.id LIMIT 12"#, &[], &[]).map_err(db_err)?;
     let tok = one(&db, &format!(r#"SELECT COALESCE(sum(tokens_in), 0) AS "in", COALESCE(sum(tokens_out), 0) AS "out"
      FROM tasks WHERE created_at >= {TODAY}"#), &[], &[]).map_err(db_err)?.unwrap_or(json!({}));
     let (tin, tout) = (tok["in"].as_i64().unwrap_or(0), tok["out"].as_i64().unwrap_or(0));

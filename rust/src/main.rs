@@ -9,6 +9,7 @@ mod sql;
 mod store;
 mod stream;
 mod text;
+mod writes;
 
 use std::path::{Path, PathBuf};
 

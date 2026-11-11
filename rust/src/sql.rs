@@ -19,7 +19,19 @@ use regex::Regex;
 use rusqlite::{functions::{Aggregate, Context, FunctionFlags}, types::{Value as Sql, ValueRef}, Connection};
 use std::sync::OnceLock;
 
-pub fn now_us() -> i64 { Utc::now().timestamp_micros() }
+/// The clock every write reads. It never gives the same microsecond twice: a
+/// Node write is one statement and one now(), so two rows it writes never tie,
+/// and a list sorted by time must not find ties here that it never found there.
+pub fn now_us() -> i64 {
+    use std::sync::atomic::{AtomicI64, Ordering};
+    static LAST: AtomicI64 = AtomicI64::new(0);
+    let real = Utc::now().timestamp_micros();
+    let mut last = LAST.load(Ordering::SeqCst);
+    loop {
+        let next = real.max(last + 1);
+        match LAST.compare_exchange(last, next, Ordering::SeqCst, Ordering::SeqCst) { Ok(_) => return next, Err(x) => last = x }
+    }
+}
 
 pub fn iso_ms(us: i64) -> String {
     DateTime::<Utc>::from_timestamp_micros(us.div_euclid(1000) * 1000)

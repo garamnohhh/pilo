@@ -1,7 +1,8 @@
 //! The GET paths, each beside the api.js function it stands for. SQL is api.js's,
 //! read through sql::translate; where SQLite needs it said another way it is.
-//! Rows that tie on a time are put in id order: Postgres gives them back in the
-//! order they were written, and one transaction's rows share one now().
+//! Rows that tie on a time are put in id order, oldest first: Postgres reads ties
+//! in the order they were written, through the index as much as the table. New
+//! rows never tie here (sql::now_us only goes forward).
 
 use crate::serve::{db_err, exec, fail, one, rows, Res, Shared, K};
 use crate::text::t;
@@ -45,7 +46,7 @@ async fn health(State(app): State<Shared>) -> Json<Value> {
 // listEvents
 async fn events(State(app): State<Shared>) -> Res {
     list(&app, r#"SELECT e.id, e.type, e.title, e.created_at AS "createdAt", COALESCE(a.name, 'pilo') AS agent
-       FROM events e LEFT JOIN agents a ON a.id = e.agent_id ORDER BY e.created_at DESC LIMIT 60"#, &[], &[])
+       FROM events e LEFT JOIN agents a ON a.id = e.agent_id ORDER BY e.created_at DESC, e.id LIMIT 60"#, &[], &[])
 }
 
 // eventDetail
@@ -66,7 +67,7 @@ async fn event(State(app): State<Shared>, Path(id): Path<i64>) -> Res {
 // listArtifacts
 async fn artifacts(State(app): State<Shared>) -> Res {
     list(&app, r#"SELECT ar.id, ar.path, ar.delta, ar.created_at AS "createdAt", COALESCE(a.name, 'pilo') AS agent
-       FROM artifacts ar LEFT JOIN agents a ON a.id = ar.agent_id ORDER BY ar.created_at DESC LIMIT 60"#, &[], &[])
+       FROM artifacts ar LEFT JOIN agents a ON a.id = ar.agent_id ORDER BY ar.created_at DESC, ar.id LIMIT 60"#, &[], &[])
 }
 
 // artifactDetail
@@ -84,13 +85,13 @@ async fn tasks(State(app): State<Shared>) -> Res {
        a.name AS agent, pa.name AS "parentAgent"
        FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
          LEFT JOIN agents pa ON pa.id = (SELECT to_agent_id FROM tasks p WHERE p.id = t.parent_task_id)
-       ORDER BY (t.status IN ('blocked', 'queued', 'running')) DESC, t.created_at DESC LIMIT 100"#, &[], &[])
+       ORDER BY (t.status IN ('blocked', 'queued', 'running')) DESC, t.created_at DESC, t.id LIMIT 100"#, &[], &[])
 }
 
 /// logEvent: one row in events. (The Node one also tells the screens; the
 /// change feed comes with the SSE stream.)
 pub fn log_event(db: &rusqlite::Connection, kind: &str, title: &str, agent: Option<i64>, task: Option<i64>, inbox: Option<i64>, payload: &Value) -> rusqlite::Result<i64> {
-    exec(db, "INSERT INTO events (type, title, agent_id, task_id, inbox_id, payload, run_log) VALUES ($1, $2, $3, $4, $5, $6, '[]')",
+    exec(db, "INSERT INTO events (type, title, agent_id, task_id, inbox_id, payload, run_log, created_at) VALUES ($1, $2, $3, $4, $5, $6, '[]', now())",
         &[&kind, &title, &agent, &task, &inbox, &payload.to_string()])?;
     Ok(db.last_insert_rowid())
 }
@@ -344,7 +345,7 @@ fn plain_question(s: &str) -> String {
     regex::Regex::new(r"[.!?·:;,\s]+$").unwrap().replace(&s, "").trim().to_string()
 }
 
-fn same_question(a: &Value, b: &Value) -> bool {
+pub fn same_question(a: &Value, b: &Value) -> bool {
     let s = |v: &Value| match v { Value::Null => String::new(), Value::String(s) => s.clone(), v => v.to_string() };
     if s(&a["inboxId"]) != s(&b["inboxId"]) || s(&a["taskId"]) == s(&b["taskId"]) { return false; }
     let carries = |x: &Value, y: &Value| !x["relayOf"].is_null() && s(&x["relayOf"]) == s(&y["taskId"]);

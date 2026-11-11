@@ -101,8 +101,20 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
     let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src"),
         herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new() });
-    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::reads::routes(Router::new())))));
-    let router = router.fallback(get(page)).with_state(app);
+    let router: Router<Shared> = crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::writes::routes(crate::reads::routes(Router::new()))))));
+    // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
+    let bell = app.clone();
+    let router = router.fallback(get(page))
+        .layer(axum::middleware::from_fn(move |req: axum::extract::Request, next: axum::middleware::Next| {
+            let app = bell.clone();
+            async move {
+                let write = req.method() != axum::http::Method::GET && !req.uri().path().starts_with("/api/files/");
+                let res = next.run(req).await;
+                if write { app.bell.changed(); }
+                res
+            }
+        }))
+        .with_state(app);
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await.map_err(|e| e.to_string())?;
     println!("pilo serve on http://127.0.0.1:{port} ({})", db.display());
     axum::serve(listener, router).await.map_err(|e| e.to_string())

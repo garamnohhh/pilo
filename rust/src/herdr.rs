@@ -57,4 +57,9 @@ impl Herdr {
         *c = (Some(Instant::now()), rows.clone());
         rows
     }
+
+    /// a desktop notice through herdr; false when it did not go
+    pub fn notify(&self, title: &str, body: &str) -> bool {
+        self.call(&["notification", "show", title, "--body", body, "--position", "top-right", "--sound", "none"]).is_ok()
+    }
 }

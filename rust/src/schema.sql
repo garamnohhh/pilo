@@ -1,7 +1,9 @@
 -- Pilo's tables in SQLite, as of migration 021 on the Postgres side, one file.
 -- Times are INTEGER microseconds since 1970 UTC (Postgres keeps microseconds;
 -- milliseconds would not survive a round trip). jsonb is TEXT holding JSON,
--- boolean is INTEGER 0/1. Names, columns and rules are Postgres's.
+-- boolean is INTEGER 0/1. Names, columns and rules are Postgres's. The time
+-- defaults are for anything else writing here; pilo itself writes every time
+-- (sql::now_us, which never repeats a microsecond).
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE projects (
