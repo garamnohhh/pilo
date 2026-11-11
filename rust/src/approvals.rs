@@ -176,16 +176,32 @@ impl Approvals {
 }
 
 /// onScreen: the command's first or last line, or its description, is on the screen (#5989)
+// #6037: a heredoc's first line was off the top and its last was "EOF" (too
+// short to count): any line of the command long enough to mean something counts.
+// Box borders go with whitespace.
 pub fn on_screen(input: &Value, screen: &str) -> bool {
-    let squash = |x: &str| x.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    let squash = |x: &str| x.chars().filter(|c| !c.is_whitespace() && !('\u{2500}'..='\u{257f}').contains(c)).collect::<String>();
     let what = [&input["command"], &input["file_path"], &input["url"]].into_iter().find(|v| !v.is_null()).map(|v| s(v)).unwrap_or_default();
     let lines: Vec<String> = what.split('\n').map(squash).filter(|l| !l.is_empty()).collect();
     if lines.is_empty() { return true; }
     let shown = squash(screen);
     let cut = |x: &str| x.chars().take(24).collect::<String>();
-    let marks: Vec<String> = [lines[0].clone(), lines.last().unwrap().clone(), squash(input["description"].as_str().unwrap_or(""))]
-        .into_iter().filter(|x| x.chars().count() >= 6).map(|x| cut(&x)).collect();
-    marks.iter().any(|m| shown.contains(m.as_str())) || (marks.is_empty() && shown.contains(lines[0].as_str()))
+    let marks: Vec<String> = lines.iter().enumerate().filter(|(i, x)| x.chars().count() >= if *i == 0 { 6 } else { 10 }).map(|(_, x)| x.clone())
+        .chain([squash(input["description"].as_str().unwrap_or(""))]).filter(|x| x.chars().count() >= 6).map(|x| cut(&x)).collect();
+    let seen = marks.iter().any(|m| shown.contains(m.as_str())) || (marks.is_empty() && shown.contains(lines[0].as_str()));
+    if !seen && !screen.is_empty() && !cfg!(test) { unread_log(&what, screen); }
+    seen
+}
+// what was asked and what the screen showed, when the two did not meet (~/.pilo/logs/unread.log, last 50kB kept)
+fn unread_log(what: &str, screen: &str) {
+    let base = std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default();
+    let dir = std::path::Path::new(&base).join(".pilo").join("logs");
+    let file = dir.join("unread.log");
+    let old = std::fs::read_to_string(&file).unwrap_or_default();
+    let tail = |x: &str, n: usize| { let c: Vec<char> = x.chars().collect(); c[c.len().saturating_sub(n)..].iter().collect::<String>() };
+    let old = tail(&old, 50_000);
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&file, format!("{old}\n=== {}\n--- asked\n{}\n--- screen\n{}\n", crate::sql::iso_ms(crate::sql::now_us()), what.chars().take(2000).collect::<String>(), tail(screen, 4000)));
 }
 
 // --- device keys ----------------------------------------------------------

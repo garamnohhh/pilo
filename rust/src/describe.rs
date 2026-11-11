@@ -172,13 +172,13 @@ pub fn plain_ask(item: &Value, menu: Option<&Value>) -> Value {
     let input = if item["input"].is_object() { item["input"].clone() } else { json!({}) };
     let s = |v: &Value| v.as_str().map(String::from).unwrap_or_else(|| if v.is_null() { String::new() } else { v.to_string() });
     let mut line = if item["kind"] == "question" { t_user("plain.question", &[("who", who.clone())]) }
-    else if tool.is_empty() { t_user("plain.unread", &[]) }
+    else if tool.is_empty() { t_user("plain.unread", &[("who", who.clone())]) }
     else if tool == "Bash" || tool == "exec_command" || !input["command"].is_null() {
         let all: Vec<Value> = describe(tool, &input)["steps"].as_array().cloned().unwrap_or_default();
         let doing: Vec<Value> = all.iter().filter(|x| x["key"] != "read").cloned().collect();
         let pick = if doing.is_empty() { all } else { doing };
         let steps: Vec<String> = pick.iter().take(3).map(step_phrase).collect();
-        if steps.is_empty() { t_user("plain.unread", &[]) } else {
+        if steps.is_empty() { t_user("plain.unread", &[("who", who.clone())]) } else {
             let n = steps.len();
             let chain = steps.iter().enumerate().map(|(i, p)| if i < n - 1 { format!("{p}고") } else { format!("{}해도", p.strip_suffix('하').unwrap_or(p)) }).collect::<Vec<_>>().join(", ");
             t_user("plain.ask", &[("who", who.clone()), ("what", chain)])

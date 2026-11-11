@@ -36,6 +36,7 @@ impl Herdr {
 
     /// `herdr agent list`, one call per PILO_HERDR_CACHE_MS (1.5 s)
     pub fn sessions(&self) -> Vec<Value> {
+        if let Some(list) = crate::replay::sessions() { *self.health.lock().unwrap() = Health { ok: true, error: String::new() }; return list; }
         let ttl = Duration::from_millis(std::env::var("PILO_HERDR_CACHE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500));
         let mut c = self.cache.lock().unwrap();
         if let Some(at) = c.0 { if at.elapsed() < ttl { return c.1.clone(); } }
@@ -72,7 +73,7 @@ impl Herdr {
     pub fn fresh_sessions(&self) -> Vec<Value> { *self.cache.lock().unwrap() = (None, vec![]); self.sessions() }
 
     pub fn read_pane(&self, target: &str) -> String {
-        if target.is_empty() { return String::new(); }
+        if target.is_empty() || crate::replay::sessions().is_some() { return String::new(); }
         self.call(&["pane", "read", target]).unwrap_or_default()
     }
 

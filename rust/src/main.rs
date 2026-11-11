@@ -16,6 +16,7 @@ mod rest;
 mod modelrun;
 mod models;
 mod quota;
+mod replay;
 mod rules;
 mod schedules;
 mod serve;
@@ -50,6 +51,7 @@ fn main() {
         std::process::exit(cli::run(&args));
     }
     // the engine beside the live server, deciding and never acting
+    if a.first() == Some(&"replay") { std::process::exit(replay::run(&args[1..])); }
     if a.first() == Some(&"shadow") { std::process::exit(shadow::run(&args[1..])); }
     if a.first() == Some(&"serve") {
         let opt = |name: &str| a.iter().position(|x| *x == name).and_then(|i| a.get(i + 1)).map(|s| s.to_string());

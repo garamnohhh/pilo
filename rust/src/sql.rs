@@ -22,9 +22,19 @@ use std::sync::OnceLock;
 /// The clock every write reads. It never gives the same microsecond twice: a
 /// Node write is one statement and one now(), so two rows it writes never tie,
 /// and a list sorted by time must not find ties here that it never found there.
+/// a clock set by hand: the replay (`pilo replay`) runs the engine at the moments history happened
+pub static FAKE_NOW: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+pub fn set_now(us: i64) {
+    use std::sync::atomic::Ordering;
+    FAKE_NOW.store(us, Ordering::SeqCst);
+}
+
 pub fn now_us() -> i64 {
     use std::sync::atomic::{AtomicI64, Ordering};
     static LAST: AtomicI64 = AtomicI64::new(0);
+    let fake = FAKE_NOW.load(Ordering::SeqCst);
+    // a clock set back in time starts the run of microseconds over from there
+    if fake > 0 { let l = LAST.load(Ordering::SeqCst); let next = if l >= fake && l < fake + 1_000_000 { l + 1 } else { fake }; LAST.store(next, Ordering::SeqCst); return next; }
     let real = Utc::now().timestamp_micros();
     let mut last = LAST.load(Ordering::SeqCst);
     loop {

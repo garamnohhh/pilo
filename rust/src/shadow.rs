@@ -17,6 +17,8 @@ static RECORDED: Mutex<Vec<Vec<String>>> = Mutex::new(Vec::new());
 static BUSY: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
 pub fn on() -> bool { ON.load(Ordering::Relaxed) }
+pub fn set_on() { ON.store(true, Ordering::Relaxed); }
+pub fn take_recorded() -> Vec<Vec<String>> { std::mem::take(&mut *RECORDED.lock().unwrap()) }
 pub fn record(args: &[&str]) { RECORDED.lock().unwrap().push(args.iter().map(|a| a.to_string()).collect()); }
 pub fn live_busy(pane: &str) -> bool { on() && BUSY.lock().unwrap().iter().any(|p| p == pane) }
 
