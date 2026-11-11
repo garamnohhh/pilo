@@ -172,3 +172,38 @@ scenario("registering a worker tells its PM and the desk their instructions chan
   assert.ok(srv.prompts(t.pane.desk, { all: true }).some((m) => m.startsWith("[pilo:rules]")), "desk told");
   assert.ok(srv.prompts(t.pane.pm, { all: true }).find((m) => m.startsWith("[pilo:rules]")).includes(`${t.cwd.pm}/CLAUDE.md`));
 });
+
+const PROMPT = "Do you want to proceed?\n❯ 1. Yes\n  2. No\n\nEsc to cancel";
+
+scenario("a worker's result waits on its PM's open prompt: one try a minute, not one a tick", {}, async (srv) => {
+  const t = await team(srv);
+  const { task, inbox } = await taskFor(srv, t.ids.pm);
+  await woken(srv, t);
+  const sub = await srv.api("POST", `/api/inbox/${inbox}/tasks`, { toAgentId: t.ids.worker, request: "part" });
+  await srv.waitFor(() => srv.prompts(t.pane.worker).length, { what: "worker wake" });
+  t.set({ screens: { "w1:p2": PROMPT } });
+  await srv.api("POST", `/api/tasks/${sub.json.id}/result`, { status: "done", pmResult: "part done" });
+  await srv.waitFor(async () => (await events(srv, "wake_failed")).length, { what: "first try into the prompt" });
+  await ticks(10);
+  assert.equal((await events(srv, "wake_failed")).length, 1, "11/11: 99 tries in five minutes");
+  t.set({ screens: {}, status: { pm: "working" } });
+  await ticks(2);
+  t.set({ status: { pm: "idle" } });
+  await srv.waitFor(() => srv.prompts(t.pane.pm).some((m) => m.startsWith(`[pilo:worker] task #${sub.json.id}`) && m.includes(`#${task}`)), { what: "the result once the prompt is gone" });
+});
+
+scenario("the desk's bundle waits on the desk's open prompt the same way", {}, async (srv) => {
+  const t = await team(srv, { screens: { "w1:p1": PROMPT } });
+  const { task } = await taskFor(srv, t.ids.pm);
+  await srv.api("POST", `/api/tasks/${task}/result`, { status: "blocked", pmResult: "ship?" });
+  await srv.waitFor(async () => (await events(srv, "wake_failed")).some((e) => e.agent === "desk"), { what: "first try into the desk's prompt" });
+  // one try writes a failure per item it carried; what must not happen is another try
+  await ticks(2);
+  const first = (await events(srv, "wake_failed")).filter((e) => e.agent === "desk").length;
+  await ticks(10);
+  assert.equal((await events(srv, "wake_failed")).filter((e) => e.agent === "desk").length, first);
+  t.set({ screens: {}, status: { desk: "working" } });
+  await ticks(2);
+  t.set({ status: { desk: "idle" } });
+  await srv.waitFor(() => srv.prompts(t.pane.desk).some((m) => m.includes(`[pilo:blocked] task #${task}`)), { what: "the desk told once its prompt is gone" });
+});

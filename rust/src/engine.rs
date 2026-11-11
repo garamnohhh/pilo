@@ -83,6 +83,23 @@ fn should_wake(app: &Shared, column: &str, id: i64, agent: Option<i64>) -> Check
     Check { wake: now - row["last"].as_i64().unwrap_or(0) >= wait, give_up: false }
 }
 
+/// dialogHeld: the agent's last wake hit a dialog. Wait while its pane is blocked
+/// on the prompt, go once it has gone idle since, else try once a minute. The
+/// worker-result wake and the desk's bundle had no such gate (11/11: 99 tries
+/// into garamnoh's open prompt in five minutes).
+fn dialog_held(app: &Shared, agent: i64) -> bool {
+    let Some(r) = q1(app, "SELECT (e.type = 'wake_failed' AND e.payload->>'code' = 'PANE_IN_DIALOG') AS dialog, e.created_at AS tried,
+       (SELECT status = 'idle' AND since > e.created_at FROM agent_sessions WHERE agent_id = $1) AS idle_since,
+       (SELECT status = 'blocked' FROM agent_sessions WHERE agent_id = $1) AS blocked
+     FROM events e WHERE e.agent_id = $1 AND e.type IN ('wake_sent', 'wake_failed') ORDER BY e.created_at DESC, e.id DESC LIMIT 1", &[&agent]) else { return false };
+    if r["dialog"].as_i64() != Some(1) { return false; }
+    if r["blocked"].as_i64() == Some(1) { return true; }
+    if r["idle_since"].as_i64() == Some(1) { return false; }
+    let tried = db(app, |c| one(c, "SELECT created_at AS t FROM events WHERE agent_id = $1 AND type IN ('wake_sent', 'wake_failed') ORDER BY created_at DESC, id DESC LIMIT 1", &[&agent], &[("t", K::Plain)]).ok().flatten())
+        .and_then(|x| x["t"].as_i64()).unwrap_or(0);
+    crate::sql::now_us() - tried < DIALOG_RETRY_SECONDS * 1_000_000
+}
+
 fn gave_up(app: &Shared, column: &str, id: i64, agent: &Value, task: Option<i64>, inbox: Option<i64>) {
     if q1(app, &format!("SELECT 1 AS hit FROM events WHERE type = 'wake_gave_up' AND {column} = $1 LIMIT 1"), &[&id]).is_some() { return; }
     let name = if s(&agent["name"]).is_empty() { "agent".to_string() } else { s(&agent["name"]) };
@@ -166,6 +183,7 @@ fn flush_desk(app: &Shared) {
         if crate::sql::now_us() - since_us < hold.as_micros() as i64 { return wait_for(app, "working", &all); }
     }
     let desk_id = desk["id"].as_i64().unwrap_or(0);
+    if dialog_held(app, desk_id) { return wait_for(app, "dialog", &all); }
     let capped = over_cap(app, desk_id);
     let (send, hold): (Vec<Item>, Vec<Item>) = if capped { items.into_iter().partition(|x| x.user) } else { (items, vec![]) };
     if !hold.is_empty() {
@@ -270,6 +288,7 @@ fn pump_worker_results(app: &Shared) {
         let status = t(if row["status"] == "failed" { "worker.failed" } else { "worker.done" }, &[]);
         let vars = [("task", s(&row["task"])), ("worker", s(&row["worker"])), ("status", status), ("parent", s(&row["parent"])), ("pm", s(&row["pm"]))];
         let parent = row["parent"].as_i64();
+        if dialog_held(app, row["pmId"].as_i64().unwrap_or(0)) { continue; }
         if !wake(app, &pm, &t("wake.workerResult", &vars), parent, row["inboxId"].as_i64()) { continue; }
         db(app, |c| { let _ = crate::serve::exec(c, "UPDATE tasks SET status = 'running', hold_note = '', updated_at = now() WHERE id = $1 AND status = 'holding'", &[&parent]); });
         ev(app, "worker_result_woken", &t("event.workerResult", &vars), pm["id"].as_i64(), row["task"].as_i64(), row["inboxId"].as_i64(),
