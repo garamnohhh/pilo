@@ -195,11 +195,16 @@ fn system_status(app: &Shared, db: &Connection) -> rusqlite::Result<Value> {
     }))
 }
 
+/// config.toml's docs_root
+pub fn docs_root_of(home: &std::path::Path) -> String {
+    let conf = std::fs::read_to_string(home.join("config.toml")).unwrap_or_default();
+    regex::Regex::new(r#"(?m)^\s*docs_root\s*=\s*"?([^"\n]+)"?"#).unwrap()
+        .captures(&conf).map(|c| c[1].trim().trim_end_matches('/').to_string()).unwrap_or_default()
+}
+
 /// docsRoot: config.toml's docs_root and its top folders
 fn docs_root(home: &std::path::Path) -> Value {
-    let conf = std::fs::read_to_string(home.join("config.toml")).unwrap_or_default();
-    let root = regex::Regex::new(r#"(?m)^\s*docs_root\s*=\s*"?([^"\n]+)"?"#).unwrap()
-        .captures(&conf).map(|c| c[1].trim().trim_end_matches('/').to_string()).unwrap_or_default();
+    let root = docs_root_of(home);
     let mut top: Vec<String> = if root.is_empty() { vec![] } else {
         std::fs::read_dir(&root).map(|d| d.filter_map(Result::ok).filter(|e| e.path().is_dir())
             .filter_map(|e| e.file_name().into_string().ok()).filter(|n| !n.starts_with('.')).collect()).unwrap_or_default()

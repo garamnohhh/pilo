@@ -56,6 +56,8 @@ async function paths() {
     `/api/replies?ids=${pick.join(",")}`, "/api/replies?ids=x", `/api/tasks/${doneTask}`, "/api/tasks/999999999",
     `/api/schedules/${sched}/runs`, "/api/history?q=pilo", "/api/history?q=%EA%B3%84%ED%9A%8D%20rust&limit=30",
     `/api/history?q=pilo&agent=${encodeURIComponent(agentName)}&since=2026-11-01`, "/api/history?q=", "/api/history?q=x&since=11-01",
+    "/api/update", "/api/approvals", "/api/agents/1/session", "/api/agents/6/session", "/api/agents/999999/session",
+    "/api/files/resolve?p=src/server.js&p=package.json&p=nope.md&p=public/*.png&p=~/workspace", "/api/files/resolve?p=README.md&base=" + encodeURIComponent(process.cwd()),
     "/api/agents", "/api/agents/tree", "/api/sessions", "/api/system", "/api/overview", "/api/overview?part=stats",
     "/", "/dashboard.html", "/markdown.js", "/nope.txt"];
 }

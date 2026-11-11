@@ -1,5 +1,7 @@
 mod agents;
+mod files;
 mod herdr;
+mod misc;
 mod reads;
 mod serve;
 mod sql;
