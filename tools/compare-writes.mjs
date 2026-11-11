@@ -17,7 +17,7 @@ let reordered = 0;
 function diffs(x, y, at = "", out = []) {
   if (out.length >= 8) return out;
   if (typeof x === "string" && typeof y === "string" && ISO.test(x) && ISO.test(y)) return out;
-  if (Array.isArray(x) && Array.isArray(y) && tiesOnly(x, y) && JSON.stringify(x) !== JSON.stringify(y)) { reordered++; return out; }
+  if (Array.isArray(x) && Array.isArray(y) && tiesOnly(x, y) && x.some((r, i) => r.id !== y[i].id)) { reordered++; return out; }
   if (Array.isArray(x) && Array.isArray(y)) {
     if (x.length !== y.length) out.push(`${at || "."} length ${x.length} != ${y.length}`);
     for (let i = 0; i < Math.min(x.length, y.length); i++) diffs(x[i], y[i], `${at}[${i}]`, out);
