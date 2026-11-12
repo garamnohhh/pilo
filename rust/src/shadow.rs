@@ -1,7 +1,7 @@
 //! `pilo shadow`: the Rust engine run beside the live Node server, deciding but
 //! never acting. Each round the live data folder is cloned (APFS clone: instant,
 //! the original untouched), dumped and put into a fresh SQLite file; one engine
-//! tick runs on it with herdr writes recorded instead of sent; a few seconds later
+//! tick runs on it with the daemon's writes recorded instead of sent; a few seconds later
 //! what the Node server really sent is read from its API, and the two are written
 //! side by side. `pilo shadow report` sums them up.
 //!
@@ -109,7 +109,7 @@ pub fn run(argv: &[String]) -> i32 {
                     None => {
                         let (tx, rx) = std::sync::mpsc::channel();
                         let made = Arc::new(crate::serve::App { db: Mutex::new(conn), port: 0, public: o.repo.join("public"), src: o.repo.join("src"),
-                            home: o.out.join("home/.pilo"), herdr: crate::herdr::Herdr::new(real_pilo.clone()), started: std::time::Instant::now(),
+                            home: o.out.join("home/.pilo"), desk: crate::desk::Desk::new(), started: std::time::Instant::now(),
                             bell: crate::stream::Bell::new(), engine: crate::engine::Engine::new(), approvals: crate::approvals::Approvals::new(),
                             wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
                         app = Some(made.clone());

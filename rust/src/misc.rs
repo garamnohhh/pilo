@@ -112,8 +112,8 @@ fn permission_args(runtime: &str) -> Vec<String> {
 /// files in Node (models.codexSessionInPane); that search moves with the models (B3).
 async fn session(State(app): State<Shared>, Path(id): Path<i64>) -> Res {
     let db = app.db.lock().unwrap();
-    let a = one(&db, r#"SELECT a.id, a.name, a.runtime, a.herdr_target AS target, a.cwd, s.session_id AS reported, s.session_at AS "reportedAt"
-       FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.herdr_target
+    let a = one(&db, r#"SELECT a.id, a.name, a.runtime, a.pane AS target, a.cwd, s.session_id AS reported, s.session_at AS "reportedAt"
+       FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.pane
       WHERE a.id = $1 AND a.archived_at IS NULL"#, &[&id], &[]).map_err(db_err)?.ok_or_else(|| fail(StatusCode::NOT_FOUND, "agent not found"))?;
     let codex = a["runtime"] == "codex";
     let mut rest = json!({ "id": a["id"], "name": a["name"], "runtime": a["runtime"], "target": a["target"], "cwd": a["cwd"] });
@@ -129,7 +129,6 @@ async fn session(State(app): State<Shared>, Path(id): Path<i64>) -> Res {
     rest["session"] = json!(session);
     rest["source"] = json!("hook");
     rest["reportedAt"] = a["reportedAt"].clone();
-    rest["restart"] = json!(format!("herdr agent start {} --kind {} --pane {} -- {}", a["name"].as_str().unwrap_or(""),
-        if codex { "codex" } else { "claude" }, a["target"].as_str().unwrap_or(""), args.join(" ")));
+    rest["restart"] = json!(format!("{} {}", if codex { "codex" } else { "claude" }, args.join(" ")));
     Ok(Json(rest))
 }

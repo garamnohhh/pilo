@@ -17,7 +17,7 @@ if [[ "$ROOT" == */lib/node_modules/* && -x "${ROOT%/lib/node_modules/*}/bin/nod
   PATH="${ROOT%/lib/node_modules/*}/bin:$PATH"
 fi
 
-# pilo runs on macOS (herdr, open, launchd paths). The package no longer says
+# pilo runs on macOS (the pilo app, open, launchd paths). The package no longer says
 # so through npm's "os" field: that also stopped the site's Linux build from
 # installing the repository at all.
 if [[ "$(uname -s)" != "Darwin" && -z "${PILO_ANY_OS:-}" ]]; then
@@ -148,11 +148,6 @@ case "${1:-tui}" in
     echo "home:      $PILO_HOME_DIR"
     echo "port file: $(live_port)"
     echo "database:  $PILO_HOME_DIR/data $([[ -d "$PILO_HOME_DIR/data" ]] && echo present || echo "not created yet")"
-    HERDR_BIN="$(cat "$PILO_HOME_DIR/herdr-bin" 2>/dev/null)"
-    [[ -n "$HERDR_BIN" ]] || HERDR_BIN="${PILO_HERDR:-$(command -v "$HOME/.local/bin/herdr" || command -v /opt/homebrew/bin/herdr || command -v /usr/local/bin/herdr || command -v herdr || true)}"
-    [[ -n "$HERDR_BIN" && -x "$HERDR_BIN" ]] \
-      && echo "herdr:     $("$HERDR_BIN" agent list 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)["result"]["agents"]), "sessions")' 2>/dev/null || echo 'installed, no sessions')" \
-      || echo "herdr:     missing"
     if health; then
       echo "server:    running"
       curl -fsS "http://127.0.0.1:$(live_port)/api/system" | python3 -c '

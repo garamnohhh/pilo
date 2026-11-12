@@ -362,7 +362,7 @@ pub fn run(event: &str, codex: bool) {
     if std::io::stdin().read_to_string(&mut raw).is_err() { return; }
     let Ok(input) = serde_json::from_str::<Value>(if raw.trim().is_empty() { "{}" } else { &raw }) else { return };
     let runtime = if codex { "codex" } else { "claude" };
-    let pane = std::env::var("HERDR_PANE_ID").unwrap_or_default();
+    let pane = std::env::var("PILO_PANE_ID").unwrap_or_default();
     let tool = input["tool_name"].as_str().unwrap_or("").to_string();
     let tool_input = if input["tool_input"].is_null() { json!({}) } else { input["tool_input"].clone() };
     let base = json!({ "runtime": runtime, "pane": pane, "session": input["session_id"].as_str().unwrap_or(""), "agentId": input["agent_id"].as_str().unwrap_or(""),

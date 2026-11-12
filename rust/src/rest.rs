@@ -109,32 +109,16 @@ fn url_host(origin: &str) -> Option<(String, String)> {
     Some((hp.split(':').next()?.to_string(), hp))
 }
 
-/// focusAgent: herdr brings the pane forward, and the app herdr is open in too
+/// focusAgent: the daemon puts the pane in front and the pilo app comes forward to show it (#6137)
 async fn focus(State(app): State<Shared>, Path(id): Path<i64>) -> Response {
-    let target = { let db = app.db.lock().unwrap(); match one(&db, "SELECT herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err) {
+    let target = { let db = app.db.lock().unwrap(); match one(&db, "SELECT pane AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err) {
         Ok(Some(a)) if !s(&a["target"]).is_empty() => s(&a["target"]), Ok(_) => return fail(StatusCode::NOT_FOUND, "no pane bound to that agent"), Err(e) => return e } };
     let a2 = app.clone();
     let t2 = target.clone();
     let res = tokio::task::spawn_blocking(move || -> Result<String, String> {
-        a2.herdr.focus(&t2)?;
-        // the app holding herdr's client: up from the herdr process to the first ancestor inside an .app bundle
-        let ps = std::process::Command::new("ps").args(["-axo", "pid=,ppid=,command="]).output().map_err(|e| e.to_string())?;
-        let text = String::from_utf8_lossy(&ps.stdout).into_owned();
-        let line = regex::Regex::new(r"^\s*(\d+)\s+(\d+)\s+(.*)$").unwrap();
-        let procs: std::collections::HashMap<String, (String, String)> = text.lines().filter_map(|l| line.captures(l).map(|c| (c[1].to_string(), (c[2].to_string(), c[3].to_string())))).collect();
-        let client = procs.iter().find(|(_, (_, cmd))| regex::Regex::new(r"(^|/)herdr$").unwrap().is_match(cmd.trim())).map(|(_, (pp, _))| pp.clone());
-        let mut pid = client.clone();
-        let bundle = regex::Regex::new(r"^(.*?\.app)/Contents/MacOS/").unwrap();
-        for _ in 0..12 {
-            let Some(p) = pid.clone().filter(|p| p != "0") else { break };
-            if let Some((pp, cmd)) = procs.get(&p) {
-                if let Some(b) = bundle.captures(cmd) { let app = b[1].to_string(); let _ = std::process::Command::new("open").args(["-a", &app]).status(); return Ok(app); }
-                pid = Some(pp.clone());
-            } else { break; }
-        }
-        // #6137: no herdr client once pilo-desk holds the sessions; its daemon has the pane in focus, the pilo app shows it
-        if client.is_none() && std::process::Command::new(std::env::var("PILO_OPEN").unwrap_or_else(|_| "open".into())).args(["-a", "pilo"]).status().is_ok_and(|s| s.success()) { return Ok("pilo".into()); }
-        Ok(String::new())
+        a2.desk.focus(&t2)?;
+        let opened = std::process::Command::new(std::env::var("PILO_OPEN").unwrap_or_else(|_| "open".into())).args(["-a", "pilo"]).status().is_ok_and(|s| s.success());
+        Ok(if opened { "pilo".into() } else { String::new() })
     }).await.unwrap_or(Err("focus failed".into()));
     match res {
         Ok(app) => (StatusCode::CREATED, Json(json!({ "ok": true, "target": target, "app": app.rsplit('/').next().unwrap_or("").trim_end_matches(".app") }))).into_response(),

@@ -87,8 +87,8 @@ pub fn codex_model_on_pane(text: &str) -> Option<String> {
 async fn overview(State(app): State<Shared>) -> Res {
     let claude = claude_global();
     let codex = codex_global();
-    let live = app.herdr.sessions();
-    let agents = { let db = app.db.lock().unwrap(); rows(&db, r#"SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pending AS pending, a.model_pin AS pin,
+    let live = app.desk.sessions();
+    let agents = { let db = app.db.lock().unwrap(); rows(&db, r#"SELECT a.id, a.name, a.role, a.runtime, a.pane AS target, a.model_pending AS pending, a.model_pin AS pin,
        (SELECT count(*) FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
        s.status AS "sessionStatus"
      FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
@@ -107,7 +107,7 @@ async fn overview(State(app): State<Shared>) -> Res {
                 None => { model = claude["model"].clone(); effort = claude["effort"].clone(); }
             }
         } else if a["runtime"] == "codex" {
-            let shown = codex_model_on_pane(&app.herdr.read_pane(&target));
+            let shown = codex_model_on_pane(&app.desk.read_pane(&target));
             model = shown.as_ref().map(|s| json!(s)).unwrap_or(codex["model"].clone());
             effort = match (&shown, a["pin"]["effort"].as_str()) { (Some(s), Some(e)) if a["pin"]["model"] == s.as_str() => json!(e), _ => codex["effort"].clone() };
             source = if shown.is_some() { "pane" } else { "global" };

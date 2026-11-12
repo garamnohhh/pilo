@@ -88,7 +88,7 @@ fn via_spool(method: &str, path: &str, body: Option<&Value>) -> Result<Value, St
 
 fn call(method: &str, path: &str, body: Option<&Value>) -> Result<Value, String> {
     let mut path = path.to_string();
-    if let Ok(pane) = std::env::var("HERDR_PANE_ID") {
+    if let Ok(pane) = std::env::var("PILO_PANE_ID") {
         if method == "GET" && !pane.is_empty() && Regex::new(r"^/api/tasks/\d+$").unwrap().is_match(&path) { path = format!("{path}?_pane={}", enc(&pane)); }
     }
     match via_socket(method, &path, body) {

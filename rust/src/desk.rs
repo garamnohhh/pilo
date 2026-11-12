@@ -1,9 +1,7 @@
-//! Sessions as herdr (or pilo-desk's stand-in for it) lists them, the way
-//! src/herdr.js reads them. A bridge for B2-B3: B4 talks to the desk daemon
-//! directly and this goes.
+//! Sessions as pilo-desk's daemon holds them, asked over its socket (desk.sock): one JSON line out, one back.
 
 use serde_json::{json, Value};
-use std::{path::PathBuf, process::Command, sync::Mutex, time::{Duration, Instant}};
+use std::{io::{BufRead, BufReader, Write}, os::unix::net::UnixStream, path::PathBuf, sync::Mutex, time::{Duration, Instant}};
 
 pub struct Health { pub ok: bool, pub error: String }
 
@@ -36,51 +34,66 @@ fn with_turns(mut rows: Vec<Value>) -> Vec<Value> {
     rows
 }
 
-/// ~/.pilo/herdr-bin wins (pilo-desk writes it), then PILO_HERDR, then the usual places.
-fn program(home: &PathBuf) -> String {
-    if let Ok(s) = std::fs::read_to_string(home.join("herdr-bin")) { if !s.trim().is_empty() { return s.trim().to_string(); } }
-    if let Ok(s) = std::env::var("PILO_HERDR") { if !s.is_empty() { return s; } }
-    let h = std::env::var("HOME").unwrap_or_default();
-    [format!("{h}/.local/bin/herdr"), "/opt/homebrew/bin/herdr".into(), "/usr/local/bin/herdr".into()]
-        .into_iter().find(|p| std::path::Path::new(p).exists()).unwrap_or_else(|| "herdr".into())
+/// the daemon's socket: PILO_DESK_SOCK, else under PILO_DESK_HOME, else ~/Library/Application Support/pilo-desk
+fn socket() -> PathBuf {
+    if let Ok(s) = std::env::var("PILO_DESK_SOCK") { if !s.is_empty() { return s.into(); } }
+    let home = std::env::var("PILO_DESK_HOME").map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Library/Application Support/pilo-desk"));
+    home.join("desk.sock")
 }
 
-pub struct Herdr { home: PathBuf, cache: Mutex<(Option<Instant>, Vec<Value>)>, pub health: Mutex<Health> }
+pub struct Desk { cache: Mutex<(Option<Instant>, Vec<Value>)>, pub health: Mutex<Health> }
 
-impl Herdr {
-    pub fn new(home: PathBuf) -> Self {
-        Herdr { home, cache: Mutex::new((None, vec![])), health: Mutex::new(Health { ok: true, error: String::new() }) }
+impl Desk {
+    pub fn new() -> Self {
+        Desk { cache: Mutex::new((None, vec![])), health: Mutex::new(Health { ok: true, error: String::new() }) }
     }
 
-    fn call(&self, args: &[&str]) -> Result<String, String> {
+    /// one request, its one answer; an error answer comes back as Err
+    fn ask(&self, req: Value) -> Result<Value, String> {
         // the shadow run (`pilo shadow`) reads sessions and screens but types nothing: what it would send is written down
-        if crate::shadow::on() && matches!((args.first().copied(), args.get(1).copied()), (Some("agent"), Some("prompt" | "send-keys" | "start" | "focus")) | (Some("notification"), _)) {
-            crate::shadow::record(args);
-            return Ok(String::new());
+        let op = req["op"].as_str().unwrap_or("");
+        if crate::shadow::on() && matches!(op, "prompt" | "keys" | "start" | "focus") {
+            let verb = match op { "keys" => "send-keys", o => o };
+            let mut rec = vec!["agent".to_string(), verb.into(), req["pane"].as_str().unwrap_or("").into()];
+            if op == "prompt" { rec.push(req["text"].as_str().unwrap_or("").into()); }
+            if let Some(k) = req["keys"].as_array() { rec.extend(k.iter().filter_map(|x| x.as_str()).map(String::from)); }
+            crate::shadow::record(&rec.iter().map(String::as_str).collect::<Vec<_>>());
+            return Ok(json!({ "ev": "done" }));
         }
-        let out = Command::new(program(&self.home)).args(args).output().map_err(|e| e.to_string())?;
-        if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("failed").to_string()); }
-        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        let mut c = UnixStream::connect(socket()).map_err(|e| format!("pilo-desk: {e}"))?;
+        c.set_read_timeout(Some(Duration::from_secs(70))).ok();
+        c.write_all(format!("{req}\n").as_bytes()).map_err(|e| e.to_string())?;
+        let mut line = String::new();
+        BufReader::new(c).read_line(&mut line).map_err(|e| e.to_string())?;
+        let v: Value = serde_json::from_str(&line).map_err(|_| "no answer".to_string())?;
+        if v["ev"] == "error" { return Err(v["msg"].as_str().unwrap_or("failed").to_string()); }
+        Ok(v)
     }
 
-    /// `herdr agent list`, one call per PILO_HERDR_CACHE_MS (1.5 s)
+    /// nothing goes into a session whose claude or codex is gone: in the shell left behind it would run as a command
+    fn gone(&self, pane: &str) -> bool {
+        self.ask(json!({ "op": "list" })).ok().and_then(|v| v["list"].as_array().cloned()).unwrap_or_default()
+            .iter().any(|s| s["pane"] == pane && (s["gone"] == true || s["alive"] == false))
+    }
+
+    /// the daemon's sessions as rows, one ask per PILO_DESK_CACHE_MS (1.5 s)
     pub fn sessions(&self) -> Vec<Value> {
         if let Some(list) = crate::replay::sessions() { *self.health.lock().unwrap() = Health { ok: true, error: String::new() }; return list; }
-        let ttl = Duration::from_millis(std::env::var("PILO_HERDR_CACHE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500));
+        let ttl = Duration::from_millis(std::env::var("PILO_DESK_CACHE_MS").ok().and_then(|v| v.parse().ok()).unwrap_or(1500));
         let mut c = self.cache.lock().unwrap();
         if let Some(at) = c.0 { if at.elapsed() < ttl { return with_turns(c.1.clone()); } }
-        let rows = match self.call(&["agent", "list"]).and_then(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string())) {
+        let rows = match self.ask(json!({ "op": "list" })) {
             Ok(v) => {
                 *self.health.lock().unwrap() = Health { ok: true, error: String::new() };
-                v["result"]["agents"].as_array().cloned().unwrap_or_default().iter().map(|a| {
+                v["list"].as_array().cloned().unwrap_or_default().iter().filter(|a| a["alive"] == true && a["gone"] != true).map(|a| {
                     let s = |k: &str| a[k].as_str().unwrap_or("").to_string();
+                    let program = s("program");
                     json!({
-                        "runtime": s("agent"), "status": s("agent_status"),
-                        "cwd": if s("cwd").is_empty() { s("foreground_cwd") } else { s("cwd") },
-                        "target": s("pane_id"), "terminalId": s("terminal_id"),
-                        "seq": a["state_change_seq"].as_f64().unwrap_or(0.0) as i64,
-                        "title": if s("terminal_title_stripped").is_empty() { s("terminal_title") } else { s("terminal_title_stripped") },
-                        "name": s("name"), "session": a["agent_session"]["value"].as_str().unwrap_or(""),
+                        "runtime": if matches!(program.as_str(), "claude" | "codex") { program.as_str() } else { "" },
+                        "status": match s("state").as_str() { "working" => "working", "waiting" => "blocked", _ => "idle" },
+                        "cwd": s("cwd"), "target": s("pane"), "terminalId": format!("desk_{}", a["id"]),
+                        "seq": a["seq"].as_i64().unwrap_or(0), "title": s("name"), "name": s("name"), "session": s("conversation"),
                     })
                 }).collect()
             }
@@ -93,18 +106,13 @@ impl Herdr {
         with_turns(rows)
     }
 
-    /// a desktop notice through herdr; false when it did not go
-    pub fn notify(&self, title: &str, body: &str) -> bool {
-        self.call(&["notification", "show", title, "--body", body, "--position", "top-right", "--sound", "none"]).is_ok()
-    }
-
     /// past the cache: the check made right before typing
     pub fn fresh_sessions(&self) -> Vec<Value> { *self.cache.lock().unwrap() = (None, vec![]); self.sessions() }
 
     pub fn read_pane(&self, target: &str) -> String {
         if target.is_empty() { return String::new(); }
         if crate::replay::sessions().is_some() { return crate::replay::screen(target); }
-        self.call(&["pane", "read", target]).unwrap_or_default()
+        self.ask(json!({ "op": "read", "pane": target })).ok().and_then(|v| v["text"].as_str().map(String::from)).unwrap_or_default()
     }
 
     /// candidates: sessions in the same folder (and of the same runtime, when known)
@@ -114,11 +122,12 @@ impl Herdr {
         self.sessions().into_iter().filter(|s| expand(s["cwd"].as_str().unwrap_or("")) == want && (runtime.is_empty() || s["runtime"] == runtime)).collect()
     }
 
-    /// prompt: refused into a dialog (PANE_IN_DIALOG), else typed by herdr
+    /// prompt: refused into a dialog (PANE_IN_DIALOG), else typed by the daemon
     pub fn prompt(&self, target: &str, message: &str, busy: bool) -> Result<(), String> {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
         if busy || in_dialog(&self.read_pane(target)) { return Err("PANE_IN_DIALOG".into()); }
-        self.call(&["agent", "prompt", target, message]).map(|_| ()).map_err(|e| {
+        if !crate::shadow::on() && self.gone(target) { return Err("SESSION_NOT_FOUND".into()); }
+        self.ask(json!({ "op": "prompt", "pane": target, "text": message })).map(|_| ()).map_err(|e| {
             if regex::Regex::new(r"(?i)not found|unknown pane|no such").unwrap().is_match(&e) { "SESSION_NOT_FOUND".into() }
             else if e.trim().is_empty() { "WAKE_FAILED".into() } else { e.trim().lines().next().unwrap_or("WAKE_FAILED").to_string() }
         })
@@ -126,23 +135,20 @@ impl Herdr {
 
     /// startAgent: a Claude or Codex session in a pane back at its shell, the runtime's arguments after --
     pub fn start_agent(&self, name: &str, kind: &str, pane: &str, args: &[String]) -> Result<(), String> {
-        let mut a: Vec<&str> = vec!["agent", "start", name, "--kind", kind, "--pane", pane, "--timeout", "60000", "--"];
-        a.extend(args.iter().map(String::as_str));
-        self.call(&a).map(|_| ())
+        self.ask(json!({ "op": "start", "pane": pane, "name": name, "program": kind, "args": args })).map(|_| ())
     }
 
-    /// focus: herdr switches to the pane inside itself
+    /// focus: the daemon puts the pane in front in the pilo app
     pub fn focus(&self, target: &str) -> Result<(), String> {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
-        self.call(&["agent", "focus", target]).map(|_| ())
+        self.ask(json!({ "op": "focus", "pane": target })).map(|_| ())
     }
 
     /// sendKeys: keys, not text (Escape, a menu's number, Enter)
     pub fn send_keys(&self, target: &str, keys: &[&str]) -> Result<(), String> {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
-        let mut args = vec!["agent", "send-keys", target];
-        args.extend_from_slice(keys);
-        self.call(&args).map(|_| ())
+        if !crate::shadow::on() && self.gone(target) { return Err("SESSION_NOT_FOUND".into()); }
+        self.ask(json!({ "op": "keys", "pane": target, "keys": keys })).map(|_| ())
     }
 }
 
@@ -153,7 +159,7 @@ fn expand(path: &str) -> String {
     full.trim_end_matches('/').to_string()
 }
 
-/// herdr.js inDialog: only the bottom of the screen counts, and Claude's own input
+/// inDialog: only the bottom of the screen counts, and Claude's own input
 /// box (a ❯ line right under a rule) means no screen is open
 pub fn in_dialog(screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();

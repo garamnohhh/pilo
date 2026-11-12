@@ -34,7 +34,7 @@ fn agent_columns() -> String {
   EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'queued'
     AND (SELECT e.type FROM events e WHERE e.task_id = t.id AND e.type IN ('wake_sent', 'wake_failed')
           ORDER BY e.created_at DESC, e.id DESC LIMIT 1) = 'wake_failed') AS "wakeWaiting",
-  a.runtime, a.herdr_target AS "herdrTarget", a.model, a.cwd, a.aliases, a.specialty, a.note, a.reviewer,
+  a.runtime, a.pane AS "pane", a.model, a.cwd, a.aliases, a.specialty, a.note, a.reviewer,
   a.created_at AS "createdAt", p.name AS "projectName",
   (SELECT count(*)::int FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS "openTasks",
   (SELECT t.blocked_question FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked'
@@ -46,7 +46,7 @@ fn agent_columns() -> String {
        AND NOT {waits}) AS "lastSignal",
   s.status AS "sessionStatus", s.since AS "sessionSince",
   CASE
-    WHEN a.herdr_target = '' OR s.status = 'gone' THEN 'unbound'
+    WHEN a.pane = '' OR s.status = 'gone' THEN 'unbound'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked') THEN 'blocked'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) THEN 'running'
     WHEN EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'holding') THEN 'holding'
@@ -94,7 +94,7 @@ pub fn list_agents_with(db: &Connection, busy: impl Fn(&str) -> bool) -> rusqlit
   LEFT JOIN agent_sessions s ON s.agent_id = a.id
   WHERE a.archived_at IS NULL ORDER BY a.role = 'pilo' DESC, a.name"#, agent_columns()), &[], &AGENT_KINDS)?;
     for a in out.iter_mut() {
-        let t = a["herdrTarget"].as_str().unwrap_or("").to_string();
+        let t = a["pane"].as_str().unwrap_or("").to_string();
         a["waitingApproval"] = json!(!t.is_empty() && busy(&t));
         // a session that cannot work, read from its own record by the engine
         if let Some(b) = crate::engine2::block_of(a["id"].as_i64().unwrap_or(0)) {
@@ -127,9 +127,9 @@ async fn tree(State(app): State<Shared>) -> Res {
 }
 
 async fn sessions(State(app): State<Shared>) -> Res {
-    let live = app.herdr.sessions();
+    let live = app.desk.sessions();
     let db = app.db.lock().unwrap();
-    let agents = rows(&db, "SELECT id, name, role, herdr_target AS target, cwd FROM agents WHERE archived_at IS NULL", &[], &[]).map_err(db_err)?;
+    let agents = rows(&db, "SELECT id, name, role, pane AS target, cwd FROM agents WHERE archived_at IS NULL", &[], &[]).map_err(db_err)?;
     let projects = rows(&db, "SELECT id, name, path FROM projects WHERE archived_at IS NULL", &[], &[]).map_err(db_err)?;
     let home = std::env::var("HOME").unwrap_or_default();
     Ok(Json(json!(live.into_iter().map(|mut s| {
@@ -170,10 +170,10 @@ pub fn wake_failures(db: &Connection, limit: i64) -> rusqlite::Result<Vec<Value>
 }
 
 fn system_status(app: &Shared, db: &Connection) -> rusqlite::Result<Value> {
-    let live = app.herdr.sessions();
-    let health = app.herdr.health.lock().unwrap();
+    let live = app.desk.sessions();
+    let health = app.desk.health.lock().unwrap();
     let count = |sql: &str| one(db, sql, &[], &[]).map(|r| r.and_then(|r| r["n"].as_i64()).unwrap_or(0));
-    let bound = count("SELECT count(*) AS n FROM agents WHERE archived_at IS NULL AND herdr_target <> ''")?;
+    let bound = count("SELECT count(*) AS n FROM agents WHERE archived_at IS NULL AND pane <> ''")?;
     let agents = count("SELECT count(*) AS n FROM agents WHERE archived_at IS NULL")?;
     let version: String = db.query_row("SELECT sqlite_version()", [], |r| r.get(0))?;
     let port = app.port;
@@ -183,8 +183,8 @@ fn system_status(app: &Shared, db: &Connection) -> rusqlite::Result<Value> {
             { "name": "server", "detail": format!("pid {} · port {port} · up {}s", std::process::id(), app.started.elapsed().as_secs()), "state": "running" },
             { "name": "postgres", "detail": format!("SQLite {version} · {}", db.path().unwrap_or("")), "state": "healthy" },
             { "name": "wake",
-              "detail": if health.ok { format!("herdr {} sessions · {bound}/{agents} agents bound", live.len()) }
-                        else { format!("herdr is not answering — {}. agent states are as herdr last said", if health.error.is_empty() { "no reply" } else { &health.error }) },
+              "detail": if health.ok { format!("pilo-desk {} sessions · {bound}/{agents} agents bound", live.len()) }
+                        else { format!("pilo-desk is not answering — {}. agent states are as it last said", if health.error.is_empty() { "no reply" } else { &health.error }) },
               "state": if !health.ok { "down" } else if bound < agents { "degraded" } else { "running" } },
             { "name": "dashboard", "detail": format!("http://127.0.0.1:{port}/dashboard"), "state": "running" }
         ],
@@ -296,12 +296,12 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
 
 /// setupState: what the welcome screen needs to know
 async fn setup(State(app): State<Shared>) -> Res {
-    let live = app.herdr.sessions();
-    let up = app.herdr.health.lock().unwrap().ok;
+    let live = app.desk.sessions();
+    let up = app.desk.health.lock().unwrap().ok;
     let db = app.db.lock().unwrap();
-    let pilos = rows(&db, r#"SELECT id, name, cwd, runtime, herdr_target AS "herdrTarget", created_at AS "createdAt" FROM agents WHERE role = 'pilo' AND archived_at IS NULL"#, &[], &[]).map_err(db_err)?;
+    let pilos = rows(&db, r#"SELECT id, name, cwd, runtime, pane AS "pane", created_at AS "createdAt" FROM agents WHERE role = 'pilo' AND archived_at IS NULL"#, &[], &[]).map_err(db_err)?;
     let pms = one(&db, "SELECT count(*) AS n FROM agents WHERE role = 'pm' AND archived_at IS NULL", &[], &[]).map_err(db_err)?.unwrap()["n"].clone();
-    let held: Vec<String> = rows(&db, "SELECT herdr_target AS target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[], &[]).map_err(db_err)?
+    let held: Vec<String> = rows(&db, "SELECT pane AS target FROM agents WHERE archived_at IS NULL AND pane <> ''", &[], &[]).map_err(db_err)?
         .into_iter().filter_map(|r| r["target"].as_str().map(String::from)).collect();
     let first = one(&db, r#"SELECT i.id, i.status, i.created_at AS "createdAt",
        EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id) AS answered
@@ -313,7 +313,7 @@ async fn setup(State(app): State<Shared>) -> Res {
         .map(|x| json!({ "target": x["target"], "cwd": x["cwd"], "runtime": x["runtime"], "status": x["status"] })).collect();
     let n = pilos.len();
     Ok(Json(json!({
-        "herdrUp": up, "herdr": !live.is_empty(), "sessions": live.len(),
+        "deskUp": up, "desk": !live.is_empty(), "sessions": live.len(),
         // the Node server says which Node runs it; there is none here
         "node": "", "url": format!("http://127.0.0.1:{port}/welcome"),
         "lastRequest": first, "answered": answered, "welcome": welcome, "postgres": true,

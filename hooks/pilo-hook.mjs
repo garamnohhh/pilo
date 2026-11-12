@@ -351,7 +351,7 @@ async function main() {
   } catch {
     return;
   }
-  const pane = process.env.HERDR_PANE_ID || "";
+  const pane = process.env.PILO_PANE_ID || "";
   const tool = input.tool_name || "";
   const toolInput = input.tool_input || {};
   // agent_id is set when a subagent (Task/Agent tool) runs the tool: several can

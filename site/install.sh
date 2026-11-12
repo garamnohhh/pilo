@@ -23,7 +23,6 @@ node_ok() {
 }
 
 [ "$(uname -s)" = Darwin ] || die "pilo runs on macOS only."
-have herdr || [ -x "$HOME/.local/bin/herdr" ] || echo "herdr is not installed yet: 'curl -fsSL https://herdr.dev/install.sh | sh' before you start pilo."
 
 if node_ok; then
   npm install -g "$PKG"

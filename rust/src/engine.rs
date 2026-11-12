@@ -137,8 +137,8 @@ fn wake(app: &Shared, agent: &Value, message: &str, task: Option<i64>, inbox: Op
         return false;
     }
     app.engine.state.lock().unwrap().pending.insert(id);
-    let target = s(&agent["herdr_target"]);
-    match app.herdr.prompt(&target, message, app.approvals.busy(&target)) {
+    let target = s(&agent["pane"]);
+    match app.desk.prompt(&target, message, app.approvals.busy(&target)) {
         Ok(()) => { ev(app, "wake_sent", &t("event.woken", &[("agent", name)]), Some(id), task, inbox, json!({ "target": target, "message": message })); true }
         Err(e) => { failed(app, agent, &e, task, inbox); false }
     }
@@ -170,9 +170,9 @@ fn clear_wait(app: &Shared) { app.engine.state.lock().unwrap().desk_wait = DeskW
 fn flush_desk(app: &Shared) {
     let items: Vec<Item> = std::mem::take(&mut app.engine.state.lock().unwrap().desk_box);
     if items.is_empty() { clear_wait(app); return; }
-    let Some(desk) = q1(app, "SELECT a.id, a.name, a.herdr_target, a.limited_until > now() AS limited, s.status AS session
+    let Some(desk) = q1(app, "SELECT a.id, a.name, a.pane, a.limited_until > now() AS limited, s.status AS session
      FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id WHERE a.role = 'pilo' AND a.archived_at IS NULL", &[]) else { return };
-    let target = s(&desk["herdr_target"]);
+    let target = s(&desk["pane"]);
     if target.is_empty() { return; }
     let all: Vec<&Item> = items.iter().collect();
     if desk["limited"].as_i64() == Some(1) { return wait_for(app, "limited", &all); }
@@ -193,7 +193,7 @@ fn flush_desk(app: &Shared) {
     }
     let bundle = format!("b{}", crate::sql::now_us() / 1000);
     let messages: Vec<&str> = send.iter().map(|x| x.message.as_str()).collect();
-    if let Err(e) = app.herdr.prompt(&target, &bundle_message(&messages), app.approvals.busy(&target)) {
+    if let Err(e) = app.desk.prompt(&target, &bundle_message(&messages), app.approvals.busy(&target)) {
         for x in &send { failed(app, &desk, &e, x.task, x.inbox); }
         return;
     }
@@ -208,28 +208,28 @@ fn flush_desk(app: &Shared) {
 }
 
 fn pump_inbox(app: &Shared) {
-    let Some(pilo) = q1(app, "SELECT id, name, herdr_target, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
+    let Some(pilo) = q1(app, "SELECT id, name, pane, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
     for row in q(app, "SELECT id, source FROM inbox WHERE status = 'queued' ORDER BY created_at LIMIT 5", &[]) {
         let id = row["id"].as_i64().unwrap();
         let c = should_wake(app, "inbox_id", id, None);
         if c.give_up { gave_up(app, "inbox_id", id, &pilo, None, Some(id)); continue; }
         if !c.wake { continue; }
-        if s(&pilo["herdr_target"]).is_empty() { failed(app, &pilo, "SESSION_NOT_BOUND", None, Some(id)); continue; }
+        if s(&pilo["pane"]).is_empty() { failed(app, &pilo, "SESSION_NOT_BOUND", None, Some(id)); continue; }
         let user = { let src = s(&row["source"]); src.is_empty() || src == "user" };
         desk_wake(app, t("wake.inbox", &[("id", id.to_string()), ("agent", s(&pilo["name"]))]), None, Some(id), user, None);
     }
 }
 
 fn pump_tasks(app: &Shared) {
-    for task in q(app, "SELECT t.id, t.inbox_id, t.answer, a.id AS agent_id, a.name, a.herdr_target, a.runtime
+    for task in q(app, "SELECT t.id, t.inbox_id, t.answer, a.id AS agent_id, a.name, a.pane, a.runtime
      FROM tasks t JOIN agents a ON a.id = t.to_agent_id WHERE t.status = 'queued' AND a.archived_at IS NULL ORDER BY t.created_at LIMIT 10", &[]) {
-        let agent = json!({ "id": task["agent_id"], "name": task["name"], "herdr_target": task["herdr_target"], "runtime": task["runtime"] });
+        let agent = json!({ "id": task["agent_id"], "name": task["name"], "pane": task["pane"], "runtime": task["runtime"] });
         let id = task["id"].as_i64().unwrap();
         let inbox = task["inbox_id"].as_i64();
         let c = should_wake(app, "task_id", id, task["agent_id"].as_i64());
         if c.give_up { gave_up(app, "task_id", id, &agent, Some(id), inbox); continue; }
         if !c.wake { continue; }
-        if s(&agent["herdr_target"]).is_empty() { failed(app, &agent, "SESSION_NOT_BOUND", Some(id), inbox); continue; }
+        if s(&agent["pane"]).is_empty() { failed(app, &agent, "SESSION_NOT_BOUND", Some(id), inbox); continue; }
         let vars = [("id", id.to_string()), ("agent", s(&agent["name"]))];
         let m = if s(&task["answer"]).is_empty() { t("wake.task", &vars) } else { t("wake.answer", &vars) };
         wake(app, &agent, &m, Some(id), inbox);
@@ -237,8 +237,8 @@ fn pump_tasks(app: &Shared) {
 }
 
 fn pump_results(app: &Shared) {
-    let Some(pilo) = q1(app, "SELECT id, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
-    if s(&pilo["herdr_target"]).is_empty() { return; }
+    let Some(pilo) = q1(app, "SELECT id, pane FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
+    if s(&pilo["pane"]).is_empty() { return; }
     for row in q(app, "SELECT i.id, max(t.done_at) AS ready FROM inbox i JOIN tasks t ON t.inbox_id = i.id WHERE i.status = 'dispatched'
      GROUP BY i.id HAVING count(CASE WHEN t.status NOT IN ('done', 'failed') THEN 1 END) = 0
         AND NOT EXISTS (SELECT 1 FROM final_replies f WHERE f.inbox_id = i.id) LIMIT 5", &[]) {
@@ -253,8 +253,8 @@ fn pump_results(app: &Shared) {
 }
 
 fn pump_followups(app: &Shared) {
-    let Some(pilo) = q1(app, "SELECT id, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL AND (limited_until IS NULL OR limited_until < now())", &[]) else { return };
-    if s(&pilo["herdr_target"]).is_empty() { return; }
+    let Some(pilo) = q1(app, "SELECT id, pane FROM agents WHERE role = 'pilo' AND archived_at IS NULL AND (limited_until IS NULL OR limited_until < now())", &[]) else { return };
+    if s(&pilo["pane"]).is_empty() { return; }
     let hours = env_num("PILO_FOLLOWUP_WINDOW_HOURS", 24.0);
     let span = (hours * 3_600_000_000.0) as i64;
     for task in q(app, r#"SELECT t.id, t.inbox_id AS "inboxId", a.name AS agent FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id
@@ -274,17 +274,17 @@ fn pump_followups(app: &Shared) {
 fn pump_worker_results(app: &Shared) {
     for row in q(app, r#"SELECT * FROM (
        SELECT t.id AS task, t.status, t.done_at, t.inbox_id AS "inboxId", w.name AS worker,
-              p.id AS "pmId", p.name AS pm, p.herdr_target, p.runtime,
+              p.id AS "pmId", p.name AS pm, p.pane, p.runtime,
               (SELECT pt.id FROM tasks pt WHERE pt.to_agent_id = p.id AND pt.inbox_id = t.inbox_id AND pt.status IN ('queued', 'running', 'holding')
                   AND pt.created_at <= t.done_at ORDER BY pt.created_at DESC LIMIT 1) AS parent
          FROM tasks t JOIN agents w ON w.id = t.to_agent_id JOIN agents p ON p.id = w.parent_agent_id
          LEFT JOIN agent_sessions s ON s.agent_id = p.id
         WHERE t.status IN ('done', 'failed') AND t.done_at > now() - interval '24 hours'
-          AND w.role = 'worker' AND p.archived_at IS NULL AND p.herdr_target <> ''
+          AND w.role = 'worker' AND p.archived_at IS NULL AND p.pane <> ''
           AND coalesce(s.status, '') <> 'gone' AND (p.limited_until IS NULL OR p.limited_until < now())
           AND NOT EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'worker_result_woken')
      ) r WHERE r.parent IS NOT NULL ORDER BY r.done_at LIMIT 5"#, &[]) {
-        let pm = json!({ "id": row["pmId"], "name": row["pm"], "herdr_target": row["herdr_target"], "runtime": row["runtime"] });
+        let pm = json!({ "id": row["pmId"], "name": row["pm"], "pane": row["pane"], "runtime": row["runtime"] });
         let status = t(if row["status"] == "failed" { "worker.failed" } else { "worker.done" }, &[]);
         let vars = [("task", s(&row["task"])), ("worker", s(&row["worker"])), ("status", status), ("parent", s(&row["parent"])), ("pm", s(&row["pm"]))];
         let parent = row["parent"].as_i64();
@@ -323,10 +323,10 @@ fn pump_stalled(app: &Shared) {
     if !on { return; }
     let stall_min = env_num("PILO_STALL_MIN", 10.0);
     let (stall, window) = ((stall_min * 60_000_000.0) as i64, (every * 60_000_000.0) as i64);
-    let stuck = q(app, &format!(r#"SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.herdr_target, a.runtime,
+    let stuck = q(app, &format!(r#"SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.pane, a.runtime,
             EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'task_opened') AS opened
      FROM tasks t JOIN agents a ON a.id = t.to_agent_id LEFT JOIN agent_sessions s ON s.agent_id = a.id
-     WHERE t.status IN ('queued', 'running') AND a.archived_at IS NULL AND a.herdr_target <> ''
+     WHERE t.status IN ('queued', 'running') AND a.archived_at IS NULL AND a.pane <> ''
        AND coalesce(s.status, '') <> 'working' AND (a.limited_until IS NULL OR a.limited_until < now())
        AND GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) < now() - $1
        AND NOT {}
@@ -334,7 +334,7 @@ fn pump_stalled(app: &Shared) {
      ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5"#, crate::agents::waits_on_worker("t", "a")), &[&stall, &window]);
     let (mut nudged, mut held) = (vec![], vec![]);
     for task in &stuck {
-        let agent = json!({ "id": task["agent_id"], "name": task["name"], "herdr_target": task["herdr_target"], "runtime": task["runtime"] });
+        let agent = json!({ "id": task["agent_id"], "name": task["name"], "pane": task["pane"], "runtime": task["runtime"] });
         let id = task["id"].as_i64().unwrap();
         let opened = task["opened"].as_i64() == Some(1);
         ev(app, "task_stalled", &t("event.stalled", &[("id", id.to_string())]), task["agent_id"].as_i64(), Some(id), task["inbox_id"].as_i64(),
@@ -363,12 +363,12 @@ fn pump_decisions(app: &Shared) {
              FROM tasks t2 WHERE t2.status = 'blocked') b ON b.tid = t.id
      WHERE t.status = 'blocked' ORDER BY b.at LIMIT 10", &[]);
     if waiting.is_empty() { return; }
-    let desk = q1(app, "SELECT id, name, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]);
+    let desk = q1(app, "SELECT id, name, pane FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]);
     let steps = remind_steps();
     for task in waiting {
         let (id, inbox) = (task["id"].as_i64().unwrap(), task["inbox_id"].as_i64());
         if task["woken"].as_i64() != Some(1) {
-            if let Some(d) = desk.as_ref().filter(|d| !s(&d["herdr_target"]).is_empty()) {
+            if let Some(d) = desk.as_ref().filter(|d| !s(&d["pane"]).is_empty()) {
                 let did = d["id"].as_i64();
                 desk_wake(app, t("wake.blocked", &[("id", id.to_string()), ("inbox", s(&task["inbox_id"]))]), Some(id), inbox, false,
                     Some(Box::new(move |c: &Connection| { let _ = log_event(c, "decision_woken", &format!("desk woken for #{id}"), did, Some(id), inbox, &json!({})); })));
@@ -390,16 +390,16 @@ fn kst_hm(us: i64) -> String {
 }
 
 fn pump_held(app: &Shared) {
-    let Some(pilo) = q1(app, "SELECT id, herdr_target FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
-    if s(&pilo["herdr_target"]).is_empty() { return; }
+    let Some(pilo) = q1(app, "SELECT id, pane FROM agents WHERE role = 'pilo' AND archived_at IS NULL", &[]) else { return };
+    if s(&pilo["pane"]).is_empty() { return; }
     let held = q(app, "SELECT i.id,
        count(CASE WHEN t.status IN ('done', 'failed') THEN 1 END) AS done, count(*) AS total,
-       pg_agg_distinct(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.herdr_target = '') THEN a.name END) AS who,
-       max(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.herdr_target = '') THEN a.limited_until END) AS until
+       pg_agg_distinct(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.pane = '') THEN a.name END) AS who,
+       max(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.pane = '') THEN a.limited_until END) AS until
      FROM inbox i JOIN tasks t ON t.inbox_id = i.id JOIN agents a ON a.id = t.to_agent_id
      WHERE i.status = 'dispatched' GROUP BY i.id
-     HAVING count(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.herdr_target = '') THEN 1 END) > 0
-        AND count(CASE WHEN t.status IN ('queued', 'running') AND NOT (a.limited_until > now() OR a.herdr_target = '') THEN 1 END) = 0
+     HAVING count(CASE WHEN t.status IN ('queued', 'running') AND (a.limited_until > now() OR a.pane = '') THEN 1 END) > 0
+        AND count(CASE WHEN t.status IN ('queued', 'running') AND NOT (a.limited_until > now() OR a.pane = '') THEN 1 END) = 0
         AND count(CASE WHEN t.status = 'blocked' THEN 1 END) = 0
      ORDER BY i.id LIMIT 5", &[]);
     for row in held {
@@ -417,25 +417,25 @@ fn pump_held(app: &Shared) {
     }
 }
 
-/// pumpSessions: what herdr says each bound pane is doing; a pane it no longer
+/// pumpSessions: what the daemon says each bound pane is doing; a pane it no longer
 /// lists is "gone", and one back from gone is a new session
 fn pump_sessions(app: &Shared) {
-    let live = app.herdr.sessions();
-    if !app.herdr.health.lock().unwrap().ok { return; }
-    let agents = q(app, "SELECT id, name, herdr_target FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[]);
+    let live = app.desk.sessions();
+    if !app.desk.health.lock().unwrap().ok { return; }
+    let agents = q(app, "SELECT id, name, pane FROM agents WHERE archived_at IS NULL AND pane <> ''", &[]);
     let before: Vec<(i64, String)> = q(app, "SELECT agent_id, status FROM agent_sessions", &[]).into_iter().map(|r| (r["agent_id"].as_i64().unwrap_or(0), s(&r["status"]))).collect();
     for a in agents {
         let id = a["id"].as_i64().unwrap();
-        let target = s(&a["herdr_target"]);
+        let target = s(&a["pane"]);
         let session = live.iter().find(|x| x["target"] == target.as_str());
-        // a card read off the screen goes when the screen no longer shows its menu; herdr's status settles the rest
+        // a card read off the screen goes when the screen no longer shows its menu; the daemon's status settles the rest
         if app.approvals.notice_for(&target).map(|n| n["screen"] == true).unwrap_or(false) {
-            let m = crate::panemenu::parse_menu(&app.herdr.read_pane(&target));
+            let m = crate::panemenu::parse_menu(&app.desk.read_pane(&target));
             if app.approvals.screen_says(&target, m.as_ref()) { app.bell.changed(); }
         }
         if let Some(sx) = session { if app.approvals.settle(&target, sx["status"].as_str().unwrap_or("")) { app.bell.changed(); } }
         if session.map(|x| x["status"] == "blocked").unwrap_or(false) && !app.approvals.busy(&target) {
-            let screen = app.herdr.read_pane(&target);
+            let screen = app.desk.read_pane(&target);
             if let Some(menu) = crate::panemenu::parse_menu(&screen) {
                 let agent = crate::approvals::agent_for_pane(app, &target);
                 if app.approvals.notice_from_screen(&target, agent.as_ref(), menu, "") { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }

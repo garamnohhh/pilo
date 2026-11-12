@@ -41,10 +41,9 @@ test("attachments, the rules preview and a file chip's refusals", async () => {
   }
 });
 
-// Rust only (Node is frozen): with pilo-desk holding the sessions there is no herdr client to bring forward,
-// so Open window opens the pilo app, whose daemon has the pane in focus (#6137). The opener is a stand-in:
-// a real 'open' would bring an app forward on the screen.
-test("Open window with no herdr client opens the pilo app", { skip: !process.env.PILO_SERVER_CMD }, async () => {
+// Open window puts the pane in focus in the daemon and brings the pilo app forward (#6137). The opener is a
+// stand-in: a real 'open' would bring an app forward on the screen.
+test("Open window focuses the pane and opens the pilo app", async () => {
   const { mkdtempSync, writeFileSync, readFileSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
@@ -59,5 +58,6 @@ test("Open window with no herdr client opens the pilo app", { skip: !process.env
     assert.equal(r.json.target, t.pane.pm);
     assert.equal(r.json.app, "pilo");
     assert.equal(readFileSync(join(dir, "args"), "utf8").trim(), "-a pilo");
+    assert.ok(srv.calls().some((a) => a[1] === "focus" && a[2] === t.pane.pm));
   } finally { await srv.stop(); }
 });

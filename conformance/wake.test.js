@@ -1,4 +1,4 @@
-// The wake rules, seen from outside: what reaches a pane (the fake herdr's log)
+// The wake rules, seen from outside: what reaches a pane (the fake daemon's log)
 // and what the server records (/api/events), for a given world and requests.
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -86,9 +86,8 @@ scenario("the desk is held while it works, then told everything in one bundle", 
   assert.ok(sent[0].includes(`request #${a.json.id}`) && sent[0].includes(`request #${b.json.id}`));
 });
 
-// Rust only (Node is frozen): the desk daemon reads a working claude as idle since its busy line lost
-// 'esc to interrupt', so the hooks' word holds the wake (#6111)
-test("a pane its hooks call mid-turn is held though the screen reads idle, and woken after Stop", { skip: !process.env.PILO_SERVER_CMD }, async () => {
+// the daemon read a working claude as idle once its busy line lost 'esc to interrupt': the hooks' word holds the wake (#6111)
+test("a pane its hooks call mid-turn is held though the screen reads idle, and woken after Stop", async () => {
   const srv = await startServer();
   try {
     const t = await team(srv);

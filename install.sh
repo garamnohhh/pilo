@@ -14,7 +14,6 @@ have node || die "Pilo needs Node.js 20 or newer — https://nodejs.org"
 have npm  || die "Pilo needs npm, which comes with Node.js."
 [ "$(node -e 'process.stdout.write(String(process.versions.node.split(".")[0]))')" -ge 20 ] \
   || die "Pilo needs Node.js 20 or newer. This one is $(node -v)."
-have herdr || echo "herdr is not installed yet — 'brew install herdr' before you start Pilo."
 
 npm install -g @garamnohhh/pilo
 

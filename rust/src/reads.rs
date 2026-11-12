@@ -106,7 +106,7 @@ async fn task(State(app): State<Shared>, Path(id): Path<i64>, Query(q): Q) -> Re
        t.blocked_question AS "blockedQuestion", t.answer, t.progress AS "progressNote",
        t.progress_at AS "progressAt",
        t.inbox_id AS "inboxId", t.parent_task_id AS "parentTaskId",
-       a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty, a.herdr_target AS "herdrTarget",
+       a.name AS agent, a.role AS "agentRole", a.cwd, a.specialty, a.pane AS "pane",
        f.name AS "fromAgent", i.user_request AS "userRequest", p.name AS project
      FROM tasks t
        LEFT JOIN agents a ON a.id = t.to_agent_id
@@ -118,7 +118,7 @@ async fn task(State(app): State<Shared>, Path(id): Path<i64>, Query(q): Q) -> Re
      WHERE task_id = $1 AND type = 'task_progress' ORDER BY created_at, id"#, &[&id], &[]).map_err(db_err)?;
     let children = rows(&db, r#"SELECT t.id, t.title, t.status, t.pm_result AS "pmResult", a.name AS agent
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id WHERE t.parent_task_id = $1 ORDER BY t.created_at"#, &[&id], &[]).map_err(db_err)?;
-    let target = row["herdrTarget"].as_str().unwrap_or("").to_string();
+    let target = row["pane"].as_str().unwrap_or("").to_string();
     if row["status"] == "queued" && (pane.is_empty() || target.is_empty() || pane == target) {
         let seen = one(&db, "SELECT 1 AS hit FROM events WHERE type = 'task_opened' AND task_id = $1 LIMIT 1", &[&id], &[]).map_err(db_err)?;
         if seen.is_none() {
@@ -266,7 +266,7 @@ async fn inbox(State(app): State<Shared>, Query(q): Q) -> Res {
                        a.limited_until AS until, count(*)::int AS n
                   FROM tasks t JOIN agents a ON a.id = t.to_agent_id
                  WHERE t.inbox_id = i.id AND t.status IN ('queued', 'running')
-                   AND (a.limited_until > now() OR a.herdr_target = ''
+                   AND (a.limited_until > now() OR a.pane = ''
                         OR EXISTS (SELECT 1 FROM agent_sessions s WHERE s.agent_id = a.id AND s.status = 'gone'))
                  GROUP BY a.name, a.limited_until
                  ORDER BY count(*) DESC, a.name LIMIT 1) h) AS held,

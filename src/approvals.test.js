@@ -354,7 +354,7 @@ test("hook: prints the decision, or nothing when Pilo is away", async () => {
     res.end(JSON.stringify(req.url === "/api/hooks/wait" ? (JSON.parse(body).kind === "question" ? { decision: "answer", answers: { Q: "A" } } : { decision: "deny" }) : { ok: true }));
   });
   await new Promise((r) => server.listen(sock, r));
-  const env = { PILO_SOCKET: sock, HERDR_PANE_ID: "w9:p1" };
+  const env = { PILO_SOCKET: sock, PILO_PANE_ID: "w9:p1" };
   const perm = await runHook(["PermissionRequest"], { tool_name: "Bash", tool_input: { command: "npm test" }, session_id: "s" }, env);
   assert.equal(JSON.parse(perm.out).hookSpecificOutput.decision.behavior, "deny");
   const ask = await runHook(["PreToolUse"], { tool_name: "AskUserQuestion", tool_input: { questions: [1] } }, env);

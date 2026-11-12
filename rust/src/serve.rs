@@ -29,7 +29,7 @@ pub struct App {
     pub db: Mutex<Connection>, pub port: u16, pub public: PathBuf, pub src: PathBuf,
     /// Pilo's home (~/.pilo, or $PILO_HOME/.pilo)
     pub home: PathBuf,
-    pub herdr: crate::herdr::Herdr,
+    pub desk: crate::desk::Desk,
     pub started: std::time::Instant,
     pub bell: crate::stream::Bell,
     pub engine: crate::engine::Engine,
@@ -115,7 +115,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo");
     let (tx, rx) = std::sync::mpsc::channel();
     let app = Arc::new(App { db: Mutex::new(conn), port, public: repo.join("public"), src: repo.join("src"),
-        herdr: crate::herdr::Herdr::new(home.clone()), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
+        desk: crate::desk::Desk::new(), home, started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
         engine: crate::engine::Engine::new(), approvals: crate::approvals::Approvals::new(), wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
     // the key the TUI and pibot answer approvals with, as the Node server makes it at start
     let _ = crate::approvals::tui_key(&app);

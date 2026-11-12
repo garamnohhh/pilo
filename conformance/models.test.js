@@ -60,8 +60,8 @@ scenario("a pin: the session leaves when idle, is started again on the pinned mo
   await srv.waitFor(() => srv.prompts(t.pane.pm).includes("/exit"), { what: "asked to leave" });
   srv.world({ agents: agents(true) });
   const start = await srv.waitFor(() => srv.calls().find((a) => a[0] === "agent" && a[1] === "start"), { what: "started again" });
-  assert.deepEqual(start.slice(0, 9), ["agent", "start", "pm1", "--kind", "claude", "--pane", "w1:p2", "--timeout", "60000"]);
-  assert.deepEqual(start.slice(9), ["--", "--resume", "s-w1-p2", "--model", "opus", "--effort", "high"]);
+  assert.deepEqual(start.slice(0, 5), ["agent", "start", "pm1", "claude", "w1:p2"]);
+  assert.deepEqual(start.slice(5), ["--resume", "s-w1-p2", "--model", "opus", "--effort", "high"]);
   srv.world({ agents: agents() });
   tapFile(srv, "s-w1-p2", { at: Date.now() + 1000, model: "claude-opus-5-5", effort: "high" });
   await srv.waitFor(async () => (await events(srv, "model_applied")).length, { what: "applied" });

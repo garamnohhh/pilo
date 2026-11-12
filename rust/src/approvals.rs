@@ -158,7 +158,7 @@ impl Approvals {
         true
     }
 
-    /// settle: herdr says the pane is idle or done; a card read off the screen goes only when the screen says so
+    /// settle: the daemon says the pane is idle or done; a card read off the screen goes only when the screen says so
     pub fn settle(&self, pane: &str, status: &str) -> bool {
         let mut all = self.notices.lock().unwrap();
         if all.get(pane).map(|n| n["screen"] == true).unwrap_or(false) { return false; }
@@ -246,7 +246,7 @@ pub fn agent_for_pane(app: &Shared, pane: &str) -> Option<Value> {
     one(&db, r#"SELECT a.id, a.name, a.runtime,
        (SELECT id FROM tasks WHERE to_agent_id = a.id AND status IN ('running', 'queued') ORDER BY status = 'running' DESC, updated_at DESC LIMIT 1) AS "taskId",
        (SELECT title FROM tasks WHERE to_agent_id = a.id AND status IN ('running', 'queued') ORDER BY status = 'running' DESC, updated_at DESC LIMIT 1) AS "taskTitle"
-     FROM agents a WHERE a.herdr_target = $1 AND a.archived_at IS NULL ORDER BY a.id LIMIT 1"#, &[&pane], &[]).ok().flatten()
+     FROM agents a WHERE a.pane = $1 AND a.archived_at IS NULL ORDER BY a.id LIMIT 1"#, &[&pane], &[]).ok().flatten()
 }
 
 pub fn routes(r: Router<Shared>) -> Router<Shared> {
@@ -310,7 +310,7 @@ async fn hook_wait(State(app): State<Shared>, raw: String) -> Response {
 async fn hook_notify(State(app): State<Shared>, raw: String) -> Response {
     let b = match body(&raw) { Ok(b) => b, Err(e) => return e };
     let pane = s(&b["pane"]);
-    crate::herdr::hook_said(&pane, b["type"].as_str().unwrap_or(""));
+    crate::desk::hook_said(&pane, b["type"].as_str().unwrap_or(""));
     let agent = agent_for_pane(&app, &pane);
     if app.approvals.notify(&b, agent.as_ref()) { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
     let Some(agent) = agent else { return (StatusCode::CREATED, Json(json!({ "ok": true }))).into_response() };
@@ -331,7 +331,7 @@ pub fn read_menu_soon(app: Shared, pane: String) {
         std::thread::sleep(Duration::from_millis(250));
         for again in [true, false] {
             if app.approvals.notice_for(&pane).is_none() { return; }
-            let screen = app.herdr.read_pane(&pane);
+            let screen = app.desk.read_pane(&pane);
             let menu = crate::panemenu::parse_menu(&screen);
             if menu.is_some() || !again {
                 app.approvals.attach_menu(&pane, menu, &screen);
@@ -409,7 +409,7 @@ async fn check(State(app): State<Shared>, raw: String) -> Response {
 async fn choose(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> Response {
     let b = match body(&raw) { Ok(b) => b, Err(e) => return e };
     if !key_ok(&app, &b["key"]) { return fail(StatusCode::FORBIDDEN, "this device is not paired for approvals"); }
-    let agent = { let db = app.db.lock().unwrap(); one(&db, "SELECT id, name, herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err) };
+    let agent = { let db = app.db.lock().unwrap(); one(&db, "SELECT id, name, pane AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err) };
     let agent = match agent { Ok(Some(a)) if !s(&a["target"]).is_empty() => a, Ok(_) => return fail(StatusCode::NOT_FOUND, "no pane bound to that agent"), Err(e) => return e };
     let target = s(&agent["target"]);
     if let Some(r) = app.approvals.notice_for(&target).and_then(|n| n["reason"].as_str().map(String::from)).filter(|r| pane_only(r)) {
@@ -417,7 +417,7 @@ async fn choose(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     }
     let app2 = app.clone();
     let t2 = target.clone();
-    let menu = tokio::task::spawn_blocking(move || crate::panemenu::parse_menu(&app2.herdr.read_pane(&t2))).await.ok().flatten();
+    let menu = tokio::task::spawn_blocking(move || crate::panemenu::parse_menu(&app2.desk.read_pane(&t2))).await.ok().flatten();
     if menu.as_ref().map(|m| m["fingerprint"] != b["fingerprint"]).unwrap_or(true) {
         app.approvals.attach_menu(&target, menu, "");
         let mut r = fail(StatusCode::CONFLICT, "the screen changed — look again");
@@ -431,10 +431,10 @@ async fn choose(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     let app3 = app.clone();
     let (t3, fp) = (target.clone(), menu["fingerprint"].clone());
     let _ = tokio::task::spawn_blocking(move || {
-        let _ = app3.herdr.send_keys(&t3, &[&n.to_string()]);
+        let _ = app3.desk.send_keys(&t3, &[&n.to_string()]);
         std::thread::sleep(Duration::from_millis(400));
         // a menu that only moved its pointer to the number takes Enter as well
-        if crate::panemenu::parse_menu(&app3.herdr.read_pane(&t3)).map(|m| m["fingerprint"] == fp).unwrap_or(false) { let _ = app3.herdr.send_keys(&t3, &["Enter"]); }
+        if crate::panemenu::parse_menu(&app3.desk.read_pane(&t3)).map(|m| m["fingerprint"] == fp).unwrap_or(false) { let _ = app3.desk.send_keys(&t3, &["Enter"]); }
     }).await;
     let label = s(&option["label"]);
     { let db = app.db.lock().unwrap(); let _ = log_event(&db, "pane_choice", &format!("{}: chose {n}. {label}", s(&agent["name"])), agent["id"].as_i64(), None, None,

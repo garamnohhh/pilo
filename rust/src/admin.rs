@@ -74,7 +74,7 @@ fn settle_project(db: &Connection, role: &str, parent: Option<i64>, project: Opt
 /// detectSession: one session in the folder binds; several of one kind still say the runtime
 fn detect(app: &Shared, cwd: &str, runtime: &str) -> (String, String, Vec<Value>) {
     if cwd.is_empty() { return (runtime.to_string(), String::new(), vec![]); }
-    let found = app.herdr.candidates(cwd, runtime);
+    let found = app.desk.candidates(cwd, runtime);
     if found.len() == 1 { return (s(&found[0]["runtime"]), s(&found[0]["target"]), found); }
     let mut kinds: Vec<String> = found.iter().map(|c| s(&c["runtime"])).filter(|k| !k.is_empty()).collect();
     kinds.sort();
@@ -135,11 +135,11 @@ pub fn wake_failed(app: &Shared, db: &Connection, agent: &Value, code: &str, tas
     let prior = one(db, "SELECT count(*) AS n FROM events WHERE type = 'wake_failed' AND agent_id = $1 AND created_at > now() - interval '1 day'", &[&aid], &[])
         .map_err(db_err)?.and_then(|r| r["n"].as_i64()).unwrap_or(0);
     let hint = match code {
-        "SESSION_NOT_FOUND" => "rebind the herdr session",
+        "SESSION_NOT_FOUND" => "rebind the agent's session",
         "PANE_IN_DIALOG" => "the pane has a dialog or settings screen open (/permissions, hooks review): close it in the pane and the wake retries",
-        _ => "check the herdr session",
+        _ => "check the agent's session",
     };
-    let payload = json!({ "name": agent["name"], "code": code, "attempts": prior + 1, "runtime": s(&agent["runtime"]), "target": s(&agent["herdr_target"]), "hint": hint });
+    let payload = json!({ "name": agent["name"], "code": code, "attempts": prior + 1, "runtime": s(&agent["runtime"]), "target": s(&agent["pane"]), "hint": hint });
     let run_log = json!([{ "t": "00:00", "text": format!("wake {}", s(&agent["name"])) }, { "t": "00:00", "text": code }]);
     exec(db, "INSERT INTO events (type, title, agent_id, task_id, inbox_id, payload, run_log, created_at) VALUES ('wake_failed', $1, $2, $3, $4, $5, $6, now())",
         &[&t("event.wakeFailed", &[("code", code.to_string())]), &aid, &task, &inbox, &payload.to_string(), &run_log.to_string()]).map_err(db_err)?;
@@ -155,11 +155,11 @@ pub fn wake_failed(app: &Shared, db: &Connection, agent: &Value, code: &str, tas
 /// applyRules: the file written, then the session told to read it again
 fn apply_rules(app: &Shared, db: &Connection, id: i64) -> R<Value> {
     let written = write_rules(app, db, id)?;
-    let agent = one(db, "SELECT id, name, herdr_target, runtime FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err)?;
+    let agent = one(db, "SELECT id, name, pane, runtime FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err)?;
     let (mut notified, mut reason) = (false, String::new());
-    match agent.as_ref().filter(|a| !s(&a["herdr_target"]).is_empty()) {
+    match agent.as_ref().filter(|a| !s(&a["pane"]).is_empty()) {
         None => reason = "no session bound, so nothing was sent".into(),
-        Some(a) => match app.herdr.prompt(&s(&a["herdr_target"]), &t("wake.rules", &[("file", s(&written["file"]))]), false) {
+        Some(a) => match app.desk.prompt(&s(&a["pane"]), &t("wake.rules", &[("file", s(&written["file"]))]), false) {
             Ok(()) => notified = true,
             Err(e) => { reason = e.clone(); wake_failed(app, db, a, &e, None, None)?; }
         },
@@ -203,7 +203,7 @@ async fn create_agent(State(app): State<Shared>, raw: String) -> W {
     let (runtime, target, candidates) = detect(&app, &s(&b["cwd"]), &s(&b["runtime"]));
     let name = s(&b["name"]);
     let reviewer = settle_reviewer(&role, &b["reviewer"], false)?;
-    exec(&db, "INSERT INTO agents (name, role, parent_agent_id, project_id, runtime, herdr_target, runtime_detected_at,
+    exec(&db, "INSERT INTO agents (name, role, parent_agent_id, project_id, runtime, pane, runtime_detected_at,
        model, cwd, aliases, specialty, note, reviewer, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6 = '' THEN NULL ELSE now() END, $7, $8, $9, $10, $11, $12, now(), now())",
         &[&name, &role, &parent, &project, &runtime, &target, &s(&b["model"]), &s(&b["cwd"]), &s(&b["aliases"]), &s(&b["specialty"]), &s(&b["note"]), &reviewer])
@@ -231,7 +231,7 @@ async fn update_agent(State(app): State<Shared>, Path(id): Path<i64>, raw: Strin
     let project = settle_project(&db, &role, parent, project_in, Some(id))?;
     let cwd = str_or(&b["cwd"], &cur["cwd"]);
     let mut runtime = str_or(&b["runtime"], &cur["runtime"]);
-    let mut target = s(&cur["herdr_target"]);
+    let mut target = s(&cur["pane"]);
     if cwd != s(&cur["cwd"]) || target.is_empty() {
         let (r, tg, _) = detect(&app, &cwd, &runtime);
         if !r.is_empty() { runtime = r; }
@@ -240,7 +240,7 @@ async fn update_agent(State(app): State<Shared>, Path(id): Path<i64>, raw: Strin
     let name = str_or(&b["name"], &cur["name"]);
     let reviewer = settle_reviewer(&role, &b["reviewer"], cur["reviewer"] == true)?;
     exec(&db, "UPDATE agents SET name = $2, role = $3, parent_agent_id = $4, project_id = $5, runtime = $6,
-       herdr_target = $7, model = $8, cwd = $9, aliases = $10, specialty = $11, note = $12, reviewer = $13, updated_at = now() WHERE id = $1",
+       pane = $7, model = $8, cwd = $9, aliases = $10, specialty = $11, note = $12, reviewer = $13, updated_at = now() WHERE id = $1",
         &[&id, &name, &role, &parent, &project, &runtime, &target, &str_or(&b["model"], &cur["model"]), &cwd, &str_or(&b["aliases"], &cur["aliases"]),
           &str_or(&b["specialty"], &cur["specialty"]), &str_or(&b["note"], &cur["note"]), &reviewer]).map_err(db_err)?;
     if role == "pm" {
@@ -271,15 +271,15 @@ async fn rebind(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     let db = app.db.lock().unwrap();
     let a = one(&db, "SELECT id, name, cwd, runtime FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err)?.ok_or_else(|| bad(404, "agent not found"))?;
     if !target.is_empty() {
-        let picked = app.herdr.candidates(&s(&a["cwd"]), "").into_iter().find(|c| c["target"] == target.as_str());
+        let picked = app.desk.candidates(&s(&a["cwd"]), "").into_iter().find(|c| c["target"] == target.as_str());
         let runtime = picked.map(|p| s(&p["runtime"])).filter(|r| !r.is_empty()).unwrap_or_else(|| s(&a["runtime"]));
-        exec(&db, "UPDATE agents SET herdr_target = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1", &[&id, &target, &runtime]).map_err(db_err)?;
+        exec(&db, "UPDATE agents SET pane = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1", &[&id, &target, &runtime]).map_err(db_err)?;
         return created(json!({ "id": id, "target": target, "runtime": runtime, "candidates": [] }));
     }
-    let found = app.herdr.candidates(&s(&a["cwd"]), &s(&a["runtime"]));
+    let found = app.desk.candidates(&s(&a["cwd"]), &s(&a["runtime"]));
     if found.len() != 1 { return created(json!({ "id": id, "target": "", "candidates": found })); }
     let (tg, rt) = (s(&found[0]["target"]), s(&found[0]["runtime"]));
-    exec(&db, "UPDATE agents SET herdr_target = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1", &[&id, &tg, &rt]).map_err(db_err)?;
+    exec(&db, "UPDATE agents SET pane = $2, runtime = $3, runtime_detected_at = now(), updated_at = now() WHERE id = $1", &[&id, &tg, &rt]).map_err(db_err)?;
     log_event(&db, "session_rebound", &t("event.rebound", &[("agent", s(&a["name"]))]), Some(id), None, None, &json!({ "target": tg })).map_err(db_err)?;
     created(json!({ "id": id, "target": tg, "candidates": found }))
 }
@@ -296,11 +296,11 @@ async fn dismiss(State(app): State<Shared>, Path(id): Path<i64>) -> W {
 async fn wake(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> W {
     let b = body(&raw)?;
     let db = app.db.lock().unwrap();
-    let a = one(&db, "SELECT id, name, herdr_target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err)?.ok_or_else(|| bad(404, "agent not found"))?;
+    let a = one(&db, "SELECT id, name, pane FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err)?.ok_or_else(|| bad(404, "agent not found"))?;
     let message = { let m = s(&b["message"]); if m.is_empty() { t("wake.check", &[("agent", s(&a["name"]))]) } else { m } };
-    match app.herdr.prompt(&s(&a["herdr_target"]), &message, false) {
+    match app.desk.prompt(&s(&a["pane"]), &message, false) {
         Ok(()) => {
-            log_event(&db, "wake_sent", &t("event.woken", &[("agent", s(&a["name"]))]), Some(id), None, None, &json!({ "target": a["herdr_target"] })).map_err(db_err)?;
+            log_event(&db, "wake_sent", &t("event.woken", &[("agent", s(&a["name"]))]), Some(id), None, None, &json!({ "target": a["pane"] })).map_err(db_err)?;
             created(json!({ "ok": true }))
         }
         Err(e) => { wake_failed(&app, &db, &a, &e, None, None)?; Err(bad(502, &e)) }

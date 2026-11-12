@@ -96,7 +96,7 @@ pub fn run(argv: &[String]) -> i32 {
     std::env::set_var("PILO_HOME", &home);
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
     let app: Shared = Arc::new(crate::serve::App { db: Mutex::new(conn), port: 0, public: repo.join("public"), src: repo.join("src"), home: home.join(".pilo"),
-        herdr: crate::herdr::Herdr::new(home.join(".pilo")), started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
+        desk: crate::desk::Desk::new(), started: std::time::Instant::now(), bell: crate::stream::Bell::new(),
         engine: crate::engine::Engine::new(), approvals: crate::approvals::Approvals::new(), wake_tx: Mutex::new(tx), wake_rx: Mutex::new(rx) });
 
     let mut windows: Vec<Window> = Vec::new();
@@ -104,7 +104,7 @@ pub fn run(argv: &[String]) -> i32 {
     let mut next_tick = since;
     let tick = |app: &Shared, at: i64, dialog: &std::collections::HashSet<i64>| -> Vec<(String, String)> {
         // every bound agent's session idle
-        let list: Vec<Value> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT id, herdr_target AS t, runtime, cwd FROM agents WHERE archived_at IS NULL AND herdr_target <> ''", &[], &[]).unwrap_or_default() }
+        let list: Vec<Value> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT id, pane AS t, runtime, cwd FROM agents WHERE archived_at IS NULL AND pane <> ''", &[], &[]).unwrap_or_default() }
             .into_iter().map(|a| json!({ "target": a["t"], "runtime": a["runtime"], "status": if dialog.contains(&a["id"].as_i64().unwrap_or(0)) { "blocked" } else { "idle" }, "cwd": a["cwd"], "title": "", "name": "", "session": "", "seq": 0, "terminalId": "" })).collect();
         *DIALOG.lock().unwrap() = list.iter().filter(|x| x["status"] == "blocked").map(|x| s(&x["target"])).collect();
         *SESSIONS.lock().unwrap() = Some(list);
@@ -120,7 +120,7 @@ pub fn run(argv: &[String]) -> i32 {
         { let db = app.db.lock().unwrap(); let _ = db.execute_batch("ROLLBACK"); }
         let mut out = Vec::new();
         // panes moved over the weeks (desk:4 was w7:p5): who was woken is the agent, not its pane
-        let ids: HashMap<String, String> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT herdr_target AS t, id FROM agents", &[], &[]).unwrap_or_default() }
+        let ids: HashMap<String, String> = { let db = app.db.lock().unwrap(); crate::serve::rows(&db, "SELECT pane AS t, id FROM agents", &[], &[]).unwrap_or_default() }
             .into_iter().map(|a| (s(&a["t"]), a["id"].to_string())).collect();
         for r in rec { if r.get(1).map(String::as_str) == Some("prompt") { let who = ids.get(&r[2]).cloned().unwrap_or_else(|| r[2].clone()); for m in items(r.get(3).map(String::as_str).unwrap_or("")) { out.push(key(&who, &m)); } } }
         out

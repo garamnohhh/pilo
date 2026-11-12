@@ -7,7 +7,7 @@ mod describe;
 mod engine;
 mod engine2;
 mod files;
-mod herdr;
+mod desk;
 mod panemenu;
 mod hook;
 mod misc;

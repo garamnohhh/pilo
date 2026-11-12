@@ -168,8 +168,8 @@ pub fn pump_quota(app: &Shared) {
         p.asked_at = 0;
         let misses = p.misses + 1;
         drop(g);
-        let screen = app.herdr.read_pane(&pane);
-        let _ = app.herdr.send_keys(&pane, &["esc"]);
+        let screen = app.desk.read_pane(&pane);
+        let _ = app.desk.send_keys(&pane, &["esc"]);
         let fresh = crate::quota::claude_age_min() < minutes;
         probe_outcome(app, fresh, probe_reason(&screen), &pane, misses);
         let mut g = PROBE.lock().unwrap();
@@ -195,8 +195,8 @@ pub fn pump_quota(app: &Shared) {
     if crate::quota::claude_age_min() < minutes { p.misses = 0; p.miss_at = 0; return; }
     if now_ms() - p.miss_at < probe_backoff_ms(p.misses) { return; }
     drop(g);
-    let pane = q(app, "SELECT a.herdr_target AS target FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
-     WHERE a.role = 'system' AND a.runtime = 'claude' AND a.archived_at IS NULL AND a.herdr_target <> '' AND coalesce(s.status, 'idle') <> 'working' ORDER BY a.id LIMIT 1", &[])
+    let pane = q(app, "SELECT a.pane AS target FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
+     WHERE a.role = 'system' AND a.runtime = 'claude' AND a.archived_at IS NULL AND a.pane <> '' AND coalesce(s.status, 'idle') <> 'working' ORDER BY a.id LIMIT 1", &[])
         .first().map(|r| s(&r["target"])).unwrap_or_default();
     if pane.is_empty() { return; }
     let retry = std::env::var("PILO_PROBE_RETRY_MS").ok().and_then(|v| v.parse::<i64>().ok()).unwrap_or(600_000);
@@ -204,7 +204,7 @@ pub fn pump_quota(app: &Shared) {
     let p = g.as_mut().unwrap();
     if p.lost_pane == pane && now_ms() - p.lost_at < retry { return; }
     drop(g);
-    match app.herdr.prompt(&pane, "/usage", app.approvals.busy(&pane)) {
+    match app.desk.prompt(&pane, "/usage", app.approvals.busy(&pane)) {
         Ok(()) => { let mut g = PROBE.lock().unwrap(); let p = g.as_mut().unwrap(); p.pane = pane; p.asked_at = now_ms(); p.minutes = minutes; p.lost_pane.clear(); p.lost_at = 0; }
         Err(e) => {
             let first = { let g = PROBE.lock().unwrap(); g.as_ref().unwrap().lost_pane != pane };
@@ -289,12 +289,12 @@ static BLOCKS_AT: Mutex<i64> = Mutex::new(0);
 /// pumpBlocks: every 15 s, each session's own record: a lost sign-in, an API error, or no answer to a wake
 pub fn pump_blocks(app: &Shared) {
     { let mut at = BLOCKS_AT.lock().unwrap(); if now_ms() - *at < 15000 { return; } *at = now_ms(); }
-    let rs = q(app, "SELECT a.id, a.name, a.runtime, a.cwd, a.herdr_target AS target, s.session_id AS session,
+    let rs = q(app, "SELECT a.id, a.name, a.runtime, a.cwd, a.pane AS target, s.session_id AS session,
        (SELECT max(e.created_at) FROM events e WHERE e.agent_id = a.id AND e.type = 'wake_sent' AND e.created_at > now() - interval '2 hours') AS woke,
        (EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running'))
          OR (a.role = 'pilo' AND EXISTS (SELECT 1 FROM inbox i WHERE i.status IN ('queued', 'dispatched')))) AS busy
-     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.herdr_target
-     WHERE a.archived_at IS NULL AND a.role <> 'system' AND a.herdr_target <> '' AND a.runtime IN ('claude', 'codex')", &[]);
+     FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id AND s.target = a.pane
+     WHERE a.archived_at IS NULL AND a.role <> 'system' AND a.pane <> '' AND a.runtime IN ('claude', 'codex')", &[]);
     let now = now_ms();
     // read every record first: a Claude sign-in that came back anywhere clears every Claude login block older than it
     let mut read: HashMap<i64, (PathBuf, Option<(String, String, i64)>, i64)> = HashMap::new();
@@ -349,7 +349,7 @@ pub fn pump_notice(app: &Shared) {
     let row = { let db = app.db.lock().unwrap(); one(&db, &format!("SELECT
        (SELECT group_concat(x, ',') FROM (SELECT agent_id || ':' || status AS x FROM agent_sessions ORDER BY agent_id)) AS sessions,
        (SELECT group_concat(x, ',') FROM (SELECT a.id AS x FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id
-         WHERE a.archived_at IS NULL AND a.herdr_target <> '' AND coalesce(s.status, '') <> 'working'
+         WHERE a.archived_at IS NULL AND a.pane <> '' AND coalesce(s.status, '') <> 'working'
            AND NOT EXISTS (SELECT 1 FROM tasks t WHERE t.to_agent_id = a.id AND t.status = 'blocked')
            AND (SELECT max(GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at)) FROM tasks t
                  WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running') AND NOT {}) < now() - interval '10 minutes' ORDER BY a.id)) AS stalled",

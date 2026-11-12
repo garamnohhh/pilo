@@ -45,7 +45,8 @@ test("quota, usage and models: both servers read the same files the same way", a
     // what is the server's own (its home's path, the moment it answered) is set aside
     const own = (srv, v) => JSON.parse(JSON.stringify(v).split(srv.home).join("<home>")
       .replace(/"at":"[^"]+"/g, '"at":"<now>"'));
-    for (const path of ["/api/quota", "/api/usage", "/api/models"]) {
+    // /api/models is left out: what it says of sessions comes from the daemon, which the Node server cannot ask
+    for (const path of ["/api/quota", "/api/usage"]) {
       const [x, y] = [await a.api("GET", path), await b.api("GET", path)];
       assert.equal(y.status, x.status, path);
       assert.deepEqual(own(b, y.json), own(a, x.json), path);

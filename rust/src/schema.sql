@@ -25,7 +25,7 @@ CREATE TABLE agents (
   parent_agent_id INTEGER REFERENCES agents(id) ON DELETE SET NULL,
   project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
   runtime TEXT NOT NULL DEFAULT '' CHECK (runtime IN ('', 'codex', 'claude')),
-  herdr_target TEXT NOT NULL DEFAULT '',
+  pane TEXT NOT NULL DEFAULT '',
   runtime_detected_at INTEGER,
   model TEXT NOT NULL DEFAULT '',
   cwd TEXT NOT NULL DEFAULT '',

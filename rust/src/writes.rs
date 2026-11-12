@@ -55,14 +55,10 @@ pub fn summarize(text: &str, limit: usize) -> String {
     if js_len(&flat) > limit { format!("{}…", js_slice(&flat, limit)) } else { flat }
 }
 
-/// notifyRule: a desktop notice when the user's settings ask for one, through herdr
-pub fn notify_rule(app: &Shared, db: &Connection, when: &str, title: &str, text: &str) {
-    let rules = one(db, "SELECT value FROM settings WHERE key = 'notifications'", &[], &[("value", K::Json)]).ok().flatten()
-        .map(|r| r["value"].clone()).unwrap_or(json!([]));
-    let Some(rule) = rules.as_array().and_then(|r| r.iter().find(|x| x["when"] == when)) else { return };
-    if rule["on"] != true || rule["channel"] != "desktop" { return; }
-    app.herdr.notify(title, text);
-}
+/// notifyRule: a desktop notice when the user's settings ask for one. pibot shows pilo's notices; the daemon has no
+/// notice of its own, so this one is dropped as the stand-in dropped it
+// ponytail: kept as the one place a desktop channel would go
+pub fn notify_rule(_app: &Shared, _db: &Connection, _when: &str, _title: &str, _text: &str) {}
 
 /// missingTask, for writes
 fn missing(db: &Connection, id: i64) -> Response {

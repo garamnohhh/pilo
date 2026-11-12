@@ -29,7 +29,7 @@ test("the front door forwards nothing it was not asked to", () => {
 // counts only the assignee's own pane.
 test("a task read names the pane it came from, and only the assignee's pane opens it", async () => {
   const cli = readFileSync(new URL("./cli.js", import.meta.url), "utf8");
-  assert.match(cli, /HERDR_PANE_ID/);
+  assert.match(cli, /PILO_PANE_ID/);
   assert.match(cli, /_pane=/);
   const api = readFileSync(new URL("./api.js", import.meta.url), "utf8");
   const fn = api.slice(api.indexOf("async function noteOpened"), api.indexOf("async function noteOpened") + 600);

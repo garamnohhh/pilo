@@ -163,7 +163,7 @@ async fn tap(State(app): State<Shared>, raw: String) -> W {
 
 async fn restart(State(app): State<Shared>) -> W {
     let db = app.db.lock().unwrap();
-    let agents = rows(&db, "SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pin AS pin, a.model_pending AS pending, s.status AS session
+    let agents = rows(&db, "SELECT a.id, a.name, a.role, a.runtime, a.pane AS target, a.model_pin AS pin, a.model_pending AS pending, s.status AS session
      FROM agents a LEFT JOIN agent_sessions s ON s.agent_id = a.id WHERE a.archived_at IS NULL AND a.role <> 'system' ORDER BY a.role = 'pilo', a.name", &[], &[("pin", K::Json), ("pending", K::Json)]).unwrap_or_default();
     let at = now_ms();
     let mut out = Vec::new();
@@ -203,7 +203,7 @@ async fn cancel(State(app): State<Shared>, Path(id): Path<i64>) -> W {
 async fn pin(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> W {
     let b = body(&raw)?;
     let db = app.db.lock().unwrap();
-    let a = one(&db, "SELECT id, name, role, runtime, herdr_target AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).ok().flatten().ok_or_else(|| bad(404, "agent not found"))?;
+    let a = one(&db, "SELECT id, name, role, runtime, pane AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).ok().flatten().ok_or_else(|| bad(404, "agent not found"))?;
     if a["role"] == "system" { return Err(bad(400, "a system agent is not pinned")); }
     let name = s(&a["name"]);
     if !["claude", "codex"].contains(&a["runtime"].as_str().unwrap_or("")) || s(&a["target"]).is_empty() { return Err(bad(400, &format!("{name} has no Claude or Codex session to start again"))); }
@@ -308,7 +308,7 @@ fn step_pin(app: &Shared, a: &Value, p: &Value, live: &[Value]) -> bool {
     let step = s(&p["step"]);
     if step.is_empty() {
         if restart {
-            let gone = match &session { None => "its session is gone", Some(x) if s(&x["session"]).is_empty() => if a["runtime"] == "codex" { "its Codex session could not be told apart from the transcripts" } else { "herdr does not know its session id" }, _ => "" };
+            let gone = match &session { None => "its session is gone", Some(x) if s(&x["session"]).is_empty() => if a["runtime"] == "codex" { "its Codex session could not be told apart from the transcripts" } else { "pilo-desk does not know its session id" }, _ => "" };
             if !gone.is_empty() { save(app, id, None); let db = app.db.lock().unwrap(); note_restart(&db, id, "skipped", gone); return false; }
             if now_ms() - p["at"].as_i64().unwrap_or(0) > env_ms("PILO_RESTART_WAIT_MS", 3_600_000) { save(app, id, None); let db = app.db.lock().unwrap(); note_restart(&db, id, "skipped", "still working after an hour"); return false; }
         }
@@ -317,7 +317,7 @@ fn step_pin(app: &Shared, a: &Value, p: &Value, live: &[Value]) -> bool {
             if restart { let db = app.db.lock().unwrap(); note_restart(&db, id, "waiting", "working — restarts once idle"); }
             return false;
         }
-        if let Err(e) = app.herdr.prompt(&target, if a["runtime"] == "codex" { "/quit" } else { "/exit" }, app.approvals.busy(&target)) { fail("could not ask the session to leave", json!({ "error": e })); return false; }
+        if let Err(e) = app.desk.prompt(&target, if a["runtime"] == "codex" { "/quit" } else { "/exit" }, app.approvals.busy(&target)) { fail("could not ask the session to leave", json!({ "error": e })); return false; }
         let mut next = p.clone();
         next["step"] = json!("leaving"); next["session"] = session.as_ref().unwrap()["session"].clone();
         next["name"] = json!(session.as_ref().map(|x| s(&x["name"])).filter(|n| !n.is_empty()).unwrap_or(name.clone())); next["stepAt"] = json!(now_ms());
@@ -332,7 +332,7 @@ fn step_pin(app: &Shared, a: &Value, p: &Value, live: &[Value]) -> bool {
         let (h, pn, tg, sess, pv) = (app.clone(), s(&p["name"]), target.clone(), s(&p["session"]), pin.clone());
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let start = |args: Vec<String>| h.herdr.start_agent(&pn, &kind, &tg, &args);
+            let start = |args: Vec<String>| h.desk.start_agent(&pn, &kind, &tg, &args);
             let out = match start(resume_args(&kind, &sess, &pv)) {
                 Ok(()) => json!({ "ok": true }),
                 Err(e) => { let back = start(resume_args(&kind, &sess, &Value::Null)).is_ok(); json!({ "ok": false, "error": e, "back": back }) }
@@ -357,7 +357,7 @@ fn step_pin(app: &Shared, a: &Value, p: &Value, live: &[Value]) -> bool {
     }
     if step == "checking" {
         let took = if restart { session.is_some() }
-            else if a["runtime"] == "codex" { session.is_some() && crate::models::codex_model_on_pane(&app.herdr.read_pane(&target)).as_deref() == pin["model"].as_str() }
+            else if a["runtime"] == "codex" { session.is_some() && crate::models::codex_model_on_pane(&app.desk.read_pane(&target)).as_deref() == pin["model"].as_str() }
             else {
                 let sid = session.as_ref().map(|x| s(&x["session"])).filter(|x| !x.is_empty()).unwrap_or_else(|| s(&p["session"]));
                 tap_reading(&sid).map(|seen| seen["at"].as_i64().unwrap_or(0) >= p["stepAt"].as_i64().unwrap_or(0) - 60000 && model_matches(&pin["model"], &seen["model"])
@@ -382,13 +382,13 @@ fn step_pin(app: &Shared, a: &Value, p: &Value, live: &[Value]) -> bool {
 
 /// pumpModels: one typed change or one restart step at a time; the desk restarts last
 pub fn pump(app: &Shared) {
-    let rs = { let db = app.db.lock().unwrap(); rows(&db, "SELECT a.id, a.name, a.role, a.runtime, a.herdr_target AS target, a.model_pending AS p,
+    let rs = { let db = app.db.lock().unwrap(); rows(&db, "SELECT a.id, a.name, a.role, a.runtime, a.pane AS target, a.model_pending AS p,
        (SELECT count(*) FROM tasks t WHERE t.to_agent_id = a.id AND t.status IN ('queued', 'running')) AS open
      FROM agents a WHERE a.archived_at IS NULL AND a.model_pending IS NOT NULL
        AND (a.runtime = 'claude' OR a.model_pending->>'kind' IN ('pin', 'restart')) ORDER BY a.role = 'pilo', a.name", &[], &[("p", K::Json)]).unwrap_or_default() };
     if rs.is_empty() { return; }
-    let live = app.herdr.fresh_sessions();
-    if !app.herdr.health.lock().unwrap().ok { return; }
+    let live = app.desk.fresh_sessions();
+    if !app.desk.health.lock().unwrap().ok { return; }
     let restarts: Vec<&Value> = rs.iter().filter(|a| a["p"]["kind"] == "restart").collect();
     let mut in_flight: Option<i64> = restarts.iter().find(|a| !a["p"]["step"].is_null()).and_then(|a| a["id"].as_i64());
     let others_left = restarts.iter().any(|a| a["role"] != "pilo");
@@ -410,9 +410,9 @@ pub fn pump(app: &Shared) {
             let typed = now_ms();
             let busy = app.approvals.busy(&target);
             let mut r = Ok(());
-            if let Some(m) = p["model"].as_str() { r = app.herdr.prompt(&target, &format!("/model {m}"), busy); }
+            if let Some(m) = p["model"].as_str() { r = app.desk.prompt(&target, &format!("/model {m}"), busy); }
             if r.is_ok() && p["model"].is_string() && p["effort"].is_string() { std::thread::sleep(Duration::from_millis(env_ms("PILO_MODEL_GAP_MS", 1500) as u64)); }
-            if r.is_ok() { if let Some(e) = p["effort"].as_str() { r = app.herdr.prompt(&target, &format!("/effort {e}"), busy); } }
+            if r.is_ok() { if let Some(e) = p["effort"].as_str() { r = app.desk.prompt(&target, &format!("/effort {e}"), busy); } }
             if let Err(e) = r { save(app, id, None); let mut pl = p.clone(); pl["error"] = json!(e); ev(app, "model_failed", &format!("{name}: could not type the model change"), id, pl); continue; }
             let mut next = p.clone(); next["typedAt"] = json!(typed); next["session"] = session.as_ref().unwrap()["session"].clone();
             save(app, id, Some(&next));
@@ -436,7 +436,7 @@ pub fn pump(app: &Shared) {
         let seen = tap_reading(&sid);
         let took = seen.as_ref().map(|x| x["at"].as_i64().unwrap_or(0) >= p["typedAt"].as_i64().unwrap_or(0) && model_matches(&p["model"], &x["model"])
             && (p["effort"].is_null() || x["effort"].is_null() || x["effort"] == p["effort"])).unwrap_or(false);
-        let said = !took && pane_confirms(&app.herdr.read_pane(&target), &p);
+        let said = !took && pane_confirms(&app.desk.read_pane(&target), &p);
         if took || said {
             save(app, id, None);
             let title = if took { let x = seen.as_ref().unwrap(); format!("{name}: now {}{}", s(&x["model"]), x["effort"].as_str().map(|e| format!(" · {e}")).unwrap_or_default()) }

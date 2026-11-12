@@ -50,7 +50,7 @@ scenario("a risky request is held with its risk said, and a tool call that moves
 const PROMPT = " Bash command\n Build the crate\n╌╌╌╌╌╌╌╌\n cargo build --release\n╌╌╌╌╌╌╌╌\n Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, and don't ask again for cargo build commands in /x\n   3. No\n\n Esc to cancel · Tab to amend";
 
 scenario("a prompt the pane shows: the card says what is asked, its choices named, and a choice is typed back", {}, async (srv) => {
-  // herdr reads a pane on its prompt as blocked
+  // the daemon reads a pane on its prompt as blocked
   const t = await team(srv, { screens: { "w1:p2": PROMPT }, status: { pm: "blocked" } });
   await srv.api("POST", "/api/hooks/notify", { pane: t.pane.pm, type: "tool", tool: "Bash", input: { command: "cargo build --release", description: "Build the crate" } });
   await srv.api("POST", "/api/hooks/notify", { pane: t.pane.pm, type: "permission_prompt", message: "Claude needs your permission to use Bash" });
