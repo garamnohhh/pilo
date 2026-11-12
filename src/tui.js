@@ -589,8 +589,8 @@ function setupScreen(setup, width) {
     rows.push("");
   }
   const steps = [
-    // herdr up with no agent pane wants a pane opened, not herdr started
-    [t("setup.herdr"), setup.herdr, t("setup.herdrOk", { count: setup.sessions }), t(setup.herdrUp ? "setup.panesHint" : "setup.herdrHint")],
+    // the daemon up with no agent session wants a session opened, not the daemon started
+    [t("setup.daemon"), setup.desk, t("setup.daemonOk", { count: setup.sessions }), t(setup.deskUp ? "setup.panesHint" : "setup.daemonHint")],
     [t("setup.postgres"), setup.postgres, t("setup.postgresOk"), "pilo start"],
     [t("setup.desk"), setup.piloAgents.length === 1, t("setup.deskOk"), t("setup.deskHow"), setup.url],
     [t("setup.pm"), setup.pmCount > 0, t("setup.pmOk"), t("setup.register")]
@@ -1060,9 +1060,9 @@ function render() {
   emit(pre + line(outWidth));
 
   const running = tree.pms.filter((p) => p.status === "running").length;
-  // green only with a session to work with; herdr up and empty is amber
-  const herdrDot = setup.herdr ? `${c.green}●` : setup.herdrUp ? `${c.amber}●` : `${c.faint}○`;
-  const statusLeft = `${herdrDot}${c.reset} ${c.muted}herdr${c.reset} ${c.faint}${setup.herdr ? `connected · ${setup.sessions} sessions` : setup.herdrUp ? "no agent panes" : "not running"}${c.reset}`;
+  // green only with a session to work with; the daemon up and empty is amber
+  const deskDot = setup.desk ? `${c.green}●` : setup.deskUp ? `${c.amber}●` : `${c.faint}○`;
+  const statusLeft = `${deskDot}${c.reset} ${c.muted}desk${c.reset} ${c.faint}${setup.desk ? `connected · ${setup.sessions} sessions` : setup.deskUp ? "no agent sessions" : "not running"}${c.reset}`;
   const statusMid = `${c.muted}pm${c.reset} ${c.fg}${overview.stats.pm}${c.reset} · ${c.muted}worker${c.reset} ${c.fg}${overview.stats.worker}${c.reset} · ${c.muted}running${c.reset} ${c.green}${running}${c.reset} · ${c.muted}failed${c.reset} ${c.red}${overview.stats.failed.total}${c.reset}${overview.stats.needsYou?.total ? ` · ${c.muted}needs you${c.reset} ${c.red}${overview.stats.needsYou.total}${c.reset}` : ""}`;
   const showTokens = settings.tokens?.showInTui !== false;
   const tokenPart = showTokens

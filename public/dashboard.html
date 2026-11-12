@@ -837,22 +837,22 @@ function railHtml() {
       </span>
       <span class="d-railtxt">${label}</span>
     </button>`;
-  }).join("") + herdrFootHtml();
+  }).join("") + deskFootHtml();
 }
 
-// herdr, from the wake service's own line ("herdr 19 sessions · 18/18 agents bound"):
+// pilo-desk, from the wake service's own line ("pilo-desk 19 sessions · 18/18 agents bound"):
 // every agent bound is fine, some unbound is a warning, no sessions at all is down.
 // The foot is as tall as the bars beside it, so the three rules line up. ⌘K stays
 // in the top bar and on the keyboard.
-function herdrFootHtml() {
+function deskFootHtml() {
   const wake = (state.data.system?.services || []).find((x) => x.name === "wake");
   const counts = /(\d+)\/(\d+) agents bound/.exec(wake?.detail || "");
   const tone = !wake ? DIM : wake.state === "running" ? OK : wake.state === "degraded" ? WARN : ERR;
   const short = counts ? `${counts[1]}/${counts[2]}` : "-";
-  const tip = wake?.detail || "herdr - no reading yet";
+  const tip = wake?.detail || "pilo-desk - no reading yet";
   return `<button class="d-plain d-railfoot" data-tab="system" data-tip="${esc(tip)}" data-tone="${tone}" aria-label="${esc(tip)}">
       <span class="d-railstate"><span class="d-dot" style="background:${tone}"></span><span class="d-m">${esc(short)}</span></span>
-      <span class="d-railtxt">herdr</span>
+      <span class="d-railtxt">desk</span>
     </button>`;
 }
 
@@ -888,7 +888,7 @@ function topstateHtml() {
     ${st.needsYou?.total ? `<button class="d-plain d-m d-mneeds" style="font-size:12px;color:var(--err)" data-act="needs-you">${st.needsYou.total} ${esc(T("desk.mobile.needs"))}</button>` : ""}
     ${usageHtml()}
     <button class="d-plain d-m d-top-wide" style="font-size:11px;color:var(--text-3);border:var(--bw) solid var(--line);padding:4px 8px" data-act="open-palette">⌘K</button>`;
-  // The old sidebar's herdr card has no home in the rail; the same facts are on
+  // The old sidebar's sessions card has no home in the rail; the same facts are on
   // the System screen, and the topbar already says whether the server is up.
 }
 
@@ -1389,7 +1389,7 @@ function syncAgentTip() {
   tree.addEventListener("scroll", () => { if (tipAt) { tipFor = under(); syncAgentTip(); } }, true);
 }
 
-// The herdr line at the foot of the rail, in the same drawn tip. The rail is too
+// The sessions line at the foot of the rail, in the same drawn tip. The rail is too
 // narrow to hold it, so it opens above the pointer and runs right, kept on screen.
 let railTipAt = null;
 function syncRailTip() {
@@ -1768,7 +1768,7 @@ const agentNote = (a) => T(`state.${agentState(a)}`);
 const MARK = { wakeWaiting: "◷", holding: "◇", stalled: "◌", limited: "‖", failed: "✕", gaveUp: "!", login: "⊘", apierror: "✕", noanswer: "!", unbound: "○", blocked: "◆" };
 function agentMark(a, colour) {
   const key = agentState(a);
-  // "running" is held work or a pane herdr says is working - the TUI spins for
+  // "running" is held work or a pane the daemon says is working - the TUI spins for
   // both, and a still dot under the word "running" read as a contradiction
   if (key === "running") return `<span class="d-spin" style="color:${colour}" aria-hidden="true"></span>`;
   if (MARK[key]) return `<span class="d-spin-still" style="color:${colour}" aria-hidden="true">${MARK[key]}</span>`;
@@ -1866,7 +1866,7 @@ function approvalsHtml() {
   };
   // asked in the pane only: what it is about, and why it cannot be answered here
   const notice = (n) => `<div>${forHtml(n)}<span class="d-lbl d-appr-who">${esc(T(`appr.notice.${["permission_prompt", "elicitation_dialog", "returned"].includes(n.type) ? n.type : "other"}`))}${n.tool ? ` · ${esc(n.tool)}` : ""} · ${esc(ago(n.at))}</span><div class="d-appr-item">
-    ${n.plain?.line && n.menu ? `<div style="font-size:var(--fs-body);color:var(--text)">${esc(n.plain.line)}</div>` : n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : `<div style="font-size:var(--fs-small);color:var(--warn, var(--text-2))">${esc(T("appr.unread"))}</div>`}
+    ${n.plain?.line && n.menu ? `<div style="font-size:var(--fs-body);color:var(--text)">${esc(n.plain.line)}</div>${plainMore(n.plain)}` : n.tool ? aboutHtml(n) : n.message ? `<div style="font-size:var(--fs-small);color:var(--text-3)">${esc(n.message)}</div>` : `<div style="font-size:var(--fs-small);color:var(--warn, var(--text-2))">${esc(T("appr.unread"))}</div>`}
     ${(n.reason || !n.menu) && !(n.plain?.line && n.menu) ? `<div style="font-size:var(--fs-small);color:${n.reason ? "var(--err)" : "var(--text-3)"}">${esc(n.reason ? (PANE_ONLY.has(n.reason) ? T("appr.paneOnly", { why: n.reason }) : aboutWords(n.about).danger || T("appr.risky", { why: n.reason })) : T("appr.inPane"))}</div>` : ""}
     ${menuHtml(n)}</div></div>`;
   // The pane's own numbered choice as buttons, when it could be read and the
@@ -1898,7 +1898,7 @@ function markAsking(busy) {
     if (!x || typeof x !== "object" || seen.has(x)) return;
     seen.add(x);
     if (Array.isArray(x)) return x.forEach(walk);
-    if ("herdrTarget" in x) x.waitingApproval = Boolean(x.herdrTarget) && asking.has(x.herdrTarget);
+    if ("pane" in x) x.waitingApproval = Boolean(x.pane) && asking.has(x.pane);
     for (const v of Object.values(x)) if (v && typeof v === "object") walk(v);
   };
   walk(state.data.agents);
@@ -2491,7 +2491,7 @@ function welcomeSteps(setup) {
   const owners = Boolean(setup.welcome) || setup.answered > 0 || (setup.pmCount > 0 && !(setup.free || []).length);
   const last = setup.lastRequest;
   const waiting = last && !last.answered && Date.now() - new Date(last.createdAt).getTime() > WAIT_MS;
-  const ready = setup.herdrUp && setup.herdr;
+  const ready = setup.deskUp && setup.desk;
   return [
     { done: ready, summary: ready ? T("welcome.s1.sum", { node: setup.node.split(".")[0], count: setup.sessions }) : "" },
     { done: Boolean(desk), summary: desk ? T("welcome.s2.sum", { cwd: home(desk.cwd) }) : T("welcome.s2.found", { count: (setup.free || []).length }) },
@@ -2500,19 +2500,23 @@ function welcomeSteps(setup) {
   ];
 }
 
+// #6140: under a card's sentence, how far it reaches and why it is asked, the command folded
+const plainMore = (p) => (p.level || p.why ? `<div style="font-size:var(--fs-small);color:var(--text-2)">${[p.level ? `<b>${esc(p.level)}</b>` : "", esc(p.why || "")].filter(Boolean).join(" · ")}</div>` : "")
+  + (p.command ? `<details><summary style="font-size:var(--fs-small);color:var(--text-3);cursor:pointer">${esc(T("appr.command"))}</summary><pre style="white-space:pre-wrap;font-size:var(--fs-small)">${esc(p.command)}</pre></details>` : "");
+
 const copyCmd = (cmd) => `<div class="w-cmd"><code>${esc(cmd)}</code>${btn(T("welcome.copy"), "w-copy", `data-value="${esc(cmd)}"`)}</div>`;
 
 function welcomeReady(setup) {
   const check = (ok, title, why) => `<div class="w-check"><span class="w-mark ${ok ? "ok" : ""}">${ok ? "✓" : "○"}</span><div>${title}</div>${why}</div>`;
-  const herdrWhy = setup.herdrUp
-    ? `<div class="w-why">${T("welcome.herdr.up")}</div>`
-    : `<div class="w-why">${T("welcome.herdr.down")}</div>${copyCmd("curl -fsSL https://herdr.dev/install.sh | sh")}${copyCmd("herdr")}`;
-  const paneWhy = setup.herdr
+  const deskWhy = setup.deskUp
+    ? `<div class="w-why">${T("welcome.desk.up")}</div>`
+    : `<div class="w-why">${T("welcome.desk.down")}</div>`;
+  const paneWhy = setup.desk
     ? `<div class="w-why">${T("welcome.panes.ok", { count: setup.sessions })}</div>`
     : `<div class="w-why">${T("welcome.panes.none")}</div>${copyCmd("claude")}${copyCmd("codex")}<div class="w-live">${T("welcome.watching")}</div>`;
   return check(true, T("welcome.node"), `<div class="w-why">v${esc(setup.node)}</div>`)
-    + check(setup.herdrUp, T("welcome.herdr"), herdrWhy)
-    + (setup.herdrUp ? check(setup.herdr, T("welcome.panes"), paneWhy) : "");
+    + check(setup.deskUp, T("welcome.desk"), deskWhy)
+    + (setup.deskUp ? check(setup.desk, T("welcome.panes"), paneWhy) : "");
 }
 
 function welcomeDesk(setup) {
@@ -2529,7 +2533,7 @@ function welcomeOwners(setup) {
   const free = setup.free || [];
   const registered = (state.data.agents || []).filter((a) => a.role === "pm");
   const done = registered.map((a) => `<div class="w-owner"><div class="w-orow">
-      <div style="min-width:0"><b>${esc(a.name)}</b> <span class="w-tag ok">${T("welcome.registered")}</span><div class="w-meta">${esc(a.herdrTarget || "")} · ${esc(a.runtime || "")} · ${esc(home(a.cwd))}</div></div></div></div>`).join("");
+      <div style="min-width:0"><b>${esc(a.name)}</b> <span class="w-tag ok">${T("welcome.registered")}</span><div class="w-meta">${esc(a.pane || "")} · ${esc(a.runtime || "")} · ${esc(home(a.cwd))}</div></div></div></div>`).join("");
   const open = free.map((x) => {
     const name = state.welcome.names[x.target] ?? base(x.cwd);
     const pv = state.welcome.previews[x.target];
@@ -2556,7 +2560,7 @@ function welcomeFirst(setup) {
   }
   const stuck = last && !last.answered && Date.now() - new Date(last.createdAt).getTime() > WAIT_MS;
   const desk = setup.piloAgents?.[0];
-  return `<div class="w-trail"><div><span>${time(last?.createdAt)}</span>${T("welcome.first.sent", { target: esc(desk?.herdrTarget || desk?.name || "") })}</div>
+  return `<div class="w-trail"><div><span>${time(last?.createdAt)}</span>${T("welcome.first.sent", { target: esc(desk?.pane || desk?.name || "") })}</div>
       <div><span>${time(Date.now())}</span>${T("welcome.first.waiting")}</div></div>
     ${stuck ? `<div class="w-warn"><b>${T("welcome.stuck.title")}</b> ${T("welcome.stuck.body")}</div>
       <div class="w-btns">${btn(T("welcome.stuck.skip"), "w-finish")}</div>` : `<div class="w-live">${T("welcome.first.live")}</div>`}`;
@@ -2721,14 +2725,14 @@ views.agents = () => {
           <span class="gn-ladder-name">${esc(a.name)}</span>
           ${a.reviewer ? `<span class="d-chip d-chip-sm" style="color:var(--text-2);background:var(--bg-2);margin-left:6px" title="reviewer - its PM hands it checks">REVIEW</span>` : ""}
           ${runtimeMark(a.runtime)}
-          <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.herdrTarget || "no session")}</span>
+          <span class="d-m" style="font-size:11px;color:var(--text-2);padding-left:8px;flex:none">${esc(a.pane || "no session")}</span>
           <span class="d-dot${agentState(a) === "running" ? " d-live" : ""}" style="background:${colour};margin-left:10px"></span>
           <span class="gn-ladder-note" style="color:${colour}">${esc(agentNote(a))}</span>
           <button class="gn-btn gn-btn-sm gn-btn-ghost" style="margin-right:8px;flex:none" data-act="open-agent" data-id="${a.id}">open</button>
         </span></div>`;
     }).join("")}</div>` +
     `<div class="d-hint">A child row starts where its parent's plate ends. Click a PM row anywhere to fold its workers. open holds everything about one agent - rules, binding, waking, removal.
-      ${bound ? `${bound} herdr session${bound > 1 ? "s" : ""} not registered yet - Add agent picks one up.` : ""}</div>` +
+      ${bound ? `${bound} session${bound > 1 ? "s" : ""} not registered yet - Add agent picks one up.` : ""}</div>` +
     modelsHtml()
   );
 };
@@ -2737,7 +2741,7 @@ views.agents = () => {
 // own status line says whether it did; Codex takes one from its next start.
 const MODEL_FROM = { session: "this session", pane: "its pane", global: "global file" };
 let tapOn = false;
-// Why a change is still waiting, in herdr's and Pilo's own terms.
+// Why a change is still waiting, in Pilo's own terms.
 const waitReason = (r) => !r.bound ? "waits - no session bound"
   : r.openTasks > 0 ? `waits - ${r.openTasks} open task${r.openTasks > 1 ? "s" : ""}`
   : r.sessionState === "working" ? "waits until the session is idle"
@@ -3358,7 +3362,7 @@ views.system = () => {
             <span class="d-m" style="font-size:12px;color:var(--text-2)">${esc(x.runtime)}</span>
             <span class="d-m d-clip" style="font-size:12px;color:var(--text-3)" title="${esc(x.cwd)}">${esc(x.cwd)}</span>
             <span class="d-m d-num" style="font-size:12px;color:var(--text-3)">${esc(x.target)}</span>
-          </div>`).join("") || `<div class="d-tr"><span class="d-lbl">herdr shows no session</span></div>`}</div></div>
+          </div>`).join("") || `<div class="d-tr"><span class="d-lbl">pilo-desk shows no session</span></div>`}</div></div>
       </div>
       <div class="d-stack" style="min-width:0">
         <div><div class="d-lblrule"><span class="d-lbl">${T("desk.lbl.tokensToday")}</span></div>
@@ -3633,19 +3637,19 @@ DIALOGS.agent = (d) => {
   return {
     title: esc(a.name),
     sub: `agent ${a.id} · ${esc(a.runtime || "runtime unknown")}`,
-    banner: a.herdrTarget ? null : {
+    banner: a.pane ? null : {
       color: ERR, label: "session lost",
-      text: "The herdr pane is gone. Bind it again before work can reach it.",
+      text: "The agent's session is gone. Bind it again before work can reach it.",
       action: btn("Bind again", "rebind", `data-id="${a.id}"`)
     },
     fields: [
       { id: "d-name", label: "name", value: a.name },
-      { id: "d-session", label: "session", kind: "read", value: a.herdrTarget || "not bound",
-        hint: "herdr picks this up from the pane's cwd - Bind again re-reads it" },
+      { id: "d-session", label: "session", kind: "read", value: a.pane || "not bound",
+        hint: "picked up from the session's cwd - Bind again re-reads it" },
       { label: "role", kind: "seg", act: "dlg-role", value: d.role || a.role,
         options: [["pilo", "PILO", a.role !== "pilo"], ["pm", "PM"], ["worker", "WORKER"], ["system", "SYSTEM"]],
         hint: a.role === "system" ? "a system agent is never handed work - it only reads the machine" : "one PILO overall" },
-      { label: "runtime", kind: "read", value: a.runtime || "-", mark: runtimeMark(a.runtime), hint: "read from herdr" },
+      { label: "runtime", kind: "read", value: a.runtime || "-", mark: runtimeMark(a.runtime), hint: "read from its session" },
       a.role === "pilo" || a.role === "system" ? null
         : { id: "d-project", label: "project", kind: "select", value: a.projectId || "",
             options: [["", "-"], ...projects.map((p) => [p.id, p.name])] },
@@ -3717,7 +3721,7 @@ DIALOGS["add-agent"] = () => {
     title: "Add agent",
     sub: noDesk
       ? "no desk agent yet - this is the one you talk to"
-      : free.length ? "pick a pane herdr already has open" : "no free herdr session - open one and refresh",
+      : free.length ? "pick a session already open in pilo" : "no free session - open one in pilo and refresh",
     fields: [
       { id: "f-project", label: "project", kind: "select", value: projectId,
         options: [["", "-"], ...projects.map((p) => [p.id, p.name])] },
@@ -4123,7 +4127,7 @@ const actions = {
   async "appr-focus"(el) {
     try {
       const res = await call("POST", `/api/agents/${el.dataset.id}/focus`);
-      toast(T("appr.focused", { pane: res.target || "", app: res.app || "herdr" }));
+      toast(T("appr.focused", { pane: res.target || "", app: res.app || "pilo" }));
     } catch (err) { toast(err.message, true); }
   },
   async "go-approvals"() {
@@ -4825,7 +4829,7 @@ setInterval(() => {
     listen();
   }
   if (Date.now() - sync.lastLoad >= (sync.live ? SAFETY_MS : FALLBACK_MS)) refresh();
-  // herdr panes come and go without the server hearing of it: the welcome
+  // sessions come and go without the server hearing of it: the welcome
   // screen asks for them itself while it is open
   if (state.tab === "welcome" && Date.now() - (sync.setupAt || 0) >= 3000) {
     sync.setupAt = Date.now();
