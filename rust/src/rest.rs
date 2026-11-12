@@ -123,7 +123,7 @@ async fn focus(State(app): State<Shared>, Path(id): Path<i64>) -> Response {
         let line = regex::Regex::new(r"^\s*(\d+)\s+(\d+)\s+(.*)$").unwrap();
         let procs: std::collections::HashMap<String, (String, String)> = text.lines().filter_map(|l| line.captures(l).map(|c| (c[1].to_string(), (c[2].to_string(), c[3].to_string())))).collect();
         let client = procs.iter().find(|(_, (_, cmd))| regex::Regex::new(r"(^|/)herdr$").unwrap().is_match(cmd.trim())).map(|(_, (pp, _))| pp.clone());
-        let mut pid = client;
+        let mut pid = client.clone();
         let bundle = regex::Regex::new(r"^(.*?\.app)/Contents/MacOS/").unwrap();
         for _ in 0..12 {
             let Some(p) = pid.clone().filter(|p| p != "0") else { break };
@@ -132,6 +132,8 @@ async fn focus(State(app): State<Shared>, Path(id): Path<i64>) -> Response {
                 pid = Some(pp.clone());
             } else { break; }
         }
+        // #6137: no herdr client once pilo-desk holds the sessions; its daemon has the pane in focus, the pilo app shows it
+        if client.is_none() && std::process::Command::new(std::env::var("PILO_OPEN").unwrap_or_else(|_| "open".into())).args(["-a", "pilo"]).status().is_ok_and(|s| s.success()) { return Ok("pilo".into()); }
         Ok(String::new())
     }).await.unwrap_or(Err("focus failed".into()));
     match res {
