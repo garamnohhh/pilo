@@ -66,6 +66,13 @@ fn view(r: &Value) -> Value {
     v
 }
 
+/// every open card's command, sent off to be put in one plain sentence (summary.rs; once each)
+pub fn summarize(app: &Shared) {
+    let inputs: Vec<Value> = app.approvals.pending.lock().unwrap().values().map(|h| h.item["input"].clone())
+        .chain(app.approvals.notices.lock().unwrap().values().map(|n| n["input"].clone())).filter(|i| i.is_object()).collect();
+    for i in inputs { crate::summary::start(app, &masked(&i)); }
+}
+
 impl Approvals {
     /// busy: a request held open, or the pane said it shows a prompt
     pub fn busy(&self, pane: &str) -> bool {
@@ -154,6 +161,8 @@ impl Approvals {
         let mut n = json!({ "pane": pane, "agent": agent["name"], "agentId": agent["id"], "taskId": agent["taskId"], "taskTitle": s(&agent["taskTitle"]),
             "type": "permission_prompt", "message": "", "at": now, "agentKey": "", "screen": true, "menu": menu });
         if let (true, Some(a)) = (fits, asked) { n["tool"] = a["tool"].clone(); n["input"] = a["input"].clone(); n["reason"] = a["reason"].clone(); }
+        // no hook said it (#6140): the box itself says what it asks about
+        else if let Some(r) = crate::panemenu::parse_request(screen) { for k in ["tool", "input", "reason", "hook"] { n[k] = r[k].clone(); } }
         self.notices.lock().unwrap().insert(pane.to_string(), n);
         true
     }
@@ -285,6 +294,7 @@ async fn hook_wait(State(app): State<Shared>, raw: String) -> Response {
     item["fingerprint"] = json!(fingerprint(&item));
     let (tx, rx) = oneshot::channel();
     app.approvals.pending.lock().unwrap().insert(id, Held { item: item.clone(), tx: Some(tx) });
+    summarize(&app);
     app.bell.named("approvals", &app.approvals.list());
     app.bell.changed();
     // dropped when the hook hangs up (Esc in the pane): that resolves it as gone
@@ -312,7 +322,7 @@ async fn hook_notify(State(app): State<Shared>, raw: String) -> Response {
     let pane = s(&b["pane"]);
     crate::desk::hook_said(&pane, b["type"].as_str().unwrap_or(""));
     let agent = agent_for_pane(&app, &pane);
-    if app.approvals.notify(&b, agent.as_ref()) { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
+    if app.approvals.notify(&b, agent.as_ref()) { summarize(&app); app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
     let Some(agent) = agent else { return (StatusCode::CREATED, Json(json!({ "ok": true }))).into_response() };
     if ["permission_prompt", "elicitation_dialog"].contains(&b["type"].as_str().unwrap_or("")) { read_menu_soon(app.clone(), pane.clone()); }
     let sid = s(&b["session"]);

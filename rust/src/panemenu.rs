@@ -82,3 +82,40 @@ mod tests {
         assert!(super::parse_menu("1. a\n2. b\n\n❯ ").is_none(), "a list in an answer, the prompt box under it");
     }
 }
+
+/// parseRequest: what Claude Code's confirmation box asks about, read off the screen when no hook said it (#6140):
+/// its title ("Bash command"), the line the agent wrote about it, the command between the box's rules, and the rule
+/// of Pilo's that asked ("Pilo: .env / secrets always asks"). None when the screen shows no such box.
+pub fn parse_request(screen: &str) -> Option<Value> {
+    let clean = ansi().replace_all(screen, "");
+    let all: Vec<&str> = clean.split('\n').collect();
+    let lines = &all[all.len().saturating_sub(60)..];
+    let title = lines.iter().rposition(|l| l.trim() == "Bash command")?;
+    let after = &lines[title + 1..];
+    let is_rule = |l: &str| l.trim().chars().count() >= 8 && l.trim().chars().all(|c| "─━╌┄═-".contains(c));
+    let rules: Vec<usize> = after.iter().enumerate().filter(|(_, l)| is_rule(l)).map(|(i, _)| i).collect();
+    let first = *rules.first()?;
+    let description = after[..first].iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect::<Vec<_>>().join(" ");
+    let end = rules.get(1).copied().unwrap_or_else(|| after.iter().position(|l| l.contains("Do you want")).unwrap_or(after.len()));
+    let body: Vec<String> = after[first + 1..end].iter().map(|l| lead().replace(l, "").trim_end().to_string()).filter(|l| !l.is_empty()).collect();
+    if body.is_empty() { return None; }
+    let rest = after[end..].join("\n");
+    let reason = Regex::new(r"Pilo: (.+?) (?:always asks|is answered in this window only)").unwrap().captures(&rest).map(|c| c[1].to_string()).unwrap_or_default();
+    let hook = Regex::new(r"Hook (\S+) requires confirmation").unwrap().captures(&rest).map(|c| c[1].to_string()).unwrap_or_default();
+    Some(json!({ "tool": "Bash", "input": { "command": body.join("\n"), "description": description }, "reason": reason, "hook": hook }))
+}
+
+#[cfg(test)]
+mod request_tests {
+    #[test]
+    fn a_hook_asked_bash_box() {
+        let screen = "  earlier output\n Bash command\n Test if legacy passwd is a hash of our password\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n │ ssh -o ConnectTimeout=8 local.ci 'v=$(grep \"^BIZTALK_PASSWD=\" /home/u/.env.localServer | cut -d= -f2-)'\n │ cd /w/nolgofarm && grep -q x src/BizTalk.java\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n │ Hook PreToolUse:Bash requires confirmation for this command:\n │ Pilo: .env / secrets always asks (Pilo or this window) [settings]\n settings.json to update hooks\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. No";
+        let r = super::parse_request(screen).unwrap();
+        assert_eq!(r["input"]["description"], "Test if legacy passwd is a hash of our password");
+        assert!(r["input"]["command"].as_str().unwrap().starts_with("ssh -o ConnectTimeout=8 local.ci"));
+        assert_eq!(r["input"]["command"].as_str().unwrap().lines().count(), 2);
+        assert_eq!(r["reason"], ".env / secrets");
+        assert_eq!(r["hook"], "PreToolUse:Bash");
+        assert!(super::parse_request("❯ 1. Yes\n  2. No").is_none());
+    }
+}

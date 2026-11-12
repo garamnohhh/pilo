@@ -23,6 +23,7 @@ mod serve;
 mod shadow;
 mod sql;
 mod store;
+mod summary;
 mod stream;
 mod text;
 mod usage;

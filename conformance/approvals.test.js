@@ -74,3 +74,27 @@ scenario("a prompt no hook told of, read off a blocked pane: unread says so in o
   await srv.waitFor(async () => !(await srv.api("GET", "/api/approvals")).json.notices.length, { what: "gone with the menu" });
   await sleep(10);
 });
+
+// #6140: a box no hook told of is read off the screen - what the agent wrote about it, the command, Pilo's rule that
+// asked - and a small model puts it in one sentence (a stand-in here). The card says it, how far it reaches and why.
+test("a hook-asked box read off the screen: one sentence, how far it reaches, why, the command", async () => {
+  const { mkdtempSync, writeFileSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "pilo-sum-"));
+  const model = join(dir, "model");
+  writeFileSync(model, "#!/bin/sh\necho 'checks whether the old password is a hash of ours'\n", { mode: 0o755 });
+  const srv = await startServer({ env: { PILO_SUMMARY_CMD: model } });
+  try {
+    const box = " Bash command\n Test if legacy passwd is a hash of our password\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n │ ssh local.ci 'grep \"^BIZTALK_PASSWD=\" /srv/.env.localServer | shasum'\n╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌\n │ Hook PreToolUse:Bash requires confirmation for this command:\n │ Pilo: .env / secrets always asks (Pilo or this window) [settings]\n\n Do you want to proceed?\n ❯ 1. Yes\n   2. No";
+    const t = await team(srv, { status: { pm: "blocked" }, screens: { "w1:p2": box } });
+    const n = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.notices.find((x) => x.plain?.summarized), { what: "card with its sentence" });
+    assert.equal(n.tool, "Bash");
+    assert.equal(n.reason, ".env / secrets");
+    assert.equal(n.plain.line, "pm1: checks whether the old password is a hash of ours It reads a secret file.");
+    assert.equal(n.plain.level, "touches a secret");
+    assert.equal(n.plain.why, "Pilo's rule '.env / secrets' always asks");
+    assert.match(n.plain.command, /^ssh local\.ci/);
+    void t;
+  } finally { await srv.stop(); }
+});

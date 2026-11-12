@@ -163,6 +163,20 @@ fn step_phrase(s: &Value) -> String {
     if line == key { t_user("plain.step.run", &[("arg", if arg.is_empty() { s["key"].as_str().unwrap_or("").to_string() } else { arg })]) } else { line }
 }
 
+/// how far a request reaches, the worst of what it does: a secret, a delete, out of this Mac, a file changed, only reading
+fn level_of(tool: &str, input: &Value, why: &str) -> Option<&'static str> {
+    if tool.is_empty() { return None; }
+    if risk_key(why) == Some("secret") { return Some("secret"); }
+    let steps: Vec<Value> = describe(tool, input)["steps"].as_array().cloned().unwrap_or_default();
+    let has = |k: &str| steps.iter().any(|x| x["key"].as_str().unwrap_or("").starts_with(k));
+    let ssh = steps.iter().any(|x| x["key"] == "run" && x["arg"].as_str().unwrap_or("").starts_with("ssh "));
+    Some(if has("rm") || has("git.resetHard") || risk_key(why) == Some("delete") { "delete" }
+        else if has("git.push") || has("git.forcePush") || has("npm.publish") || has("download") || ssh || ["WebFetch", "WebSearch"].contains(&tool) { "outside" }
+        else if has("write") || has("git.commit") || ["Edit", "MultiEdit", "Write", "NotebookEdit"].contains(&tool) { "edit" }
+        else if !steps.is_empty() && steps.iter().all(|x| x["key"] == "read") || tool == "Read" { "read" }
+        else { "run" })
+}
+
 fn filename(p: &str) -> String { p.split('/').filter(|x| !x.is_empty()).last().map(String::from).unwrap_or_else(|| p.to_string()) }
 
 /// plainAsk(item, menu): { line, options }
@@ -199,8 +213,13 @@ pub fn plain_ask(item: &Value, menu: Option<&Value>) -> Value {
         t_user("plain.mcp", &[("who", who.clone()), ("server", server), ("fn", f)])
     }
     else { t_user("plain.tool", &[("who", who.clone()), ("tool", tool.to_string())]) };
+    // #6140: what it sets out to do in one plain sentence, once the model has written it (summary.rs)
+    let said = if item["kind"] == "question" { None } else { crate::summary::of(&input) };
+    if let Some(what) = &said { line = t_user("plain.summary", &[("who", who.clone()), ("what", what.clone())]); }
     let why = [s(&item["reason"]), s(&item["risk"])].into_iter().find(|x| !x.is_empty()).unwrap_or_default();
     if let Some(k) = risk_key(&why) { line = format!("{line} {}", t_user(&format!("plain.risk.{k}"), &[])); }
+    let level = level_of(tool, &input, &why);
+    let asked = if why.is_empty() { t_user("plain.why.window", &[]) } else { t_user("plain.why.rule", &[("rule", why.clone())]) };
     let yes = Regex::new(r"(?i)^yes\b").unwrap();
     let no = Regex::new(r"(?i)^no\b").unwrap();
     let options: Vec<Value> = menu.and_then(|m| m["options"].as_array()).cloned().unwrap_or_default().iter().map(|o| {
@@ -208,7 +227,8 @@ pub fn plain_ask(item: &Value, menu: Option<&Value>) -> Value {
         let named = if yes.is_match(label) && o["standing"] != true { t_user("plain.go", &[]) } else if no.is_match(label) { t_user("plain.stop", &[]) } else { label.to_string() };
         json!({ "n": o["n"], "label": named })
     }).collect();
-    json!({ "line": line, "options": options })
+    json!({ "line": line, "options": options, "level": level.map(|k| t_user(&format!("plain.level.{k}"), &[])), "why": if item["kind"] == "question" { Value::Null } else { json!(asked) },
+            "command": input["command"].as_str().filter(|c| !c.is_empty()), "summarized": said.is_some() })
 }
 
 /// `pilo hook describe`: one {tool, input, agent, reason} per line in, {about, plain} per line out

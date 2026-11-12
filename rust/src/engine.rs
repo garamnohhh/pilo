@@ -438,7 +438,7 @@ fn pump_sessions(app: &Shared) {
             let screen = app.desk.read_pane(&target);
             if let Some(menu) = crate::panemenu::parse_menu(&screen) {
                 let agent = crate::approvals::agent_for_pane(app, &target);
-                if app.approvals.notice_from_screen(&target, agent.as_ref(), menu, "") { app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
+                if app.approvals.notice_from_screen(&target, agent.as_ref(), menu, &screen) { crate::approvals::summarize(app); app.bell.named("approvals", &app.approvals.list()); app.bell.changed(); }
             }
         }
         if session.is_some() && before.iter().any(|(i, st)| *i == id && st == "gone") {
