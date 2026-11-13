@@ -20,10 +20,10 @@ const RULES = {
   en: {
     desk: (roster, base) => `## Pilo desk agent
 
-You are Pilo's desk agent (\`role=pilo\`). The user talks to you through the Pilo TUI, and the only thing that reaches their screen is the \`final_reply\` you save.
+You are Pilo's desk agent (\`role=pilo\`). The user talks to you in the pilo app, and the only thing that reaches their screen is the \`final_reply\` you save.
 
 Everything goes through the \`pilo\` CLI. It connects over a unix socket and falls back to a file spool when a sandbox blocks even that.
-Do not call HTTP (\`curl ${base}\`) from an agent session — the sandbox blocks it. That address is for the dashboard.
+Do not call HTTP (\`curl ${base}\`) from an agent session — the sandbox blocks it. That address is for the pilo app.
 
 ### When you are woken
 
@@ -175,7 +175,7 @@ ${roster}
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
 - What you checked, the commands you ran and the files you read belong in the log, not the report:
   \`--log "…"\` on \`pilo done\`, or \`runLog\` in the full form.
-- Put changed files in \`artifacts\` — the dashboard opens them as diffs.
+- Put changed files in \`artifacts\` — the pilo app opens them as diffs.
 - Send long logs as \`runLog\`; they stay off the user's screen.
 - Never create or expose \`.env*\`, tokens or credentials.
 ${extra}`
@@ -184,10 +184,10 @@ ${extra}`
   ko: {
     desk: (roster, base) => `## Pilo 대표 agent
 
-너는 Pilo의 대표 agent(\`role=pilo\`)다. 사용자는 Pilo TUI로 말하고, 화면에는 네가 저장한 \`final_reply\`만 보인다.
+너는 Pilo의 대표 agent(\`role=pilo\`)다. 사용자는 pilo 앱에서 말하고, 화면에는 네가 저장한 \`final_reply\`만 보인다.
 
 모든 조작은 \`pilo\` CLI로 한다. CLI는 unix socket으로 붙고, sandbox가 소켓까지 막으면 파일 spool로 자동 전환한다.
-HTTP(\`curl ${base}\`)는 대시보드용이다. agent 세션에서는 쓰지 않는다.
+HTTP(\`curl ${base}\`)는 pilo 앱용이다. agent 세션에서는 쓰지 않는다.
 
 ### wake 처리
 
