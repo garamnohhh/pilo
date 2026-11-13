@@ -124,6 +124,8 @@ welcome() {
 case "${1:-tui}" in
   tui|""|--no-open)
     ensure_server
+    # #6240: with the Rust build, 'pilo' opens the app (the terminal UI and the browser page were the old Node faces)
+    if [[ -n "$ENGINE" && -d "$HOME/Applications/pilo.app" ]]; then open "$HOME/Applications/pilo.app"; echo "pilo opened"; exit 0; fi
     welcome "${2:-${1:-}}"
     PILO_PORT="$(live_port)" PILO_LAUNCH_CWD="$LAUNCH_CWD" node "$ROOT/src/tui.js"
     ;;
@@ -135,6 +137,7 @@ case "${1:-tui}" in
     ;;
   dashboard|dash)
     ensure_server
+    if [[ -n "$ENGINE" && -d "$HOME/Applications/pilo.app" ]]; then open "$HOME/Applications/pilo.app"; echo "pilo opened"; exit 0; fi
     command -v open >/dev/null 2>&1 && open "http://127.0.0.1:$(live_port)/dashboard"
     echo "Pilo dashboard opened"
     ;;
