@@ -2,9 +2,9 @@
 
 **Many agents, one place to talk.**
 
-pilo does not start agents. It gathers the ones already open in your terminal, so
-you say a thing once and the owners split the work between them. macOS, local
-only, no account.
+pilo keeps your coding agents, Claude Code and Codex, in one Mac app, so you say a
+thing once and the owners split the work between them. macOS, local only, no
+account.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/cycle-dark.gif">
@@ -135,9 +135,11 @@ reported, what failed, and the answer that came back — on **Requests**, and
 
 ## What it keeps, and where
 
-Everything lives under `~/.pilo/`: `pilo.sqlite` (requests, answers, events),
-`port`, `logs/`, and the app's terminal daemon under `desk/`. The only socket that
-listens is `127.0.0.1`.
+Everything pilo keeps lives under `~/.pilo/`: `pilo.sqlite` (requests, answers,
+events), `port`, `socket`, `logs/`, the server in `bin/` and the terminal daemon's
+program in `desk/bin/`. The app keeps its sessions list and the daemon's socket
+(`desk.sock`) in `~/Library/Application Support/pilo-desk/`. The only port that
+listens is on `127.0.0.1`.
 
 ## What it sends
 
