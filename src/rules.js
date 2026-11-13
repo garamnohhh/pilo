@@ -154,7 +154,7 @@ ${roster}
 - **Waiting on someone outside Pilo** (a reply, a CI run): \`pilo hold N "what you wait on"\`, then \`pilo done N\` when it
   arrives. A task left running reads as work in hand, and then as stalled.
 - **Restarting a codex worker: take its session from Pilo**, \`pilo api GET /api/agents/<id>/session\` — it gives the
-  thread and the whole restart line. herdr's session id for a codex pane can be another thread (the auto-review one).
+  thread and the whole restart line. The session id a pane shows for codex can be another thread (the auto-review one).
 - **Do the work to the end without asking.** Push, tags, releases, deploys, temporary deletes and installs go ahead.
   Only the very important ones get one check, and Pilo's hook raises it as a card right before they run: a delete
   that cannot be undone, a production database write, a cloud change, a force push over a shared branch, posting as
@@ -276,7 +276,7 @@ ${roster}
 - **Pilo 밖의 답을 기다릴 때**(사람의 답, CI 등): \`pilo hold N "기다리는 것"\`, 오면 \`pilo done N\`. running 으로 두면
   작업 중으로 보이다가 멈춘 것으로 보인다.
 - **codex worker 를 다시 띄울 때 세션은 Pilo 에서 받는다**: \`pilo api GET /api/agents/<id>/session\` 이 그 대화와
-  재시작 명령 한 줄을 준다. herdr 가 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.
+  재시작 명령 한 줄을 준다. 창이 보여 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.
 - **묻지 않고 끝까지 한다.** push·태그·릴리스·배포·임시 삭제·설치는 그냥 진행한다. 아주 중요한 일만 한 번
   확인하고, 그 확인은 실행 직전 Pilo 훅이 카드로 띄운다: 되돌릴 수 없는 삭제, 운영 DB 쓰기, 클라우드 변경, 공유 브랜치
   강제 push, 사용자 계정으로 게시, 비밀 값, 결제, 회사 밖 사람에게 메시지. 명령은 그대로 실행하고 카드가 묻게 둔다.

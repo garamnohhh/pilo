@@ -14,7 +14,8 @@ rm -rf "$S"; mkdir -p "$S/bin" "$S/share/src" "$S/share/bin"
 cp rust/target/release/pilo "$S/bin/pilo"; codesign --force --sign - --identifier dev.garamnoh.pilo "$S/bin/pilo" 2>/dev/null
 cp -R public "$S/share/public"
 cp src/markdown.js src/width.js src/commands.js src/text.js "$S/share/src/"
-cp package.json "$S/share/"; cp bin/pilo-statusline "$S/share/bin/"; cp -R mods "$S/share/mods"
+# only the version from package.json (the server reads it); its Node fields stay out of the archive
+printf '{ "name": "pilo", "version": "%s" }\n' "$VER" > "$S/share/package.json"; cp bin/pilo-statusline "$S/share/bin/"; cp -R mods "$S/share/mods"
 # the app as pilo-desk builds it, signed ad hoc (no personal certificate), installed into the folder instead of ~/Applications
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 PILO_SIGN="ad hoc only" PILO_HOME="$T" PILO_APP_DIR="$S" "$DESK/scripts/install.sh" --no-build >/dev/null
