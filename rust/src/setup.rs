@@ -14,6 +14,14 @@ pub fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
 
+/// where a command is: PATH, then where installers put it (Claude Code's own, Homebrew, npm's, ~/.local)
+pub fn find_cli(name: &str) -> Option<String> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let mut dirs: Vec<String> = std::env::var("PATH").unwrap_or_default().split(':').map(String::from).collect();
+    dirs.extend([format!("{home}/.local/bin"), format!("{home}/.claude/local"), "/opt/homebrew/bin".into(), "/usr/local/bin".into(), format!("{home}/.npm-global/bin")]);
+    dirs.into_iter().filter(|d| !d.is_empty()).map(|d| std::path::Path::new(&d).join(name)).find(|p| p.is_file()).map(|p| p.display().to_string())
+}
+
 /// git that runs: macOS's /usr/bin/git without the developer tools only offers to install them, in a dialog
 pub fn has_git() -> bool {
     std::process::Command::new("/usr/bin/xcode-select").arg("-p").output().map(|o| o.status.success()).unwrap_or(false)

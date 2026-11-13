@@ -317,6 +317,8 @@ async fn setup(State(app): State<Shared>) -> Res {
         // the Node server says which Node runs it; there is none here
         "node": "", "url": format!("http://127.0.0.1:{port}/welcome"),
         "lastRequest": first, "answered": answered, "welcome": welcome, "postgres": true,
+        // #6240: which coding agents this Mac has, for the app's first step (a launchd server's PATH is short)
+        "clis": { "claude": crate::setup::find_cli("claude"), "codex": crate::setup::find_cli("codex") },
         "piloAgents": pilos, "duplicatePilo": n > 1, "needsSetup": n != 1, "pmCount": pms, "free": free
     })))
 }
