@@ -63,7 +63,7 @@ pub async fn update_status(app: &Shared) -> Json<Value> {
     let state: Value = std::fs::read_to_string(app.home.join("update.json")).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or(json!({}));
     let latest = state["latest"].as_str().filter(|s| !s.is_empty()).map(String::from);
     let available = matches!((latest.as_deref().and_then(version_of), version_of(&current)), (Some(a), Some(b)) if a > b);
-    let git = |args: &[&str]| std::process::Command::new("git").args(args).current_dir(&root).output().ok().filter(|o| o.status.success())
+    let git = |args: &[&str]| crate::setup::has_git().then(|| std::process::Command::new("git").args(args).current_dir(&root).output().ok()).flatten().filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
     let kind = if root.to_string_lossy().contains("/node_modules/") && !root.join(".git").exists() { "npm" }
         else { match git(&["status", "--porcelain", "--", ".", ":!package-lock.json"]) {

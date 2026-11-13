@@ -20,6 +20,7 @@ mod replay;
 mod rules;
 mod schedules;
 mod serve;
+mod setup;
 mod shadow;
 mod sql;
 mod store;
@@ -36,6 +37,7 @@ const USAGE: &str = "usage:
   pilo shadow [--live url] [--data dir] [--out dir] [--every s] [--once]   decide beside the live server, act on nothing
   pilo shadow report                        what the rounds found
   pilo hook <event> [--codex]               a Claude Code / Codex hook (stdin: the hook's JSON)
+  pilo hooks install|remove                 Pilo's hooks in Claude Code's (and Codex's) settings, calling this binary
   pilo db import <dump.jsonl> <new.sqlite>   rows from tools/db/pg-dump.mjs into a new SQLite file
   pilo db export <file.sqlite> <dump.jsonl>  the same rows back out, for tools/db/pg-restore.mjs";
 
@@ -51,6 +53,7 @@ fn main() {
     if a.first().map(|c| cli::COMMANDS.contains(c)).unwrap_or(false) || a.is_empty() {
         std::process::exit(cli::run(&args));
     }
+    if a.first() == Some(&"hooks") { std::process::exit(setup::hooks(&args[1..])); }
     // the engine beside the live server, deciding and never acting
     if a.first() == Some(&"replay") { std::process::exit(replay::run(&args[1..])); }
     if a.first() == Some(&"shadow") { std::process::exit(shadow::run(&args[1..])); }
@@ -69,8 +72,8 @@ fn main() {
             let _ = std::fs::write(home.join("port"), port.to_string());
             let _ = std::fs::write(home.join("server.pid"), std::process::id().to_string());
         }
-        // the dashboard and src/ come from the checkout this binary was built in
-        let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..");
+        // the dashboard and src/: an install's share/, else the checkout this binary was built in (#6236)
+        let repo = setup::root();
         let rt = tokio::runtime::Runtime::new().expect("runtime");
         if let Err(e) = rt.block_on(serve::run(port, db, repo)) { eprintln!("pilo: {e}"); std::process::exit(1) }
         return;

@@ -136,6 +136,7 @@ async fn preview(State(app): State<Shared>, raw: String) -> Response {
 async fn update_check(State(app): State<Shared>) -> Response {
     let repo = std::env::var("PILO_UPDATE_REPO").unwrap_or_else(|_| "https://github.com/garamnohhh/pilo.git".into());
     let latest = std::env::var("PILO_UPDATE_LATEST").ok().or_else(|| {
+        if !crate::setup::has_git() { return None }   // #6236: a Mac without the developer tools would put up their install dialog
         let o = std::process::Command::new("git").args(["ls-remote", "--tags", "--refs", &repo]).output().ok()?;
         let re = regex::Regex::new(r"^v?(\d+)\.(\d+)\.(\d+)$").unwrap();
         String::from_utf8_lossy(&o.stdout).lines().filter_map(|l| l.split('\t').nth(1)).map(|t| t.trim_start_matches("refs/tags/").trim_start_matches('v').to_string())

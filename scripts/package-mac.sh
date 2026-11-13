@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# A Pilo for a Mac with nothing on it (#6236): the Rust server (agent CLI and hooks in the same binary), the dashboard
+# it serves, the pilo app with its terminal daemon, and install.sh, in one folder and a .tar.gz. No Node, no herdr.
+# Ad hoc signed, not notarised: a downloaded copy needs its quarantine cleared (install.sh does it for its own files).
+#   scripts/package-mac.sh [out dir]      (default dist/); PILO_DESK_REPO: the pilo-desk checkout (default ../pilo-desk)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+DESK="${PILO_DESK_REPO:-../pilo-desk}"
+VER="$(grep -m1 '^version' rust/Cargo.toml | cut -d'"' -f2)"
+OUT="${1:-dist}"; NAME="pilo-$VER-mac"; S="$OUT/$NAME"
+(cd rust && cargo build --release --quiet)
+(cd "$DESK" && cargo build --release --quiet)
+rm -rf "$S"; mkdir -p "$S/bin" "$S/share/src" "$S/share/bin"
+cp rust/target/release/pilo "$S/bin/pilo"; codesign --force --sign - --identifier dev.garamnoh.pilo "$S/bin/pilo" 2>/dev/null
+cp -R public "$S/share/public"
+cp src/markdown.js src/width.js src/commands.js src/text.js "$S/share/src/"
+cp package.json "$S/share/"; cp bin/pilo-statusline "$S/share/bin/"
+# the app as pilo-desk builds it, signed ad hoc (no personal certificate), installed into the folder instead of ~/Applications
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+PILO_SIGN="ad hoc only" PILO_HOME="$T" PILO_APP_DIR="$S" "$DESK/scripts/install.sh" --no-build >/dev/null
+cat > "$S/install.sh" <<'INSTALL'
+#!/usr/bin/env bash
+# Puts Pilo on this Mac: ~/.pilo/bin/pilo (server, agent CLI, hooks) and ~/.pilo/share (the dashboard),
+# ~/Applications/pilo.app, the server and the terminal daemon at login, Pilo's hooks in Claude Code (and Codex).
+# Run again to update; your requests stay in ~/.pilo/pilo.sqlite.
+set -euo pipefail
+cd "$(dirname "$0")"
+P="$HOME/.pilo"; APP="$HOME/Applications/pilo.app"; LA="$HOME/Library/LaunchAgents/dev.garamnoh.pilo-serve.plist"
+xattr -dr com.apple.quarantine . 2>/dev/null || true
+mkdir -p "$P/bin" "$P/logs" "$P/desk/bin" "$HOME/.local/bin" "$HOME/Applications" "$HOME/Library/LaunchAgents"
+cp bin/pilo "$P/bin/.pilo.new" && mv -f "$P/bin/.pilo.new" "$P/bin/pilo"
+rm -rf "$P/share.new" && cp -R share "$P/share.new" && rm -rf "$P/share" && mv "$P/share.new" "$P/share"
+ln -sf "$P/bin/pilo" "$HOME/.local/bin/pilo"
+[ -e "$APP" ] && mv "$APP" "$HOME/.Trash/pilo-$(date +%Y%m%d-%H%M%S).app"
+cp -R pilo.app "$APP"
+cp pilo.app/Contents/MacOS/pilo-deskd "$P/desk/bin/.pilo-deskd.new" && mv -f "$P/desk/bin/.pilo-deskd.new" "$P/desk/bin/pilo-deskd"
+"$P/desk/bin/pilo-deskd" --install-agent >/dev/null 2>&1 || true
+cat > "$LA" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>dev.garamnoh.pilo-serve</string>
+  <key>ProgramArguments</key><array><string>$P/bin/pilo</string><string>serve</string></array>
+  <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>$P/logs/pilo.log</string><key>StandardErrorPath</key><string>$P/logs/pilo.log</string>
+</dict></plist>
+PLIST
+launchctl bootout "gui/$(id -u)/dev.garamnoh.pilo-serve" 2>/dev/null || true
+launchctl bootstrap "gui/$(id -u)" "$LA"
+"$P/bin/pilo" hooks install
+for _ in $(seq 1 40); do curl -fsS "http://127.0.0.1:$(cat "$P/port" 2>/dev/null || echo 48888)/health" >/dev/null 2>&1 && break; sleep 0.25; done
+open "$APP"
+open "http://127.0.0.1:$(cat "$P/port" 2>/dev/null || echo 48888)/welcome"
+echo "Installed. The pilo app and the setup page are open."
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "For the 'pilo' command in a terminal: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc";; esac
+INSTALL
+chmod +x "$S/install.sh"
+tar -czf "$OUT/$NAME.tar.gz" -C "$OUT" "$NAME"
+echo "$OUT/$NAME.tar.gz ($(du -h "$OUT/$NAME.tar.gz" | cut -f1))"
