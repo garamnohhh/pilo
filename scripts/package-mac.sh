@@ -52,10 +52,9 @@ launchctl bootstrap "gui/$(id -u)" "$LA"
 "$P/bin/pilo" hooks install
 for _ in $(seq 1 40); do curl -fsS "http://127.0.0.1:$(cat "$P/port" 2>/dev/null || echo 48888)/health" >/dev/null 2>&1 && break; sleep 0.25; done
 # the 'pilo' command in new terminals: ~/.local/bin on PATH, added once to the shell's own file (#6240)
-case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *)
-  RC="$HOME/.zshrc"; [ "$(basename "${SHELL:-zsh}")" = "bash" ] && RC="$HOME/.bash_profile"
-  grep -qs '.local/bin' "$RC" || printf '\n# pilo\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$RC";;
-esac
+# and in the login shell's file too: the app starts Claude Code and Codex in a login shell, by name (#6240)
+RCS="$HOME/.zshrc $HOME/.zprofile"; [ "$(basename "${SHELL:-zsh}")" = "bash" ] && RCS="$HOME/.bash_profile"
+for RC in $RCS; do grep -qs '.local/bin' "$RC" || printf '\n# pilo\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$RC"; done
 # setup happens in the app, not a browser page (#6240)
 open "$APP"
 echo "Installed. pilo is open; setup continues there."
