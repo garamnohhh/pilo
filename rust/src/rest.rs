@@ -168,7 +168,8 @@ pub fn check_now(app: &Shared) {
     let _ = std::fs::write(&file, st.to_string());
 }
 
-/// #6240: a few minutes after start and then every six hours, unless PILO_UPDATE_CHECK=off
+/// #6240: a few minutes after start and then every hour (#6273: six hours left a new release unseen all afternoon;
+/// GitHub allows 60 unsigned looks an hour), unless PILO_UPDATE_CHECK=off
 pub fn start_checks(app: Shared) {
     if std::env::var("PILO_UPDATE_CHECK").as_deref() == Ok("off") { return }
     tokio::spawn(async move {
@@ -176,7 +177,7 @@ pub fn start_checks(app: Shared) {
         loop {
             let a = app.clone();
             let _ = tokio::task::spawn_blocking(move || check_now(&a)).await;
-            tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
         }
     });
 }
