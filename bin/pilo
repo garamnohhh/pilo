@@ -54,8 +54,18 @@ wait_http() {
   return 1
 }
 
+# the Rust build named in ~/.pilo/engine runs everything below but the TUI and the update (#6239); ~/.pilo/bin/pilo
+# follows it, the name Claude Code's and Codex's hooks call
+ENGINE="$(cat "$PILO_HOME_DIR/engine" 2>/dev/null || true)"
+if [[ -n "$ENGINE" && -x "$ENGINE" ]]; then
+  mkdir -p "$PILO_HOME_DIR/bin"
+  [[ "$(readlink "$PILO_HOME_DIR/bin/pilo" 2>/dev/null)" == "$ENGINE" ]] || ln -sfn "$ENGINE" "$PILO_HOME_DIR/bin/pilo"
+else
+  ENGINE=""
+fi
+
 ensure_server() {
-  need node
+  [[ -n "$ENGINE" ]] || need node
   need curl
 
   health && return
@@ -65,8 +75,7 @@ ensure_server() {
   # in ~/.pilo/port.
   # ~/.pilo/engine names another server binary to run instead (the Rust one,
   # tools/db/cutover.sh); without it, or when it is gone, the Node server runs
-  ENGINE="$(cat "$PILO_HOME_DIR/engine" 2>/dev/null || true)"
-  if [[ -n "$ENGINE" && -x "$ENGINE" ]]; then
+  if [[ -n "$ENGINE" ]]; then
     PILO_PORT="$WANTED_PORT" nohup "$ENGINE" serve >> "$LOG" 2>&1 &
   else
     PILO_PORT="$WANTED_PORT" nohup node "$ROOT/src/server.js" >> "$LOG" 2>&1 &
@@ -176,14 +185,16 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     ;;
   logs) tail -f "$LOG" ;;
   # the user's own: put Pilo's hooks into Claude Code / Codex, pair a phone
-  hooks|approvals) exec node "$ROOT/src/hooks.js" "$@" ;;
+  hooks) [[ -n "$ENGINE" && "${2:-}" =~ ^(install|remove)$ ]] && exec "$PILO_HOME_DIR/bin/pilo" "$@"; exec node "$ROOT/src/hooks.js" "$@" ;;
+  approvals) exec node "$ROOT/src/hooks.js" "$@" ;;
   # Every CLI command in src/commands.js has to be named here or it never
   # reaches the dispatcher — the shell answers with the usage line instead.
   # cli.test.js reads this list and that one, and fails when they drift.
   inbox|agents|send|reply|history|task|progress|done|block|blocked|ask|hold|resume|limited|answer|schedules|schedule|api)
     # agent commands go over the unix socket, so they work with sandbox network off
+    [[ -n "$ENGINE" ]] && exec "$ENGINE" "$@"
     exec node "$ROOT/src/cli.js" "$@"
     ;;
-  help|--help|-h) node "$ROOT/src/cli.js" ;;
+  help|--help|-h) if [[ -n "$ENGINE" ]]; then "$ENGINE"; else node "$ROOT/src/cli.js"; fi ;;
   *) echo "Usage: pilo [tui|start|stop|restart|status|update|dashboard|doctor|logs|hooks|approvals]"; echo "       pilo [inbox|agents|send|reply|history|task|progress|done|schedules|api] — agent commands"; exit 1 ;;
 esac

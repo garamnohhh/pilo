@@ -58,7 +58,9 @@ pub fn with_pilo(mut s: Value, events: &[(&str, u64, Option<&str>)], flag: &str,
 /// `pilo hooks install|remove`: Claude Code always, Codex where ~/.codex is; the old file kept as .before-pilo
 pub fn hooks(args: &[String]) -> i32 {
     let add = match args.first().map(String::as_str) { Some("install") => true, Some("remove") => false, _ => { eprintln!("usage: pilo hooks install|remove"); return 2 } };
-    let bin = std::env::current_exe().ok().and_then(|e| e.canonicalize().ok()).map(|e| e.display().to_string()).unwrap_or_default();
+    // ~/.pilo/bin/pilo, the name that stays when a new build comes in (the launcher points it at ~/.pilo/engine)
+    let home = PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo/bin/pilo");
+    let bin = if home.exists() { home.display().to_string() } else { std::env::current_exe().map(|e| e.display().to_string()).unwrap_or_default() };
     for (name, file, events, flag) in targets() {
         if name == "codex" && !file.parent().map(|d| d.exists()).unwrap_or(false) { continue }
         let text = std::fs::read_to_string(&file).unwrap_or_default();
