@@ -1,6 +1,6 @@
 [package]
 name = "pilo"
-version = "0.0.1"
+version = "0.4.0"
 edition = "2021"
 description = "Pilo in one binary: the server, the CLI and the hooks (work in progress)"
 license = "Apache-2.0"

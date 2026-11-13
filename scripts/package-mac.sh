@@ -49,10 +49,14 @@ launchctl bootout "gui/$(id -u)/dev.garamnoh.pilo-serve" 2>/dev/null || true
 launchctl bootstrap "gui/$(id -u)" "$LA"
 "$P/bin/pilo" hooks install
 for _ in $(seq 1 40); do curl -fsS "http://127.0.0.1:$(cat "$P/port" 2>/dev/null || echo 48888)/health" >/dev/null 2>&1 && break; sleep 0.25; done
+# the 'pilo' command in new terminals: ~/.local/bin on PATH, added once to the shell's own file (#6240)
+case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *)
+  RC="$HOME/.zshrc"; [ "$(basename "${SHELL:-zsh}")" = "bash" ] && RC="$HOME/.bash_profile"
+  grep -qs '.local/bin' "$RC" || printf '\n# pilo\nexport PATH="$HOME/.local/bin:$PATH"\n' >> "$RC";;
+esac
+# setup happens in the app, not a browser page (#6240)
 open "$APP"
-open "http://127.0.0.1:$(cat "$P/port" 2>/dev/null || echo 48888)/welcome"
-echo "Installed. The pilo app and the setup page are open."
-case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) echo "For the 'pilo' command in a terminal: echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc";; esac
+echo "Installed. pilo is open; setup continues there."
 INSTALL
 chmod +x "$S/install.sh"
 tar -czf "$OUT/$NAME.tar.gz" -C "$OUT" "$NAME"
