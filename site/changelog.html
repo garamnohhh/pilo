@@ -68,9 +68,121 @@ a:hover { color: var(--accent); }
     <div  style="max-width: 760px; padding: 44px 0px 76px; display: flex; flex-direction: column; gap: 48px;">
       <div >
         <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
+          <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.4.0</span>
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.11.13</span>
+          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
+        </div>
+        <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
+<span class="l-en">One Mac app and one small server, both in Rust: setup, terminals, approvals and updates all live in the app.</span>
+<span class="l-ko">맥 앱 하나와 작은 서버 하나, 둘 다 Rust: 설정, 터미널, 승인, 업데이트가 모두 앱 안에.</span>
+</p>
+        <div  style="border-top: 1px solid var(--line);">
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">app</span>
+<span class="l-ko">앱</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">pilo is one Mac app plus one small server, both written in Rust. No Node.js, no herdr, no npm install path any more; the npm package stays at 0.3.4 and is no longer updated.</span>
+<span class="l-ko">pilo 는 이제 맥 앱 하나와 작은 서버 하나, 둘 다 Rust 예요. Node, herdr, npm 설치 경로는 모두 없어졌어요. npm 패키지는 0.3.4 에 머물고 더는 올라가지 않아요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">install</span>
+<span class="l-ko">설치</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh, or download pilo-&lt;version&gt;-mac.tar.gz from the latest release and run ./pilo-&lt;version&gt;-mac/install.sh. Not notarised yet, so run it from a terminal. No sudo. Needs Claude Code or Codex installed and signed in once; the app checks.</span>
+<span class="l-ko">curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh, 또는 최신 릴리스에서 pilo-&lt;version&gt;-mac.tar.gz 를 받아 ./pilo-&lt;version&gt;-mac/install.sh 실행. 아직 공증 전이라 터미널에서 실행해요. sudo 없음. Claude Code 나 Codex 설치와 한 번 로그인이 필요하고, 앱이 확인해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">setup</span>
+<span class="l-ko">설정</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The first run happens in the app: Set up pilo, four steps that check themselves (Get ready, Pick your desk, Owners (optional), A first request from the Work screen). No browser page.</span>
+<span class="l-ko">첫 실행은 앱에서: Set up pilo, 스스로 확인하는 4단계(준비물, 데스크 정하기, 담당(선택), Work 화면에서 첫 요청). 브라우저 화면은 없어요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">terminals</span>
+<span class="l-ko">터미널</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The agents' terminals live in the app, kept by a background daemon; closing the window or updating keeps the sessions running.</span>
+<span class="l-ko">에이전트 터미널이 앱 안에 있고 백그라운드 데몬이 붙잡고 있어요. 창을 닫거나 업데이트해도 세션은 계속 돌아요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">approvals</span>
+<span class="l-ko">승인</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Every approval can be answered from the app, Pilo's own hooks included. Risky ones are marked in red, and each answer from the app is logged (the rule and the tool, never the command).</span>
+<span class="l-ko">Pilo 자체 훅까지 모든 승인을 앱에서 답할 수 있어요. 위험한 건 빨간색으로 표시되고, 앱에서 한 답은 기록돼요(규칙과 도구만, 명령은 남기지 않음).</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">updates</span>
+<span class="l-ko">업데이트</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">New versions show on System in the app and install from there.</span>
+<span class="l-ko">새 버전은 앱의 System 화면에 뜨고 거기서 설치해요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">usage</span>
+<span class="l-ko">사용 횟수</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Usage counts go out once a day: a random install id, version, macOS, chip, how many agents per runtime, and counts of requests, tasks, results, approvals, window choices, schedule runs and wakes. Never content, prompts, paths, names or accounts; no IP kept. On by default; off on the first screen, in Settings, or with PILO_TELEMETRY=off.</span>
+<span class="l-ko">하루 한 번 사용 횟수를 보내요: 무작위 설치 id, 버전, macOS, 칩, 런타임별 에이전트 수, 요청 · 작업 · 결과 · 승인 · 창 선택 · 예약 실행 · 깨우기 횟수. 내용 · 프롬프트 · 경로 · 이름 · 계정은 보내지 않고 IP 도 남기지 않아요. 기본은 켜짐이고 첫 화면, 설정, PILO_TELEMETRY=off 로 꺼요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">data</span>
+<span class="l-ko">데이터</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">Everything lives in ~/.pilo/pilo.sqlite (SQLite).</span>
+<span class="l-ko">데이터는 모두 ~/.pilo/pilo.sqlite(SQLite)에 있어요.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">commands</span>
+<span class="l-ko">명령</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">pilo opens the app; pilo start, stop, restart, status; pilo hooks install | remove; pilo inbox, agents, history, schedules. Agents use pilo task, progress, done, block, reply.</span>
+<span class="l-ko">pilo 는 앱을 열어요. pilo start · stop · restart · status, pilo hooks install | remove, pilo inbox · agents · history · schedules. 에이전트는 pilo task · progress · done · block · reply.</span>
+</span>
+        </div>
+        <div  style="display: flex; gap: 14px; padding: 13px 0px; border-bottom: 1px solid var(--line-soft);">
+          <span  class="gn-mono" style="font-size: 11px; color: var(--text-3); flex: 0 0 auto; width: 72px;">
+<span class="l-en">removed</span>
+<span class="l-ko">삭제</span>
+</span>
+          <span  style="font-size: 14px; line-height: 1.75; color: var(--text-2); flex: 1 1 0%; min-width: 0px;">
+<span class="l-en">The browser dashboard, the terminal UI and phone pairing with phone approvals (they needed a tunnel such as Tailscale) are gone.</span>
+<span class="l-ko">브라우저 대시보드, 터미널 UI, 폰 연결과 폰 승인(Tailscale 같은 터널이 필요했던 것)은 빠졌어요.</span>
+</span>
+        </div>
+        </div>
+      </div>
+      <div >
+        <div  style="display: flex; align-items: baseline; gap: 14px; margin-bottom: 20px; flex-wrap: wrap;">
           <span  class="gn-mono" style="font-size: 22px; letter-spacing: -0.01em; color: var(--text);">0.3.4</span>
           <span  class="gn-mono" style="font-size: 11px; color: var(--text-3);">2026.10.27</span>
-          <span  style="display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--accent-text); border: 1px solid var(--accent-text); padding: 1px 5px;">LATEST</span>
         </div>
         <p  style="font-size: 15px; line-height: 1.8; color: var(--text-2); margin: 0px 0px 24px; text-wrap: pretty;">
 <span class="l-en">A patched Node.js, wakes that wait out a dialog instead of giving up, and file paths as chips.</span>
