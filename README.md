@@ -51,7 +51,13 @@ pilo never speaks to a model provider. Everything stays on your Mac.
 
 ## Install
 
-Download `pilo-<version>-mac.tar.gz` from the
+One line in a terminal:
+
+```bash
+curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
+```
+
+or download `pilo-<version>-mac.tar.gz` from the
 [latest release](https://github.com/garamnohhh/pilo/releases/latest), unpack it and run
 the installer in a terminal:
 
