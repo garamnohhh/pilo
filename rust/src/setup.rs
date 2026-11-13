@@ -22,6 +22,59 @@ pub fn find_cli(name: &str) -> Option<String> {
     dirs.into_iter().filter(|d| !d.is_empty()).map(|d| std::path::Path::new(&d).join(name)).find(|p| p.is_file()).map(|p| p.display().to_string())
 }
 
+// --- #6274: the server's life for an installed release (the checkout's bin/pilo does this with its own shell) ---
+
+fn uid() -> String { std::process::Command::new("/usr/bin/id").arg("-u").output().map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string()).unwrap_or_default() }
+fn home_dir() -> PathBuf { PathBuf::from(std::env::var("PILO_HOME").or_else(|_| std::env::var("HOME")).unwrap_or_default()).join(".pilo") }
+const LABEL: &str = "dev.garamnoh.pilo-serve";
+fn plist() -> PathBuf { PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(format!("Library/LaunchAgents/{LABEL}.plist")) }
+fn port() -> String { std::fs::read_to_string(home_dir().join("port")).map(|s| s.trim().to_string()).unwrap_or_else(|_| "48888".into()) }
+fn up() -> bool {
+    std::process::Command::new("/usr/bin/curl").args(["-fsS", "-m", "2", &format!("http://127.0.0.1:{}/health", port())]).output().map(|o| o.status.success()).unwrap_or(false)
+}
+fn launchctl(args: &[&str]) -> bool { std::process::Command::new("/bin/launchctl").args(args).output().map(|o| o.status.success()).unwrap_or(false) }
+fn wait(want: bool) -> bool { for _ in 0..40 { if up() == want { return true } std::thread::sleep(std::time::Duration::from_millis(250)); } up() == want }
+
+/// pilo start · stop · restart · status, and a bare `pilo`: the app
+pub fn life(cmd: &str) -> i32 {
+    let target = format!("gui/{}/{LABEL}", uid());
+    let start = || -> bool {
+        if up() { return true }
+        // the login item the installer made; without one (a hand-made setup) the server on its own
+        if plist().exists() { launchctl(&["bootstrap", &format!("gui/{}", uid()), &plist().display().to_string()]); launchctl(&["kickstart", &target]); }
+        else if let Ok(me) = std::env::current_exe() {
+            let log = std::fs::OpenOptions::new().create(true).append(true).open(home_dir().join("logs/pilo.log"));
+            let mut c = std::process::Command::new(me);
+            c.arg("serve").stdin(std::process::Stdio::null());
+            if let Ok(f) = log { if let Ok(g) = f.try_clone() { c.stdout(f).stderr(g); } }
+            use std::os::unix::process::CommandExt;
+            let _ = c.process_group(0).spawn();
+        }
+        wait(true)
+    };
+    let stop = || -> bool {
+        if plist().exists() && launchctl(&["bootout", &target]) { return wait(false) }
+        if let Ok(pid) = std::fs::read_to_string(home_dir().join("server.pid")) { let _ = std::process::Command::new("/bin/kill").arg(pid.trim()).status(); }
+        wait(false)
+    };
+    match cmd {
+        "start" => { if start() { println!("Pilo ready"); 0 } else { eprintln!("pilo did not answer in 10 s - see ~/.pilo/logs/pilo.log"); 1 } }
+        "stop" => { if stop() { println!("Pilo server stopped"); 0 } else { eprintln!("pilo still answers"); 1 } }
+        "restart" => { stop(); if start() { println!("Pilo restarted"); 0 } else { eprintln!("pilo did not come back - see ~/.pilo/logs/pilo.log"); 1 } }
+        "status" => {
+            println!("server:    {}", if up() { format!("running (port {})", port()) } else { "stopped".into() });
+            println!("version:   {}", env!("CARGO_PKG_VERSION"));
+            println!("database:  {}", home_dir().join("pilo.sqlite").display());
+            0
+        }
+        _ => {
+            let app = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join("Applications/pilo.app");
+            if app.exists() { start(); let _ = std::process::Command::new("/usr/bin/open").arg(&app).status(); println!("pilo opened"); 0 }
+            else { crate::cli::run(&[]) }   // no app here (a test's home, a server-only Mac): the commands, as before
+        }
+    }
+}
+
 /// git that runs: macOS's /usr/bin/git without the developer tools only offers to install them, in a dialog
 pub fn has_git() -> bool {
     std::process::Command::new("/usr/bin/xcode-select").arg("-p").output().map(|o| o.status.success()).unwrap_or(false)

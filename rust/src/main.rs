@@ -50,8 +50,13 @@ fn main() {
         match a.get(1) { Some(&"classify") => hook::classify(), Some(&"describe") => describe::print_lines(), Some(ev) => hook::run(ev, a.contains(&"--codex")), None => {} }
         return;
     }
+    // #6274: the server's life and the app, as the checkout's launcher has them
+    if a.is_empty() || matches!(a.first(), Some(&"start" | &"stop" | &"restart" | &"status" | &"open")) {
+        std::process::exit(setup::life(a.first().copied().unwrap_or("open")));
+    }
+    if a.first() == Some(&"help") { std::process::exit(cli::run(&[])); }
     // the agent CLI: pilo task, done, progress, …
-    if a.first().map(|c| cli::COMMANDS.contains(c)).unwrap_or(false) || a.is_empty() {
+    if a.first().map(|c| cli::COMMANDS.contains(c)).unwrap_or(false) {
         std::process::exit(cli::run(&args));
     }
     if a.first() == Some(&"hooks") { std::process::exit(setup::hooks(&args[1..])); }
