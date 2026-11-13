@@ -65,7 +65,9 @@ pub async fn update_status(app: &Shared) -> Json<Value> {
     let available = matches!((latest.as_deref().and_then(version_of), version_of(&current)), (Some(a), Some(b)) if a > b);
     let git = |args: &[&str]| crate::setup::has_git().then(|| std::process::Command::new("git").args(args).current_dir(&root).output().ok()).flatten().filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
-    let kind = if root.to_string_lossy().contains("/node_modules/") && !root.join(".git").exists() { "npm" }
+    // #6240: share/ beside an installed binary is a release the app can update
+    let kind = if !root.join(".git").exists() && root.join("../bin/pilo").exists() { "release" }
+        else if root.to_string_lossy().contains("/node_modules/") && !root.join(".git").exists() { "npm" }
         else { match git(&["status", "--porcelain", "--", ".", ":!package-lock.json"]) {
             None => "nogit",
             Some(s) if !s.is_empty() => "dirty",

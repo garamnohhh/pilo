@@ -14,7 +14,7 @@ rm -rf "$S"; mkdir -p "$S/bin" "$S/share/src" "$S/share/bin"
 cp rust/target/release/pilo "$S/bin/pilo"; codesign --force --sign - --identifier dev.garamnoh.pilo "$S/bin/pilo" 2>/dev/null
 cp -R public "$S/share/public"
 cp src/markdown.js src/width.js src/commands.js src/text.js "$S/share/src/"
-cp package.json "$S/share/"; cp bin/pilo-statusline "$S/share/bin/"
+cp package.json "$S/share/"; cp bin/pilo-statusline "$S/share/bin/"; cp -R mods "$S/share/mods"
 # the app as pilo-desk builds it, signed ad hoc (no personal certificate), installed into the folder instead of ~/Applications
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 PILO_SIGN="ad hoc only" PILO_HOME="$T" PILO_APP_DIR="$S" "$DESK/scripts/install.sh" --no-build >/dev/null
@@ -31,6 +31,8 @@ mkdir -p "$P/bin" "$P/logs" "$P/desk/bin" "$HOME/.local/bin" "$HOME/Applications
 cp bin/pilo "$P/bin/.pilo.new" && mv -f "$P/bin/.pilo.new" "$P/bin/pilo"
 rm -rf "$P/share.new" && cp -R share "$P/share.new" && rm -rf "$P/share" && mv "$P/share.new" "$P/share"
 ln -sf "$P/bin/pilo" "$HOME/.local/bin/pilo"
+# an open window is closed for the new one (its terminals live in the daemon and stay); reopened below
+WAS_OPEN=0; pgrep -f "$APP/Contents/MacOS/pilo-desk$" >/dev/null && { WAS_OPEN=1; osascript -e 'tell application id "dev.garamnoh.pilo-desk" to quit' >/dev/null 2>&1 || true; sleep 1; pkill -f "$APP/Contents/MacOS/pilo-desk$" || true; }
 [ -e "$APP" ] && mv "$APP" "$HOME/.Trash/pilo-$(date +%Y%m%d-%H%M%S).app"
 cp -R pilo.app "$APP"
 cp pilo.app/Contents/MacOS/pilo-deskd "$P/desk/bin/.pilo-deskd.new" && mv -f "$P/desk/bin/.pilo-deskd.new" "$P/desk/bin/pilo-deskd"

@@ -132,28 +132,63 @@ async fn preview(State(app): State<Shared>, raw: String) -> Response {
     match crate::rules::preview(&app, &b) { Ok(v) => (StatusCode::CREATED, Json(v)).into_response(), Err(e) => e }
 }
 
-/// update.check: the newest release tag; installing a release is how pilo is shipped later (D)
+/// update.check: the newest release on GitHub and its Mac archive (#6240: curl, which every Mac has; no git)
 async fn update_check(State(app): State<Shared>) -> Response {
-    let repo = std::env::var("PILO_UPDATE_REPO").unwrap_or_else(|_| "https://github.com/garamnohhh/pilo.git".into());
-    let latest = std::env::var("PILO_UPDATE_LATEST").ok().or_else(|| {
-        if !crate::setup::has_git() { return None }   // #6236: a Mac without the developer tools would put up their install dialog
-        let o = std::process::Command::new("git").args(["ls-remote", "--tags", "--refs", &repo]).output().ok()?;
-        let re = regex::Regex::new(r"^v?(\d+)\.(\d+)\.(\d+)$").unwrap();
-        String::from_utf8_lossy(&o.stdout).lines().filter_map(|l| l.split('\t').nth(1)).map(|t| t.trim_start_matches("refs/tags/").trim_start_matches('v').to_string())
-            .filter(|t| re.is_match(t)).max_by_key(|t| t.split('.').map(|x| x.parse::<u64>().unwrap_or(0)).collect::<Vec<_>>())
-    });
-    let file = app.home.join("update.json");
-    let mut st: Value = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
-    if let Some(l) = latest { st["latest"] = json!(l); st["error"] = json!(""); }
-    st["checkedAt"] = json!(crate::sql::iso_ms(crate::sql::now_us()));
-    let _ = std::fs::write(&file, st.to_string());
+    let a = app.clone();
+    let _ = tokio::task::spawn_blocking(move || check_now(&a)).await;
     crate::misc::update_status(&app).await.into_response()
 }
 
-/// startUpdate: refused unless this copy is an installed release, as the Node server refuses it; a release of the
-/// Rust build is installed by its own installer (stage D), so it says so
+pub fn check_now(app: &Shared) {
+    let api = std::env::var("PILO_UPDATE_API").unwrap_or_else(|_| "https://api.github.com/repos/garamnohhh/pilo/releases/latest".into());
+    let got: Option<Value> = std::env::var("PILO_UPDATE_LATEST").ok().map(|v| json!({ "tag_name": v })).or_else(|| {
+        let o = std::process::Command::new("/usr/bin/curl").args(["-fsSL", "-m", "15", "-H", "Accept: application/vnd.github+json", &api]).output().ok()?;
+        serde_json::from_slice(&o.stdout).ok()
+    });
+    let file = app.home.join("update.json");
+    let mut st: Value = std::fs::read_to_string(&file).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
+    match got.as_ref().and_then(|g| g["tag_name"].as_str()) {
+        Some(tag) => {
+            st["latest"] = json!(tag.trim_start_matches('v'));
+            st["asset"] = got.as_ref().and_then(|g| g["assets"].as_array()).and_then(|a| a.iter().find(|x| x["name"].as_str().is_some_and(|n| n.ends_with("-mac.tar.gz"))))
+                .map(|x| x["browser_download_url"].clone()).unwrap_or(Value::Null);
+            st["error"] = json!("");
+        }
+        None => st["error"] = json!("could not reach GitHub"),
+    }
+    st["checkedAt"] = json!(crate::sql::iso_ms(crate::sql::now_us()));
+    let _ = std::fs::write(&file, st.to_string());
+}
+
+/// #6240: a few minutes after start and then every six hours, unless PILO_UPDATE_CHECK=off
+pub fn start_checks(app: Shared) {
+    if std::env::var("PILO_UPDATE_CHECK").as_deref() == Ok("off") { return }
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+        loop {
+            let a = app.clone();
+            let _ = tokio::task::spawn_blocking(move || check_now(&a)).await;
+            tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
+        }
+    });
+}
+
+/// startUpdate: an installed release (#6240) fetches the new archive and runs its installer, apart from this server,
+/// which the installer restarts; a checkout or an npm copy is refused as before
 async fn update_install(State(app): State<Shared>) -> Response {
     let st = crate::misc::update_status(&app).await.0;
     let kind = st["kind"].as_str().unwrap_or("nogit").to_string();
-    fail(StatusCode::CONFLICT, if kind != "ok" && kind != "npm" { &kind } else { "this build updates with its release installer" })
+    if kind != "release" { return fail(StatusCode::CONFLICT, if kind != "ok" && kind != "npm" { &kind } else { "this build updates with its release installer" }) }
+    if st["available"] != true { return fail(StatusCode::CONFLICT, "already the newest") }
+    let saved: Value = std::fs::read_to_string(app.home.join("update.json")).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({}));
+    let Some(url) = saved["asset"].as_str().filter(|u| u.starts_with("https://github.com/")).map(String::from) else { return fail(StatusCode::CONFLICT, "the release has no Mac archive") };
+    let dir = app.home.join("tmp/update");
+    let script = format!("set -e; rm -rf '{d}'; mkdir -p '{d}'; cd '{d}'; /usr/bin/curl -fsSL -m 300 -o p.tgz '{url}'; /usr/bin/tar xzf p.tgz; /bin/bash */install.sh >> '{log}' 2>&1",
+        d = dir.display(), log = app.home.join("logs/update.log").display());
+    use std::os::unix::process::CommandExt;
+    // its own process group: the installer stops this server, and must outlive it
+    match std::process::Command::new("/bin/bash").args(["-c", &script]).process_group(0).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn() {
+        Ok(_) => (StatusCode::CREATED, Json(json!({ "ok": true, "step": "installing", "version": st["latest"] }))).into_response(),
+        Err(e) => fail(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()),
+    }
 }
