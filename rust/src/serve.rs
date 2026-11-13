@@ -94,7 +94,8 @@ async fn page(State(app): State<Shared>, uri: Uri) -> Response {
     let p = uri.path();
     let shared = ["/markdown.js", "/width.js", "/commands.js", "/text.js"];
     let file = if shared.contains(&p) { app.src.join(&p[1..]) }
-        else if matches!(p, "/" | "/dashboard" | "/welcome") { app.public.join("dashboard.html") }
+        // #6240: no browser page any more; the app is pilo's face (public/ keeps what pibot's pages load)
+        else if matches!(p, "/" | "/dashboard" | "/welcome") { return ([("content-type", "text/html; charset=utf-8")], "<!doctype html><meta charset=utf-8><title>pilo</title><p style=\"font:15px system-ui;margin:40px\">pilo runs in its app now: open <b>pilo</b> from Applications.</p>").into_response() }
         else if p.split('/').any(|s| s == "..") { return fail(StatusCode::NOT_FOUND, "not found") }
         else { app.public.join(&p[1..]) };
     let Ok(body) = tokio::fs::read(&file).await else { return fail(StatusCode::NOT_FOUND, "not found") };
@@ -123,6 +124,7 @@ pub async fn run(port: u16, db: PathBuf, repo: PathBuf) -> Result<(), String> {
     crate::quota::install_mod(&repo_root.join("mods/pilo-usage"));
     crate::engine::start(app.clone());
     crate::rest::start_checks(app.clone());
+    crate::telemetry::start(app.clone());
     let router: Router<Shared> = crate::rest::routes(crate::modelrun::routes(crate::models::routes(crate::usage::routes(crate::approvals::routes(crate::stream::routes(crate::rules::routes(crate::misc::routes(crate::agents::routes(crate::schedules::routes(crate::admin::routes(crate::writes::routes(crate::reads::routes(Router::new())))))))))))));
     // every write, from the dashboard, the CLI or the spool, rings the bell (server.js dispatch)
     let bell = app.clone();

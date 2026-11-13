@@ -342,7 +342,7 @@ async fn archive_project(State(app): State<Shared>, Path(id): Path<i64>) -> W {
 // saveSetting
 async fn save_setting(State(app): State<Shared>, Path(key): Path<String>, raw: String) -> W {
     let b = body(&raw)?;
-    if !["notifications", "tokens", "retention", "icons", "welcome"].contains(&key.as_str()) { return Err(bad(400, "unknown setting")); }
+    if !["notifications", "tokens", "retention", "icons", "welcome", "telemetry"].contains(&key.as_str()) { return Err(bad(400, "unknown setting")); }
     let value = b["value"].clone();
     let db = app.db.lock().unwrap();
     exec(&db, "INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, now())

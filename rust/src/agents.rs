@@ -308,14 +308,13 @@ async fn setup(State(app): State<Shared>) -> Res {
      FROM inbox i ORDER BY i.id DESC LIMIT 1"#, &[], &[("answered", K::Bool)]).map_err(db_err)?;
     let answered = one(&db, "SELECT count(*) AS n FROM final_replies", &[], &[]).map_err(db_err)?.unwrap()["n"].clone();
     let welcome = one(&db, "SELECT value FROM settings WHERE key = 'welcome'", &[], &[("value", K::Json)]).map_err(db_err)?.map(|r| r["value"].clone()).unwrap_or(json!(""));
-    let port = std::fs::read_to_string(app.home.join("port")).ok().and_then(|s| s.trim().parse::<u16>().ok()).unwrap_or(app.port);
     let free: Vec<Value> = live.iter().filter(|x| !held.iter().any(|h| x["target"] == h.as_str()))
         .map(|x| json!({ "target": x["target"], "cwd": x["cwd"], "runtime": x["runtime"], "status": x["status"] })).collect();
     let n = pilos.len();
     Ok(Json(json!({
         "deskUp": up, "desk": !live.is_empty(), "sessions": live.len(),
         // the Node server says which Node runs it; there is none here
-        "node": "", "url": format!("http://127.0.0.1:{port}/welcome"),
+        "node": "", "url": "",
         "lastRequest": first, "answered": answered, "welcome": welcome, "postgres": true,
         // #6240: which coding agents this Mac has, for the app's first step (a launchd server's PATH is short)
         "clis": { "claude": crate::setup::find_cli("claude"), "codex": crate::setup::find_cli("codex") },

@@ -19,7 +19,6 @@ use tokio::sync::oneshot;
 
 const HOOK_TIMEOUT_S: u64 = 86400;
 const MAX_WAIT_MS: u64 = (HOOK_TIMEOUT_S - 30) * 1000;
-const PAIR_MS: i64 = 5 * 60_000;
 const NOTICE_MS: i64 = 60 * 60_000;
 const ASKED_MS: i64 = 10 * 60_000;
 
@@ -213,14 +212,8 @@ fn unread_log(what: &str, screen: &str) {
     let _ = std::fs::write(&file, format!("{old}\n=== {}\n--- asked\n{}\n--- screen\n{}\n", crate::sql::iso_ms(crate::sql::now_us()), what.chars().take(2000).collect::<String>(), tail(screen, 4000)));
 }
 
-// --- device keys ----------------------------------------------------------
-fn store(app: &Shared) -> std::path::PathBuf { app.home.join("approvals.json") }
+// --- the Mac apps' key ----------------------------------------------------------
 fn tui_key_file(app: &Shared) -> std::path::PathBuf { app.home.join("approve-tui.key") }
-fn read_store(app: &Shared) -> Value { std::fs::read_to_string(store(app)).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or(json!({})) }
-fn write_store(app: &Shared, v: &Value) {
-    use std::os::unix::fs::OpenOptionsExt;
-    if let Ok(mut f) = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(store(app)) { use std::io::Write; let _ = f.write_all(serde_json::to_string_pretty(v).unwrap_or_default().as_bytes()); }
-}
 fn random(n: usize) -> Vec<u8> { let mut b = vec![0u8; n]; if let Ok(mut f) = std::fs::File::open("/dev/urandom") { use std::io::Read; let _ = f.read_exact(&mut b); } b }
 fn b64url(b: &[u8]) -> String {
     const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
@@ -244,8 +237,8 @@ fn same(a: &str, b: &str) -> bool { a.len() == b.len() && a.bytes().zip(b.bytes(
 pub fn key_ok(app: &Shared, key: &Value) -> bool {
     let Some(key) = key.as_str().filter(|k| !k.is_empty()) else { return false };
     let h = sha(key);
-    if tui_key_file(app).exists() && same(&h, &sha(&tui_key(app))) { return true; }
-    read_store(app)["devices"].as_array().map(|d| d.iter().any(|x| same(&h, x["hash"].as_str().unwrap_or("")))).unwrap_or(false)
+    // #6240: the Mac's own apps only (the key in ~/.pilo); phones paired over the browser page are gone with it
+    tui_key_file(app).exists() && same(&h, &sha(&tui_key(app)))
 }
 
 /// agentForPane: the agent bound to the pane, with the task it is on
@@ -260,7 +253,6 @@ pub fn agent_for_pane(app: &Shared, pane: &str) -> Option<Value> {
 
 pub fn routes(r: Router<Shared>) -> Router<Shared> {
     r.route("/api/approvals", get(list))
-        .route("/api/approvals/pair", post(pair))
         .route("/api/approvals/check", post(check))
         .route("/api/approvals/{id}", post(decide))
         .route("/api/hooks/notify", post(hook_notify))
@@ -378,42 +370,7 @@ async fn decide(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     (StatusCode::CREATED, Json(json!({ "ok": true, "id": id, "decision": if d.is_empty() { "answer".into() } else { d } }))).into_response()
 }
 
-async fn pair(State(app): State<Shared>, raw: String) -> Response {
-    let b = match body(&raw) { Ok(b) => b, Err(e) => return e };
-    let st = read_store(&app);
-    let code = s(&b["code"]).trim().to_uppercase();
-    let p = &st["pair"];
-    let now = now_ms();
-    if p.is_null() || now > p["until"].as_i64().unwrap_or(0) || code.is_empty() || !same(&sha(&code), p["hash"].as_str().unwrap_or("")) {
-        if !p.is_null() {
-            let misses = p["misses"].as_i64().unwrap_or(0) + 1;
-            let mut next = st.clone();
-            next["pair"] = if misses >= 5 { Value::Null } else { let mut q = p.clone(); q["misses"] = json!(misses); q };
-            write_store(&app, &next);
-        }
-        return fail(StatusCode::FORBIDDEN, "wrong or expired code — run 'pilo approvals pair' in a terminal on the Mac for a new one");
-    }
-    let key = b64url(&random(24));
-    let name = crate::writes::js_slice(&{ let n = s(&b["name"]); if n.is_empty() { "device".into() } else { n } }, 60);
-    let mut next = st.clone();
-    next["pair"] = Value::Null;
-    let mut devices = st["devices"].as_array().cloned().unwrap_or_default();
-    devices.push(json!({ "name": name, "hash": sha(&key), "at": crate::sql::iso_ms(crate::sql::now_us()) }));
-    next["devices"] = json!(devices);
-    write_store(&app, &next);
-    (StatusCode::CREATED, Json(json!({ "key": key, "name": name }))).into_response()
-}
 
-/// newPairCode, for `pilo approvals pair` (typed by the user in a terminal)
-#[allow(dead_code)]
-pub fn new_pair_code(app: &Shared) -> String {
-    let r = random(4);
-    let code = format!("{:06}", u32::from_le_bytes([r[0], r[1], r[2], r[3]]) % 1_000_000);
-    let mut st = read_store(app);
-    st["pair"] = json!({ "hash": sha(&code), "until": now_ms() + PAIR_MS, "misses": 0 });
-    write_store(app, &st);
-    code
-}
 
 async fn check(State(app): State<Shared>, raw: String) -> Response {
     let b = match body(&raw) { Ok(b) => b, Err(e) => return e };

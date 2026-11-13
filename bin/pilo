@@ -188,8 +188,7 @@ print("  wake failures: %d" % len(d["wakeFailures"]))
     ;;
   logs) tail -f "$LOG" ;;
   # the user's own: put Pilo's hooks into Claude Code / Codex, pair a phone
-  hooks) [[ -n "$ENGINE" && "${2:-}" =~ ^(install|remove)$ ]] && exec "$PILO_HOME_DIR/bin/pilo" "$@"; exec node "$ROOT/src/hooks.js" "$@" ;;
-  approvals) exec node "$ROOT/src/hooks.js" "$@" ;;
+  hooks) [[ -n "$ENGINE" ]] && exec "$PILO_HOME_DIR/bin/pilo" "$@"; exec node "$ROOT/src/hooks.js" "$@" ;;
   # Every CLI command in src/commands.js has to be named here or it never
   # reaches the dispatcher — the shell answers with the usage line instead.
   # cli.test.js reads this list and that one, and fails when they drift.

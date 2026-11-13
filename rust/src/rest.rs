@@ -4,7 +4,7 @@
 
 use crate::serve::{db_err, fail, one, Shared};
 use crate::writes::{body, s};
-use axum::{body::Bytes, extract::{Path, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Response}, routing::post, Json, Router};
+use axum::{body::Bytes, extract::{Path, State}, http::{HeaderMap, StatusCode}, response::{IntoResponse, Response}, routing::{get, post}, Json, Router};
 use serde_json::{json, Value};
 
 pub fn routes(r: Router<Shared>) -> Router<Shared> {
@@ -13,6 +13,7 @@ pub fn routes(r: Router<Shared>) -> Router<Shared> {
         .route("/api/agents/{id}/focus", post(focus))
         .route("/api/setup/preview", post(preview))
         .route("/api/update/check", post(update_check))
+        .route("/api/telemetry", get(telemetry))
         .route("/api/update/install", post(update_install))
 }
 
@@ -130,6 +131,13 @@ async fn focus(State(app): State<Shared>, Path(id): Path<i64>) -> Response {
 async fn preview(State(app): State<Shared>, raw: String) -> Response {
     let b = match body(&raw) { Ok(b) => b, Err(e) => return e };
     match crate::rules::preview(&app, &b) { Ok(v) => (StatusCode::CREATED, Json(v)).into_response(), Err(e) => e }
+}
+
+/// #6240: whether the daily usage line goes out, and the line itself, for the app to show before it does
+async fn telemetry(State(app): State<Shared>) -> Response {
+    let a = app.clone();
+    let (on, body, sends) = tokio::task::spawn_blocking(move || (crate::telemetry::on(&a), crate::telemetry::body(&a), crate::telemetry::release())).await.unwrap_or((false, json!({}), false));
+    Json(json!({ "on": on, "sends": on && sends, "body": body })).into_response()
 }
 
 /// update.check: the newest release on GitHub and its Mac archive (#6240: curl, which every Mac has; no git)

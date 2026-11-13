@@ -29,7 +29,7 @@ what came back is on record, so tomorrow you do not explain it again.
 
 ## How it works
 
-Three kinds of agent, and pilo starts none of them:
+Three kinds of agent, and pilo starts none of them on its own:
 
 | | What it does |
 | --- | --- |
@@ -37,109 +37,74 @@ Three kinds of agent, and pilo starts none of them:
 | **Owner** (`pm`) | One project, one owner. Reads only its own folder, does the work, reports to the desk. |
 | **Specialist** (`worker`) | Sits under an owner and covers one area — review, QA, a second runtime. Reports to its owner, never to you. |
 
-Underneath, three things share the machine:
+pilo is one app and one small server, both written in Rust:
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.png">
-  <img alt="You ask pilo. pilo keeps the request in ~/.pilo, wakes the right session through herdr, and the owners running in your terminal — shop, notes, atlas — report back to pilo." src="docs/diagrams/architecture-light.png">
-</picture>
+- **the pilo app** — your agents' terminals (Claude Code, Codex) live in it, next to
+  the desk, the requests, schedules, usage and settings. The terminals belong to
+  a background daemon, so closing the window or updating the app leaves every
+  session running.
+- **the server** — keeps requests and answers in a SQLite file, wakes the agent a
+  request is for by typing into its terminal, and answers the agents' `pilo`
+  commands over a unix socket.
 
-pilo never launches an agent and never speaks to a provider. It finds the panes
-with `herdr agent list`, wakes one with `herdr agent prompt`, and the agent
-answers by running `pilo` commands of its own. Everything crosses a unix socket
-on your own machine.
+pilo never speaks to a model provider. Everything stays on your Mac.
 
 ## Install
 
+Download `pilo-<version>-mac.tar.gz` from the
+[latest release](https://github.com/garamnohhh/pilo/releases/latest), unpack it and run
+the installer in a terminal:
+
 ```bash
-curl -fsSL https://pilo.garamnoh.workers.dev/install.sh | sh
+tar xzf pilo-*-mac.tar.gz && ./pilo-*-mac/install.sh
 ```
 
-No Node.js needed. With Node 22.23.4+ or 24.22.1+ already there, this is the plain
-`npm install -g @garamnohhh/pilo` (which you can also run yourself). Without it,
-pilo gets a private Node in `~/.pilo/runtime` (about 27 MB to download, 230 MB
-on disk), fetched from nodejs.org and checked against its published checksums.
-That Node runs pilo and nothing else: the Node on your PATH, nvm and the rest
-are not touched, and switching versions later does not break pilo. The command
-goes in `~/.local/bin`; the installer says so if that is not on your PATH yet.
+It puts the server in `~/.pilo/bin`, the app in `~/Applications/pilo.app`, starts
+both at login, adds Pilo's hooks to Claude Code (and Codex, if you have it) and
+adds `~/.local/bin` to your shell's `PATH` for the `pilo` command. Nothing needs
+sudo, Node or anything else installed first. The build is not notarised yet;
+running the installer from the terminal is what keeps macOS from refusing it.
 
-Nothing is compiled and nothing asks for sudo. pilo is a terminal tool, not an
-app bundle, so Gatekeeper and notarisation never come into it.
+You need at least one coding agent, signed in once: Claude Code
+(`curl -fsSL https://claude.ai/install.sh | bash`) or Codex
+(`brew install --cask codex`). The app checks for them on its first screen.
 
-Before the first run you need:
+New versions show on **System** in the app, with a button that installs them; your
+sessions keep running through it.
 
-| | |
-| --- | --- |
-| **[herdr](https://herdr.dev)** | the terminal workspace pilo watches: `curl -fsSL https://herdr.dev/install.sh | sh` (or `brew install herdr`) |
-| **At least one coding agent** | Claude Code or Codex, opened by you in a herdr pane |
-
-To update later, run `pilo update`, or press Install where the dashboard says a
-new release is out (System). Running the installer again also moves the private
-Node to the newest LTS.
-
-To remove it: `npm uninstall -g @garamnohhh/pilo`, or for the private-Node install
-`rm -rf ~/.pilo/runtime ~/.local/bin/pilo`. Your requests and their history stay
-in `~/.pilo` until you remove that too.
+To remove it: `launchctl bootout gui/$(id -u)/dev.garamnoh.pilo-serve`,
+`~/.pilo/desk/bin/pilo-deskd --uninstall-agent`, `pilo hooks remove`, then delete
+`~/Applications/pilo.app`, `~/.pilo/bin` and `~/.local/bin/pilo`. Your requests and
+their history stay in `~/.pilo` until you remove that too.
 
 ## First run
 
-```bash
-pilo                  # start the services and enter the terminal UI
-pilo dashboard        # the same desk in a browser
-pilo status           # what is running
-pilo stop             # stop the server; pilo start / pilo restart
-pilo doctor           # what is missing
-```
-
-The first run creates the database under `~/.pilo/data`, enables `pgvector` and
-applies the migrations. There is nothing to install first and no password to
-keep: the database is a directory only your account can read.
-
-### 1. Finish setup in the browser
-
-With no desk registered yet, `pilo` opens `http://127.0.0.1:48888/welcome` in
-your browser and says so in the terminal (`pilo --no-open` skips the browser;
-the terminal UI shows the same address). Four steps, each checking itself:
+The installer opens the app on **Set up pilo**: four steps, each checking itself,
+so you can leave and come back.
 
 | Step | What it asks of you |
 | --- | --- |
-| **Get ready** | Node 22.23.4+ or 24.22.1+, herdr running, and a Claude Code or Codex session in a herdr pane. What is missing comes with the command to copy, and turns green on its own. |
-| **Pick your desk** | Which open session you talk to. One click. |
-| **Register the owners** | A project name for each other session. Preview the block pilo writes into that folder's `CLAUDE.md` or `AGENTS.md`, then write it. Optional. |
-| **Send a first request** | One request there and back, to see the desk answer. |
+| **Get ready** | Claude Code or Codex installed, and one session opened in the app (a button does it). |
+| **Pick your desk** | Which session is the desk you talk to. |
+| **Owners** | Optional: one owner per project session. Their instruction file gets Pilo's rules. |
+| **A first request** | Write it in the box on **Work** and watch it come back. |
 
-![Welcome: four steps from install to a first answer](docs/screenshots/welcome.png)
+### Say what you want done
 
-Owners can be added or changed later on the Agents tab (**Add agent**).
-
-![Agents: the desk, its owners and their specialists](docs/screenshots/agents.png)
-
-An owner reports to the desk; a specialist reports to its owner. The same screen
-pins the model and effort each runtime should use, and says when a session has
-gone.
-
-### 2. Say what you want done
-
-Type it at the prompt — in the terminal or in the dashboard, they are the same
-desk. You do not name an agent. The desk reads the request, splits it when it
-belongs to more than one project, and hands each part to the owner of that
-folder.
+Type it in the box on **Work**. You do not name an agent. The desk reads the
+request, splits it when it belongs to more than one project, and hands each part
+to the owner of that folder.
 
 While the work is out, the line under your request says who is holding it and
 what they last said about it. When everything lands you get one answer, written
-in the language you asked in.
+in the language you asked in. If something finishes *after* that answer was
+written, the desk comes back and adds what changed underneath it.
 
-If something finishes *after* that answer was written, the desk comes back and
-adds what changed underneath it, rather than leaving the promise unkept.
-
-### 3. Read the trail when you want it
-
-![Requests: the stages one request went through](docs/screenshots/requests.png)
+### Read the trail when you want it
 
 Every request keeps its stages — what you said, who it went to, what each owner
-reported, what failed, and the answer that came back. The terminal shows the last
-one; the rest is there when you want it, and `pilo history <words>` finds what
-you asked last week.
+reported, what failed, and the answer that came back — on **Requests**, and
+`pilo history <words>` finds what you asked last week.
 
 ## What else it does
 
@@ -148,85 +113,63 @@ you asked last week.
   instead of stacking a second one.
 - **Limits** — when a provider's window runs out, pilo parks that runtime until
   it reopens and hands the parked agent's unopened queue to its owner.
-  When Claude's usage figure cannot be refreshed, the status line says why —
-  `? · login needed` or `? · rate limited` — and the desk leaves one note.
 - **Notes** — the desk can also speak first: a job that ran, a limit that landed.
-  A line of its own, with nothing waiting on it.
 - **Decisions** — when an owner needs you to decide something, the question
   arrives in that conversation and your answer goes back to the work.
-- **Approvals** — with `pilo hooks install`, a session pilo runs asks its
-  permission prompts and its multiple-choice questions on the dashboard, the
-  terminal UI and the phone as well as in its own pane; the first answer from
-  either side wins. A few things always ask, whatever the mode, and their card
-  says in red what they do: `rm -rf` outside temporary folders and build
-  output (`/tmp`, `$TMPDIR`, `~/.cache`, a `mktemp` folder, `node_modules`,
-  `dist`), deleting a remote repository, branch or release, a force push over
-  `main` or another shared branch, database writes, cloud changes (`aws`,
-  `gcloud`, `terraform apply`, `kubectl apply` and the like), reading `.env` or
-  a secret's value, posting from a logged-in browser, and messages to people
-  outside (RelayRoom, Slack, mail). Everything else goes ahead. Codex, which
-  takes no "ask" from a hook, is held by pilo itself and stopped unless you
-  say yes. Only a session reaching for pilo's own
-  approvals (`pilo approvals`, `pilo hooks`, the answer API, the device keys) is
-  answered in its pane alone. A phone answers once paired with a code from
-  `pilo approvals pair`, and Allow asks once more. The same
-  hooks tell pilo when a pane is waiting, when a turn ends and which
-  conversation a pane runs. Settings are backed up and the change shown before
-  it is written; `pilo hooks remove` takes it out again.
-- **Phone** — the dashboard fits a phone: one screen at a time with a tab bar
-  at the bottom, and it can be added to the home screen. pilo only listens on
-  `127.0.0.1`, so reaching it from a phone is up to a tunnel you run (for
-  example `tailscale serve`). When the Mac does not answer, the phone shows an
-  offline screen with the last requests and answers it kept, and comes back by
-  itself.
+- **Approvals** — a session's permission prompts and multiple-choice questions
+  show in the app as well as in its own terminal; the first answer wins. A few
+  things always ask, whatever the mode, and their card says in red what they
+  touch: `rm -rf` outside temporary folders and build output, deleting a remote
+  repository, branch or release, a force push over a shared branch, database
+  writes, cloud changes, reading `.env` or a secret's value, posting from a
+  logged-in browser, messages to people outside, and Pilo's own approvals and
+  hooks. Every one of them can be answered from the app, and each answer given
+  there is logged (the rule and the tool, not the command). Codex, which takes
+  no "ask" from a hook, is held by pilo itself and stopped unless you say yes.
 
 ## What it keeps, and where
 
-Everything pilo keeps lives under `~/.pilo/`: `config.toml`, `port`, `logs/`, and
-`data/` — the database itself. There is no container and no separate server: the
-database is [PGlite](https://pglite.dev), PostgreSQL 18 compiled to WebAssembly,
-opened as a directory of files, with `pgvector` enabled in it.
+Everything lives under `~/.pilo/`: `pilo.sqlite` (requests, answers, events),
+`port`, `logs/`, and the app's terminal daemon under `desk/`. The only socket that
+listens is `127.0.0.1`.
 
-One process owns that directory at a time. pilo writes `~/.pilo/db.lock` when it
-opens the database and refuses to start if another server still holds it — PGlite
-has no lock of its own, and two writers would corrupt the files.
+## What it sends
 
-Nothing about you is sent anywhere: no account, no telemetry. The one outbound
-request is a look at the npm registry once a day, to see whether a newer
-release is out; `PILO_UPDATE_CHECK=off` stops it. The only socket that
-listens is `127.0.0.1`, for the dashboard.
+Two things leave your Mac, and both can be switched off:
+
+- **Update check** — every six hours, the newest release on GitHub
+  (`api.github.com`). `PILO_UPDATE_CHECK=off` stops it.
+- **Usage counts** — once a day, one line to `garamnohh.pages.dev`, so we can see
+  how many installs are in use and which features matter. It holds a random
+  install id (made on your Mac, tied to nothing), pilo's version, the macOS
+  version and chip, how many agents run on Claude Code and on Codex, and how
+  many requests, tasks, results, approvals, window choices, schedule runs and
+  wakes happened that day. Never any content, prompts, file paths, names,
+  accounts or keys; the receiver keeps no IP address. It is on by default:
+  untick it on the first screen or in **Settings → Send usage counts**, or set
+  `PILO_TELEMETRY=off`. `curl 127.0.0.1:$(cat ~/.pilo/port)/api/telemetry` shows
+  the exact line before it goes.
 
 ## Commands
 
-The ones you use:
-
 ```bash
-pilo                  # the terminal UI
-pilo dashboard        # the browser desk
-pilo start            # the server only — pilo stop · pilo restart
-pilo update           # move to the newest release
-pilo hooks install    # approvals from the dashboard (--codex for Codex) · pilo hooks remove
-pilo approvals pair   # a code to pair a phone for answering
+pilo                  # open the app
+pilo start            # the server only — pilo stop · pilo restart · pilo status
+pilo hooks install    # Pilo's hooks in Claude Code and Codex · pilo hooks remove
 pilo inbox [id]       # requests, or one request in full
 pilo agents           # id · name · role · project
 pilo history <words>  # what was asked, answered and reported before
 pilo schedules        # standing work
-pilo doctor           # diagnostics
 ```
 
 Agents have their own set — `pilo task`, `pilo progress`, `pilo done`,
 `pilo block`, `pilo reply` — written into their instruction file when you
 register them. `pilo help` lists every one.
 
-Inside the terminal UI, `:help` does the same; `:dash`, `:project <name>`,
-`:follow`, `:fold`, `:cost` and `:icons` are the ones worth knowing, and
-`:allow`, `:deny`, `:pane` and `:pick` answer what a session is asking.
-
 ## Running a second instance
 
 Every part of the layout moves, which is how a test instance runs beside a real
-one: `PILO_HOME`, `PILO_DATA`, `PILO_PORT`, `PILO_SOCKET`, `PILO_SPOOL`, and
-`PILO_WATCHER=off` to start without the loop that wakes agents. Move the socket
+one: `PILO_HOME`, `PILO_PORT`, `PILO_SOCKET` and `PILO_SPOOL`. Move the socket
 and the spool together — the CLI falls back from one to the other, so changing
 only one leaves it talking to the instance you meant to leave alone.
 
@@ -234,33 +177,16 @@ only one leaves it talking to the instance you meant to leave alone.
 
 | Path | Role |
 | --- | --- |
-| `src/server.js` | HTTP API and static serving |
-| `src/tui.js` | the terminal UI |
-| `src/watcher.js` | inbox → wake → result → answer, every three seconds |
-| `src/herdr.js` | session detection and waking |
-| `public/dashboard.html` | the dashboard that ships |
-| `migrations/` | SQL migrations, applied in order |
-| `design/Pilo.dc.html` | the design reference — read-only, never served |
-
-The dashboard and the TUI must match the design file. If exact reproduction is
-blocked, the design file changes first.
-
-## Terminal notes
-
-The tree writes what each agent runs in front of its name — a brand glyph where
-the icon font has one, three letters where it does not. `:icons off` switches to
-letters and keeps the answer for the next run; `PILO_ICONS=off` does it for a
-whole shell. No terminal can be asked whether its font carries a glyph, so a
-machine without one shows a blank box until someone says so.
-
-`PILO_AMBIGUOUS_WIDTH` forces the East Asian ambiguous width when the startup
-probe cannot run.
+| `rust/` | the server, the agent CLI and the hooks, one binary |
+| `public/`, `src/*.js` | the design system and markdown files the apps' pages load |
+| `conformance/` | scenarios every server build has to pass |
+| `scripts/package-mac.sh` | builds the release archive (with the app from `pilo-desk`) |
 
 ## Contributing
 
-`npm test` runs the suite (`node --test src/*.test.js`). Push one branch at a
-time — `git push origin main`, not `--all` and not `--mirror`: a working copy
-picks up refs that are nobody's business in a public repository.
+`cargo test` in `rust/`, and `npm run conformance` against a build
+(`PILO_SERVER_CMD="rust/target/release/pilo serve"`). Push one branch at a time —
+`git push origin main`, not `--all` and not `--mirror`.
 
 ## License
 

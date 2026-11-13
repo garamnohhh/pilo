@@ -25,6 +25,7 @@ mod shadow;
 mod sql;
 mod store;
 mod summary;
+mod telemetry;
 mod stream;
 mod text;
 mod usage;

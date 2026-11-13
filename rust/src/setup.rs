@@ -9,7 +9,7 @@ use std::path::PathBuf;
 pub fn root() -> PathBuf {
     if let Ok(r) = std::env::var("PILO_ROOT") { if !r.is_empty() { return PathBuf::from(r) } }
     if let Some(s) = std::env::current_exe().ok().and_then(|e| e.parent().map(|d| d.join("../share"))) {
-        if s.join("public/dashboard.html").exists() { return s }
+        if s.join("src/markdown.js").exists() { return s }
     }
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("..")
 }
