@@ -310,7 +310,6 @@ pub fn window_only(tool: &str, input: &Value) -> String {
 /// JSON.stringify(input): keys in the order they came
 fn js_json(v: &Value) -> String { serde_json::to_string(v).unwrap_or_default() }
 
-pub fn pane_only(why: &str) -> bool { why == "pilo approvals" }
 
 /// codexAutoReview: the top-level approvals_reviewer is "auto_review"
 fn codex_auto_review() -> bool {
@@ -387,7 +386,7 @@ pub fn run(event: &str, codex: bool) {
     let why = window_only(&tool, &tool_input);
     if event == "PreToolUse" && codex {
         if why.is_empty() { return; }
-        let res = if !pane.is_empty() && !pane_only(&why) { post("/api/hooks/wait", &with(json!({ "kind": "permission" })), 0) } else { None };
+        let res = if !pane.is_empty() { post("/api/hooks/wait", &with(json!({ "kind": "permission" })), 0) } else { None };
         if res.as_ref().map(|r| r["decision"] != "allow").unwrap_or(true) {
             let msg = res.as_ref().and_then(|r| r["message"].as_str()).filter(|m| !m.is_empty()).map(|m| format!(" ({m})")).unwrap_or_default();
             print(json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "deny",
@@ -398,13 +397,14 @@ pub fn run(event: &str, codex: bool) {
     if event == "PreToolUse" {
         tell("tool", if why.is_empty() { json!({}) } else { json!({ "reason": why }) });
         if !why.is_empty() {
-            let reason = if pane_only(&why) { format!("Pilo: {why} is answered in this window only") } else { format!("Pilo: {why} always asks (Pilo or this window)") };
+            // #6245: every one of them answered from Pilo too, Pilo's own approval door included (its card says what it touches)
+            let reason = format!("Pilo: {why} always asks (Pilo or this window)");
             print(json!({ "hookSpecificOutput": { "hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": reason } }));
         }
         return;
     }
     if event == "PermissionRequest" {
-        if pane_only(&why) || pane.is_empty() { return; }
+        if pane.is_empty() { return; }
         if codex && why.is_empty() && codex_auto_review() { return; }
         let Some(res) = post("/api/hooks/wait", &with(json!({ "kind": "permission" })), 0) else { return };
         if res["decision"] == "allow" { print(json!({ "hookSpecificOutput": { "hookEventName": "PermissionRequest", "decision": { "behavior": "allow" } } })); }

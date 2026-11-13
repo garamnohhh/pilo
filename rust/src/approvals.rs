@@ -6,7 +6,7 @@
 //! asks as it always did. Answering needs a device key; only key hashes are kept.
 
 use crate::describe::{describe, plain_ask};
-use crate::hook::{pane_only, window_only};
+use crate::hook::window_only;
 use crate::reads::log_event;
 use crate::serve::{db_err, fail, one, Shared};
 use crate::writes::{body, s};
@@ -279,7 +279,6 @@ async fn hook_wait(State(app): State<Shared>, raw: String) -> Response {
     let agent = agent_for_pane(&app, &s(&b["pane"]));
     let Some(agent) = agent else { return Json(json!({ "decision": null, "skipped": "not a pilo agent" })).into_response() };
     let why = if b["kind"] == "permission" { window_only(b["tool"].as_str().unwrap_or(""), &b["input"]) } else { String::new() };
-    if pane_only(&why) { return Json(json!({ "decision": null, "skipped": why })).into_response(); }
     let pane = s(&b["pane"]);
     app.approvals.notices.lock().unwrap().remove(&pane);
     // the same session asking again has moved on from what it asked before
@@ -366,7 +365,13 @@ async fn decide(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
         app.approvals.notices.lock().unwrap().insert(s(&item["pane"]), json!({ "pane": item["pane"], "agent": item["agent"], "agentId": item["agentId"], "type": "permission_prompt",
             "message": "", "at": now_ms(), "tool": item["tool"], "input": item["input"], "reason": "" }));
         read_menu_soon(app.clone(), s(&item["pane"]));
-    } else if item["kind"] == "permission" && (d == "allow" || d == "deny") { app.approvals.resolve(id, json!({ "decision": d })); }
+    } else if item["kind"] == "permission" && (d == "allow" || d == "deny") {
+        app.approvals.resolve(id, json!({ "decision": d }));
+        // #6245: what was let through or stopped from Pilo, and under which rule (the command itself stays out of the log)
+        let db = app.db.lock().unwrap();
+        let _ = log_event(&db, "approval_answered", &format!("{}: {d} {}{}", s(&item["agent"]), s(&item["tool"]), if s(&item["risk"]).is_empty() { String::new() } else { format!(" ({})", s(&item["risk"])) }),
+            item["agentId"].as_i64(), None, None, &json!({ "decision": d, "tool": item["tool"], "risk": item["risk"] }));
+    }
     else if item["kind"] == "question" && b["answers"].is_object() { app.approvals.resolve(id, json!({ "decision": "answer", "answers": b["answers"] })); }
     else { return fail(StatusCode::BAD_REQUEST, "decision must be allow, deny, pane or answers"); }
     app.bell.named("approvals", &app.approvals.list());
@@ -422,9 +427,6 @@ async fn choose(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     let agent = { let db = app.db.lock().unwrap(); one(&db, "SELECT id, name, pane AS target FROM agents WHERE id = $1 AND archived_at IS NULL", &[&id], &[]).map_err(db_err) };
     let agent = match agent { Ok(Some(a)) if !s(&a["target"]).is_empty() => a, Ok(_) => return fail(StatusCode::NOT_FOUND, "no pane bound to that agent"), Err(e) => return e };
     let target = s(&agent["target"]);
-    if let Some(r) = app.approvals.notice_for(&target).and_then(|n| n["reason"].as_str().map(String::from)).filter(|r| pane_only(r)) {
-        return fail(StatusCode::FORBIDDEN, &format!("{r}: answered in its pane only"));
-    }
     let app2 = app.clone();
     let t2 = target.clone();
     let menu = tokio::task::spawn_blocking(move || crate::panemenu::parse_menu(&app2.desk.read_pane(&t2))).await.ok().flatten();

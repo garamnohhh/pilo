@@ -1940,7 +1940,7 @@ function aboutHtml(x) {
 // A risky request (rm -rf, force push, a database write, a cloud change, .env) is answered here
 // too, like any other; what it does stands out in red (10/15: typing "allow"
 // was too much, the user's call).
-const PANE_ONLY = new Set(["pilo approvals"]);
+const PANE_ONLY = new Set();   // #6245: none; every card is answered here
 function riskHtml(why, about) {
   const danger = aboutWords(about).danger || T("appr.risky", { why });
   return `<div style="margin-top:12px;padding:8px 12px;border-left:3px solid var(--err);color:var(--err);font-size:var(--fs-small)">${esc(danger)}</div>`;

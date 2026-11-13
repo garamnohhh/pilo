@@ -27,10 +27,15 @@ scenario("a held permission is shown with its plain sentence, and the answer rel
   assert.equal((await srv.api("GET", "/api/approvals")).json.pending.length, 0);
 });
 
-scenario("pane-only requests and unknown panes are not held", {}, async (srv) => {
+// #6245: Pilo's own approval door is held like the rest (answered from Pilo, its risk said), only an unknown pane is not
+scenario("unknown panes are not held; Pilo's own door is, with its risk", {}, async (srv) => {
   const t = await team(srv);
-  assert.deepEqual((await srv.api("POST", "/api/hooks/wait", { kind: "permission", pane: t.pane.worker, tool: "Bash", input: { command: "pilo approvals pair" } })).json,
-    { decision: null, skipped: "pilo approvals" });
+  const waiting = srv.api("POST", "/api/hooks/wait", { kind: "permission", pane: t.pane.worker, tool: "Bash", input: { command: "pilo approvals pair" } });
+  let held;
+  for (let i = 0; i < 40 && !held; i++) { held = (await srv.api("GET", "/api/approvals")).json.pending[0]; if (!held) await new Promise((r) => setTimeout(r, 50)); }
+  assert.equal(held?.risk, "pilo approvals");
+  await srv.api("POST", `/api/approvals/${held.id}`, { decision: "deny", fingerprint: held.fingerprint, key: key(srv) });
+  assert.equal((await waiting).json.decision, "deny");
   assert.deepEqual((await srv.api("POST", "/api/hooks/wait", { kind: "permission", pane: "w9:p9", tool: "Bash", input: { command: "ls" } })).json,
     { decision: null, skipped: "not a pilo agent" });
 });
