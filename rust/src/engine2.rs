@@ -69,7 +69,9 @@ pub fn pump_relay(app: &Shared) {
     use notify::Watcher;
     let mut g = RELAY.lock().unwrap();
     let r = g.get_or_insert_with(Relay::default);
-    if now_ms() - r.looked < 60_000 { return; }
+    // PILO_RELAY_LOOK_MS: a scenario's shorter look (#6271: a minute never fit in the runner's 60 s per scenario)
+    let every = std::env::var("PILO_RELAY_LOOK_MS").ok().and_then(|v| v.parse::<i64>().ok()).unwrap_or(60_000);
+    if now_ms() - r.looked < every { return; }
     r.looked = now_ms();
     if r.watcher.is_none() {
         let a = app.clone();

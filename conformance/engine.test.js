@@ -12,18 +12,18 @@ const scenario = (name, opts, body) => test(name, async () => {
   try { await body(srv); } finally { await srv.stop(); }
 });
 
-scenario("a RelayRoom message for a part becomes a task for it, once", {}, async (srv) => {
+scenario("a RelayRoom message for a part becomes a task for it, once", { env: { PILO_RELAY_LOOK_MS: "2000" } }, async (srv) => {
   const t = await team(srv);
   const log = join(t.cwd.worker, ".relayroom", "pager.log");
   mkdirSync(join(t.cwd.worker, ".relayroom"), { recursive: true });
   writeFileSync(log, "[pager wk1] started\n");
   await sleep(1500);
-  // the server looks for parts once a minute; a part registered now is found at its next look
+  // the server looks for parts once a minute (here every 2 s); a part registered now is found at its next look
   const found = await srv.waitFor(async () => {
     appendFileSync(log, '[pager wk1] event: "build is green" from infra\n[pager wk1] event: "mine" from wk1\n');
     await sleep(700);
     return (await events(srv, "relay_message")).length;
-  }, { ms: 75000, what: "relay task" });
+  }, { ms: 30000, what: "relay task" });
   assert.ok(found);
   const tasks = (await srv.api("GET", "/api/tasks")).json.filter((x) => x.title.startsWith("RelayRoom 새 메시지"));
   assert.equal(tasks.length, 1, "one open task, however many lines came");
