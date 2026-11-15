@@ -130,7 +130,20 @@ impl Desk {
         self.ask(json!({ "op": "prompt", "pane": target, "text": message })).map(|_| ()).map_err(|e| {
             if regex::Regex::new(r"(?i)not found|unknown pane|no such").unwrap().is_match(&e) { "SESSION_NOT_FOUND".into() }
             else if e.trim().is_empty() { "WAKE_FAILED".into() } else { e.trim().lines().next().unwrap_or("WAKE_FAILED").to_string() }
-        })
+        })?;
+        // #6277: a session idle for a day can still be taking the paste when the daemon's Enter comes (the scheduled
+        // wakes of 11/14 and 11/15 sat typed in the box until the stall nudge's Enter): look once more, and if the words
+        // are still in the input at the bottom, Enter again (an Enter on an empty box does nothing)
+        // on a thread of its own: the engine does not wait for the second look
+        if !crate::shadow::on() && crate::replay::sessions().is_none() {
+            let (t, m) = (target.to_string(), message.to_string());
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(1200));
+                let d = Desk::new();
+                if still_typed(&d.read_pane(&t), &m) { let _ = d.send_keys(&t, &["Enter"]); }
+            });
+        }
+        Ok(())
     }
 
     /// startAgent: a Claude or Codex session in a pane back at its shell, the runtime's arguments after --
@@ -149,6 +162,25 @@ impl Desk {
         if target.is_empty() { return Err("SESSION_NOT_BOUND".into()); }
         if !crate::shadow::on() && self.gone(target) { return Err("SESSION_NOT_FOUND".into()); }
         self.ask(json!({ "op": "keys", "pane": target, "keys": keys })).map(|_| ())
+    }
+}
+
+/// the message still in the input box: its first words on one of the screen's last three lines with text
+pub fn still_typed(screen: &str, message: &str) -> bool {
+    let head: String = message.chars().take(24).collect();
+    if head.trim().is_empty() { return false; }
+    screen.lines().rev().filter(|l| !l.trim().is_empty()).take(3).any(|l| l.contains(head.as_str()))
+}
+
+#[cfg(test)]
+mod typed_tests {
+    #[test]
+    fn a_message_left_in_the_box_is_seen_and_one_sent_is_not() {
+        let m = "[pilo:task] task #6277 - for pilo-dev. read it";
+        let left = "● done\n\n╭────╮\n│ > [pilo:task] task #6277 - for pilo-dev. read it │\n╰────╯\n  ? for shortcuts";
+        assert!(super::still_typed(left, m));
+        let sent = "> [pilo:task] task #6277 - for pilo-dev. read it\n\n● Reading the task\n✻ Thinking…\n╭────╮\n│ >  │\n╰────╯\n  ? for shortcuts";
+        assert!(!super::still_typed(sent, m));
     }
 }
 
