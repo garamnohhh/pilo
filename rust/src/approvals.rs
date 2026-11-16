@@ -396,10 +396,20 @@ async fn choose(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> 
     let menu = menu.unwrap();
     let n = b["n"].as_i64().or_else(|| s(&b["n"]).parse().ok()).unwrap_or(-1);
     let Some(option) = menu["options"].as_array().and_then(|o| o.iter().find(|x| x["n"].as_i64() == Some(n))).cloned() else { return fail(StatusCode::BAD_REQUEST, "no such option") };
-    if option["standing"] == true || option["typed"] == true { return fail(StatusCode::FORBIDDEN, "that choice is made in the pane"); }
+    // #6280 (#6245's rule: everything from Pilo): a standing choice too; only a typed answer stays in the pane
+    if option["typed"] == true { return fail(StatusCode::FORBIDDEN, "that choice is typed in the pane"); }
     let app3 = app.clone();
     let (t3, fp) = (target.clone(), menu["fingerprint"].clone());
+    let (arrows, from) = (menu["arrows"] == true, menu["cursor"].as_i64().unwrap_or(1));
     let _ = tokio::task::spawn_blocking(move || {
+        // an arrow menu (#6280): ↑/↓ from where ❯ stands, then Enter
+        if arrows {
+            let (key, times) = if n >= from { ("Down", n - from) } else { ("Up", from - n) };
+            let mut keys: Vec<&str> = std::iter::repeat_n(key, times as usize).collect();
+            keys.push("Enter");
+            let _ = app3.desk.send_keys(&t3, &keys);
+            return;
+        }
         let _ = app3.desk.send_keys(&t3, &[&n.to_string()]);
         std::thread::sleep(Duration::from_millis(400));
         // a menu that only moved its pointer to the number takes Enter as well

@@ -186,6 +186,10 @@ pub fn plain_ask(item: &Value, menu: Option<&Value>) -> Value {
     let input = if item["input"].is_object() { item["input"].clone() } else { json!({}) };
     let s = |v: &Value| v.as_str().map(String::from).unwrap_or_else(|| if v.is_null() { String::new() } else { v.to_string() });
     let mut line = if item["kind"] == "question" { t_user("plain.question", &[("who", who.clone())]) }
+    // #6280: a menu read off the screen with no tool behind it says its own question (Claude's folder trust)
+    else if tool.is_empty() && menu.and_then(|m| m["question"].as_str()).is_some_and(|q| !q.is_empty()) {
+        t_user("plain.menu", &[("who", who.clone()), ("question", menu.and_then(|m| m["question"].as_str()).unwrap_or("").to_string())])
+    }
     else if tool.is_empty() { t_user("plain.unread", &[("who", who.clone())]) }
     else if tool == "Bash" || tool == "exec_command" || !input["command"].is_null() {
         let all: Vec<Value> = describe(tool, &input)["steps"].as_array().cloned().unwrap_or_default();

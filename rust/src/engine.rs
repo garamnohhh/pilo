@@ -117,6 +117,16 @@ fn over_cap(app: &Shared, agent: i64) -> bool {
 
 fn failed(app: &Shared, agent: &Value, code: &str, task: Option<i64>, inbox: Option<i64>) {
     db(app, |c| { let _ = crate::admin::wake_failed(app, c, agent, code, task, inbox); });
+    // #6280: a wake refused for a dialog puts that dialog on a card, whatever the session's status says (Claude's
+    // folder-trust question left a new Mac's desk 'idle' for two days, its wakes refused and nothing shown)
+    let pane = s(&agent["pane"]);
+    if code == "PANE_IN_DIALOG" && !pane.is_empty() && app.approvals.notice_for(&pane).is_none() && !app.approvals.busy(&pane) {
+        let screen = app.desk.read_pane(&pane);
+        if let Some(menu) = crate::panemenu::parse_menu(&screen) {
+            let who = crate::approvals::agent_for_pane(app, &pane);
+            if app.approvals.notice_from_screen(&pane, who.as_ref(), menu, &screen) { crate::approvals::summarize(app); app.bell.named("approvals", &app.approvals.list()); }
+        }
+    }
     app.bell.changed();
 }
 
@@ -422,7 +432,7 @@ fn pump_held(app: &Shared) {
 fn pump_sessions(app: &Shared) {
     let live = app.desk.sessions();
     if !app.desk.health.lock().unwrap().ok { return; }
-    let agents = q(app, "SELECT id, name, pane FROM agents WHERE archived_at IS NULL AND pane <> ''", &[]);
+    let agents = q(app, "SELECT id, name, pane, cwd FROM agents WHERE archived_at IS NULL AND pane <> ''", &[]);
     let before: Vec<(i64, String)> = q(app, "SELECT agent_id, status FROM agent_sessions", &[]).into_iter().map(|r| (r["agent_id"].as_i64().unwrap_or(0), s(&r["status"]))).collect();
     for a in agents {
         let id = a["id"].as_i64().unwrap();
@@ -434,6 +444,17 @@ fn pump_sessions(app: &Shared) {
             if app.approvals.screen_says(&target, m.as_ref()) { app.bell.changed(); }
         }
         if let Some(sx) = session { if app.approvals.settle(&target, sx["status"].as_str().unwrap_or("")) { app.bell.changed(); } }
+        // #6280: Claude Code or Codex started again in another folder: the agent moves with it, its rules written there
+        if let Some(now) = session.filter(|x| matches!(x["runtime"].as_str(), Some("claude" | "codex"))).and_then(|x| x["cwd"].as_str()).filter(|c| !c.is_empty()) {
+            if now != s(&a["cwd"]) {
+                let name = s(&a["name"]);
+                db(app, |c| {
+                    let _ = c.execute("UPDATE agents SET cwd = ?1 WHERE id = ?2", rusqlite::params![now, id]);
+                    let _ = crate::admin::write_rules(app, c, id);
+                });
+                ev(app, "agent_moved", &format!("{name}: now in {now}"), Some(id), None, None, json!({ "from": s(&a["cwd"]), "to": now }));
+            }
+        }
         if session.map(|x| x["status"] == "blocked").unwrap_or(false) && !app.approvals.busy(&target) {
             let screen = app.desk.read_pane(&target);
             if let Some(menu) = crate::panemenu::parse_menu(&screen) {

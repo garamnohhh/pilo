@@ -110,7 +110,7 @@ const BEGIN: &str = "<!-- pilo:begin -->";
 const END: &str = "<!-- pilo:end -->";
 
 /// writeRules: only the marked block is Pilo's; what the user wrote stays
-fn write_rules(app: &Shared, db: &Connection, id: i64) -> R<Value> {
+pub(crate) fn write_rules(app: &Shared, db: &Connection, id: i64) -> R<Value> {
     let plan = crate::rules::build(app, db, id)?;
     let file = s(&plan["file"]);
     let dir = file[..file.rfind('/').unwrap_or(0)].to_string();

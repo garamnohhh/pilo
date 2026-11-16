@@ -62,7 +62,8 @@ scenario("a prompt the pane shows: the card says what is asked, its choices name
   const n = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.notices.find((x) => x.menu), { what: "menu read" });
   assert.equal(n.plain.line, "pm1에서 Rust 프로그램을 빌드해도 될까요?");
   assert.deepEqual(n.plain.options.map((o) => [o.n, o.label]), [[1, "진행"], [2, "Yes, and don't ask again for cargo build commands in /x"], [3, "멈춤"]]);
-  assert.equal((await srv.api("POST", `/api/agents/${t.ids.pm}/choose`, { key: key(srv), fingerprint: n.menu.fingerprint, n: 2 })).status, 403, "a standing rule stays in the pane");
+  // #6280: everything from Pilo, a standing rule too (only a typed answer stays in the pane)
+  assert.equal((await srv.api("POST", `/api/agents/${t.ids.pm}/choose`, { key: key(srv), fingerprint: n.menu.fingerprint, n: 2 })).status, 201, "a standing rule is chosen from Pilo too");
   const c = await srv.api("POST", `/api/agents/${t.ids.pm}/choose`, { key: key(srv), fingerprint: n.menu.fingerprint, n: 1 });
   assert.equal(c.status, 201, c.text);
   assert.deepEqual(c.json, { ok: true, n: 1, label: "Yes" });

@@ -27,11 +27,46 @@ pub fn menu_print(question: &str, options: &[Value]) -> String {
     h.iter().map(|b| format!("{b:02x}")).collect::<String>()[..24].to_string()
 }
 
+re!(cursor_line, r"^\s*❯\s+(\D.*?)\s*$");
+
+/// #6280: a menu walked with the arrows, no numbers ("❯ No, exit / Yes, I trust this folder", Claude Code's first
+/// question in a new folder): the options under one another, ❯ on the chosen one, a key hint below. Numbered here in
+/// screen order; `cursor` is where ❯ stands, so a choice is ↑/↓ to it and Enter
+fn arrow_menu(lines: &[&str]) -> Option<Value> {
+    let at = (0..lines.len()).rev().find(|&i| cursor_line().is_match(lines[i]))?;
+    let item = |l: &str| cursor_line().is_match(l) || (indented().is_match(l) && !option().is_match(l));
+    let (mut start, mut end) = (at, at);
+    while start > 0 && item(lines[start - 1]) && !lines[start - 1].trim().is_empty() { start -= 1; }
+    while end + 1 < lines.len() && item(lines[end + 1]) && !lines[end + 1].trim().is_empty() { end += 1; }
+    if end == start { return None; }
+    // the hint under it says it is a menu (Enter to confirm · Esc to cancel); an input box has none
+    if !lines[end + 1..].iter().take(4).any(|l| keys().is_match(l) || hint().is_match(l)) { return None; }
+    let options: Vec<(u32, String)> = (start..=end).enumerate().map(|(k, i)| ((k + 1) as u32, cursor_line().captures(lines[i]).map(|c| c[1].to_string()).unwrap_or_else(|| lines[i].trim().to_string()))).collect();
+    let (mut question, mut context) = (String::new(), Vec::<String>::new());
+    let mut j = start as isize - 1;
+    while j >= (start as isize - 14).max(0) {
+        let l = lines[j as usize];
+        let text = lead().replace(l, "").trim().to_string();
+        if text.is_empty() || rule().is_match(l) { if !question.is_empty() && !context.is_empty() { break; } j -= 1; continue; }
+        if question.is_empty() { question = text; } else { context.insert(0, text); }
+        if context.len() >= 6 { break; }
+        j -= 1;
+    }
+    if question.is_empty() { return None; }
+    // Claude Code's first question in a folder: the folder is what is asked about
+    if let Some(w) = lines[..start].iter().rposition(|l| l.trim() == "Accessing workspace:") {
+        if let Some(folder) = lines[w + 1..start].iter().map(|l| l.trim()).find(|l| !l.is_empty()) { question = format!("Trust this folder? {folder}"); }
+    }
+    let choices: Vec<Value> = options.iter().map(|(n, label)| json!({ "n": n, "label": label, "standing": standing().is_match(label), "typed": typed().is_match(label) })).collect();
+    let fp = menu_print(&question, &choices);
+    Some(json!({ "question": question, "context": context, "options": choices, "fingerprint": fp, "arrows": true, "cursor": (at - start + 1) }))
+}
+
 pub fn parse_menu(screen: &str) -> Option<Value> {
     let clean = ansi().replace_all(screen, "");
     let all: Vec<&str> = clean.split('\n').collect();
     let lines = &all[all.len().saturating_sub(60)..];
-    let end = (0..lines.len()).rev().find(|&i| option().is_match(lines[i]))?;
+    let Some(end) = (0..lines.len()).rev().find(|&i| option().is_match(lines[i])) else { return arrow_menu(lines) };
     let mut options: Vec<(u32, String)> = Vec::new();
     let mut start = end;
     let mut i = end as isize;
@@ -69,6 +104,18 @@ pub fn parse_menu(screen: &str) -> Option<Value> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn claude_s_folder_trust_question_reads_as_an_arrow_menu() {
+        let s = "\n────────\n Accessing workspace:\n\n /Users/garam\n\n Quick safety check: Is this a project you created or one you trust?\n\n Claude Code'll be able to read, edit, and execute files here.\n\n Security guide\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n\n\n";
+        let m = super::parse_menu(s).unwrap();
+        assert_eq!(m["arrows"], true);
+        assert_eq!(m["cursor"], 1);
+        assert_eq!(m["options"][1]["label"], "Yes, I trust this folder");
+        assert_eq!(m["question"], "Trust this folder? /Users/garam");
+        // an idle input box is no menu
+        assert!(super::parse_menu("● done\n────────\n❯ \n────────\n  ? for shortcuts").is_none());
+    }
+
     #[test]
     fn claude_and_codex_menus_read_as_panemenu_js_reads_them() {
         let claude = " Bash command\n Remove no-such-dir directory if present\n╌╌╌╌╌╌╌╌\n rm -rf ./no-such-dir\n╌╌╌╌╌╌╌╌\n Do you want to proceed?\n ❯ 1. Yes\n   2. Yes, and always allow access to /tmp/x from this project\n   3. Yes, and switch to auto mode · auto mode handles these prompts for you\n   4. No\n\n Esc to cancel · Tab to amend";
