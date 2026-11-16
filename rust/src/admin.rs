@@ -132,6 +132,17 @@ pub(crate) fn write_rules(app: &Shared, db: &Connection, id: i64) -> R<Value> {
 /// recordWakeFailure (the parts that need no screen reading yet)
 pub fn wake_failed(app: &Shared, db: &Connection, agent: &Value, code: &str, task: Option<i64>, inbox: Option<i64>) -> R<()> {
     let aid = agent["id"].as_i64();
+    // #6307: a wake that keeps meeting the same dialog is one line, its time and count moved on, not a line a minute
+    // (a Mac's desk on Claude's trust question logged 10,000 in two days). A dialog never counts toward the backoff and
+    // only the newest try's time is read, so the retries go on as before
+    if code == "PANE_IN_DIALOG" {
+        let last = one(db, "SELECT id, payload->>'code' AS code, type FROM events WHERE agent_id = $1 AND task_id IS $2 AND inbox_id IS $3
+            AND type IN ('wake_sent', 'wake_failed') ORDER BY created_at DESC, id DESC LIMIT 1", &[&aid, &task, &inbox], &[]).map_err(db_err)?;
+        if let Some(l) = last.filter(|l| l["type"] == "wake_failed" && l["code"] == "PANE_IN_DIALOG") {
+            exec(db, "UPDATE events SET created_at = now(), payload = json_set(payload, '$.attempts', COALESCE(payload->>'attempts', 1) + 1) WHERE id = $1", &[&l["id"].as_i64()]).map_err(db_err)?;
+            return Ok(());
+        }
+    }
     let prior = one(db, "SELECT count(*) AS n FROM events WHERE type = 'wake_failed' AND agent_id = $1 AND created_at > now() - interval '1 day'", &[&aid], &[])
         .map_err(db_err)?.and_then(|r| r["n"].as_i64()).unwrap_or(0);
     let hint = match code {
