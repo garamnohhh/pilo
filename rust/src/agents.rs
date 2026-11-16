@@ -296,7 +296,8 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
 
 /// setupState: what the welcome screen needs to know
 async fn setup(State(app): State<Shared>) -> Res {
-    let live = app.desk.sessions();
+    // #6280: a session counts once Claude Code or Codex runs in it (an Install terminal or a plain shell is not one to pick)
+    let live: Vec<Value> = app.desk.sessions().into_iter().filter(|x| x["runtime"].as_str().is_some_and(|r| !r.is_empty())).collect();
     let up = app.desk.health.lock().unwrap().ok;
     let db = app.db.lock().unwrap();
     let pilos = rows(&db, r#"SELECT id, name, cwd, runtime, pane AS "pane", created_at AS "createdAt" FROM agents WHERE role = 'pilo' AND archived_at IS NULL"#, &[], &[]).map_err(db_err)?;
