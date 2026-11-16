@@ -29,6 +29,14 @@ fn given(v: &Value) -> bool { !v.is_null() }
 fn id_or_none(v: &Value) -> Option<i64> {
     match v { Value::Number(n) => n.as_f64().filter(|f| *f != 0.0).map(|f| f as i64), Value::String(x) if !x.is_empty() => x.parse::<f64>().ok().map(|f| f as i64), _ => None }
 }
+/// #6280: one agent to a folder - its rules file (CLAUDE.md / AGENTS.md) and its session are the folder's
+fn folder_free(db: &Connection, cwd: &str, id: Option<i64>) -> R<()> {
+    let c = cwd.trim_end_matches('/');
+    if c.is_empty() { return Ok(()); }
+    let other = one(db, "SELECT name FROM agents WHERE archived_at IS NULL AND rtrim(cwd, '/') = $1 AND ($2 IS NULL OR id <> $2)", &[&c, &id], &[]).map_err(db_err)?;
+    match other { Some(o) => Err(bad(409, &format!("{} already works in {c}", s(&o["name"])))), None => Ok(()) }
+}
+
 fn str_or(v: &Value, current: &Value) -> String { if v.is_null() { s(current) } else { s(v) } }
 
 fn validate_hierarchy(db: &Connection, role: &str, parent: Option<i64>, id: Option<i64>) -> R<Option<i64>> {
@@ -213,6 +221,7 @@ async fn create_agent(State(app): State<Shared>, raw: String) -> W {
     let project = settle_project(&db, &role, parent, project, None)?;
     // #6280: a PM is a project's (its name, a new one made from projectName)
     if role == "pm" && project.is_none() { return Err(bad(400, "a pm agent needs a project")); }
+    folder_free(&db, &s(&b["cwd"]), None)?;
     let (runtime, target, candidates) = detect(&app, &s(&b["cwd"]), &s(&b["runtime"]));
     let name = s(&b["name"]);
     let reviewer = settle_reviewer(&role, &b["reviewer"], false)?;
@@ -243,6 +252,7 @@ async fn update_agent(State(app): State<Shared>, Path(id): Path<i64>, raw: Strin
     let project_in = if b["projectId"].is_null() { cur["project_id"].as_i64() } else { id_or_none(&b["projectId"]) };
     let project = settle_project(&db, &role, parent, project_in, Some(id))?;
     let cwd = str_or(&b["cwd"], &cur["cwd"]);
+    if cwd != s(&cur["cwd"]) { folder_free(&db, &cwd, Some(id))?; }
     let mut runtime = str_or(&b["runtime"], &cur["runtime"]);
     let mut target = s(&cur["pane"]);
     if cwd != s(&cur["cwd"]) || target.is_empty() {

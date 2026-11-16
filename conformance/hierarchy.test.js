@@ -13,6 +13,7 @@ test("hierarchy and parent task rules", async () => {
     assert.equal((await post({ name: "p0", role: "pm" })).json.error, "pm agent needs a parent");
     assert.equal((await post({ name: "p2", role: "pm", parentAgentId: t.ids.pm })).json.error, "pm must hang off the pilo agent");
     assert.equal((await post({ name: "p3", role: "pm", parentAgentId: t.ids.desk })).json.error, "a pm agent needs a project", "a PM is a project's");
+    assert.equal((await post({ name: "w4", role: "worker", parentAgentId: t.ids.pm, cwd: folder(srv, "pm") })).json.error, "pm1 already works in " + folder(srv, "pm").replace(/\/$/, ""), "one agent to a folder");
     assert.equal((await post({ name: "w2", role: "worker", parentAgentId: t.ids.desk })).json.error, "a worker hangs off a PM");
     assert.equal((await post({ name: "w3", role: "worker", parentAgentId: t.ids.worker })).json.error, "a worker hangs off a PM");
 
