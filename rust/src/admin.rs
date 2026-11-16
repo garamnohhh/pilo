@@ -211,6 +211,8 @@ async fn create_agent(State(app): State<Shared>, raw: String) -> W {
     settle_reviewer(&role, &b["reviewer"], false)?;
     let project = if role == "worker" { None } else { resolve_project(&db, &b)? };
     let project = settle_project(&db, &role, parent, project, None)?;
+    // #6280: a PM is a project's (its name, a new one made from projectName)
+    if role == "pm" && project.is_none() { return Err(bad(400, "a pm agent needs a project")); }
     let (runtime, target, candidates) = detect(&app, &s(&b["cwd"]), &s(&b["runtime"]));
     let name = s(&b["name"]);
     let reviewer = settle_reviewer(&role, &b["reviewer"], false)?;

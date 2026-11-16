@@ -12,6 +12,7 @@ test("hierarchy and parent task rules", async () => {
     assert.deepEqual([(await post({ name: "d2", role: "pilo" })).status], [409], "one desk");
     assert.equal((await post({ name: "p0", role: "pm" })).json.error, "pm agent needs a parent");
     assert.equal((await post({ name: "p2", role: "pm", parentAgentId: t.ids.pm })).json.error, "pm must hang off the pilo agent");
+    assert.equal((await post({ name: "p3", role: "pm", parentAgentId: t.ids.desk })).json.error, "a pm agent needs a project", "a PM is a project's");
     assert.equal((await post({ name: "w2", role: "worker", parentAgentId: t.ids.desk })).json.error, "a worker hangs off a PM");
     assert.equal((await post({ name: "w3", role: "worker", parentAgentId: t.ids.worker })).json.error, "a worker hangs off a PM");
 

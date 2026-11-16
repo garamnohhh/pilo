@@ -99,7 +99,7 @@ export async function team(srv, { status = {}, screens = {}, fail = {}, worker =
     return r.json.id;
   };
   const ids = { desk: await add({ name: "desk", role: "pilo", cwd: cwd.desk }) };
-  ids.pm = await add({ name: "pm1", role: "pm", parentAgentId: ids.desk, cwd: cwd.pm, project: "p1" });
+  ids.pm = await add({ name: "pm1", role: "pm", parentAgentId: ids.desk, cwd: cwd.pm, projectName: "p1" });
   if (worker) ids.worker = await add({ name: "wk1", role: "worker", parentAgentId: ids.pm, cwd: cwd.worker });
   return {
     ids, pane, cwd,

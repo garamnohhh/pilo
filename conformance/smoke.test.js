@@ -12,7 +12,7 @@ test("a queued request wakes the desk agent once, a task wakes its PM", async ()
     ] });
     const desk = await srv.api("POST", "/api/agents", { name: "desk", role: "pilo", cwd: deskCwd, runtime: "claude" });
     assert.equal(desk.status, 201, desk.text);
-    const pm = await srv.api("POST", "/api/agents", { name: "pm1", role: "pm", parentAgentId: desk.json.id, cwd: pmCwd, runtime: "claude", project: "p1" });
+    const pm = await srv.api("POST", "/api/agents", { name: "pm1", role: "pm", parentAgentId: desk.json.id, cwd: pmCwd, runtime: "claude", projectName: "p1" });
     assert.equal(pm.status, 201, pm.text);
 
     const inbox = await srv.api("POST", "/api/inbox", { userRequest: "hello" });
