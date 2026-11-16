@@ -33,9 +33,9 @@ Three kinds of agent, and pilo starts none of them on its own:
 
 | | What it does |
 | --- | --- |
-| **Desk** (`pilo`) | The only one you talk to. Reads the request, decides whose work it is, gathers what comes back and writes one answer. |
-| **Owner** (`pm`) | One project, one owner. Reads only its own folder, does the work, reports to the desk. |
-| **Specialist** (`worker`) | Sits under an owner and covers one area — review, QA, a second runtime. Reports to its owner, never to you. |
+| **PILO** | The only one you talk to. Reads the request, decides whose work it is, gathers what comes back and writes one answer. |
+| **PM** | One per project folder. Reads only its own folder, does the work, reports to PILO. |
+| **WORKER** | Sits under a PM and covers one area: review, QA, a second runtime. Reports to its PM, never to you. |
 
 pilo is one app and one small server, both written in Rust:
 
@@ -90,9 +90,9 @@ so you can leave and come back.
 
 | Step | What it asks of you |
 | --- | --- |
-| **Get ready** | Claude Code or Codex installed, and one session opened in the app (a button does it). |
-| **Pick your desk** | Which session is the desk you talk to. |
-| **Owners** | Optional: one owner per project session. Their instruction file gets Pilo's rules. |
+| **Get ready** | Claude Code or Codex installed, and one session opened in the app, in the folder you pick. |
+| **Pick PILO** | Which session is PILO, the one you talk to. |
+| **Add a PM (optional)** | Open a session in a project's folder and make it that project's PM. Its instruction file gets Pilo's rules. PILO works alone too. |
 | **A first request** | Write it in the box on **Work** and watch it come back. |
 
 ### Say what you want done
