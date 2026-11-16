@@ -217,11 +217,15 @@ async fn create_agent(State(app): State<Shared>, raw: String) -> W {
     let role = { let r = s(&b["role"]); if r.is_empty() { "pm".to_string() } else { r } };
     let parent = validate_hierarchy(&db, &role, id_or_none(&b["parentAgentId"]), None)?;
     settle_reviewer(&role, &b["reviewer"], false)?;
+    // refused before anything is made (a project from projectName)
+    folder_free(&db, &s(&b["cwd"]), None)?;
+    if one(&db, "SELECT id FROM agents WHERE name = $1 AND archived_at IS NULL", &[&s(&b["name"])], &[]).map_err(db_err)?.is_some() {
+        return Err(bad(500, "duplicate key value violates unique constraint \"agents_name_live\""));
+    }
     let project = if role == "worker" { None } else { resolve_project(&db, &b)? };
     let project = settle_project(&db, &role, parent, project, None)?;
     // #6280: a PM is a project's (its name, a new one made from projectName)
     if role == "pm" && project.is_none() { return Err(bad(400, "a pm agent needs a project")); }
-    folder_free(&db, &s(&b["cwd"]), None)?;
     let (runtime, target, candidates) = detect(&app, &s(&b["cwd"]), &s(&b["runtime"]));
     let name = s(&b["name"]);
     let reviewer = settle_reviewer(&role, &b["reviewer"], false)?;
