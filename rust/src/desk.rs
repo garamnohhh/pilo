@@ -199,5 +199,18 @@ pub fn in_dialog(screen: &str) -> bool {
     let rule = regex::Regex::new(r"^\s*─{8,}").unwrap();
     let input_box = bottom.iter().enumerate().any(|(i, l)| i > 0 && l.trim_start().starts_with('❯') && rule.is_match(bottom[i - 1]));
     let dialogs = regex::Regex::new(r"trust all · enter review · esc close|Hooks need review|Trust all and continue|Space to select · Esc to reject all|Type to search|\bEsc to (cancel|close|go back|exit)\b").unwrap();
-    !input_box && dialogs.is_match(&bottom.join("\n"))
+    // #6280: a first run (Claude's theme and sign-in, Codex's sign-in) is a dialog too: a line typed there picks the
+    // highlighted choice (a pane made PILO on its theme screen was sent on to a browser sign-in)
+    let first_run = regex::Regex::new(r"Choose the text style|Select login method|Paste code here if prompted|Sign in with ChatGPT|Provide your own API key").unwrap();
+    !input_box && (dialogs.is_match(&bottom.join("\n")) || first_run.is_match(screen))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn first_run_is_a_dialog() {
+        assert!(super::in_dialog("Let's get started.\n\nChoose the text style that looks best with your terminal\n ❯ ✓ Dark mode\n   Light mode\n\n 1 function greet() {\n Syntax theme: Monokai Extended (ctrl+t to disable)"));
+        assert!(super::in_dialog(" Browser didn't open? Use the url below to sign in\n https://claude.com/x\n\n Paste code here if prompted >"));
+        assert!(!super::in_dialog("Welcome back\n────────────────────\n❯ \n────────────────────\n  ? for shortcuts"));
+    }
 }
