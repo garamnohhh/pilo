@@ -8,7 +8,9 @@ use axum::{body::Bytes, extract::{Path, State}, http::{HeaderMap, StatusCode}, r
 use serde_json::{json, Value};
 
 pub fn routes(r: Router<Shared>) -> Router<Shared> {
-    r.route("/api/attachments", post(attach))
+    // #6363: the body limit at the size attach() allows (axum's own 2MB cap turned a 3MB screenshot away first); twice it, so a bigger one hears its size from attach()
+    let max = std::env::var("PILO_ATTACH_MAX_BYTES").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(10 * 1024 * 1024);
+    r.route("/api/attachments", post(attach).layer(axum::extract::DefaultBodyLimit::max(max * 2)))
         .route("/api/files/act", post(file_act))
         .route("/api/agents/{id}/focus", post(focus))
         .route("/api/setup/preview", post(preview))
