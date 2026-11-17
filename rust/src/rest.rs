@@ -64,7 +64,6 @@ pub fn file_command(b: &Value) -> Result<(String, Vec<String>), Response> {
     let path = if raw == "~" { home.clone() } else if let Some(r) = raw.strip_prefix("~/") { format!("{home}/{r}") } else { raw };
     if !path.starts_with('/') || path.contains('\0') { return Err(fail(StatusCode::BAD_REQUEST, "a full path is needed")); }
     let meta = std::fs::metadata(&path).map_err(|_| fail(StatusCode::NOT_FOUND, &format!("not found: {path}")))?;
-    let image = regex::Regex::new(r"(?i)\.(png|jpe?g|gif|webp|heic|heif|tiff?|bmp|svg|avif)$").unwrap().is_match(&path);
     let runs = regex::Regex::new(r"\.(app|command|tool|terminal|workflow|pkg|mpkg|scpt|scptd|applescript|jar|action|prefPane|kext|mobileconfig)$").unwrap().is_match(&path);
     const PIREP: &str = "com.garamnoh.pirep";
     if let Some(glob) = b["glob"].as_str().filter(|g| !g.is_empty()) {
@@ -79,12 +78,11 @@ pub fn file_command(b: &Value) -> Result<(String, Vec<String>), Response> {
         if act == "reveal" { return Ok(("open".into(), vec![path])); }
         if act == "pirep" { return Ok(("open".into(), vec!["-b".into(), PIREP.into(), path])); }
         if files.is_empty() { return Err(fail(StatusCode::NOT_FOUND, &format!("nothing matches {glob}"))); }
-        let mut a = vec!["-p".to_string()]; a.extend(files);
-        return Ok(("qlmanage".into(), a));
+        return Ok(("open".into(), files));   // #6442: the default app (Preview), not qlmanage's bare window
     }
     if act == "reveal" { return Ok(("open".into(), vec!["-R".into(), path])); }
     if act == "pirep" { return Ok(("open".into(), vec!["-b".into(), PIREP.into(), path])); }
-    if act == "quicklook" || (act == "open" && meta.is_file() && image) { return Ok(("qlmanage".into(), vec!["-p".into(), path])); }
+    if act == "quicklook" { return Ok(("qlmanage".into(), vec!["-p".into(), path])); }
     if act != "open" { return Err(fail(StatusCode::BAD_REQUEST, &format!("unknown act: {act}"))); }
     if runs { return Ok(("open".into(), vec!["-R".into(), path])); }
     Ok(("open".into(), vec![path]))

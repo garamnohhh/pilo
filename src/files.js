@@ -115,11 +115,11 @@ export function fileCommand(body) {
     if (act === "reveal") return ["open", [path]];
     if (act === "pirep") return ["open", ["-b", PIREP, path]];
     if (!files.length) throw Object.assign(new Error(`nothing matches ${body.glob}`), { status: 404 });
-    return ["qlmanage", ["-p", ...files]];
+    return ["open", files];   // #6442: the default app (Preview), not qlmanage's bare window
   }
   if (act === "reveal") return ["open", ["-R", path]];
   if (act === "pirep") return ["open", ["-b", PIREP, path]];
-  if (act === "quicklook" || (act === "open" && k === "file" && isImage(path))) return ["qlmanage", ["-p", path]];
+  if (act === "quicklook") return ["qlmanage", ["-p", path]];
   if (act !== "open") throw Object.assign(new Error(`unknown act: ${act}`), { status: 400 });
   if (RUNS.test(path)) return ["open", ["-R", path]];
   return ["open", [path]];

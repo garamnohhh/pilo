@@ -57,10 +57,10 @@ test("a click becomes open, open -R, pirep or Quick Look - never run here", asyn
   const check = join(dir, "outputs/_src/check");
   try {
     assert.deepEqual(fileCommand({ act: "open", path: join(dir, ".env.local") }), ["open", [join(dir, ".env.local")]]);
-    assert.deepEqual(fileCommand({ act: "open", path: join(check, "a.png") }), ["qlmanage", ["-p", join(check, "a.png")]]);
+    assert.deepEqual(fileCommand({ act: "open", path: join(check, "a.png") }), ["open", [join(check, "a.png")]]);
     assert.deepEqual(fileCommand({ act: "reveal", path: join(check, "a.png") }), ["open", ["-R", join(check, "a.png")]]);
     assert.deepEqual(fileCommand({ act: "pirep", path: join(check, "notes.md") }), ["open", ["-b", "com.garamnoh.pirep", join(check, "notes.md")]]);
-    assert.deepEqual(fileCommand({ act: "open", path: check, glob: "*.png" }), ["qlmanage", ["-p", join(check, "a.png"), join(check, "b.png")]]);
+    assert.deepEqual(fileCommand({ act: "open", path: check, glob: "*.png" }), ["open", [join(check, "a.png"), join(check, "b.png")]]);
     assert.deepEqual(fileCommand({ act: "reveal", path: check, glob: "*.png" }), ["open", [check]]);
     assert.deepEqual(fileCommand({ act: "open", path: join(dir, "run.command") }), ["open", ["-R", join(dir, "run.command")]], "what would run is shown, not opened");
     assert.throws(() => fileCommand({ act: "open", path: join(dir, "gone.md") }), (e) => e.status === 404);
@@ -69,6 +69,6 @@ test("a click becomes open, open -R, pirep or Quick Look - never run here", asyn
     const ran = [];
     setRunner(async (cmd, args) => { ran.push([cmd, args]); });
     await fileAct({ act: "open", path: check, glob: "*.png" });
-    assert.deepEqual(ran, [["qlmanage", ["-p", join(check, "a.png"), join(check, "b.png")]]]);
+    assert.deepEqual(ran, [["open", [join(check, "a.png"), join(check, "b.png")]]]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
