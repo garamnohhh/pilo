@@ -19,7 +19,7 @@ scenario("a held permission is shown with its plain sentence, and the answer rel
   const waiting = srv.api("POST", "/api/hooks/wait", { kind: "permission", pane: t.pane.pm, session: "s1", tool: "Bash", input: { command: "cd rust && cargo build 2>&1 | tail -3" } });
   const r = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.pending[0], { what: "held" });
   assert.equal(r.agent, "pm1");
-  assert.equal(r.plain.line, "pm1에서 Rust 프로그램을 빌드해도 될까요?");
+  assert.equal(r.plain.line, "pm1: Rust 프로그램을 빌드해도 될까요?");
   assert.equal((await srv.api("POST", `/api/approvals/${r.id}`, { key: "wrong", fingerprint: r.fingerprint, decision: "allow" })).status, 403);
   assert.equal((await srv.api("POST", `/api/approvals/${r.id}`, { key: key(srv), fingerprint: "x", decision: "allow" })).status, 409);
   assert.equal((await srv.api("POST", `/api/approvals/${r.id}`, { key: key(srv), fingerprint: r.fingerprint, decision: "allow" })).status, 201);
@@ -46,7 +46,7 @@ scenario("a risky request is held with its risk said, and a tool call that moves
   const waiting = srv.api("POST", "/api/hooks/wait", { kind: "permission", pane: t.pane.pm, tool: "Bash", input: { command: "rm -rf /srv/old" } });
   const r = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.pending[0], { what: "held" });
   assert.equal(r.risk, "rm -rf");
-  assert.equal(r.plain.line, "pm1에서 /srv/old 삭제를 해도 될까요? 되돌릴 수 없는 삭제예요.");
+  assert.equal(r.plain.line, "pm1: /srv/old 삭제를 해도 될까요? 되돌릴 수 없는 삭제예요.");
   assert.deepEqual((await srv.api("GET", "/api/agents")).json.find((a) => a.name === "pm1").waitingApproval, true);
   await srv.api("POST", "/api/hooks/notify", { pane: t.pane.pm, type: "done" });
   assert.deepEqual((await waiting).json, { decision: null, answeredInPane: true });
@@ -60,7 +60,7 @@ scenario("a prompt the pane shows: the card says what is asked, its choices name
   await srv.api("POST", "/api/hooks/notify", { pane: t.pane.pm, type: "tool", tool: "Bash", input: { command: "cargo build --release", description: "Build the crate" } });
   await srv.api("POST", "/api/hooks/notify", { pane: t.pane.pm, type: "permission_prompt", message: "Claude needs your permission to use Bash" });
   const n = await srv.waitFor(async () => (await srv.api("GET", "/api/approvals")).json.notices.find((x) => x.menu), { what: "menu read" });
-  assert.equal(n.plain.line, "pm1에서 Rust 프로그램을 빌드해도 될까요?");
+  assert.equal(n.plain.line, "pm1: Rust 프로그램을 빌드해도 될까요?");
   assert.deepEqual(n.plain.options.map((o) => [o.n, o.label]), [[1, "진행"], [2, "Yes, and don't ask again for cargo build commands in /x"], [3, "멈춤"]]);
   // #6280: everything from Pilo, a standing rule too (only a typed answer stays in the pane)
   assert.equal((await srv.api("POST", `/api/agents/${t.ids.pm}/choose`, { key: key(srv), fingerprint: n.menu.fingerprint, n: 2 })).status, 201, "a standing rule is chosen from Pilo too");
@@ -103,4 +103,15 @@ test("a hook-asked box read off the screen: one sentence, how far it reaches, wh
     assert.match(n.plain.command, /^ssh local\.ci/);
     void t;
   } finally { await srv.stop(); }
+});
+
+// #6361: a command run over ssh is told where it runs and what it does there, a delete first and its path whole
+test("a card says on which machine an ssh command runs and what it deletes there", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const bin = (process.env.PILO_SERVER_CMD || "").split(" ")[0];
+  if (!bin.endsWith("pilo")) return;
+  const line = JSON.stringify({ tool: "Bash", agent: "homelab", reason: "rm -rf",
+    input: { command: "ssh macmini 'launchctl bootout gui/$(id -u)/local.homelab.photobook-once 2>/dev/null; rm -rf \"$HOME/Library/Application Support/photobook-once-cache\"'" } });
+  const out = JSON.parse(execFileSync(bin, ["hook", "describe"], { input: line + "\n", env: { ...process.env, PILO_LANG: "ko" } }).toString());
+  assert.equal(out.plain.line, "homelab: macmini에서 $HOME/Library/Application Support/photobook-once-cache 삭제를 하고, local.homelab.photobook-once 서비스를 중지해도 될까요? 되돌릴 수 없는 삭제예요.");
 });

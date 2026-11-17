@@ -8,7 +8,8 @@ use regex::Regex;
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
-const SKIP: [&str; 11] = ["cd", "echo", "printf", "true", "false", "set", "export", "sleep", "wait", "test", "["];
+// id · whoami · uname · basename · dirname: what a $(...) asks along the way, not a step of its own (#6361)
+const SKIP: [&str; 16] = ["cd", "echo", "printf", "true", "false", "set", "export", "sleep", "wait", "test", "[", "id", "whoami", "uname", "basename", "dirname"];
 const VALUE_FLAGS: [&str; 14] = ["-v", "-w", "-e", "-p", "-u", "--name", "--network", "--mount", "--env", "--workdir", "--volume", "--platform", "--user", "--entrypoint"];
 
 /// short(s, n): JavaScript counts UTF-16 units
@@ -67,11 +68,18 @@ fn step(segment: &str, temps: &HashSet<String>, made: &HashSet<String>) -> Optio
         let var = Regex::new(r"^\$\{?([A-Za-z_]\w*)").unwrap();
         let targets: Vec<Value> = plain.iter().map(|t| {
             let m = var.captures(t).map(|c| made.contains(&c[1])).unwrap_or(false);
-            json!({ "path": short(t, 50), "temp": is_temp_path(t, temps), "made": m })
+            json!({ "path": short(t, 120), "temp": is_temp_path(t, temps), "made": m })
         }).collect();
         return Some(json!({ "key": "rm", "targets": targets }));
     }
     if cmd == "mktemp" { return Some(json!({ "key": "mktemp" })); }
+    // #6361: a service turned off, on or over, by its name (the last part of gui/501/<label>, or a plist's)
+    if cmd == "launchctl" {
+        let sub = p(0);
+        let label = plain.last().map(|l| base(l).trim_end_matches(".plist").to_string()).unwrap_or_default();
+        let key = match sub { "bootout" | "unload" | "remove" | "stop" | "disable" => "launchctl.off", "bootstrap" | "load" | "start" | "enable" => "launchctl.on", "kickstart" => "launchctl.restart", _ => "" };
+        if !key.is_empty() { return Some(json!({ "key": key, "arg": short(&label, 80) })); }
+    }
     if cmd == "cargo" {
         let sub = p(0);
         let key = if ["build", "test", "run", "check", "clippy"].contains(&sub) { format!("cargo.{sub}") } else { "run".into() };
@@ -98,6 +106,17 @@ fn step(segment: &str, temps: &HashSet<String>, made: &HashSet<String>) -> Optio
     Some(json!({ "key": "run", "arg": cmd }))
 }
 
+/// ssh's host and the command it runs there (its flags that take a value skipped)
+fn remote(segment: &str) -> Option<(String, String)> {
+    let w: Vec<String> = words(segment).into_iter().filter(|x| !x.is_empty()).collect();
+    if w.first().map(|c| base(c)) != Some("ssh".into()) { return None; }
+    let mut i = 1;
+    while i < w.len() && w[i].starts_with('-') { i += if ["-i", "-o", "-p", "-l", "-F", "-J", "-L", "-R", "-D", "-c", "-m", "-b", "-E", "-S", "-W", "-w"].contains(&w[i].as_str()) { 2 } else { 1 }; }
+    let host = w.get(i)?.rsplit('@').next().unwrap_or("").to_string();
+    let cmd = w[i + 1..].join(" ");
+    if cmd.trim().is_empty() { None } else { Some((host, cmd)) }
+}
+
 /// describe(tool, input): { line, steps, file, danger }
 pub fn describe(tool: &str, input: &Value) -> Value {
     let mut out = json!({ "line": "", "steps": [], "file": null, "danger": null });
@@ -111,17 +130,23 @@ pub fn describe(tool: &str, input: &Value) -> Value {
         let mut seen: HashSet<String> = HashSet::new();
         for part in heredocs(&command) {
             for seg in simple_commands(&part) {
-                let Some(s) = step(&seg, &temps, &made) else { continue };
+                // #6361: ssh <host> '<command>': what runs there, step by step, each marked with the host
+                let (at, inner) = remote(&seg).map(|(h, c)| (Some(h), simple_commands(&c))).unwrap_or((None, vec![seg.clone()]));
+                for seg in inner {
+                let Some(mut s) = step(&seg, &temps, &made) else { continue };
+                if let Some(h) = &at { s["at"] = json!(h); }
                 let key = s["key"].as_str().unwrap_or("").to_string();
                 let id = format!("{key}{}{}", s["arg"].as_str().unwrap_or(""), if s["targets"].is_null() { "\"\"".to_string() } else { s["targets"].to_string() });
                 if seen.contains(&id) || (key == "read" && seen.contains("read")) { continue; }
                 seen.insert(id);
                 if key == "read" { seen.insert("read".into()); }
                 steps.push(s);
+                }
             }
         }
         // a $(mktemp) is read after the command around it, but it happens first (a stable sort, as Array.sort is)
-        steps.sort_by_key(|s| if s["key"] == "mktemp" { 0 } else { 1 });
+        // a delete is what the card is about: it goes first, so the three a sentence names include it (#6361)
+        steps.sort_by_key(|s| if s["key"] == "mktemp" { 0 } else if s["key"] == "rm" { 1 } else { 2 });
         steps.truncate(6);
     }
     out["steps"] = json!(steps);
@@ -151,6 +176,10 @@ fn risk_key(why: &str) -> Option<&'static str> {
 }
 
 fn step_phrase(s: &Value) -> String {
+    let p = step_words(s);
+    match s["at"].as_str() { Some(h) => t_user("plain.at", &[("host", h.to_string()), ("what", p)]), None => p }
+}
+fn step_words(s: &Value) -> String {
     if s["key"] == "rm" {
         let what = s["targets"].as_array().cloned().unwrap_or_default().iter()
             .map(|t| { let p = t["path"].as_str().unwrap_or("").to_string(); if t["temp"] == true { t_user("plain.tempOf", &[("path", p)]) } else { p } })
@@ -169,7 +198,7 @@ fn level_of(tool: &str, input: &Value, why: &str) -> Option<&'static str> {
     if risk_key(why) == Some("secret") { return Some("secret"); }
     let steps: Vec<Value> = describe(tool, input)["steps"].as_array().cloned().unwrap_or_default();
     let has = |k: &str| steps.iter().any(|x| x["key"].as_str().unwrap_or("").starts_with(k));
-    let ssh = steps.iter().any(|x| x["key"] == "run" && x["arg"].as_str().unwrap_or("").starts_with("ssh "));
+    let ssh = steps.iter().any(|x| !x["at"].is_null());
     Some(if has("rm") || has("git.resetHard") || risk_key(why) == Some("delete") { "delete" }
         else if has("git.push") || has("git.forcePush") || has("npm.publish") || has("download") || ssh || ["WebFetch", "WebSearch"].contains(&tool) { "outside" }
         else if has("write") || has("git.commit") || ["Edit", "MultiEdit", "Write", "NotebookEdit"].contains(&tool) { "edit" }
@@ -196,10 +225,14 @@ pub fn plain_ask(item: &Value, menu: Option<&Value>) -> Value {
         let all: Vec<Value> = describe(tool, &input)["steps"].as_array().cloned().unwrap_or_default();
         let doing: Vec<Value> = all.iter().filter(|x| x["key"] != "read").cloned().collect();
         let pick = if doing.is_empty() { all } else { doing };
-        let steps: Vec<String> = pick.iter().take(3).map(step_phrase).collect();
+        let named: Vec<&Value> = pick.iter().take(3).collect();
+        // one host for every step: named once in front, not on each (#6361)
+        let one_host = named.first().and_then(|f| f["at"].as_str()).filter(|h| named.iter().all(|x| x["at"].as_str() == Some(h)));
+        let steps: Vec<String> = named.iter().map(|x| if one_host.is_some() { step_words(x) } else { step_phrase(x) }).collect();
         if steps.is_empty() { t_user("plain.unread", &[("who", who.clone())]) } else {
             let n = steps.len();
-            let chain = steps.iter().enumerate().map(|(i, p)| if i < n - 1 { format!("{p}고") } else { format!("{}해도", p.strip_suffix('하').unwrap_or(p)) }).collect::<Vec<_>>().join(", ");
+            let mut chain = steps.iter().enumerate().map(|(i, p)| if i < n - 1 { format!("{p}고") } else { format!("{}해도", p.strip_suffix('하').unwrap_or(p)) }).collect::<Vec<_>>().join(", ");
+            if let Some(h) = one_host { chain = t_user("plain.at", &[("host", h.to_string()), ("what", chain)]); }
             t_user("plain.ask", &[("who", who.clone()), ("what", chain)])
         }
     }
