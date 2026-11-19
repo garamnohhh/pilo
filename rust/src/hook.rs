@@ -33,7 +33,9 @@ re!(assign, r"^[A-Za-z_][A-Za-z0-9_]*=");
 re!(db_sql_mcp, r"(?i)postgres|sql|db");
 
 const SHELLS: [&str; 3] = ["sh", "bash", "zsh"];
-const BROWSERS: [&str; 3] = ["ego-browser", "agent-browser", "playwright-cli"];
+// #6551: ego-browser (ego lite) is the user's own browser that agents drive by the user's say-so: not asked as an account write.
+// A final step there (paying, posting, a message out) the agent confirms itself.
+const BROWSERS: [&str; 2] = ["agent-browser", "playwright-cli"];
 const DB_CLIENTS: [&str; 3] = ["psql", "mysql", "mongosh"];
 
 fn secret(a: &str) -> bool { !a.chars().any(char::is_whitespace) && secret_file().is_match(a) && !sample().is_match(a) }
@@ -422,5 +424,16 @@ pub fn classify() {
     for line in raw.lines().filter(|l| !l.trim().is_empty()) {
         let v: Value = serde_json::from_str(line).unwrap_or(json!({}));
         println!("{}", json!(window_only(v["tool"].as_str().unwrap_or(""), &v["input"])));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn ego_browser_is_not_an_account_write() {
+        let ego = "ego-browser nodejs <<'EOF'\nawait click('@21', { label: 'reply' })\nEOF";
+        let other = "agent-browser nodejs <<'EOF'\nawait click('@21')\nEOF";
+        assert_eq!(super::browser_write_of(ego), "");
+        assert_eq!(super::browser_write_of(other), "account write");
     }
 }
