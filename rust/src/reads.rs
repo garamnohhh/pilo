@@ -289,6 +289,16 @@ async fn inbox(State(app): State<Shared>, Query(q): Q) -> Res {
     let db = app.db.lock().unwrap();
     let mut out = rows(&db, &sql, &[&limit, &before, &agent],
         &[("needsReply", K::Bool), ("leak", K::Json), ("held", K::Json), ("decision", K::Json)]).map_err(db_err)?;
+    // #6567: a request whose follow-ups (and theirs) still have work is not done: continuesIn names the newest open one,
+    // chainOpen counts the open tasks down that chain (a follow-up not handed on yet counts one)
+    if let Some(min) = out.iter().filter_map(|r| r["id"].as_i64()).min() {
+        let later = follow_ups(&db, min).map_err(db_err)?;
+        for r in out.iter_mut() {
+            let (next, open) = chain(r["id"].as_i64().unwrap_or(0), &later);
+            r["continuesIn"] = json!(next);
+            r["chainOpen"] = json!(open);
+        }
+    }
     if !with_replies {
         for r in out.iter_mut() {
             let has = !r["finalReply"].is_null();
@@ -297,6 +307,38 @@ async fn inbox(State(app): State<Shared>, Query(q): Q) -> Res {
         }
     }
     Ok(Json(Value::Array(out)))
+}
+
+/// "follow-up to in-N - …" (or "in-N 이어서 - …") → N
+fn follow_of(req: &str) -> Option<i64> {
+    let digits = |s: &str| s.chars().take_while(char::is_ascii_digit).collect::<String>();
+    if let Some(r) = req.strip_prefix("follow-up to in-") { return digits(r).parse().ok(); }
+    let r = req.strip_prefix("in-")?;
+    let n = digits(r);
+    if r[n.len()..].starts_with(" 이어서") { n.parse().ok() } else { None }
+}
+
+/// the requests after `min` that follow another: (id, the request it follows, its open tasks; one if not handed on yet)
+fn follow_ups(db: &rusqlite::Connection, min: i64) -> rusqlite::Result<Vec<(i64, Option<i64>, i64)>> {
+    let found = rows(db, &format!(r#"SELECT i.id, i.user_request AS req,
+           max((SELECT count(*)::int FROM tasks t WHERE t.inbox_id = i.id AND t.status IN ({OPEN_TASK})),
+               CASE WHEN i.status IN ('queued', 'dispatched') THEN 1 ELSE 0 END) AS open
+         FROM inbox i WHERE i.id > $1 AND (i.user_request LIKE 'follow-up to in-%' OR i.user_request LIKE 'in-% 이어서%')"#),
+        &[&min], &[])?;
+    Ok(found.iter().map(|r| (r["id"].as_i64().unwrap_or(0), follow_of(r["req"].as_str().unwrap_or("")), r["open"].as_i64().unwrap_or(0))).collect())
+}
+
+/// a request's follow-up chain (follow-ups of it, and of those): the newest one with open work, and the open tasks
+/// down the chain. `later`: (id, the request it follows, its open tasks)
+fn chain(id: i64, later: &[(i64, Option<i64>, i64)]) -> (Option<i64>, i64) {
+    let (mut todo, mut next, mut open) = (vec![id], None, 0);
+    while let Some(p) = todo.pop() {
+        for &(c, _, n) in later.iter().filter(|(c, of, _)| *of == Some(p) && *c > p) {
+            if n > 0 { open += n; next = next.max(Some(c)); }
+            todo.push(c);
+        }
+    }
+    (next, open)
 }
 
 // countInbox
@@ -524,4 +566,39 @@ async fn history(State(app): State<Shared>, Query(q): Q) -> Res {
         out.push(json!({ "id": id, "at": kst(r["createdAt"].as_i64().unwrap_or(0)), "agents": agents, "matches": matches }));
     }
     Ok(Json(json!({ "words": words, "since": since, "agent": if agent.is_empty() { Value::Null } else { json!(agent) }, "rows": out, "more": found.len() as i64 > most })))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn follow_up_chain_keeps_a_request_open() {
+        assert_eq!(follow_of("follow-up to in-5931 - 추천대로"), Some(5931));
+        assert_eq!(follow_of("in-12 이어서 - 그거"), Some(12));
+        assert_eq!(follow_of("in-12 그거"), None);
+        assert_eq!(follow_of("그냥 요청"), None);
+        // in-5931's own tasks are done; in-5940 follows it and waits on the user, in-5950 follows in-5940 and is done
+        let later = [(5940, Some(5931), 1), (5950, Some(5940), 0), (5960, Some(5950), 2), (5970, Some(1), 3)];
+        assert_eq!(chain(5931, &later), (Some(5960), 3));
+        assert_eq!(chain(5950, &later), (Some(5960), 2));
+        assert_eq!(chain(5960, &later), (None, 0));
+        // the chain finished: done stays done
+        assert_eq!(chain(5931, &[(5940, Some(5931), 0)]), (None, 0));
+    }
+
+    #[test]
+    fn follow_ups_read_from_the_tables() {
+        let path = std::env::temp_dir().join(format!("pilo-chain-{}.sqlite", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let db = crate::store::fresh(&path).unwrap();
+        db.execute_batch("INSERT INTO inbox (id, user_request, status) VALUES (10, 'a', 'replied'),
+              (11, 'follow-up to in-10 - b', 'replied'), (12, 'in-11 이어서 - c', 'queued'), (13, 'follow-up to in-10 - d', 'replied');
+            INSERT INTO tasks (inbox_id, status) VALUES (10, 'done'), (11, 'blocked'), (11, 'done'), (13, 'done');").unwrap();
+        let mut f = follow_ups(&db, 10).unwrap();
+        f.sort();
+        assert_eq!(f, vec![(11, Some(10), 1), (12, Some(11), 1), (13, Some(10), 0)]);
+        assert_eq!(chain(10, &f), (Some(12), 2));
+        let _ = std::fs::remove_file(&path);
+    }
 }
