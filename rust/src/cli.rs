@@ -369,7 +369,7 @@ pub fn run(argv: &[String]) -> i32 {
                 let (rest, opts) = flags(&kept);
                 if rest.is_empty() || (rest.len() < 2 && !opts.contains_key("file")) { return Err("usage: pilo ask <taskId> \"what the user needs to decide or do\" | --file <path> [--option \"…\" --option \"…\"]".into()); }
                 let mut said = body(&rest[1..], &opts)?;
-                if !options.is_empty() { said.push_str(&format!("\n답: {}", options.iter().map(|o| format!("'{o}'")).collect::<Vec<_>>().join(" / "))); }
+                if !options.is_empty() { said.push_str(&format!("\nAnswer: {}", options.iter().map(|o| format!("'{o}'")).collect::<Vec<_>>().join(" / "))); }
                 let res = call("POST", &format!("/api/tasks/{}/ask", rest[0]), Some(&json!({ "body": said })))?;
                 say(t("cli.asked", &[("id", crate::writes::s(&res["taskId"])), ("inbox", crate::writes::s(&res["inboxId"]))]));
             }
