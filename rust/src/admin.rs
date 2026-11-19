@@ -143,11 +143,14 @@ pub fn wake_failed(app: &Shared, db: &Connection, agent: &Value, code: &str, tas
     // #6307: a wake that keeps meeting the same dialog is one line, its time and count moved on, not a line a minute
     // (a Mac's desk on Claude's trust question logged 10,000 in two days). A dialog never counts toward the backoff and
     // only the newest try's time is read, so the retries go on as before
+    // #6566: a pane still on its first run (theme, sign-in) is waiting on the user's sign-in
+    let sign_in = code == "PANE_IN_DIALOG" && !s(&agent["pane"]).is_empty() && crate::desk::first_run(&app.desk.read_pane(&s(&agent["pane"])));
     if code == "PANE_IN_DIALOG" {
         let last = one(db, "SELECT id, payload->>'code' AS code, type FROM events WHERE agent_id = $1 AND task_id IS $2 AND inbox_id IS $3
             AND type IN ('wake_sent', 'wake_failed') ORDER BY created_at DESC, id DESC LIMIT 1", &[&aid, &task, &inbox], &[]).map_err(db_err)?;
         if let Some(l) = last.filter(|l| l["type"] == "wake_failed" && l["code"] == "PANE_IN_DIALOG") {
-            exec(db, "UPDATE events SET created_at = now(), payload = json_set(payload, '$.attempts', COALESCE(payload->>'attempts', 1) + 1) WHERE id = $1", &[&l["id"].as_i64()]).map_err(db_err)?;
+            exec(db, "UPDATE events SET created_at = now(), payload = json_set(payload, '$.attempts', COALESCE(payload->>'attempts', 1) + 1, '$.signIn', json($2)) WHERE id = $1",
+                &[&l["id"].as_i64(), &(if sign_in { "true" } else { "false" }).to_string()]).map_err(db_err)?;
             return Ok(());
         }
     }
@@ -155,10 +158,11 @@ pub fn wake_failed(app: &Shared, db: &Connection, agent: &Value, code: &str, tas
         .map_err(db_err)?.and_then(|r| r["n"].as_i64()).unwrap_or(0);
     let hint = match code {
         "SESSION_NOT_FOUND" => "rebind the agent's session",
+        "PANE_IN_DIALOG" if sign_in => "the session is on its first run: open it in Agents, pick a theme and sign in; the wake goes through after",
         "PANE_IN_DIALOG" => "the pane has a dialog or settings screen open (/permissions, hooks review): close it in the pane and the wake retries",
         _ => "check the agent's session",
     };
-    let payload = json!({ "name": agent["name"], "code": code, "attempts": prior + 1, "runtime": s(&agent["runtime"]), "target": s(&agent["pane"]), "hint": hint });
+    let payload = json!({ "name": agent["name"], "code": code, "attempts": prior + 1, "runtime": s(&agent["runtime"]), "target": s(&agent["pane"]), "hint": hint, "signIn": sign_in });
     let run_log = json!([{ "t": "00:00", "text": format!("wake {}", s(&agent["name"])) }, { "t": "00:00", "text": code }]);
     exec(db, "INSERT INTO events (type, title, agent_id, task_id, inbox_id, payload, run_log, created_at) VALUES ('wake_failed', $1, $2, $3, $4, $5, $6, now())",
         &[&t("event.wakeFailed", &[("code", code.to_string())]), &aid, &task, &inbox, &payload.to_string(), &run_log.to_string()]).map_err(db_err)?;

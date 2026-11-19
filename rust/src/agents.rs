@@ -258,7 +258,9 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
     let history = one(&db, r#"SELECT (SELECT count(*) FROM tasks WHERE status = 'failed') AS tasks,
             (SELECT count(*) FROM events WHERE type = 'wake_failed') AS wakes"#, &[], &[]).map_err(db_err)?.unwrap();
     let system = system_status(&app, &db).map_err(db_err)?;
-    let failed_wakes = system["wakeFailures"].as_array().map(|a| a.len()).unwrap_or(0) as i64;
+    // #6566: a session still waiting on its sign-in is said apart from a wake that failed
+    let sign_in = system["wakeFailures"].as_array().map(|a| a.iter().filter(|w| w["payload"]["signIn"] == true).count()).unwrap_or(0) as i64;
+    let failed_wakes = system["wakeFailures"].as_array().map(|a| a.len()).unwrap_or(0) as i64 - sign_in;
     let blocked = rows(&db, r#"SELECT t.id, t.blocked_question AS question, t.title, t.updated_at AS "at",
        a.name AS agent, a.id AS "agentId", p.name AS project, t.inbox_id AS "inboxId"
      FROM tasks t LEFT JOIN agents a ON a.id = t.to_agent_id LEFT JOIN projects p ON p.id = a.project_id
@@ -281,8 +283,8 @@ async fn overview(State(app): State<Shared>, axum::extract::Query(q): axum::extr
         "agents": agents.len(), "pilo": role("pilo"), "pm": role("pm"), "worker": role("worker"),
         "inboxToday": today,
         "tokens": { "in": tin, "out": tout, "total": tin + tout, "window": "today" },
-        "failed": { "task": open_failures, "wake": failed_wakes, "total": failed_total },
-        "needsYou": { "total": decisions.len() as i64 + failed_total + lost + blocked_now, "decisions": decisions.len(), "failed": failed_total,
+        "failed": { "task": open_failures, "wake": failed_wakes, "total": failed_total }, "signIn": sign_in,
+        "needsYou": { "total": decisions.len() as i64 + failed_total + lost + blocked_now + sign_in, "decisions": decisions.len(), "failed": failed_total, "signIn": sign_in,
                       "lost": lost, "blocked": blocked_now, "blockedWhy": why },
         "history": { "failedTasks": history["tasks"], "wakeFailures": history["wakes"] }
     });

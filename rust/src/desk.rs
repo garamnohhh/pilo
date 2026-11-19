@@ -201,8 +201,13 @@ pub fn in_dialog(screen: &str) -> bool {
     let dialogs = regex::Regex::new(r"trust all · enter review · esc close|Hooks need review|Trust all and continue|Space to select · Esc to reject all|Type to search|\bEsc to (cancel|close|go back|exit)\b").unwrap();
     // #6280: a first run (Claude's theme and sign-in, Codex's sign-in) is a dialog too: a line typed there picks the
     // highlighted choice (a pane made PILO on its theme screen was sent on to a browser sign-in)
-    let first_run = regex::Regex::new(r"Choose the text style|Select login method|Paste code here if prompted|Sign in with ChatGPT|Provide your own API key").unwrap();
-    !input_box && (dialogs.is_match(&bottom.join("\n")) || first_run.is_match(screen))
+    !input_box && (dialogs.is_match(&bottom.join("\n")) || first_run(screen))
+}
+
+/// #6566: Claude Code's or Codex's first run (theme, sign-in) on the screen: the pane waits on its sign-in, not on a dialog
+/// the user opened, so the app says "sign in" rather than "failed"
+pub fn first_run(screen: &str) -> bool {
+    regex::Regex::new(r"Choose the text style|Select login method|Paste code here if prompted|Sign in with ChatGPT|Provide your own API key").unwrap().is_match(screen)
 }
 
 #[cfg(test)]
