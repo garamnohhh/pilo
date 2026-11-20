@@ -181,6 +181,21 @@ scenario("a held task is neither woken nor nudged until resumed", { env: { PILO_
   await srv.waitFor(() => srv.prompts(t.pane.pm).some((m) => m.includes(`#${task}`)), { what: "wake after resume" });
 });
 
+scenario("a hold's time up wakes its agent once; held long past it, PILO is told once (#6604)", { env: { PILO_STALL_MIN: "60", PILO_HOLD_ALERT_MIN: "0.05" } }, async (srv) => {
+  const t = await team(srv);
+  await srv.api("POST", `/api/agents/${t.ids.pm}/limited`, { until: new Date(Date.now() + 3600e3).toISOString() });
+  const { task } = await taskFor(srv, t.ids.pm);
+  const h = await srv.api("POST", `/api/tasks/${task}/hold`, { note: "3 posts, 30 min apart", minutes: 0.02 });
+  assert.equal(h.status, 201, h.text);
+  assert.ok(h.json.until, "the hold says when it is looked at again");
+  await srv.api("POST", `/api/agents/${t.ids.pm}/limited`, { until: null });
+  await srv.waitFor(() => srv.prompts(t.pane.pm).some((m) => m.startsWith("[pilo:hold]") && m.includes(`#${task}`)), { what: "hold due wake", ms: 15000 });
+  await srv.waitFor(() => srv.prompts(t.pane.desk, { all: true }).some((m) => m.startsWith("[pilo:hold-long]") && m.includes(`#${task}`)), { what: "PILO told", ms: 15000 });
+  await ticks(6);
+  assert.equal(srv.prompts(t.pane.pm).filter((m) => m.startsWith("[pilo:hold]")).length, 1, "once until it holds again");
+  assert.equal((await events(srv, "task_hold_long")).length, 1, "PILO once");
+});
+
 scenario("registering a worker tells its PM and the desk their instructions changed", {}, async (srv) => {
   const t = await team(srv);
   await srv.waitFor(() => srv.prompts(t.pane.pm, { all: true }).some((m) => m.startsWith("[pilo:rules]")), { what: "pm told" });

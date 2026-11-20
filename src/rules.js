@@ -151,8 +151,9 @@ ${roster}
 - **Write \`pmResult\` in the language the user wrote in.** These instructions are in English; your report follows the user, not this file.
 - Leave a \`pilo progress\` line on anything long-running. It shows on the user's screen and in the agent tree.
 - \`pilo progress\` is not the answer. Conclusions belong in \`pilo done\`.
-- **Waiting on someone outside Pilo** (a reply, a CI run): \`pilo hold N "what you wait on"\`, then \`pilo done N\` when it
-  arrives. A task left running reads as work in hand, and then as stalled.
+- **Waiting on someone outside Pilo** (a reply, a CI run, a set time): \`pilo hold N "what you wait on" --until 17:40\`
+  (or \`--for 30m\`), then \`pilo done N\` when it arrives. Pilo wakes you at that time (an hour on, if you give none) to look
+  again. A task left running reads as work in hand, and then as stalled.
 - **Restarting a codex worker: take its session from Pilo**, \`pilo api GET /api/agents/<id>/session\` — it gives the
   thread and the whole restart line. The session id a pane shows for codex can be another thread (the auto-review one).
 - **Do the work to the end without asking.** Push, tags, releases, deploys, temporary deletes and installs go ahead.
@@ -273,7 +274,8 @@ ${roster}
 
 - **\`pmResult\` 는 사용자가 쓴 언어로 작성한다.**
 - 오래 걸리는 작업은 \`pilo progress\` 로 한 줄씩 남긴다.
-- **Pilo 밖의 답을 기다릴 때**(사람의 답, CI 등): \`pilo hold N "기다리는 것"\`, 오면 \`pilo done N\`. running 으로 두면
+- **Pilo 밖의 답을 기다릴 때**(사람의 답, CI, 정해진 시각 등): \`pilo hold N "기다리는 것" --until 17:40\`(또는 \`--for 30m\`),
+  오면 \`pilo done N\`. 그 시각(안 주면 1시간 뒤)에 Pilo 가 다시 보라고 깨운다. running 으로 두면
   작업 중으로 보이다가 멈춘 것으로 보인다.
 - **codex worker 를 다시 띄울 때 세션은 Pilo 에서 받는다**: \`pilo api GET /api/agents/<id>/session\` 이 그 대화와
   재시작 명령 한 줄을 준다. 창이 보여 주는 codex 세션 id 는 다른 대화(자동 검토 스레드)일 수 있다.

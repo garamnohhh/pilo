@@ -38,7 +38,7 @@ export const CATALOGUE = [
   { scope: "cli", name: "block", args: "<taskId> <question> [--for <taskId>]", summary: "mark a task as waiting on the user's decision", example: 'pilo block 301 "Publish the pricing page today?"' },
   { scope: "cli", name: "blocked", args: "", summary: "tasks waiting on a decision", example: "pilo blocked" },
   { scope: "cli", name: "ask", args: "<taskId> <words to the user> [--option <choice> …]", summary: "desk → user: a waiting task as a red line in that conversation - not an answer. Buttons only for each --option", example: 'pilo ask 301 "Decide whether the pricing page goes out today" --option "publish" --option "hold"' },
-  { scope: "cli", name: "hold", args: "<taskId> <what you wait on>", summary: "waiting on something outside Pilo", example: 'pilo hold 812 "waiting on CI"' },
+  { scope: "cli", name: "hold", args: "<taskId> <what you wait on> [--until 17:40 | --for 30m]", summary: "waiting on something outside Pilo, woken at that time (an hour on if none)", example: 'pilo hold 812 "waiting on CI" --for 30m' },
   { scope: "cli", name: "resume", args: "<taskId>", summary: "back into the queue", example: "pilo resume 812" },
   { scope: "cli", name: "limited", args: "<agentId> --until <time>", summary: "report a usage limit (omit --until to clear)", example: "pilo limited 6 --until 2026-09-08T18:00:00Z" },
   { scope: "cli", name: "answer", args: "<taskId> <answer>", summary: "answer a decision - the task goes back in the queue", example: 'pilo answer 301 "yes"' },

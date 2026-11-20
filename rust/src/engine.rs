@@ -360,6 +360,46 @@ fn pump_stalled(app: &Shared) {
     }
 }
 
+/// #6604: a hold whose time has come wakes its agent once (until it holds again), and one held past
+/// PILO_HOLD_ALERT_MIN with its time gone is told to PILO once. The time is the latest task_holding event's
+/// 'until' (a hold from before #6604 has none: its event time + PILO_HOLD_CHECK_MIN)
+fn pump_holding(app: &Shared) {
+    let (on, _) = job(app, "stalled-nudge", 30.0);
+    if !on { return; }
+    let check = (crate::writes::hold_check_min() * 60_000_000.0) as i64;
+    let long = (env_num("PILO_HOLD_ALERT_MIN", 360.0) * 60_000_000.0) as i64;
+    let held = q(app, r#"SELECT * FROM (
+       SELECT t.id, t.inbox_id, t.hold_note AS note, a.id AS agent_id, a.name, a.pane, a.runtime, COALESCE(h.id, 0) AS hold_event,
+              COALESCE(CAST(h.payload->>'until' AS INTEGER), COALESCE(h.created_at, t.updated_at) + $1) AS due,
+              now() - COALESCE((SELECT min(e.created_at) FROM events e WHERE e.task_id = t.id AND e.type = 'task_holding'
+                  AND e.id > COALESCE((SELECT max(r.id) FROM events r WHERE r.task_id = t.id AND r.type IN ('task_resumed', 'worker_result_woken')), 0)), t.updated_at) AS held_us
+         FROM tasks t JOIN agents a ON a.id = t.to_agent_id
+         LEFT JOIN events h ON h.id = (SELECT max(x.id) FROM events x WHERE x.task_id = t.id AND x.type = 'task_holding')
+        WHERE t.status = 'holding' AND a.archived_at IS NULL
+     ) x WHERE x.due < now() ORDER BY x.id LIMIT 20"#, &[&check]);
+    let now = crate::sql::now_us();
+    for task in &held {
+        let id = task["id"].as_i64().unwrap_or(0);
+        let hold_event = task["hold_event"].as_i64().unwrap_or(0);
+        let vars = [("id", id.to_string()), ("agent", s(&task["name"])), ("note", s(&task["note"]))];
+        let woken = q1(app, "SELECT 1 AS y FROM events WHERE task_id = $1 AND type = 'task_hold_due' AND id > $2", &[&id, &hold_event]).is_some();
+        if !woken && !s(&task["pane"]).is_empty() {
+            let agent = json!({ "id": task["agent_id"], "name": task["name"], "pane": task["pane"], "runtime": task["runtime"] });
+            let ok = wake(app, &agent, &t("wake.holdDue", &vars), Some(id), task["inbox_id"].as_i64());
+            ev(app, "task_hold_due", &t("event.holdDue", &[("id", id.to_string())]), task["agent_id"].as_i64(), Some(id), task["inbox_id"].as_i64(), json!({ "woken": ok }));
+        }
+        let held_for = task["held_us"].as_i64().unwrap_or(0);   // a plain number: a column named like a time comes back as one
+        if held_for < long { continue; }
+        let since = now - held_for;
+        if q1(app, "SELECT 1 AS y FROM events WHERE task_id = $1 AND type = 'task_hold_long' AND created_at >= $2", &[&id, &since]).is_some() { continue; }
+        let hours = format!("{:.0}", held_for as f64 / 3_600_000_000.0);
+        let Some(pilo) = q1(app, "SELECT id, name, pane, runtime FROM agents WHERE role = 'pilo' AND archived_at IS NULL AND pane <> ''", &[]) else { continue };
+        let lvars = [("id", id.to_string()), ("agent", s(&task["name"])), ("note", s(&task["note"])), ("hours", hours.clone())];
+        let ok = wake(app, &pilo, &t("wake.holdLong", &lvars), Some(id), task["inbox_id"].as_i64());
+        ev(app, "task_hold_long", &t("event.holdLong", &lvars), task["agent_id"].as_i64(), Some(id), task["inbox_id"].as_i64(), json!({ "hours": hours, "told": ok }));
+    }
+}
+
 fn remind_steps() -> Vec<f64> {
     std::env::var("PILO_DECISION_REMIND_MIN").unwrap_or_else(|_| "30,120".into()).split(',').filter_map(|x| x.trim().parse().ok()).filter(|n: &f64| *n > 0.0).collect()
 }
@@ -488,6 +528,7 @@ pub fn tick(app: &Shared) {
     pump_followups(app);
     pump_worker_results(app);
     pump_stalled(app);
+    pump_holding(app);
     pump_decisions(app);
     crate::engine2::pump_limits(app);
     pump_held(app);

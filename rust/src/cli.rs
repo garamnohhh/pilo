@@ -110,6 +110,21 @@ fn form(s: &str) -> String {
 fn out(v: &Value) { match v { Value::String(s) => println!("{s}"), v => println!("{}", serde_json::to_string_pretty(v).unwrap_or_default()) } }
 fn say(s: String) { println!("{s}"); }
 
+/// '30m' · '2h' · '45' → minutes
+fn hold_minutes(v: &str) -> Option<f64> {
+    let v = v.trim();
+    let (n, k) = if let Some(h) = v.strip_suffix('h') { (h, 60.0) } else { (v.strip_suffix('m').unwrap_or(v), 1.0) };
+    n.trim().parse::<f64>().ok().filter(|x| *x > 0.0).map(|x| x * k)
+}
+/// '17:40' → minutes from now to that time today, or tomorrow when it has passed
+fn hold_until(v: &str) -> Option<f64> {
+    let t = chrono::NaiveTime::parse_from_str(v.trim(), "%H:%M").ok()?;
+    let now = chrono::Local::now().naive_local();
+    let mut at = now.date().and_time(t);
+    if at <= now { at += chrono::Duration::days(1); }
+    Some(((at - now).num_seconds() as f64 / 60.0).ceil())
+}
+
 fn flags(args: &[String]) -> (Vec<String>, std::collections::HashMap<String, String>) {
     let (mut rest, mut opts) = (Vec::new(), std::collections::HashMap::new());
     let mut i = 0;
@@ -334,9 +349,14 @@ pub fn run(argv: &[String]) -> i32 {
                 say(t("cli.blocked", &[("id", crate::writes::s(&res["id"])), ("status", crate::writes::s(&res["status"]))]));
             }
             "hold" => {
-                let id = args.first().ok_or("usage: pilo hold <taskId> <what you are waiting for>")?;
-                let res = call("POST", &format!("/api/tasks/{id}/hold"), Some(&json!({ "note": args[1..].join(" ") })))?;
-                say(t("cli.holding", &[("id", crate::writes::s(&res["id"])), ("note", crate::writes::s(&res["note"]))]));
+                // #6604: when to look again, as a time and not in the words: --for 30m · 2h · 45 (minutes), --until 17:40 (today, or tomorrow once past)
+                let (rest, opts) = flags(&args);
+                let id = rest.first().ok_or("usage: pilo hold <taskId> <what you are waiting for> [--for 30m | --until 17:40]")?;
+                let mut payload = json!({ "note": rest[1..].join(" ") });
+                if let Some(f) = opts.get("for") { payload["minutes"] = json!(hold_minutes(f).ok_or("--for takes minutes: 30m, 2h or 45")?); }
+                if let Some(u) = opts.get("until") { payload["minutes"] = json!(hold_until(u).ok_or("--until takes a time of day: 17:40")?); }
+                let res = call("POST", &format!("/api/tasks/{id}/hold"), Some(&payload))?;
+                say(t("cli.holding", &[("id", crate::writes::s(&res["id"])), ("note", crate::writes::s(&res["note"]))])); // the same line as the Node CLI (cli.test); the time is in the response
             }
             "resume" => {
                 let id = args.first().ok_or("usage: pilo resume <taskId>")?;
@@ -394,3 +414,17 @@ pub fn run(argv: &[String]) -> i32 {
 }
 
 pub const COMMANDS: [&str; 18] = ["inbox", "schedules", "schedule", "agents", "send", "reply", "history", "task", "progress", "done", "block", "hold", "resume", "limited", "blocked", "ask", "answer", "api"];
+
+#[cfg(test)]
+mod hold_tests {
+    #[test]
+    fn hold_times() {
+        assert_eq!(super::hold_minutes("30m"), Some(30.0));
+        assert_eq!(super::hold_minutes("2h"), Some(120.0));
+        assert_eq!(super::hold_minutes("45"), Some(45.0));
+        assert_eq!(super::hold_minutes("soon"), None);
+        let m = super::hold_until("00:00").unwrap();
+        assert!(m > 0.0 && m <= 24.0 * 60.0);
+        assert_eq!(super::hold_until("later"), None);
+    }
+}

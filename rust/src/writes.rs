@@ -239,6 +239,9 @@ async fn progress(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -
     created(json!({ "id": id, "progress": note }))
 }
 
+/// how long a hold given no time lasts before the agent is woken to look again (#6604)
+pub fn hold_check_min() -> f64 { std::env::var("PILO_HOLD_CHECK_MIN").ok().and_then(|v| v.parse().ok()).filter(|m: &f64| *m > 0.0).unwrap_or(60.0) }
+
 // holdTask
 async fn hold(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> W {
     let b = body(&raw)?;
@@ -246,10 +249,15 @@ async fn hold(State(app): State<Shared>, Path(id): Path<i64>, raw: String) -> W 
     let db = app.db.lock().unwrap();
     let task = one(&db, "SELECT id, inbox_id, to_agent_id, status FROM tasks WHERE id = $1", &[&id], &[]).map_err(db_err)?.ok_or_else(|| missing(&db, id))?;
     if !["queued", "running", "holding"].contains(&task["status"].as_str().unwrap_or("")) { return Err(bad(400, &format!("task is {}", s(&task["status"])))); }
+    // #6604: a hold always has a time to look again (the agent's --for · --until, else PILO_HOLD_CHECK_MIN); the
+    // engine wakes the agent then (pump_holding), in the event's payload and not read back from the note's words
+    let minutes = b["minutes"].as_f64().filter(|m| *m > 0.0).unwrap_or_else(hold_check_min);
+    let until = crate::sql::now_us() + (minutes * 60_000_000.0) as i64;
     exec(&db, "UPDATE tasks SET status = 'holding', hold_note = $2, updated_at = now() WHERE id = $1", &[&id, &note]).map_err(db_err)?;
     log_event(&db, "task_holding", &t("event.holding", &[("id", id.to_string())]), task["to_agent_id"].as_i64(), Some(id), task["inbox_id"].as_i64(),
-        &json!({ "note": note })).map_err(db_err)?;
-    created(json!({ "id": id, "status": "holding", "note": note }))
+        &json!({ "note": note, "until": until, "minutes": minutes })).map_err(db_err)?;
+    let at = chrono::DateTime::from_timestamp_micros(until).map(|d| d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_default();
+    created(json!({ "id": id, "status": "holding", "note": note, "until": at }))
 }
 
 // resumeTask
