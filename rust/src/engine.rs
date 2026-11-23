@@ -333,6 +333,9 @@ fn pump_stalled(app: &Shared) {
     if !on { return; }
     let stall_min = env_num("PILO_STALL_MIN", 10.0);
     let (stall, window) = ((stall_min * 60_000_000.0) as i64, (every * 60_000_000.0) as i64);
+    // #6703: at most PILO_NUDGE_MAX nudges per quiet spell (since the task last moved); a pane that never takes them
+    // was sent 99 in a weekend. The desk still shows the task stalled
+    let max = env_num("PILO_NUDGE_MAX", 3.0) as i64;
     let stuck = q(app, &format!(r#"SELECT t.id, t.inbox_id, a.id AS agent_id, a.name, a.pane, a.runtime,
             EXISTS (SELECT 1 FROM events e WHERE e.task_id = t.id AND e.type = 'task_opened') AS opened
      FROM tasks t JOIN agents a ON a.id = t.to_agent_id LEFT JOIN agent_sessions s ON s.agent_id = a.id
@@ -341,7 +344,9 @@ fn pump_stalled(app: &Shared) {
        AND GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) < now() - $1
        AND NOT {}
        AND NOT EXISTS (SELECT 1 FROM events e2 WHERE e2.task_id = t.id AND e2.type = 'task_stalled' AND e2.created_at > now() - $2)
-     ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5"#, crate::agents::waits_on_worker("t", "a")), &[&stall, &window]);
+       AND (SELECT count(*) FROM events e3 WHERE e3.task_id = t.id AND e3.type = 'task_stalled'
+              AND e3.created_at > GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at)) < $3
+     ORDER BY GREATEST(COALESCE(t.progress_at, t.created_at), t.updated_at) LIMIT 5"#, crate::agents::waits_on_worker("t", "a")), &[&stall, &window, &max]);
     let (mut nudged, mut held) = (vec![], vec![]);
     for task in &stuck {
         let agent = json!({ "id": task["agent_id"], "name": task["name"], "pane": task["pane"], "runtime": task["runtime"] });

@@ -2,6 +2,8 @@
 // and what the server records (/api/events), for a given world and requests.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 import { startServer, team, events, sleep } from "./harness.js";
 
 const scenario = (name, opts, body) => test(name, async () => {
@@ -164,6 +166,18 @@ scenario("a task gone quiet is marked stalled and nudged; a PM waiting on its wo
   assert.ok(!stalled.map(String).includes(String(task)), `the PM waits on #${sub.json.id}`);
   assert.ok(stalled.map(String).includes(String(quiet.task)));
   assert.equal(stalled.filter((id) => String(id) === String(quiet.task)).length, 1, "once per nudge window");
+});
+
+scenario("a quiet task is nudged at most PILO_NUDGE_MAX times until it moves again (#6703)", { env: { PILO_STALL_MIN: "0.01", PILO_NUDGE_EVERY_MIN: "0.01", PILO_NUDGE_MAX: "2" } }, async (srv) => {
+  // the seeded 30-minute job would win over PILO_NUDGE_EVERY_MIN
+  execFileSync("sqlite3", [join(srv.home, ".pilo", "pilo.sqlite"), "DELETE FROM schedules WHERE kind = 'system' AND name = 'stalled-nudge'"]);
+  const t = await team(srv);
+  const quiet = await taskFor(srv, t.ids.worker, "quiet one");
+  const mine = async () => (await Promise.all((await events(srv, "task_stalled")).map(async (e) => (await srv.api("GET", `/api/events/${e.id}`)).json.taskId))).filter((id) => String(id) === String(quiet.task)).length;
+  // the pane takes each nudge (working, then idle again) but the task never moves
+  for (let k = 0; k < 6; k++) { await ticks(3); t.set({ status: { worker: "working" } }); await ticks(2); t.set({ status: { worker: "idle" } }); }
+  await ticks(3);
+  assert.equal(await mine(), 2, "capped");
 });
 
 scenario("a held task is neither woken nor nudged until resumed", { env: { PILO_STALL_MIN: "0.03" } }, async (srv) => {
