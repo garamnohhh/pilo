@@ -1223,6 +1223,10 @@ export async function searchHistory({ q = "", since = null, agent = "", limit = 
         OR EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id
                      AND (t.pm_result ILIKE ${k} ESCAPE '\\' OR t.request ILIKE ${k} ESCAPE '\\')))`;
   });
+  // #6773: 'in-6054' or '6054' alone is that request first, then the ones naming it
+  const m = words.length === 1 && /^(?:in-)?(\d+)$/i.exec(words[0]);
+  params.push(m ? Number(m[1]) : null);
+  const x = `$${params.length}`;
   params.push(most + 1);
   const rows = await query(
     `SELECT i.id, i.user_request AS request, i.created_at AS "createdAt"
@@ -1231,8 +1235,8 @@ export async function searchHistory({ q = "", since = null, agent = "", limit = 
        AND ($3::bigint IS NULL OR i.id < $3)
        AND ($2 = '' OR EXISTS (SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
                                 WHERE t.inbox_id = i.id AND a.name = $2))
-       AND ${each.join("\n       AND ")}
-     ORDER BY i.id DESC LIMIT $${params.length}`,
+       AND (i.id = ${x}::bigint OR ${each.join("\n       AND ")})
+     ORDER BY (i.id = ${x}::bigint) DESC, i.id DESC LIMIT $${params.length}`,
     params
   );
   const found = [];
@@ -1253,7 +1257,7 @@ export async function searchHistory({ q = "", since = null, agent = "", limit = 
       id: row.id,
       at: kst(row.createdAt),
       agents: [...new Set(tasks.map((task) => task.agent).filter(Boolean))],
-      matches: pieces(fields, words)
+      matches: (() => { const p = pieces(fields, words); return !p.length && m && row.id === Number(m[1]) ? [{ field: "request", agent: "", text: String(row.request).slice(0, 160) }] : p; })()
     });
   }
   return { words, since: since || null, agent: agent || null, rows: found, more: rows.length > most };

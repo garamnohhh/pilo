@@ -533,6 +533,11 @@ async fn history(State(app): State<Shared>, Query(q): Q) -> Res {
         OR EXISTS (SELECT 1 FROM tasks t WHERE t.inbox_id = i.id
                      AND (lower(t.pm_result) LIKE lower({k}) ESCAPE '\' OR lower(t.request) LIKE lower({k}) ESCAPE '\')))"#));
     }
+    // #6773: 'in-6054' or '6054' alone is that request first (its words need not say its number), then the ones naming it
+    let exact: Option<i64> = (words.len() == 1).then(|| words[0].to_lowercase()).and_then(|w| w.strip_prefix("in-").unwrap_or(&w).parse().ok());
+    params.push(Box::new(exact));
+    let x = format!("${}", params.len());
+    let each = vec![format!("(i.id = {x} OR {})", each.join("\n       AND "))];
     params.push(Box::new(most + 1));
     let sql = format!(r#"SELECT i.id, i.user_request AS request, i.created_at AS "createdAt"
      FROM inbox i
@@ -541,7 +546,7 @@ async fn history(State(app): State<Shared>, Query(q): Q) -> Res {
        AND ($2 = '' OR EXISTS (SELECT 1 FROM tasks t JOIN agents a ON a.id = t.to_agent_id
                                 WHERE t.inbox_id = i.id AND a.name = $2))
        AND {}
-     ORDER BY i.id DESC LIMIT ${}"#, each.join("\n       AND "), params.len());
+     ORDER BY (i.id = {x}) DESC, i.id DESC LIMIT ${}"#, each.join("\n       AND "), params.len());
     let db = app.db.lock().unwrap();
     let refs: Vec<&dyn rusqlite::ToSql> = params.iter().map(|b| b.as_ref()).collect();
     let found = rows(&db, &sql, &refs, &[("createdAt", K::Plain)]).map_err(db_err)?;
@@ -557,10 +562,13 @@ async fn history(State(app): State<Shared>, Query(q): Q) -> Res {
         fields.extend(tasks.iter().map(|x| ("result", str_of(&x["agent"]), str_of(&x["pmResult"]))));
         fields.extend(tasks.iter().map(|x| ("instruction", str_of(&x["agent"]), str_of(&x["request"]))));
         let mut matches = Vec::new();
+        let first_text = fields[0].2.clone();
         for (field, agent, text) in fields {
             if let Some(p) = piece(&text, &words) { matches.push(json!({ "field": field, "agent": agent, "text": p })); }
             if matches.len() >= 3 { break; }
         }
+        // the number's own request: its words, though they do not hold the number
+        if matches.is_empty() && Some(id) == exact { matches.push(json!({ "field": "request", "agent": "", "text": crate::writes::js_slice(&first_text, 160) })); }
         let mut agents: Vec<String> = Vec::new();
         for x in &tasks { let a = str_of(&x["agent"]); if !a.is_empty() && !agents.contains(&a) { agents.push(a); } }
         out.push(json!({ "id": id, "at": kst(r["createdAt"].as_i64().unwrap_or(0)), "agents": agents, "matches": matches }));

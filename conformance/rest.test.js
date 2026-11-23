@@ -61,3 +61,16 @@ test("Open window focuses the pane and opens the pilo app", async () => {
     assert.ok(srv.calls().some((a) => a[1] === "focus" && a[2] === t.pane.pm));
   } finally { await srv.stop(); }
 });
+
+test("history: a request's number alone finds that request first, then the ones naming it (#6773)", async () => {
+  const srv = await startServer({ env: { PILO_WATCHER: "off" } });
+  try {
+    const a = (await srv.api("POST", "/api/inbox", { userRequest: "고장 난 위젯 봐 줘" })).json.id;
+    const b = (await srv.api("POST", "/api/inbox", { userRequest: `follow-up to in-${a} - 더` })).json.id;
+    for (const q of [`in-${a}`, String(a)]) {
+      const r = (await srv.api("GET", `/api/history?q=${q}`)).json;
+      assert.deepEqual(r.rows.map((x) => String(x.id)), [String(a), String(b)], q);
+      assert.equal(r.rows[0].matches[0].text, "고장 난 위젯 봐 줘");
+    }
+  } finally { await srv.stop(); }
+});
