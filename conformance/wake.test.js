@@ -59,6 +59,9 @@ scenario("over the hourly cap a wake is suppressed, not sent", { env: { PILO_WAK
   for (let i = 0; i < 3; i++) await taskFor(srv, t.ids.pm, `job ${i}`);
   await srv.waitFor(async () => (await events(srv, "wake_suppressed")).length, { what: "suppression" });
   assert.equal(srv.prompts(t.pane.pm).length, 2);
+  // #6958: the tick retries every few seconds; the held wake is recorded once, not once a try
+  await ticks(6);
+  assert.equal((await events(srv, "wake_suppressed")).length, 1);
 });
 
 scenario("a limited agent is parked until the limit is lifted", {}, async (srv) => {

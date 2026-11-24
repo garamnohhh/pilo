@@ -32,6 +32,9 @@ struct Item { message: String, task: Option<i64>, inbox: Option<i64>, after: Opt
 #[derive(Default)]
 pub struct State {
     pending: HashSet<i64>,
+    /// #6958: (agent, message) already recorded as over the cap; the tick retries every 3 s and wrote one each time
+    /// (185 in 11 minutes for one garamnoh result), cleared when that agent is woken
+    suppressed: HashSet<(i64, String)>,
     desk_box: Vec<Item>,
     pub desk_wait: DeskWait,
     last_result: std::collections::HashMap<String, String>,
@@ -143,10 +146,11 @@ fn wake(app: &Shared, agent: &Value, message: &str, task: Option<i64>, inbox: Op
         return false;
     }
     if over_cap(app, id) {
+        if !app.engine.state.lock().unwrap().suppressed.insert((id, message.to_string())) { return false; }
         ev(app, "wake_suppressed", &t("event.suppressed", &[("agent", name), ("cap", cap().to_string())]), Some(id), task, inbox, json!({ "cap": cap(), "message": message }));
         return false;
     }
-    app.engine.state.lock().unwrap().pending.insert(id);
+    { let mut st = app.engine.state.lock().unwrap(); st.pending.insert(id); st.suppressed.retain(|(a, _)| *a != id); }
     let target = s(&agent["pane"]);
     match app.desk.prompt(&target, message, app.approvals.busy(&target)) {
         Ok(()) => { ev(app, "wake_sent", &t("event.woken", &[("agent", name)]), Some(id), task, inbox, json!({ "target": target, "message": message })); true }
