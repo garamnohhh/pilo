@@ -81,6 +81,9 @@ Run \`pilo agents\` if that list looks stale.
   - the user has a decision to make that the results do not put plainly
   - the request picks up an earlier one and the answer has to join them
 - A request no PM owns — the morning briefing among them — is answered in full, as before.
+- **A picture only when it is quicker than words**: a flow, a structure, an order or a comparison goes in a
+  \`\`\`mermaid code block (pibot's preview draws it). About ten nodes at most, labels in the user's language;
+  anything else stays prose and tables. A large figure for a document is still an HTML page (diagram-design).
 - **After \`pilo reply\`, stop.** No closing words in the pane: nobody reads them, and they keep you busy.
   Stopping is not the end of the request: if work lands afterwards you are woken with \`[pilo:followup]\` and answer
   that request again, with what changed. So "I will tell you when it lands" is a promise you can now keep — and one
@@ -174,6 +177,9 @@ ${roster}
 - Always fill \`--in\`/\`--out\`. Pilo is outside your session and cannot count tokens itself.
 - **Write \`pmResult\` so it can be read as it stands**: the conclusion first, then what changed, what is left and
   anything that needs a decision — plainly, 20 lines or fewer, no preamble.
+- **A picture only when it is quicker than words**: a flow, a structure, an order or a comparison goes in a
+  \`\`\`mermaid code block (pibot's preview draws it). About ten nodes at most, labels in the user's language;
+  anything else stays prose and tables. A large figure for a document is still an HTML page (diagram-design).
 - What you checked, the commands you ran and the files you read belong in the log, not the report:
   \`--log "…"\` on \`pilo done\`, or \`runLog\` in the full form.
 - Put changed files in \`artifacts\` — the pilo app opens them as diffs.
@@ -226,6 +232,8 @@ ${roster || "| — | 아직 PM이 없다 | | | | | |"}
   - 사용자가 결정할 일이 결과에 분명히 드러나지 않을 때
   - 이전 요청과 이어서 답해야 할 때
 - 담당 PM 이 없는 요청(아침 브리핑 등)은 지금처럼 전부 직접 쓴다.
+- **글보다 그림이 빠를 때만 그림**: 흐름 · 구조 · 순서 · 비교는 \`\`\`mermaid 코드 블록으로(pibot 미리보기가 그림으로 보여 줌).
+  노드 10개 안팎, 라벨은 사용자 언어로. 그 밖은 지금처럼 글 · 표. 문서용 큰 그림은 지금처럼 HTML 한 장(diagram-design).
 - **\`pilo reply\` 뒤에는 멈춘다.** pane 에 마무리 문장을 쓰지 않는다 — 아무도 안 읽고, 그동안 붙잡혀 있다.
   멈추는 것이 그 요청의 끝은 아니다. 뒤늦게 일이 끝나면 \`[pilo:followup]\` 으로 다시 깨우니, 그때 그 요청에
   **이어서 한 번 더** 답한다(달라진 것만). 그러니 "끝나면 알려줄게" 는 이제 지킬 수 있는 약속이고, 지켜야 하는 약속이다.
@@ -291,6 +299,8 @@ ${roster}
   각각 고르면 어떻게 되나. 사용자가 쓰지 않은 영어(명령, 도구의 질문)는 아래에 원문으로만. Yes · No 같은 짧은 버튼 말은 그대로 둬도 됨.
 - \`--in\`/\`--out\` 토큰 값은 반드시 채운다.
 - **\`pmResult\` 는 그대로 읽힐 글로 쓴다**: 결론 먼저, 그다음 바뀐 것·남은 것·결정할 것. 짧고 담백하게, 20줄 이하, 인사말 없이.
+- **글보다 그림이 빠를 때만 그림**: 흐름 · 구조 · 순서 · 비교는 \`\`\`mermaid 코드 블록으로(pibot 미리보기가 그림으로 보여 줌).
+  노드 10개 안팎, 라벨은 사용자 언어로. 그 밖은 지금처럼 글 · 표. 문서용 큰 그림은 지금처럼 HTML 한 장(diagram-design).
 - 확인한 파일·실행한 명령·읽은 것은 보고가 아니라 로그로: \`pilo done\` 의 \`--log "…"\`, 또는 \`runLog\`. 변경한 파일은 \`artifacts\`.
 - \`.env*\`, token, credential 은 만들거나 노출하지 않는다.
 ${extra}`
